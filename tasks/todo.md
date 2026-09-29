@@ -9,7 +9,7 @@
 
 - [x] [T001](t001-toolchain-repository-skeleton.md): Pin toolchain và repository skeleton
 - [x] [T002](t002-quality-gates-test-runner-build.md): Frontend lint, typecheck và test runner
-- [ ] [T058](t058-python-quality-gates.md): Python lint, types, pytest và coverage runner
+- [x] [T058](t058-python-quality-gates.md): Python lint, types, pytest và coverage runner
 - [ ] [T003](t003-backend-skeleton.md): FastAPI app factory và health
 - [ ] [T004](t004-frontend-shell-routes.md): React shell, route map và landmarks
 - [ ] [T005](t005-database-schema-migrations.md): SQLite connection và migration zero
@@ -76,7 +76,7 @@
 
 ## Checkpoints
 
-- [ ] CP01: T001, T002, T058 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
+- [x] CP01: T001, T002, T058 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP02: T003, T004, T005 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP03: T053, T063, T013 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP04: T006, T014, T017 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
@@ -101,8 +101,8 @@
 
 ## Execution state
 
-- Current task: T002 đã hoàn thành và kiểm chứng (npm run lint, typecheck, test:frontend PASS).
-- Next task: T058 (Python quality gates) để hoàn thành bộ đôi gate trước backend skeleton T003 theo checkpoint CP01.
+- Current task: T058 đã hoàn thành và kiểm chứng (pytest, ruff, mypy PASS, coverage.xml emitted). Checkpoint CP01 hoàn tất.
+- Next task: T003 (FastAPI app factory và health) theo checkpoint CP02.
 - T013: mandatory contract-conformance trước behavior phụ thuộc; clarification ghi trong ADR/task output.
 - Remote/commit/installed Windows/provider evidence: chưa có; Git/real inference execution theo authority và stop conditions.
 - Task ID là identifier ổn định; danh sách trên là dependency order, không sort theo số ID.
