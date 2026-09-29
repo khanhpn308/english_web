@@ -13,7 +13,18 @@
 5. Không xóa hoặc sửa lịch sử cũ, trừ khi cần sửa lỗi ghi chép rõ ràng.
 6. Agent phải cập nhật changelog trước khi kết thúc một tác vụ có thay đổi file.
 
+## 30/09/2026
+
+- **Khu vực:** T013 — `docs/api-contract.md`, `docs/reviews/contract-conformance-002.md`, thẻ T013.
+- **Thay đổi:** Sau khi T063 cung cấp Gitleaks 8.30.1, thêm RED→GREEN security recheck cho snapshot contract: thay ba synthetic `Idempotency-Key` values bằng symbolic placeholder, bỏ raw API baseline digest khỏi prose và viết lại một bridge sentence bị rule generic-key bắt nhầm. Không đổi endpoint, schema, precondition hoặc semantics. Directory, staged diff và current-HEAD history (8 commits) đều 0 findings; không dùng allowlist/suppression.
+- **Mục đích:** Giữ commit T013 atomic và tương thích security gate hiện hành mà không thay đổi quyết định contract hay quality bar.
+
 ## 29/09/2026
+
+- **Khu vực:** T013 — `docs/spec.md`, `docs/api-contract.md`, `docs/ui-architecture.md`, `docs/adr/0005-contract-clarifications.md`, `docs/reviews/contract-conformance-002.md`, thẻ T013 và `tasks/todo.md`.
+- **Thay đổi:** Chốt 11 nhóm conformance bằng ADR-0005: quiz 5–30 với ví dụ2/2/1 và reject1/1/1; HARD giữ box và due calendar midnight Bangkok; writing-rubric-v1/blank/null; conditional new-date save/backend source ID/revision/ETag; hash/watcher vs stale API409; keys/explanations chỉ trong terminal result, GET attempt/replay/SRS atomic; caps1/8/4MiB, session60s/8h, deadline120/60/30s và database-lifetime idempotency retention. Đồng bộ AC/DTO/UI và các positive fixtures.
+- **Verification:** 11 document probes RED→GREEN; hai negative mutation probes reject đúng reason; manual crosswalk/walkthrough trong report. Staged whitespace/scope/link/provenance checks PASS sau khi chuẩn hóa metadata hard-break spaces trong scoped files; supplemental redacted credential-pattern scan zero candidates. Không có application code hoặc inference; generated/runtime/Windows/browser/provider/security tooling vẫn do task owner xác minh. Gitleaks chưa có (exit127), giữ PENDING.
+- **Mục đích:** Cung cấp oracle xác định trước khi business contracts được freeze. Skill documentation-and-adrs giữ authority, alternatives/consequences và evidence ownership rõ ràng. Worktree riêng bảo toàn concurrent T053; chỉ stage allowlist/bookkeeping T013, gồm full snapshots của planning inputs trước đó untracked.
 
 - **Khu vực:** `frontend/index.html`, `frontend/src/main.tsx`, `frontend/src/app/AppShell.tsx`, `frontend/src/app/shell.css`, `frontend/src/app/AppShell.test.tsx`, `vite.config.ts`, `tsconfig.json`, `tasks/t004-frontend-shell-routes.md`, `tasks/todo.md`.
 - **Thay đổi:** Hoàn thành task T004 (React shell, route map và landmarks):

@@ -1,6 +1,6 @@
 # Implementation task checklist
 
-**Planning state:** T001/T002/T058/T003/T004/T005 đã có evidence hoàn tất; trạng thái các task còn lại theo checklist dưới đây.
+**Planning state:** T001/T002/T058/T003/T004/T005/T013 đã có evidence hoàn tất; trạng thái các task còn lại theo checklist dưới đây.
 **Canonical plan:** [docs/task-plan.md](../docs/task-plan.md).  
 **Next ready task:** [T053](t053-quality-security-gates.md).
 **Handoff rule:** Chỉ check item khi thẻ tương ứng có acceptance/verification evidence và task status `DONE`. PENDING environment không được check thành PASS.
@@ -15,7 +15,7 @@
 - [x] [T005](t005-database-schema-migrations.md): SQLite connection và migration zero
 - [ ] [T053](t053-quality-security-gates.md): Coverage và quality-floor guard
 - [ ] [T063](t063-security-scan-tooling.md): Secret và code/dependency security scan gates
-- [ ] [T013](t013-contract-conformance.md): Chuẩn hóa ví dụ và quyết định contract còn mơ hồ
+- [x] [T013](t013-contract-conformance.md): Chuẩn hóa ví dụ và quyết định contract còn mơ hồ
 - [ ] [T006](t006-api-core-contract-foundation.md): Bootstrap session và HTTP guards
 - [ ] [T014](t014-operations-idempotency.md): Durable operation ledger và idempotency
 - [ ] [T017](t017-typed-api-client.md): Generated DTO và typed fetch client
