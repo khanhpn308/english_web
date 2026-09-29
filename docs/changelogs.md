@@ -15,6 +15,12 @@
 
 ## 29/09/2026
 
+- **Khu vực:** backend/app/main.py, backend/app/http/health.py, backend/app/platform/config.py, backend/__init__.py, backend/tests/test_health.py, tasks/t003-backend-skeleton.md, tasks/todo.md.
+- **Thay đổi:** Hoàn thành task T003: Triển khai FastAPI app factory (`create_app`) và endpoint `GET /api/v1/health` theo đúng normative schema `HealthSummary` (`status`, `version`, `storageStatus`, `bridgeStatus`, `readiness`) và header `Cache-Control: no-store`; cấu hình `AppSettings` với ràng buộc chỉ bind loopback interfaces (127.0.0.1, localhost, ::1) theo threat T-01; kiểm tra storage status trung thực (`OK` khi storage tồn tại, `NOT_READY` khi missing); độc lập hoàn toàn với AI bridge (0 inference call, 0 credential read); quản lý vòng đời ASGI startup/shutdown qua lifespan context; bổ sung 8 tests với 100% độ phủ mã nguồn cho backend app; vượt qua toàn bộ Mypy strict, Ruff và Pytest quality gates.
+- **Mục đích:** Cung cấp skeleton backend vững chắc và health probe cho các task tiếp theo (T004 frontend shell, T005 SQLite migration zero).
+
+## 29/09/2026
+
 - **Khu vực:** pyproject.toml, backend/tests/conftest.py, backend/tests/test_toolchain.py, docs/toolchain.md, tasks/t058-python-quality-gates.md, tasks/todo.md.
 - **Thay đổi:** Hoàn thành task T058: Cấu hình Python quality gates gồm Ruff linter với quy tắc chuẩn (E, W, F, I, B, C4, UP, ARG, SIM, RUF), MyPy static type checker ở chế độ strict (strict = true, files = ["backend"]), Pytest và Pytest-cov tự động xuất báo cáo Cobertura XML (`coverage.xml`) sau mỗi lần chạy suite; tạo `backend/tests/conftest.py` với fixtures `project_root` và `python_version_info`; tạo `backend/tests/test_toolchain.py` kiểm tra phiên bản Python >=3.12, importable dependencies từ lockfiles, nạp fixtures và cấu hình pyproject; thực hiện negative probes xác nhận phát hiện lỗi assertion, collection, lint và type mismatches; hoàn tất checkpoint CP01.
 - **Mục đích:** Cung cấp hạ tầng quality gates, runner và coverage cho backend theo CONSTRAINTS.md, sẵn sàng cho việc triển khai FastAPI app factory tại T003.

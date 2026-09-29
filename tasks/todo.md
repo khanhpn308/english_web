@@ -10,7 +10,7 @@
 - [x] [T001](t001-toolchain-repository-skeleton.md): Pin toolchain và repository skeleton
 - [x] [T002](t002-quality-gates-test-runner-build.md): Frontend lint, typecheck và test runner
 - [x] [T058](t058-python-quality-gates.md): Python lint, types, pytest và coverage runner
-- [ ] [T003](t003-backend-skeleton.md): FastAPI app factory và health
+- [x] [T003](t003-backend-skeleton.md): FastAPI app factory và health
 - [ ] [T004](t004-frontend-shell-routes.md): React shell, route map và landmarks
 - [ ] [T005](t005-database-schema-migrations.md): SQLite connection và migration zero
 - [ ] [T053](t053-quality-security-gates.md): Coverage và quality-floor guard
@@ -101,8 +101,8 @@
 
 ## Execution state
 
-- Current task: T058 đã hoàn thành và kiểm chứng (pytest, ruff, mypy PASS, coverage.xml emitted). Checkpoint CP01 hoàn tất.
-- Next task: T003 (FastAPI app factory và health) theo checkpoint CP02.
+- Current task: T003 đã hoàn thành và kiểm chứng (pytest, ruff, mypy PASS, coverage 100% on app modules).
+- Next task: T004 (React shell, route map và landmarks) theo checkpoint CP02.
 - T013: mandatory contract-conformance trước behavior phụ thuộc; clarification ghi trong ADR/task output.
 - Remote/commit/installed Windows/provider evidence: chưa có; Git/real inference execution theo authority và stop conditions.
 - Task ID là identifier ổn định; danh sách trên là dependency order, không sort theo số ID.
