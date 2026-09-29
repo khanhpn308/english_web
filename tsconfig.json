@@ -21,6 +21,8 @@
     "vite.config.ts",
     "eslint.config.js",
     "frontend/tests/**/*.ts",
-    "frontend/tests/**/*.tsx"
+    "frontend/tests/**/*.tsx",
+    "frontend/src/**/*.ts",
+    "frontend/src/**/*.tsx"
   ]
 }

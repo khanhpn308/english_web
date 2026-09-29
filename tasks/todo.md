@@ -1,8 +1,8 @@
 # Implementation task checklist
 
-**Planning state:** Kế hoạch đã có thẻ/graph; mọi implementation task dưới đây vẫn `TODO`.  
+**Planning state:** T001/T002/T058/T003/T005 đã có evidence hoàn tất; trạng thái các task còn lại theo checklist dưới đây.
 **Canonical plan:** [docs/task-plan.md](../docs/task-plan.md).  
-**Next ready task:** [T001](t001-toolchain-repository-skeleton.md).  
+**Next ready task:** [T004](t004-frontend-shell-routes.md).
 **Handoff rule:** Chỉ check item khi thẻ tương ứng có acceptance/verification evidence và task status `DONE`. PENDING environment không được check thành PASS.
 
 ## Ordered task list
@@ -11,8 +11,8 @@
 - [x] [T002](t002-quality-gates-test-runner-build.md): Frontend lint, typecheck và test runner
 - [x] [T058](t058-python-quality-gates.md): Python lint, types, pytest và coverage runner
 - [x] [T003](t003-backend-skeleton.md): FastAPI app factory và health
-- [ ] [T004](t004-frontend-shell-routes.md): React shell, route map và landmarks
-- [ ] [T005](t005-database-schema-migrations.md): SQLite connection và migration zero
+- [x] [T004](t004-frontend-shell-routes.md): React shell, route map và landmarks
+- [x] [T005](t005-database-schema-migrations.md): SQLite connection và migration zero
 - [ ] [T053](t053-quality-security-gates.md): Coverage và quality-floor guard
 - [ ] [T063](t063-security-scan-tooling.md): Secret và code/dependency security scan gates
 - [ ] [T013](t013-contract-conformance.md): Chuẩn hóa ví dụ và quyết định contract còn mơ hồ
@@ -101,8 +101,8 @@
 
 ## Execution state
 
-- Current task: T003 đã hoàn thành và kiểm chứng (pytest, ruff, mypy PASS, coverage 100% on app modules).
-- Next task: T004 (React shell, route map và landmarks) theo checkpoint CP02.
+- Current task: T004 (React shell, route map và landmarks) đã hoàn thành và kiểm chứng (AppShell.test.tsx 17/17 PASS, full suite 21/21 PASS, typecheck 0 errors, build thành công).
+- Next task: T053 (Coverage và quality-floor guard) hoặc T063 theo checkpoint CP02.
 - T013: mandatory contract-conformance trước behavior phụ thuộc; clarification ghi trong ADR/task output.
-- Remote/commit/installed Windows/provider evidence: chưa có; Git/real inference execution theo authority và stop conditions.
+- T005-A commit: `8adf972`; T004 commit atomic; T005-B commit theo Git history của branch `feature/task-t005-sqlite-migrations`. Chưa push; Windows/provider evidence còn pending theo owner tasks.
 - Task ID là identifier ổn định; danh sách trên là dependency order, không sort theo số ID.

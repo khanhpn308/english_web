@@ -15,6 +15,26 @@
 
 ## 29/09/2026
 
+- **Khu vực:** `frontend/index.html`, `frontend/src/main.tsx`, `frontend/src/app/AppShell.tsx`, `frontend/src/app/shell.css`, `frontend/src/app/AppShell.test.tsx`, `vite.config.ts`, `tsconfig.json`, `tasks/t004-frontend-shell-routes.md`, `tasks/todo.md`.
+- **Thay đổi:** Hoàn thành task T004 (React shell, route map và landmarks):
+  - Triển khai `AppShell` với đầy đủ cấu trúc landmarks ngữ nghĩa (`<header>`, `<nav aria-label="Điều hướng chính">`, `<main id="main-content">`), skip link chuyển hướng đến nội dung chính và live region thông báo chuyển trang.
+  - Thiết lập danh mục 9 route chuẩn hóa theo `docs/ui-architecture.md` §1 (`/`, `/lookup`, `/search`, `/word-forms/:wordFormId`, `/review`, `/quiz/new`, `/quiz/:attemptId`, `/quiz/:attemptId/result`, `/status`), bộ bóc tách dynamic route parameters và màn hình 404 cho route không hợp lệ.
+  - Hiển thị trạng thái chưa khả dụng trung thực, không giả lập dữ liệu cho các route v1 chưa có logic nghiệp vụ.
+  - Đảm bảo trạng thái `aria-current="page"` tại nav link đang active và bổ sung link truy cập quyền AI `/status#ai-consent` trong header shell.
+  - Tích hợp `ErrorBoundary` bảo vệ ứng dụng khi một màn hình gặp sự cố và cung cấp liên kết chuyển sang kiểm tra trạng thái tại `/status`.
+  - Cung cấp `shell.css` hỗ trợ responsive (320px - 1440px), tương phản cao, focus ring 3:1 và zoom 200% không che khuất control theo chuẩn WCAG 2.2 AA.
+  - Đóng gói static build thành công vào `frontend/dist/` không chứa credentials hay bridge tokens.
+  - Bổ sung 17 component/route test cases trong `AppShell.test.tsx`, đạt 21/21 tests frontend PASS cùng kiểm tra typecheck và lint hoàn hảo.
+- **Mục đích:** Cung cấp khung giao diện React shell vững chắc, accessible và route map chuẩn mực cho các task giao diện tiếp theo.
+
+## 29/09/2026
+
+- **Khu vực:** `backend/app/main.py`, `backend/app/http/health.py`, `backend/tests/test_health.py`, thẻ T005, `tasks/todo.md`.
+- **Thay đổi:** Hoàn tất phần T005-B theo scope được owner xác nhận: startup kiểm tra/migrate SQLite trước khi bật readiness; lỗi storage giữ `NOT_READY`; shutdown dispose engine và xóa readiness. Thay fixture file rỗng bằng SQLite thật, thêm 5 health/lifecycle cases. Focused storage/health 35 PASS; full suite 39 PASS; Ruff/format/Mypy PASS; một Alembic head. Cập nhật T005 `DONE` với handoff và các gate downstream còn PENDING.
+- **Mục đích:** Health phản ánh kết quả storage startup và bảo toàn dữ liệu trong failure paths. Skill documentation-and-adrs giúp ghi rõ default timeout, scope split, nguồn framework, evidence và giới hạn Linux/Windows/security tooling mà không thay spec/API contract.
+
+## 29/09/2026
+
 - **Khu vực:** `backend/app/persistence/database.py`, `backend/migrations/env.py`, `backend/migrations/versions/0001_storage.py`, `backend/tests/test_storage.py`, generated `alembic.ini`, task T005.
 - **Thay đổi:** Hoàn tất phần T005-A theo scope split được owner xác nhận: migration ledger, FK trên mỗi connection, bounded busy timeout, phát hiện WAL, integrity/schema checks trước mutation, migration trong transaction và fail-safe readonly/corrupt DB. Thêm 22 storage cases; full suite 34 PASS, Ruff/format/Mypy PASS, một Alembic head.
 - **Mục đích:** Có checkpoint storage kiểm chứng được trước khi nối health/lifecycle ở T005-B; domain schema và dữ liệu học thật được giữ ngoài scope.
