@@ -1,8 +1,8 @@
 # Implementation task checklist
 
-**Planning state:** T001/T002/T058/T003/T004/T005/T053/T063 đã có evidence hoàn tất; trạng thái các task còn lại theo checklist dưới đây.
+**Planning state:** T001/T002/T058/T003/T004/T005/T053/T063/T013 đã có evidence hoàn tất; trạng thái các task còn lại theo checklist dưới đây.
 **Canonical plan:** [docs/task-plan.md](../docs/task-plan.md).  
-**Next ready task:** [T013](t013-contract-conformance.md).
+**Next ready task:** [T006](t006-api-core-contract-foundation.md).
 **Handoff rule:** Chỉ check item khi thẻ tương ứng có acceptance/verification evidence và task status `DONE`. PENDING environment không được check thành PASS.
 
 ## Ordered task list
@@ -15,7 +15,7 @@
 - [x] [T005](t005-database-schema-migrations.md): SQLite connection và migration zero
 - [x] [T053](t053-quality-security-gates.md): Coverage và quality-floor guard
 - [x] [T063](t063-security-scan-tooling.md): Secret và code/dependency security scan gates
-- [ ] [T013](t013-contract-conformance.md): Chuẩn hóa ví dụ và quyết định contract còn mơ hồ
+- [x] [T013](t013-contract-conformance.md): Chuẩn hóa ví dụ và quyết định contract còn mơ hồ
 - [ ] [T006](t006-api-core-contract-foundation.md): Bootstrap session và HTTP guards
 - [ ] [T014](t014-operations-idempotency.md): Durable operation ledger và idempotency
 - [ ] [T017](t017-typed-api-client.md): Generated DTO và typed fetch client
@@ -78,7 +78,7 @@
 
 - [x] CP01: T001, T002, T058 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP02: T003, T004, T005 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
-- [ ] CP03: T053, T063, T013 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
+- [x] CP03: T053, T063, T013 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP04: T006, T014, T017 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP05: T066, T052, T062 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP06: T015, T007, T016 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
@@ -101,9 +101,9 @@
 
 ## Execution state
 
-- Current task: T063 hoàn thành; 20 focused/78 full Python và 21 frontend tests PASS, changed coverage 88,98%, combined total 87,42%, clean installs và ba security commands đều 0 findings.
+- Current task: T013 đã được tích hợp sau T063; 11 document probes và 2 negative mutation probes PASS, Gitleaks directory/current-HEAD history sạch; T063 vẫn giữ 20 focused/78 full Python, 21 frontend tests và ba security commands sạch.
 - T005 handoff: cả hai phần SQLite/migrations và health/lifecycle hoàn tất; full backend suite 41 PASS, focused storage 24 PASS, Ruff/format/Mypy PASS, một Alembic head. Pending release/tooling checks ghi trong thẻ T005.
-- Next task: T013 contract conformance theo dependency order; hai false-positive wording fixes đã áp dụng ở planning workspace phải được mang vào history reachable của nhánh T013 trước merge. T062 architecture gate vẫn chờ T017 theo dependency graph.
-- T013: mandatory contract-conformance trước behavior phụ thuộc; clarification ghi trong ADR/task output.
+- Next task: T006 bootstrap session và HTTP guards; T062 architecture gate vẫn chờ T017 theo dependency graph.
+- T013: contract conformance hoàn tất; generated DTO/runtime verification tiếp tục thuộc T017 và downstream tasks.
 - T005-A commit: `8adf972`; T004 commit atomic; T005-B commit theo Git history của branch `feature/task-t005-sqlite-migrations`. Chưa push; Windows/provider evidence còn pending theo owner tasks.
 - Task ID là identifier ổn định; danh sách trên là dependency order, không sort theo số ID.
