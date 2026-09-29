@@ -2,7 +2,7 @@
 
 **Task ID:** `T005`
 **Title:** SQLite connection và migration zero
-**Status:** `TODO`
+**Status:** `DONE`
 **Goal:** SQLite connection và migration zero. FK enabled, bounded busy timeout, WAL support detected; readonly/corrupt DB fail safe.
 **Suggested model:** GPT-6 Astra
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -54,6 +54,7 @@ Owner đã xác nhận scope clarification trong chat (`ok`): bổ sung health a
 - `backend/app/main.py`
 - `backend/app/http/health.py`
 - `backend/tests/test_health.py`
+- `backend/app/persistence/database.py` và `backend/tests/test_storage.py`: harden shared schema checks nếu review integration phát hiện edge case; phần B vẫn tối đa 5 file implementation.
 
 Generated outputs, tạo bằng Alembic init/config generator version đã khóa:
 
@@ -75,9 +76,9 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 
 ## Acceptance criteria
 
-- [ ] FK enabled, bounded busy timeout, WAL support detected; readonly/corrupt DB fail safe.
-- [ ] Alembic fresh upgrade + repeat giữ cùng revision; một migration head.
-- [ ] Integrity failure không drop/rebuild bất kỳ history.
+- [x] FK enabled, bounded busy timeout, WAL support detected; readonly/corrupt DB fail safe.
+- [x] Alembic fresh upgrade + repeat giữ cùng revision; một migration head.
+- [x] Integrity failure không drop/rebuild bất kỳ history.
 
 ## Test cases
 
@@ -94,6 +95,21 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 - Verified fresh/repeated upgrade, FK on separate connections, 80 ms lock timeout, WAL reader during writer lock, unsupported WAL via injected mode selection, readonly URI/file permissions, unknown/unversioned/malformed ledger, corrupt copy, FK integrity failure, transactional DDL rollback and refused downgrade. No live database touched.
 - `alembic.ini` generated with locked Alembic `init` in a temporary directory; generated config normalized to `%(here)s/backend/migrations`, no default database/credentials. Online standalone migration shares the same safety path; offline upgrade refuses without integrity checks.
 - T005-B health/lifecycle is still pending; overall task stays `TODO`. Future quality/security aggregate commands are PENDING until T053/T062/T063; Windows ACL/build/recovery evidence belongs to downstream tasks.
+
+## Verification evidence — T005-B and final handoff
+
+- T005-A committed as `8adf972`; T005-B completes the approved split with five implementation files: `main.py`, `http/health.py`, `test_health.py`, plus the shared `persistence/database.py` and `test_storage.py` for schema-filter hardening.
+- RED: `.venv/bin/python -m pytest backend/tests/test_health.py -q`: exit 1, 6 failed/7 passed; old code falsely reported readiness for corrupt/readonly/unversioned databases and lacked database lifecycle state.
+- GREEN: same health command exit 0, 13 passed. Existing healthy fixture now uses a migrated temporary SQLite database and runs lifespan explicitly; no existing assertion/test was removed or suppressed.
+- `.venv/bin/python -m pytest backend/tests/test_storage.py backend/tests/test_health.py -q`: initial integration exit 0, 35 passed. Review then found SQLite `LIKE` wildcard filtering could overlook `sqliteHistory` and view-only unversioned schemas; focused RED exited 1 (2 failed/3 passed). Exact reserved-prefix inventory fixes both cases without mutation. Final `.venv/bin/python -m pytest -q`: exit 0, 41 passed in 3.05s. Overall report 98% including branches; health/main/migrations 100%, database 89%. `coverage.xml` remains ignored.
+- `.venv/bin/python -m mypy backend`: exit 0, no issues in 11 files. `.venv/bin/python -m ruff check .`: exit 0. `.venv/bin/python -m ruff format --check .`: exit 0, 110 files. `git diff --check` and staged whitespace check: exit 0.
+- `.venv/bin/python -m alembic heads`: exit 0, `0001_storage (head)` only. Final exact storage gate `.venv/bin/python -m pytest backend/tests/test_storage.py -q`: 24 passed, exit 0.
+- Health keeps the existing response schema and `Cache-Control: no-store`. It reads startup storage readiness, stays false before initialization/after shutdown, and reports `NOT_READY` on storage failure. Startup metadata records revision/journal mode/WAL detection and content-free failure category; shutdown disposes the engine. HTTP health never reruns migrations or contacts the bridge.
+- Defaults: busy timeout 1,000 ms, internal override range 1–5,000 ms; no retry loop. SQLite foreign keys are enabled on every connection; integrity and FK checks run before mutation and again under the migration writer lock.
+- Precommit supplemental redacted credential-pattern scan of staged diff/history: zero candidates. `gitleaks detect --redact --no-banner`: unavailable (exit 127), PENDING until T063. `check:task`, coverage/floor/security/architecture aggregate tooling is not yet installed by T053/T062/T063; these future gates are not represented as PASS.
+- Files changed: the seven approved Python files, generated `alembic.ini`, this card, `tasks/todo.md`, and `docs/changelogs.md`. Intentionally untouched: spec/API/UI/ADR/CONSTRAINTS, manifests/locks, frontend, domain schema, real vocabulary files and all pre-existing unrelated untracked files.
+- Open release evidence: Windows SQLite/ACL/recovery and packaging checks remain with T040/T041/T054/T056/T057; unsupported WAL was simulated against the Linux fixture, not claimed tested on a different SQLite build. Frontend build is outside T005. Concurrent T004 commit `dc52e0e` and its bookkeeping were preserved; no T004 implementation was changed by this worker.
+- Next task in ordered plan: T053 now that T004 is also recorded `DONE`; T013 is dependency-ready after T005 and must precede business-contract implementation.
 
 ## Verification commands
 

@@ -78,12 +78,20 @@ def test_busy_writer_is_bounded_and_history_is_unchanged(tmp_path: Path) -> None
         db.close()
 
 
-@pytest.mark.parametrize("kind", ["unknown_revision", "unversioned", "bad_ledger"])
+@pytest.mark.parametrize(
+    "kind", ["unknown_revision", "unversioned", "bad_ledger", "sqlite_prefix", "view_only"]
+)
 def test_schema_mismatch_preserves_existing_database(tmp_path: Path, kind: str) -> None:
     path = tmp_path / "mismatch.db"
     with sqlite3.connect(path) as connection:
-        connection.execute("CREATE TABLE history (content TEXT)")
-        connection.execute("INSERT INTO history VALUES ('synthetic-history')")
+        if kind == "sqlite_prefix":
+            connection.execute("CREATE TABLE sqliteHistory (content TEXT)")
+            connection.execute("INSERT INTO sqliteHistory VALUES ('synthetic-history')")
+        elif kind == "view_only":
+            connection.execute("CREATE VIEW history AS SELECT 'synthetic-history' AS content")
+        else:
+            connection.execute("CREATE TABLE history (content TEXT)")
+            connection.execute("INSERT INTO history VALUES ('synthetic-history')")
         if kind == "unknown_revision":
             connection.execute("CREATE TABLE alembic_version (version_num TEXT PRIMARY KEY)")
             connection.execute("INSERT INTO alembic_version VALUES ('future_revision')")

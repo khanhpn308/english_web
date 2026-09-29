@@ -1,8 +1,8 @@
 # Implementation task checklist
 
-**Planning state:** T001/T002/T058/T003/T005 đã có evidence hoàn tất; trạng thái các task còn lại theo checklist dưới đây.
+**Planning state:** T001/T002/T058/T003/T004/T005 đã có evidence hoàn tất; trạng thái các task còn lại theo checklist dưới đây.
 **Canonical plan:** [docs/task-plan.md](../docs/task-plan.md).  
-**Next ready task:** [T004](t004-frontend-shell-routes.md).
+**Next ready task:** [T053](t053-quality-security-gates.md).
 **Handoff rule:** Chỉ check item khi thẻ tương ứng có acceptance/verification evidence và task status `DONE`. PENDING environment không được check thành PASS.
 
 ## Ordered task list
@@ -102,6 +102,7 @@
 ## Execution state
 
 - Current task: T004 (React shell, route map và landmarks) đã hoàn thành và kiểm chứng (AppShell.test.tsx 17/17 PASS, full suite 21/21 PASS, typecheck 0 errors, build thành công).
+- T005 handoff: cả hai phần SQLite/migrations và health/lifecycle hoàn tất; full backend suite 41 PASS, focused storage 24 PASS, Ruff/format/Mypy PASS, một Alembic head. Pending release/tooling checks ghi trong thẻ T005.
 - Next task: T053 (Coverage và quality-floor guard) hoặc T063 theo checkpoint CP02.
 - T013: mandatory contract-conformance trước behavior phụ thuộc; clarification ghi trong ADR/task output.
 - T005-A commit: `8adf972`; T004 commit atomic; T005-B commit theo Git history của branch `feature/task-t005-sqlite-migrations`. Chưa push; Windows/provider evidence còn pending theo owner tasks.

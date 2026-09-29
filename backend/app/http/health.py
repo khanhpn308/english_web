@@ -56,17 +56,17 @@ router = APIRouter(prefix="/api/v1", tags=["health"])
 
 @router.get("/health", response_model=HealthSummary)
 def get_health(
+    request: Request,
     response: Response,
     settings: Annotated[AppSettings, Depends(get_settings)],
 ) -> HealthSummary:
     """Return application health summary with Cache-Control: no-store."""
     response.headers["Cache-Control"] = "no-store"
 
-    storage_exists = settings.storage_path is not None and settings.storage_path.exists()
-    storage_status = StorageStatus.OK if storage_exists else StorageStatus.NOT_READY
+    readiness = getattr(request.app.state, "ready", False) is True
+    storage_status = StorageStatus.OK if readiness else StorageStatus.NOT_READY
 
     # Health check is independent of bridge; runtime without storage is NOT_READY
-    readiness = storage_exists
     status = HealthStatus.OK if readiness else HealthStatus.NOT_READY
 
     return HealthSummary(

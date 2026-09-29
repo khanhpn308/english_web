@@ -58,15 +58,15 @@ def _validate(connection: sqlite3.Connection, scripts: ScriptDirectory) -> None:
         raise StorageError("INTEGRITY_FAILED")
     if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
         raise StorageError("INTEGRITY_FAILED")
-    tables = {
+    schema_objects = {
         row[0]
         for row in connection.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            "SELECT name FROM sqlite_master WHERE substr(lower(name), 1, 7) != 'sqlite_'"
         )
     }
-    if not tables:
+    if not schema_objects:
         return
-    if "alembic_version" not in tables:
+    if "alembic_version" not in schema_objects:
         raise StorageError("SCHEMA_MISMATCH")
     columns = connection.execute("PRAGMA table_info(alembic_version)").fetchall()
     if len(columns) != 1 or columns[0][1] != "version_num" or columns[0][5] != 1:
