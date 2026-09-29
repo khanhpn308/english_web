@@ -15,6 +15,12 @@
 
 ## 29/09/2026
 
+- **Khu vực:** `scripts/check_constraints.py`, `scripts/tests/test_constraints.py`, `package.json`, `pyproject.toml`, generated lockfiles, `docs/toolchain.md`, `tasks/t053-quality-security-gates.md`, `tasks/todo.md`.
+- **Thay đổi:** Hoàn thành T053 bằng CLI diff-scoped cho changed coverage tối thiểu 80%, combined coverage baseline 86,70% với ratchet 0,5 điểm và quality-floor guard. Bổ sung 17 test cases âm/dương cho report thiếu, 79,9/80, ratchet, unmeasured source, suppression/skip/xóa test hoặc assertion/hạ threshold, redaction, coverage/floor trên untracked no-HEAD và trạng thái pending; nối Vitest V8 LCOV, pytest Cobertura, format/floor/coverage scripts và các aggregate command không false-green khi T062/T063 chưa sẵn sàng.
+- **Mục đích:** Biến quality bar trong `CONSTRAINTS.md` thành gate có exit code và artifact thực, giữ scanner/architecture ownership tách biệt. Skill documentation-and-adrs được dùng để ghi nguồn chính thức, dependency/license, baseline, trade-off và trạng thái `SETUP_PENDING`; không cần ADR vì thay đổi chỉ là tooling dễ đảo ngược, không đổi architecture/API.
+
+## 29/09/2026
+
 - **Khu vực:** `frontend/index.html`, `frontend/src/main.tsx`, `frontend/src/app/AppShell.tsx`, `frontend/src/app/shell.css`, `frontend/src/app/AppShell.test.tsx`, `vite.config.ts`, `tsconfig.json`, `tasks/t004-frontend-shell-routes.md`, `tasks/todo.md`.
 - **Thay đổi:** Hoàn thành task T004 (React shell, route map và landmarks):
   - Triển khai `AppShell` với đầy đủ cấu trúc landmarks ngữ nghĩa (`<header>`, `<nav aria-label="Điều hướng chính">`, `<main id="main-content">`), skip link chuyển hướng đến nội dung chính và live region thông báo chuyển trang.

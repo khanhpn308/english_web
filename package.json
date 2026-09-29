@@ -8,9 +8,18 @@
     "npm": ">=10.0.0"
   },
   "scripts": {
+    "check:fast:active": "npm run format:check && npm run lint && npm run typecheck && npm run floor:check",
+    "check:fast": "npm run check:fast:active && python scripts/check_constraints.py pending T063 security scanners",
+    "check:task:active": "npm run check:fast:active && npm run test:frontend:coverage && python -m pytest && npm run coverage:check",
+    "check:task": "npm run check:task:active && python scripts/check_constraints.py pending T062/T063 architecture and security gates",
+    "check:full": "npm run check:task:active && python scripts/check_constraints.py pending T062/T063 architecture and security gates",
+    "coverage:check": "python scripts/check_constraints.py coverage",
+    "floor:check": "python scripts/check_constraints.py floor",
+    "format:check": "python -m ruff format --check .",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:frontend": "vitest run",
+    "test:frontend:coverage": "vitest run --coverage.enabled --coverage.provider=v8 --coverage.reporter=text --coverage.reporter=lcov --coverage.reportsDirectory=htmlcov/frontend --coverage.include=frontend/src/**",
     "build": "vite build"
   },
   "dependencies": {
@@ -22,6 +31,7 @@
     "@types/node": "^22.20.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@vitest/coverage-v8": "^5.0.2",
     "@vitejs/plugin-react": "^6.1.1",
     "eslint": "^10.11.0",
     "eslint-plugin-react-hooks": "^7.1.1",
