@@ -15,6 +15,24 @@
 
 ## 29/09/2026
 
+- **Khu vực:** `backend/app/persistence/database.py`, `backend/migrations/env.py`, `backend/migrations/versions/0001_storage.py`, `backend/tests/test_storage.py`, generated `alembic.ini`, task T005.
+- **Thay đổi:** Hoàn tất phần T005-A theo scope split được owner xác nhận: migration ledger, FK trên mỗi connection, bounded busy timeout, phát hiện WAL, integrity/schema checks trước mutation, migration trong transaction và fail-safe readonly/corrupt DB. Thêm 22 storage cases; full suite 34 PASS, Ruff/format/Mypy PASS, một Alembic head.
+- **Mục đích:** Có checkpoint storage kiểm chứng được trước khi nối health/lifecycle ở T005-B; domain schema và dữ liệu học thật được giữ ngoài scope.
+
+## 29/09/2026
+
+- **Khu vực:** `tasks/t005-database-schema-migrations.md`, `docs/changelogs.md`.
+- **Thay đổi:** Ghi audit khi tiếp tục T005: baseline health T003 đạt 8 tests; phát hiện health readiness và fixtures cần sửa ở hai file ngoài allowlist, khiến task cần scope clarification/chia nhỏ trước implementation.
+- **Mục đích:** Ghi rõ điểm chặn và evidence để tiếp tục đúng phạm vi; chưa thay application code, allowlist, spec/API contract hoặc đánh dấu T005 hoàn tất.
+
+## 29/09/2026
+
+- **Khu vực:** `tasks/t005-database-schema-migrations.md`, `docs/changelogs.md`.
+- **Thay đổi:** Ghi checkpoint tạm dừng T005 sau khi đọc dependency/contract và kiểm tra trạng thái repository; chưa viết test/implementation, chưa chạy verification hay commit T005. Giữ task `TODO` để phiên sau bắt đầu từ bước test RED.
+- **Mục đích:** Bảo toàn ngữ cảnh và ranh giới scope cho phiên làm việc tiếp theo theo yêu cầu người dùng.
+
+## 29/09/2026
+
 - **Khu vực:** backend/app/main.py, backend/app/http/health.py, backend/app/platform/config.py, backend/__init__.py, backend/tests/test_health.py, tasks/t003-backend-skeleton.md, tasks/todo.md.
 - **Thay đổi:** Hoàn thành task T003: Triển khai FastAPI app factory (`create_app`) và endpoint `GET /api/v1/health` theo đúng normative schema `HealthSummary` (`status`, `version`, `storageStatus`, `bridgeStatus`, `readiness`) và header `Cache-Control: no-store`; cấu hình `AppSettings` với ràng buộc chỉ bind loopback interfaces (127.0.0.1, localhost, ::1) theo threat T-01; kiểm tra storage status trung thực (`OK` khi storage tồn tại, `NOT_READY` khi missing); độc lập hoàn toàn với AI bridge (0 inference call, 0 credential read); quản lý vòng đời ASGI startup/shutdown qua lifespan context; bổ sung 8 tests với 100% độ phủ mã nguồn cho backend app; vượt qua toàn bộ Mypy strict, Ruff và Pytest quality gates.
 - **Mục đích:** Cung cấp skeleton backend vững chắc và health probe cho các task tiếp theo (T004 frontend shell, T005 SQLite migration zero).
