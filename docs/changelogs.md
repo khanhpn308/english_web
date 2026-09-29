@@ -15,6 +15,12 @@
 
 ## 29/09/2026
 
+- **Khu vực:** package.json, package-lock.json, tsconfig.json, eslint.config.js, vite.config.ts, frontend/tests/toolchain.test.ts, tasks/t002-quality-gates-test-runner-build.md, tasks/todo.md.
+- **Thay đổi:** Hoàn thành task T002: Cấu hình frontend quality gates gồm ESLint flat config (eslint.config.js với typescript-eslint và react plugins), TypeScript strict configuration (tsconfig.json), Vite 8 và Vitest runner (vite.config.ts với passWithNoTests=false); bổ sung scripts `lint`, `typecheck`, `test:frontend`, `build` vào package.json; tạo bộ test frontend ban đầu frontend/tests/toolchain.test.ts kiểm tra runtime Node >=20.19.0, assertions và báo cáo BUILD_PENDING_SHELL; xác minh probes bắt lỗi âm/dương cho assertion, type, lint và build thiếu entry point.
+- **Mục đích:** Cung cấp hạ tầng quality gates và test runner hoàn chỉnh cho frontend theo CONSTRAINTS.md và UI architecture §10, sẵn sàng cho T004.
+
+## 29/09/2026
+
 - **Khu vực:** package.json, package-lock.json, requirements.lock, requirements-dev.lock, README.md, docs/toolchain.md, tasks/t001-toolchain-repository-skeleton.md, tasks/todo.md.
 - **Thay đổi:** Hoàn thành task T001: Khóa phiên bản toolchain frontend (React 19, TypeScript 5.8, Vite 8) qua package.json và package-lock.json; khóa phiên bản toolchain backend (FastAPI 0.141, Pydantic 2.13, SQLAlchemy 2.1, Alembic 1.20, Uvicorn 0.54, HTTPX 0.28, Ruff 0.16, MyPy 2.3, Pytest 9.1, Pytest-cov 7.1, Pip-tools 7.6) qua pyproject.toml và requirements.lock / requirements-dev.lock; tạo README.md và docs/toolchain.md hướng dẫn cài đặt và công bố trạng thái readiness của lệnh; xác minh clean install tái lập độc lập và cấu hình .gitignore.
 - **Mục đích:** Thiết lập nền tảng toolchain có thể tái lập cho toàn bộ các task downstream bắt đầu từ T002 và T058, tuân thủ CONSTRAINTS.md và AGENTS.md.

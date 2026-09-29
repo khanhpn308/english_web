@@ -8,7 +8,7 @@
 ## Ordered task list
 
 - [x] [T001](t001-toolchain-repository-skeleton.md): Pin toolchain và repository skeleton
-- [ ] [T002](t002-quality-gates-test-runner-build.md): Frontend lint, typecheck và test runner
+- [x] [T002](t002-quality-gates-test-runner-build.md): Frontend lint, typecheck và test runner
 - [ ] [T058](t058-python-quality-gates.md): Python lint, types, pytest và coverage runner
 - [ ] [T003](t003-backend-skeleton.md): FastAPI app factory và health
 - [ ] [T004](t004-frontend-shell-routes.md): React shell, route map và landmarks
@@ -101,8 +101,8 @@
 
 ## Execution state
 
-- Current task: T001 đã hoàn thành và kiểm chứng (npm ci, pip install -r requirements-dev.lock, git check-ignore PASS).
-- Next task: T002 (frontend quality gates) hoặc T058 (Python quality gates) theo checkpoint CP01.
+- Current task: T002 đã hoàn thành và kiểm chứng (npm run lint, typecheck, test:frontend PASS).
+- Next task: T058 (Python quality gates) để hoàn thành bộ đôi gate trước backend skeleton T003 theo checkpoint CP01.
 - T013: mandatory contract-conformance trước behavior phụ thuộc; clarification ghi trong ADR/task output.
 - Remote/commit/installed Windows/provider evidence: chưa có; Git/real inference execution theo authority và stop conditions.
 - Task ID là identifier ổn định; danh sách trên là dependency order, không sort theo số ID.
