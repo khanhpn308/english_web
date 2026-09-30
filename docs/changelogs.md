@@ -1,3 +1,13 @@
+## 30/09/2026 - T017 Remediation
+
+- **Khu vực:** `frontend/src/shared/api`, `scripts/export_contract.py`, `scripts/tests/test_contract.py`
+- **Thay đổi:** 
+  1. Loại bỏ các schema ErrorDetails ảo (chưa được backend hỗ trợ) ra khỏi generator, chỉ export `FIELD_ERRORS`.
+  2. Bổ sung context (URL, method, Idempotency-Key, operationId) cho MutationUnknownError để phục vụ reconciliation.
+  3. Cập nhật `test_contract.py` so sánh full-schema byte-for-byte với file checked-in.
+  4. Sửa false positive ETag validation `null` guard.
+- **Mục đích:** Sửa các bẫy lỗi và ranh giới hợp đồng API, đảm bảo generation không chèn dữ liệu unsupported và test chống trượt cấu trúc.
+
 ## 30/09/2026
 
 - **Khu vực:** `frontend/src/shared/api`, `scripts/export_contract.py`, `contracts/openapi.json`

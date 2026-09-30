@@ -79,7 +79,7 @@
 - [x] CP01: T001, T002, T058 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP02: T003, T004, T005 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [x] CP03: T053, T063, T013 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
-- [x] CP04: T006, T014, T017 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp. (T017 remains)
+- [x] CP04: T006, T014, T017 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP05: T066, T052, T062 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP06: T015, T007, T016 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP07: T018, T019, T008 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
@@ -103,7 +103,7 @@
 
 - Current task: T006 hoàn tất server-side bootstrap/session/HTTP guards; focused session tests, full quality/security gate và build có evidence trong thẻ T006. T066/T052 tiếp tục browser bootstrap/integration evidence.
 - T005 handoff: cả hai phần SQLite/migrations và health/lifecycle hoàn tất; full backend suite 41 PASS, focused storage 24 PASS, Ruff/format/Mypy PASS, một Alembic head. Pending release/tooling checks ghi trong thẻ T005.
-- Next task: T014 durable operation ledger/idempotency; T017 và T062 tiếp tục theo dependency graph.
+- Next task: T066 (Trusted browser bootstrap page), T052 (Browser test harness), T062 (Architecture import boundary gates) theo dependency graph.
 - T013: contract conformance hoàn tất; generated DTO/runtime verification tiếp tục thuộc T017 và downstream tasks.
 - T005-A commit: `8adf972`; T004 commit atomic; T005-B commit theo Git history của branch `feature/task-t005-sqlite-migrations`. Chưa push; Windows/provider evidence còn pending theo owner tasks.
 - Task ID là identifier ổn định; danh sách trên là dependency order, không sort theo số ID.

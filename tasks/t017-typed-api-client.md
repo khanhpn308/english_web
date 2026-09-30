@@ -2,7 +2,7 @@
 
 **Task ID:** `T017`  
 **Title:** Generated DTO và typed fetch client  
-**Status:** `TODO`  
+**Status:** `DONE`  
 **Goal:** Generated DTO và typed fetch client. Generation reproducible no timestamp churn; contract diff phát hiện breaking shape.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.

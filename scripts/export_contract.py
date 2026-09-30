@@ -6,22 +6,29 @@ from pathlib import Path
 from backend.app.main import create_app
 
 
-def main():
+def build_contract() -> dict:
     app = create_app()
     openapi = app.openapi()
 
     paths = openapi.get("paths", {})
     if "/api/v1/operations/{operation_id}" in paths:
         op_path = paths.pop("/api/v1/operations/{operation_id}")
+        if "get" not in op_path:
+            raise ValueError("Expected GET method for /api/v1/operations/{operation_id}")
         for _, operation in op_path.items():
             if "parameters" in operation:
                 for param in operation["parameters"]:
                     if param.get("name") == "operation_id":
                         param["name"] = "operationId"
         paths["/api/v1/operations/{operationId}"] = op_path
+    elif "/api/v1/operations/{operationId}" not in paths:
+        raise ValueError("Backend route /api/v1/operations/{operation_id} is missing. Did it drift?")  # noqa: E501
 
     openapi.setdefault("components", {}).setdefault("schemas", {})
 
+    # ONLY project currently implemented error detail variants.
+    # The previous variants (CONFLICT, RETRY, RESTORE, etc.) are UNSUPPORTED at runtime
+    # and fabricating them masks missing implementation.
     error_details_schema = {
         "type": "object",
         "discriminator": {"propertyName": "kind"},
@@ -44,64 +51,7 @@ def main():
                     },
                 },
                 "required": ["kind", "fields"],
-            },
-            {
-                "type": "object",
-                "properties": {
-                    "kind": {"type": "string", "enum": ["CONFLICT"]},
-                    "expectedRevision": {"type": "integer"},
-                    "currentRevision": {"type": "integer"},
-                    "resourceType": {"type": "string"},
-                    "resourceId": {"type": "string"},
-                },
-                "required": ["kind", "expectedRevision", "currentRevision"],
-            },
-            {
-                "type": "object",
-                "properties": {
-                    "kind": {"type": "string", "enum": ["RETRY"]},
-                    "retryAfterSeconds": {"type": "integer"},
-                    "operationId": {"type": "string"},
-                    "operationKind": {"type": "string"},
-                },
-                "required": ["kind"],
-            },
-            {
-                "type": "object",
-                "properties": {
-                    "kind": {"type": "string", "enum": ["RESOURCE"]},
-                    "resourceType": {"type": "string"},
-                    "resourceId": {"type": "string"},
-                    "recovery": {
-                        "type": "string",
-                        "enum": ["READ", "REBOOTSTRAP", "RELINK", "RESTORE"],
-                    },
-                },
-                "required": ["kind", "resourceType", "recovery"],
-            },
-            {
-                "type": "object",
-                "properties": {
-                    "kind": {"type": "string", "enum": ["RESTORE"]},
-                    "attemptId": {"type": "string"},
-                    "snapshotRevision": {"type": "integer"},
-                    "answerRevision": {"type": "integer"},
-                    "guidanceCode": {"type": "string"},
-                },
-                "required": ["kind", "attemptId", "guidanceCode"],
-            },
-            {
-                "type": "object",
-                "properties": {
-                    "kind": {"type": "string", "enum": ["AI_CONSENT"]},
-                    "consentState": {
-                        "type": "string",
-                        "enum": ["NOT_GRANTED", "GRANTED", "REVOKED", "STALE"],
-                    },
-                    "currentPolicyVersion": {"type": "string"},
-                },
-                "required": ["kind", "consentState"],
-            },
+            }
         ],
     }
 
@@ -123,15 +73,9 @@ def main():
         "required": ["error"],
     }
 
-    # Clean up operations schema that was missing aiProvenance but aliased differently
-    # Let's ensure OperationView maps to Operation
     if "OperationView" in openapi["components"]["schemas"]:
         op_schema = openapi["components"]["schemas"].pop("OperationView")
         op_schema["title"] = "Operation"
-        # Contract requires aiProvenance?
-        # "aiProvenance?: { ... }" - we can leave it out if the backend doesn't output it for now,
-        # but to be totally spec compliant, we might add it.
-        # I will leave as is, since T014 doesn't implement aiProvenance anyway.
         openapi["components"]["schemas"]["Operation"] = op_schema
         # Update refs
         for p in paths.values():
@@ -178,8 +122,10 @@ def main():
             return [sort_dict(v) for v in d]
         return d
 
-    openapi_sorted = sort_dict(openapi)
+    return sort_dict(openapi)
 
+def main():
+    openapi_sorted = build_contract()
     out_dir = Path("contracts")
     out_dir.mkdir(exist_ok=True)
     out_file = out_dir / "openapi.json"
@@ -194,7 +140,6 @@ def main():
     print(f"Exported openapi to {out_file}")
     subprocess.run(["npx", "openapi-typescript", str(out_file), "-o", str(ts_out)], check=True)
     print(f"Exported typescript to {ts_out}")
-
 
 if __name__ == "__main__":
     main()

@@ -80,39 +80,6 @@ export interface components {
             }[];
             /** @enum {string} */
             kind: "FIELD_ERRORS";
-        } | {
-            currentRevision: number;
-            expectedRevision: number;
-            /** @enum {string} */
-            kind: "CONFLICT";
-            resourceId?: string;
-            resourceType?: string;
-        } | {
-            /** @enum {string} */
-            kind: "RETRY";
-            operationId?: string;
-            operationKind?: string;
-            retryAfterSeconds?: number;
-        } | {
-            /** @enum {string} */
-            kind: "RESOURCE";
-            /** @enum {string} */
-            recovery: "READ" | "REBOOTSTRAP" | "RELINK" | "RESTORE";
-            resourceId?: string;
-            resourceType: string;
-        } | {
-            answerRevision?: number;
-            attemptId: string;
-            guidanceCode: string;
-            /** @enum {string} */
-            kind: "RESTORE";
-            snapshotRevision?: number;
-        } | {
-            /** @enum {string} */
-            consentState: "NOT_GRANTED" | "GRANTED" | "REVOKED" | "STALE";
-            currentPolicyVersion?: string;
-            /** @enum {string} */
-            kind: "AI_CONSENT";
         };
         ErrorResponse: {
             error: {
