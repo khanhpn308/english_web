@@ -1,0 +1,59 @@
+[1mdiff --git a/scripts/tests/test_contract.py b/scripts/tests/test_contract.py[m
+[1mindex 88bfb5f..90681c2 100644[m
+[1m--- a/scripts/tests/test_contract.py[m
+[1m+++ b/scripts/tests/test_contract.py[m
+[36m@@ -18,21 +18,29 @@[m [mdef test_full_schema_matches_checked_in(tmp_path):[m
+     checked_in_json = json.loads(checked_in_json_path.read_text())[m
+ [m
+     # Compare structurally[m
+[32m+[m[32m    # fmt: off[m
+     assert openapi_sorted == checked_in_json, "Generated OpenAPI schema drifted from checked-in version! Please run export:contract."  # noqa: E501[m
+[32m+[m[32m    # fmt: on[m
+ [m
+     # 3. Generate TypeScript into temporary output[m
+     temp_openapi = tmp_path / "openapi.json"[m
+     temp_openapi.write_text(json.dumps(openapi_sorted, indent=2) + "\n")[m
+ [m
+     temp_ts = tmp_path / "generated.ts"[m
+[31m-    subprocess.run(["npx", "openapi-typescript", str(temp_openapi), "-o", str(temp_ts)], check=True, stdout=subprocess.DEVNULL)  # noqa: E501[m
+[32m+[m[32m    subprocess.run([m
+[32m+[m[32m        ["npx", "openapi-typescript", str(temp_openapi), "-o", str(temp_ts)],[m
+[32m+[m[32m        check=True,[m
+[32m+[m[32m        stdout=subprocess.DEVNULL,[m
+[32m+[m[32m    )  # noqa: E501[m
+ [m
+     # 4. Compare TS output against checked-in generated.ts[m
+     checked_in_ts_path = Path("frontend/src/shared/api/generated.ts")[m
+     if not checked_in_ts_path.exists():[m
+         pytest.fail("Checked-in generated.ts does not exist. Run export:contract.")[m
+ [m
+[32m+[m[32m    # fmt: off[m
+     assert temp_ts.read_text() == checked_in_ts_path.read_text(), "Generated TypeScript drifted from checked-in version! Please run export:contract."  # noqa: E501[m
+[32m+[m[32m    # fmt: on[m
+ [m
+ [m
+ def test_openapi_generation_is_deterministic():[m
+[36m@@ -41,6 +49,7 @@[m [mdef test_openapi_generation_is_deterministic():[m
+     second_gen = build_contract()[m
+     assert first_gen == second_gen, "OpenAPI generation is not deterministic (content changed)"[m
+ [m
+[32m+[m
+ def test_no_bridge_url_in_artifacts():[m
+     openapi_file = Path("contracts/openapi.json")[m
+     ts_file = Path("frontend/src/shared/api/generated.ts")[m
+[36m@@ -52,6 +61,7 @@[m [mdef test_no_bridge_url_in_artifacts():[m
+         assert "8045" not in content, f"Sensitive port 8045 found in {path}"[m
+         assert "http://127.0.0.1" not in content, f"Loopback URL found in {path}"[m
+ [m
+[32m+[m
+ def test_expected_schema_invariants():[m
+     openapi_sorted = build_contract()[m
+ [m
+[36m@@ -67,6 +77,7 @@[m [mdef test_expected_schema_invariants():[m
+     # 3. HTTPValidationError should not exist[m
+     assert "HTTPValidationError" not in schemas, "HTTPValidationError must be stripped"[m
+ [m
+[32m+[m
+ def test_required_nullable_fields():[m
+     openapi_sorted = build_contract()[m
+     op_schema = openapi_sorted["components"]["schemas"].get("Operation")[m

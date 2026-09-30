@@ -1,0 +1,49 @@
+{
+    "models_valid": {
+        "object": "list",
+        "data": [
+            {
+                "id": "gemini-3.8-flash-high",
+                "object": "model",
+                "created": 1700000000,
+                "owned_by": "google"
+            }
+        ]
+    },
+    "models_unapproved": {
+        "object": "list",
+        "data": [
+            {
+                "id": "gpt-5-turbo",
+                "object": "model",
+                "created": 1700000000,
+                "owned_by": "openai"
+            }
+        ]
+    },
+    "models_malformed_schema": {
+        "object": "list",
+        "items": []
+    },
+    "chat_valid": {
+        "id": "chatcmpl-123",
+        "object": "chat.completion",
+        "created": 1700000000,
+        "model": "gemini-3.8-flash-high",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "This is a mock response."
+                },
+                "finish_reason": "stop"
+            }
+        ],
+        "usage": {
+            "prompt_tokens": 10,
+            "completion_tokens": 10,
+            "total_tokens": 20
+        }
+    }
+}

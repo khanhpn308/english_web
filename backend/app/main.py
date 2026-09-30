@@ -107,6 +107,10 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.include_router(bootstrap_router)
     app.include_router(operations_router)
 
+    from backend.app.http.consent import router as consent_router
+
+    app.include_router(consent_router)
+
     # The trusted bootstrap entry is built separately by T066; never serve the main app here.
     @app.get("/bootstrap", include_in_schema=False)
     def bootstrap_page() -> Response:

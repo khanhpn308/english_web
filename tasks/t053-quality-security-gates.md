@@ -88,6 +88,25 @@ npm run floor:check
 
 ## Handoff
 
+### Narrow assertion-replacement remediation (30/09/2026)
+
+- Status: remediation `DONE`; shared workspace `NOT_READY_TO_COMMIT` because unrelated gates still fail. No commit authorized or created.
+- Context: T015 advances Alembic head, so legitimate assertion edits appear as removed/added Git lines. The original checker reported every removed assertion independently. The session started with an uncommitted per-file counting implementation and 29 passing tests; those existing changes were preserved.
+- Decision: compare assertion counts within each modified test file, across diff hunks. For Python, reconstruct the previous source from the collected diff and tokenize both versions so comments, assertion messages and multiline strings cannot count as replacements. Count multiple assertions on one line separately. Other languages retain the existing `assert`/`expect`/`should` markers with per-file replacement counting. Unreadable or untokenizable modified Python tests return redacted setup failure (exit 2), never a clean verdict. No semantic-strength inference, path/migration exemption, dependency, threshold or gate change.
+- TDD: eight additional cases cover exact sole-assertion deletion, message-word false positives, comments/strings falsely credited as replacements, multiline-string context, unchanged assertions enclosed in a string, separate-hunk replacement and redacted tokenization failure. RED before checker changes: exit 1, 4 failed / 30 passed. GREEN: exit 0, 37 passed. Existing revision replacement, wrap/unwrap, net loss/addition, same-line statements, cross-file isolation, framework replacement, test deletion, suppression/skip, threshold, coverage/ratchet and no-HEAD regressions remain green.
+- T015 reproduction: copied the actual baseline/current contents of `backend/tests/test_storage.py`, `backend/tests/test_health.py` and `backend/tests/test_operations.py` into a temporary Git repository. Original HEAD checker: exit 1 with eight `assertion-removed` findings. Repaired checker: exit 0, `floor: clean`. The source files were read only.
+
+| Command | Exit | Outcome |
+|---|---|---|
+| `python -m pytest scripts/tests/test_constraints.py -q` | 0 | 37 passed |
+| `python -m ruff check scripts/check_constraints.py scripts/tests/test_constraints.py` | 0 | All checks passed |
+| `python -m mypy scripts/check_constraints.py` | 0 | No issues in one source file |
+| `npm run floor:check` | 1 | Only remaining finding: `silenced-checker` in `scripts/tests/test_contract.py:34` |
+| `npm run check:fast` | 1 | Stops at formatter: `backend/app/adapters/bridge.py` and `backend/tests/test_bridge.py`; later stages not run |
+
+- Files changed this session: the checker, its tests, this task card and `docs/changelogs.md`. Intentionally untouched: T015 and all backend/product tests, contract/client changes, `CONSTRAINTS.md`, thresholds, package/locks and other task bookkeeping. Existing unrelated working-tree changes remain intact. No staging, branching, commit, push or inference.
+- Remaining risks: structural counts cannot establish semantic strength; other-language marker matching remains heuristic. The working-tree floor/fast failures above require their own owners. Next work: resolve the contract-test suppression and bridge formatting in their authorized tasks, then rerun the shared gates.
+
 - Files changed: `scripts/check_constraints.py`, `scripts/tests/test_constraints.py`, `package.json`, `pyproject.toml`, generated lockfiles, `docs/toolchain.md` and permitted bookkeeping files.
 - Intentionally untouched: `CONSTRAINTS.md`, spec/API/UI/security/observability/ADR documents, frontend/backend product source, vocabulary data, credentials and provider configuration.
 - Remaining risks: local `main` still trails the stacked T004/T005 commits, so current task verification names `bebcc12` explicitly; downstream CI must use its actual merge target. Architecture and security aggregates remain owned by T062/T063.

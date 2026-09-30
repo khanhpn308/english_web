@@ -18,21 +18,29 @@ def test_full_schema_matches_checked_in(tmp_path):
     checked_in_json = json.loads(checked_in_json_path.read_text())
 
     # Compare structurally
+    # fmt: off
     assert openapi_sorted == checked_in_json, "Generated OpenAPI schema drifted from checked-in version! Please run export:contract."  # noqa: E501
+    # fmt: on
 
     # 3. Generate TypeScript into temporary output
     temp_openapi = tmp_path / "openapi.json"
     temp_openapi.write_text(json.dumps(openapi_sorted, indent=2) + "\n")
 
     temp_ts = tmp_path / "generated.ts"
-    subprocess.run(["npx", "openapi-typescript", str(temp_openapi), "-o", str(temp_ts)], check=True, stdout=subprocess.DEVNULL)  # noqa: E501
+    subprocess.run(
+        ["npx", "openapi-typescript", str(temp_openapi), "-o", str(temp_ts)],
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )  # noqa: E501
 
     # 4. Compare TS output against checked-in generated.ts
     checked_in_ts_path = Path("frontend/src/shared/api/generated.ts")
     if not checked_in_ts_path.exists():
         pytest.fail("Checked-in generated.ts does not exist. Run export:contract.")
 
+    # fmt: off
     assert temp_ts.read_text() == checked_in_ts_path.read_text(), "Generated TypeScript drifted from checked-in version! Please run export:contract."  # noqa: E501
+    # fmt: on
 
 
 def test_openapi_generation_is_deterministic():
@@ -40,6 +48,7 @@ def test_openapi_generation_is_deterministic():
     first_gen = build_contract()
     second_gen = build_contract()
     assert first_gen == second_gen, "OpenAPI generation is not deterministic (content changed)"
+
 
 def test_no_bridge_url_in_artifacts():
     openapi_file = Path("contracts/openapi.json")
@@ -51,6 +60,7 @@ def test_no_bridge_url_in_artifacts():
         content = path.read_text()
         assert "8045" not in content, f"Sensitive port 8045 found in {path}"
         assert "http://127.0.0.1" not in content, f"Loopback URL found in {path}"
+
 
 def test_expected_schema_invariants():
     openapi_sorted = build_contract()
@@ -66,6 +76,7 @@ def test_expected_schema_invariants():
 
     # 3. HTTPValidationError should not exist
     assert "HTTPValidationError" not in schemas, "HTTPValidationError must be stripped"
+
 
 def test_required_nullable_fields():
     openapi_sorted = build_contract()

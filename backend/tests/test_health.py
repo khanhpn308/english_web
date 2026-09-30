@@ -193,7 +193,7 @@ async def test_asgi_startup_shutdown_lifespan(temp_storage_path: Path) -> None:
         assert getattr(app.state, "ready", False) is True
         database = app.state.database
         assert isinstance(database, Database)
-        assert app.state.storage_info.schema_revision == "0002_operations"
+        assert app.state.storage_info.schema_revision == "0003_consent"
 
     assert getattr(app.state, "ready", False) is False
     assert app.state.database is None

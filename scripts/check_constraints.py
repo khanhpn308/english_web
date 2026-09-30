@@ -10,9 +10,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tokenize
 import tomllib
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from io import StringIO
 from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
@@ -365,6 +367,63 @@ def threshold_findings(diff: DiffData) -> list[Finding]:
     return findings
 
 
+def assertion_removal_findings(repo: Path, diff: DiffData) -> list[Finding]:
+    assertion_pattern = re.compile(r"\b(?:assert|expect|should)\b")
+    added_by_path: dict[str, list[DiffLine]] = {}
+    removed_by_path: dict[str, list[DiffLine]] = {}
+    for line in diff.added:
+        if is_test(line.path):
+            added_by_path.setdefault(line.path, []).append(line)
+    for line in diff.removed:
+        if is_test(line.path) and line.path not in diff.deleted:
+            removed_by_path.setdefault(line.path, []).append(line)
+
+    findings: list[Finding] = []
+    for path, removed in removed_by_path.items():
+        added = added_by_path.get(path, [])
+        if PurePosixPath(path).suffix.lower() in {".py", ".pyi"}:
+            # Reconstruct the old file from the same diff used by every floor rule.
+            # Full-file tokenization distinguishes code from multiline strings.
+            try:
+                new_lines = (repo / path).read_text(encoding="utf-8").splitlines()
+                added_numbers = {line.line_number for line in added}
+                old_lines = [
+                    text for number, text in enumerate(new_lines, 1) if number not in added_numbers
+                ]
+                for line in sorted(removed, key=lambda line: line.line_number):
+                    old_lines.insert(line.line_number - 1, line.text)
+
+                def assertion_tokens(lines: list[str], test_path: str) -> list[DiffLine]:
+                    return [
+                        DiffLine(test_path, token.start[0], "")
+                        for token in tokenize.generate_tokens(
+                            StringIO("\n".join(lines) + "\n").readline
+                        )
+                        if token.type == tokenize.NAME and assertion_pattern.fullmatch(token.string)
+                    ]
+
+                old_assertions = assertion_tokens(old_lines, path)
+                new_assertions = assertion_tokens(new_lines, path)
+            except (OSError, UnicodeError, tokenize.TokenError, SyntaxError) as error:
+                raise SetupFailure(f"cannot count assertions: {path}") from error
+            loss = len(old_assertions) - len(new_assertions)
+            removed_numbers = {line.line_number for line in removed}
+            candidates = sorted(
+                old_assertions,
+                key=lambda line: (line.line_number not in removed_numbers, line.line_number),
+            )
+        else:
+            # Other test languages retain the existing structural markers.
+            candidates = [
+                line for line in removed for _match in assertion_pattern.finditer(line.text)
+            ]
+            replacements = sum(len(assertion_pattern.findall(line.text)) for line in added)
+            loss = len(candidates) - replacements
+        for line in candidates[: max(0, loss)]:
+            findings.append(Finding("assertion-removed", path, line.line_number))
+    return findings
+
+
 def check_floor(repo: Path, base: str) -> int:
     diff = collect_diff(repo, base)
     suppression_pattern, stub_pattern, skip_pattern = compile_floor_patterns()
@@ -385,15 +444,7 @@ def check_floor(repo: Path, base: str) -> int:
     for path in sorted(diff.deleted):
         if is_test(path):
             findings.append(Finding("test-deleted", path))
-    assertion_pattern = re.compile(r"\b(?:assert|expect|should)\b")
-    for line in diff.removed:
-        if (
-            is_test(line.path)
-            and line.path not in diff.deleted
-            and assertion_pattern.search(line.text)
-        ):
-            findings.append(Finding("assertion-removed", line.path, line.line_number))
-
+    findings.extend(assertion_removal_findings(repo, diff))
     findings.extend(threshold_findings(diff))
     unique_findings = sorted(
         set(findings),

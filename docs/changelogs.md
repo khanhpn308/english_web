@@ -1,3 +1,29 @@
+## 30/09/2026 - T053 assertion-replacement floor remediation
+
+- **Files:** `scripts/check_constraints.py`, `scripts/tests/test_constraints.py`, `tasks/t053-quality-security-gates.md` and this changelog; existing uncommitted changes preserved.
+- **Reason/change:** T015's legitimate migration-head assertion replacements must not count as assertion deletions. Compare assertions per modified test file; tokenize Python with complete before/after context to exclude comment/string matches. Keep real deletion/net loss, test deletion, skip/suppression, unfinished work, threshold, coverage, no-HEAD and redaction protections. No path/migration exemption or threshold change.
+- **Evidence:** Added regression cases first: RED exit 1, 4 failed / 30 passed; GREEN exit 0, 37 passed. Focused Ruff and Mypy exit 0. Isolated replay of the three actual T015 test diffs: original checker exit 1, eight `assertion-removed` findings; repaired checker exit 0, `floor: clean`.
+- **Shared gate failures:** `npm run floor:check` exits 1 for existing suppression in `scripts/tests/test_contract.py:34`. `npm run check:fast` exits 1 at formatting in `backend/app/adapters/bridge.py` and `backend/tests/test_bridge.py`; later stages do not run. These files remain untouched. Remediation done; shared workspace not ready to commit. No commit authorized or created.
+
+## 30/09/2026 - T007 final deadline remediation
+
+- **Files:** `backend/app/adapters/bridge.py`, `backend/app/platform/bridge_port.py`, `backend/tests/test_bridge.py`, `tasks/t007-bridge-policy-consent-adapter.md` and this changelog.
+- **Deadline:** Removed the redundant client-level timeout calculation. Every no-key models, keyed models and chat request independently receives `deadline - monotonic()` immediately before sending; nonpositive budget raises `BridgeUnavailableError` without another request. The same absolute deadline covers preflight and dispatch. This supersedes the earlier incomplete deadline evidence; operation deadline enforcement is no longer downstream evidence.
+- **Tests:** Capture all HTTPX timeout phases: preflight 5.0 → 1.0 after four seconds; exact expiry sends only the no-key request; initially expired preflight sends none; dispatch after four seconds receives 1.0; independent operation deadline 15.1 receives 8.0 / 6.0 / 4.0 on the same adapter.
+- **Verification:** Focused pytest 14 passed, Mypy adapters/platform and focused Ruff exit 0; `git diff --check` exit 0. Full pytest 152 passed outside sandbox (exit 0, coverage-file warnings); sandbox attempt stalled and was interrupted (exit 130). Full Mypy exit 1 with 33 errors in three parallel consent files; full Ruff exit 1 with 19 errors in parallel consent files, `test_operations.py` and `scripts/tests/test_contract.py`. Exact locations are recorded in the task card. Remediation DONE; whole working tree NOT_READY_TO_COMMIT until those unrelated checks pass.
+- **Scope:** Fixture JSON, shared todo, parallel T015/T017/other source and tooling untouched. Independent concurrent changes to `scripts/check_constraints.py`, `scripts/tests/test_constraints.py` and `tasks/t053-quality-security-gates.md` were observed by hash comparison. No staging, commit, push, real key or inference.
+- **Downstream:** Installed Windows/Antigravity profile, LAN isolation, T040 key provisioning, T016 consent/policy admission only. Documentation follows the repository-required documentation-and-adrs skill; no architecture or public API change.
+
+## 30/09/2026 - T007 pre-commit cleanup and evidence audit
+
+- **Files:** `backend/app/adapters/bridge.py`, `backend/tests/test_bridge.py`, `tasks/t007-bridge-policy-consent-adapter.md` and this changelog.
+- **Correction:** Initial focused Ruff returned exit 1 with 12 diagnostics; this was FAIL. Removed unused imports, sorted imports, combined equivalent async contexts and renamed unused callback arguments without rule suppression. Replaced the existing test type suppression with `AsyncIterator[bytes]`.
+- **Evidence:** Strengthened existing tests to capture the actual dispatch HTTPX timeout and unsafe-profile request path/Authorization absence. Focused pytest: 9 passed, exit 0; Mypy adapters/platform: exit 0; exact focused Ruff: exit 0; `git diff --check`: exit 0. Linux Python 3.12.3; synthetic mock transport only.
+- **Deadline:** Operation 1 deadline 5.0, preflight starts 0.0, two requests consume 4.0, dispatch starts 4.0 and receives 1.0 seconds. After expiry at 5.1, no request is sent. Operation 2 deadline 15.1, dispatch at 7.1 receives 8.0 seconds. HTTPX phase timeouts do not alone prove the caller's end-to-end cancellation/hard-deadline admission gate; downstream T016 owns that integration.
+- **Boundaries:** 4,194,303 and 4,194,304 bytes pass the size gate and fail synthetic JSON parsing; 4,194,305 bytes fail specifically on size. Unsafe no-key models 200 sends exactly one request, no Authorization and no chat. Approved sequence is no-key models 401, keyed models 200, then caller dispatch.
+- **Untouched:** `bridge_port.py`, fixture JSON, shared `tasks/todo.md`, all pre-existing parallel consent/migration/tests and contract/client changes. No staging, commit, push or real inference.
+- **Downstream PENDING:** Installed Windows/Antigravity profile, LAN isolation, protected real-key provisioning/rotation (T040), final consent/policy and operation admission (T016). A fully mimicking local listener remains the accepted ADR-0002 impersonation risk.
+
 ## 30/09/2026 - T066 Trusted browser bootstrap page
 
 - **Khu vực:** `frontend/bootstrap.html`, `frontend/src/bootstrap.ts`, `vite.config.ts`

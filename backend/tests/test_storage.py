@@ -18,18 +18,24 @@ def test_fresh_and_repeat_upgrade_have_one_head_and_operation_tables(tmp_path: P
     db = Database(tmp_path / "fresh.db")
     try:
         first = db.initialize()
-        assert first.schema_revision == "0002_operations"
+        assert first.schema_revision == "0003_consent"
         assert first.wal_supported is True
         assert first.journal_mode == "wal"
         assert db.initialize() == first
         with db.engine.connect() as connection:
             assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").all() == [
-                ("0002_operations",)
+                ("0003_consent",)
             ]
             assert connection.exec_driver_sql(
                 "SELECT name FROM sqlite_master WHERE type='table'"
-            ).all() == [("alembic_version",), ("operations",), ("operation_keys",)]
-        assert ScriptDirectory.from_config(migration_config()).get_heads() == ["0002_operations"]
+            ).all() == [
+                ("alembic_version",),
+                ("operations",),
+                ("operation_keys",),
+                ("ai_consent_state",),
+                ("ai_consent_event",),
+            ]
+        assert ScriptDirectory.from_config(migration_config()).get_heads() == ["0003_consent"]
     finally:
         db.close()
 
@@ -73,7 +79,7 @@ def test_busy_writer_is_bounded_and_history_is_unchanged(tmp_path: Path) -> None
             with pytest.raises(OperationalError), db.engine.begin() as connection:
                 connection.exec_driver_sql("INSERT INTO history VALUES (2)")
             writer.rollback()
-        assert db.initialize().schema_revision == "0002_operations"
+        assert db.initialize().schema_revision == "0003_consent"
     finally:
         db.close()
 
@@ -190,7 +196,7 @@ def test_alembic_online_upgrade_and_repeat(tmp_path: Path) -> None:
     command.upgrade(config, "head")
     with sqlite3.connect(path) as connection:
         assert connection.execute("SELECT version_num FROM alembic_version").fetchall() == [
-            ("0002_operations",)
+            ("0003_consent",)
         ]
 
 
@@ -220,7 +226,7 @@ def test_failed_migration_rolls_back_ddl_and_preserves_history(tmp_path: Path) -
             revision = connection.exec_driver_sql(
                 "SELECT version_num FROM alembic_version"
             ).scalar()
-            assert revision == "0002_operations"
+            assert revision == "0003_consent"
     finally:
         db.close()
 
@@ -268,7 +274,7 @@ def test_downgrade_refuses_to_remove_ledger(tmp_path: Path) -> None:
         command.downgrade(config, "base")
     with sqlite3.connect(path) as connection:
         assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
-            "0002_operations",
+            "0003_consent",
         )
 
 

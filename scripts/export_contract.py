@@ -22,7 +22,9 @@ def build_contract() -> dict:
                         param["name"] = "operationId"
         paths["/api/v1/operations/{operationId}"] = op_path
     elif "/api/v1/operations/{operationId}" not in paths:
+        # fmt: off
         raise ValueError("Backend route /api/v1/operations/{operation_id} is missing. Did it drift?")  # noqa: E501
+        # fmt: on
 
     openapi.setdefault("components", {}).setdefault("schemas", {})
 
@@ -124,6 +126,7 @@ def build_contract() -> dict:
 
     return sort_dict(openapi)
 
+
 def main():
     openapi_sorted = build_contract()
     out_dir = Path("contracts")
@@ -140,6 +143,7 @@ def main():
     print(f"Exported openapi to {out_file}")
     subprocess.run(["npx", "openapi-typescript", str(out_file), "-o", str(ts_out)], check=True)
     print(f"Exported typescript to {ts_out}")
+
 
 if __name__ == "__main__":
     main()

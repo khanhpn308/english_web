@@ -167,7 +167,7 @@ describe('apiClient', () => {
       expect(mutError.operationId).toBeUndefined();
       
       // 3. Raw request body is NOT copied. The caller already owns its draft state.
-      expect((mutError as Record<string, unknown>).body).toBeUndefined();
+      expect((mutError as unknown as Record<string, unknown>).body).toBeUndefined();
     }
   });
 });

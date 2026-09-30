@@ -308,6 +308,186 @@ def test_floor_flags_deleted_test_file(tmp_path: Path) -> None:
     assert "[test-deleted] tests/test_value.py" in result.stderr
 
 
+@pytest.mark.parametrize(
+    ("before", "after", "expected_code"),
+    [
+        pytest.param(
+            "    assert value == 2\n",
+            "    value = 2\n",
+            1,
+            id="only-assertion-deleted",
+        ),
+        pytest.param(
+            '    assert revision == "0002_operations"\n',
+            '    assert revision == "0003_consent"\n',
+            0,
+            id="revision-replacement",
+        ),
+        pytest.param(
+            '    assert read_revision(connection) == "0002_operations"\n',
+            '    assert (\n        read_revision(connection) == "0003_consent"\n    )\n',
+            0,
+            id="replacement-wraps-to-multiline",
+        ),
+        pytest.param(
+            '    assert (\n        read_revision(connection) == "0002_operations"\n    )\n',
+            '    assert read_revision(connection) == "0003_consent"\n',
+            0,
+            id="replacement-unwraps-multiline",
+        ),
+        pytest.param(
+            "    assert value == 2\n    assert other == 3\n",
+            "    assert value == 4\n",
+            1,
+            id="two-removed-one-added",
+        ),
+        pytest.param(
+            "    assert value == 2\n",
+            "    assert value == 4\n    assert other == 3\n",
+            0,
+            id="one-removed-two-added",
+        ),
+        pytest.param(
+            "    assert value == 2; assert other == 3\n",
+            "    assert value == 4\n",
+            1,
+            id="two-statements-on-one-line-net-loss",
+        ),
+        pytest.param(
+            "    assert value == 2; assert other == 3\n",
+            "    assert value == 4\n    assert other == 5\n",
+            0,
+            id="same-line-statements-rewrapped",
+        ),
+        pytest.param(
+            '    assert value == 2, "assert old revision"\n',
+            '    assert value == 3, "new revision"\n',
+            0,
+            id="assertion-message-is-not-an-assertion",
+        ),
+        pytest.param(
+            "    assert value == 2\n",
+            "    value = 2  # assert value == 2\n",
+            1,
+            id="comment-cannot-replace-assertion",
+        ),
+        pytest.param(
+            "    assert value == 2\n",
+            '    value = "assert value == 2"\n',
+            1,
+            id="string-cannot-replace-assertion",
+        ),
+        pytest.param(
+            '    message = """example\n    assert value == 2\n    """\n',
+            '    message = """example\n    value = 2\n    """\n',
+            0,
+            id="multiline-string-is-not-an-assertion",
+        ),
+        pytest.param(
+            "    value = 2\n    assert value == 2\n    value = 3\n",
+            '    message = """\n    assert value == 2\n    """\n',
+            1,
+            id="unchanged-assertion-enclosed-in-string",
+        ),
+    ],
+)
+def test_floor_compares_assertion_counts_per_file(
+    tmp_path: Path, before: str, after: str, expected_code: int
+) -> None:
+    path = "tests/test_schema.py"
+    initialise_repository(tmp_path, {path: "def test_schema():\n" + before})
+    write_file(tmp_path, path, "def test_schema():\n" + after)
+
+    result = run_checker(tmp_path, "floor", "--base", "main")
+
+    assert result.returncode == expected_code, result.stdout + result.stderr
+    if expected_code == 1:
+        assert f"[assertion-removed] {path}:" in result.stderr
+    else:
+        assert result.stdout == "floor: clean\n"
+        assert result.stderr == ""
+
+
+@pytest.mark.parametrize("assertion", ["expect(value).toBe", "value.should.equal"])
+def test_floor_allows_other_assertion_framework_replacements(
+    tmp_path: Path, assertion: str
+) -> None:
+    path = "frontend/src/value.test.ts"
+    initialise_repository(tmp_path, {path: f"{assertion}(2);\n"})
+    write_file(tmp_path, path, f"{assertion}(3);\n")
+
+    result = run_checker(tmp_path, "floor", "--base", "main")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stderr == ""
+
+
+def test_floor_does_not_credit_assertions_added_in_another_file(tmp_path: Path) -> None:
+    initialise_repository(
+        tmp_path,
+        {
+            "tests/test_value.py": "def test_value():\n    assert value == 2\n",
+            "tests/test_other.py": "def test_other():\n    assert other == 3\n",
+        },
+    )
+    write_file(tmp_path, "tests/test_value.py", "def test_value():\n    value = 2\n")
+    write_file(
+        tmp_path,
+        "tests/test_other.py",
+        "def test_other():\n    assert other == 3\n    assert extra == 4\n",
+    )
+
+    result = run_checker(tmp_path, "floor", "--base", "main")
+
+    assert result.returncode == 1
+    assert result.stderr == "floor: 1 violation(s)\n[assertion-removed] tests/test_value.py:2\n"
+
+
+def test_floor_allows_replacement_across_separate_diff_hunks(tmp_path: Path) -> None:
+    path = "tests/test_value.py"
+    middle = "    value += 1\n" * 10
+    initialise_repository(tmp_path, {path: "def test_value():\n    assert value == 2\n" + middle})
+    write_file(tmp_path, path, "def test_value():\n" + middle + "    assert value == 12\n")
+
+    result = run_checker(tmp_path, "floor", "--base", "main")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout == "floor: clean\n"
+
+
+def test_floor_assertion_counting_failure_is_redacted_and_never_green(tmp_path: Path) -> None:
+    path = "tests/test_value.py"
+    initialise_repository(tmp_path, {path: "def test_value():\n    assert value == 2\n"})
+    write_file(tmp_path, path, 'def test_value():\n    assert ("do-not-print-this"\n')
+
+    result = run_checker(tmp_path, "floor", "--base", "main")
+
+    assert result.returncode == 2
+    assert result.stderr == f"floor: SETUP_PENDING: cannot count assertions: {path}\n"
+    assert "do-not-print-this" not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    ("marker", "rule"),
+    [
+        ("@pytest.mark." + "skip(reason='later')", "test-made-easier"),
+        ("# type:" + " ignore", "silenced-checker"),
+    ],
+)
+def test_floor_replacement_does_not_bypass_skip_or_suppression(
+    tmp_path: Path, marker: str, rule: str
+) -> None:
+    path = "tests/test_value.py"
+    initialise_repository(tmp_path, {path: "def test_value():\n    assert value == 2\n"})
+    write_file(tmp_path, path, f"{marker}\ndef test_value():\n    assert value == 3\n")
+
+    result = run_checker(tmp_path, "floor", "--base", "main")
+
+    assert result.returncode == 1
+    assert f"[{rule}] {path}:1" in result.stderr
+    assert "[assertion-removed]" not in result.stderr
+
+
 def test_floor_flags_loosened_constraint_threshold(tmp_path: Path) -> None:
     initialise_repository(
         tmp_path,
