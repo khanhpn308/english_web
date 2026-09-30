@@ -11,8 +11,11 @@
     "check:fast:active": "npm run format:check && npm run lint && npm run typecheck && npm run floor:check",
     "check:fast": "npm run check:fast:active && npm run security:secrets",
     "check:task:active": "npm run check:fast:active && npm run test:frontend:coverage && python -m pytest && npm run coverage:check && npm run security:secrets && npm run security:code && npm run security:deps",
-    "check:task": "npm run check:task:active && python scripts/check_constraints.py pending T062 architecture gate",
-    "check:full": "npm run check:task:active && python scripts/check_constraints.py pending T062 architecture gate",
+    "check:task": "npm run check:task:active && npm run architecture:check",
+    "check:full": "npm run check:task:active && npm run architecture:check",
+    "architecture:frontend": "depcruise --config .dependency-cruiser.cjs --output-type err frontend/src",
+    "architecture:backend": "lint-imports --config pyproject.toml --no-cache",
+    "architecture:check": "npm run architecture:frontend && npm run architecture:backend && python -m pytest scripts/tests/test_architecture_gate.py -q --no-cov",
     "coverage:check": "python scripts/check_constraints.py coverage",
     "floor:check": "python scripts/check_constraints.py floor",
     "format:check": "python -m ruff format --check .",
@@ -32,6 +35,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "dependency-cruiser": "17.4.3",
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.20.4",
     "@types/react": "^19.0.0",

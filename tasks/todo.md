@@ -21,7 +21,7 @@
 - [x] [T017](t017-typed-api-client.md): Generated DTO và typed fetch client
 - [x] [T066](t066-browser-bootstrap.md): Trusted browser bootstrap page
 - [ ] [T052](t052-browser-test-harness.md): Browser harness với local fake API/bridge
-- [ ] [T062](t062-architecture-gates.md): Architecture import boundary gates
+- [ ] [T062](t062-architecture-gates.md): Architecture import boundary gates — implementation green (40 tests, both tools, dependency scan); inherited T007 formatting blocks aggregate.
 - [ ] [T015](t015-consent-api.md): Persist consent singleton và GET/PUT/DELETE
 - [x] [T007](t007-bridge-policy-consent-adapter.md): Antigravity transport adapter với fake proxy
 - [ ] [T016](t016-dispatch-fence.md): Consent admission fence trước AI dispatch

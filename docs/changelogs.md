@@ -1,3 +1,10 @@
+## 30/09/2026 - T062 resumed architecture-gate verification
+
+- **Files:** Preserved interrupted `.dependency-cruiser.cjs`, `pyproject.toml`, `package.json`, generated npm/dev Python locks and `scripts/tests/test_architecture_gate.py` without implementation edits; updated T062 card, todo and this changelog using the repository-required documentation-and-adrs skill.
+- **Reconstruction:** Branch `task/t062`, HEAD/base `b49a722`. Historical `test_real_frontend` failure did not recur. Initial exact pytest command used the original workspace virtualenv and failed 20 Python probes because import-linter/Grimp were absent; this worktree's existing virtualenv resolves the setup error.
+- **Evidence:** Final focused pytest 40 passed; architecture gate exit 0: dependency-cruiser 13 modules / 14 dependencies / zero violations, import-linter 7 kept / 0 broken. Typecheck, focused Ruff/Mypy/format, config ESLint, floor and diff checks exit 0. Synthetic forbidden imports, cycles, exact generated DTO/sibling, valid type-only port and namespace-package probes all behave as required. After missing-tool/sandbox setup failures, the checksum-verified OSV-Scanner 2.6.0 network-enabled dependency scan exits 0 with zero findings; pip dependency consistency also passes. Scanner binary stays in `/tmp`.
+- **Baseline blocker:** `npm run check:task` exits 1 at formatting in the two T007 bridge files. Both are byte-identical to `b49a722`; base-file formatting checks also exit 1. Application source, thresholds, contracts and unrelated tasks remain untouched. Whole branch not ready to commit; no commit, push or Git integration performed. Exact handoff and T052 package reconciliation are recorded in the task card.
+
 ## 30/09/2026 - T053 assertion-replacement floor remediation
 
 - **Files:** `scripts/check_constraints.py`, `scripts/tests/test_constraints.py`, `tasks/t053-quality-security-gates.md` and this changelog; existing uncommitted changes preserved.

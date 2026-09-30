@@ -27,6 +27,7 @@ chardet==7.6.0
     # via diff-cover
 click==8.5.0
     # via
+    #   import-linter
     #   pip-tools
     #   uvicorn
 coverage[toml]==7.16.2
@@ -35,6 +36,8 @@ diff-cover==10.6.0
     # via vocabulary-app (pyproject.toml)
 fastapi==0.141.1
     # via vocabulary-app (pyproject.toml)
+grimp==3.17
+    # via import-linter
 h11==0.16.0
     # via
     #   httpcore
@@ -49,6 +52,8 @@ idna==3.20
     # via
     #   anyio
     #   httpx
+import-linter==2.15
+    # via vocabulary-app (pyproject.toml)
 iniconfig==2.3.0
     # via pytest
 jinja2==3.1.6
@@ -57,10 +62,14 @@ librt==0.16.0
     # via mypy
 mako==1.4.3
     # via alembic
+markdown-it-py==4.2.0
+    # via rich
 markupsafe==3.0.3
     # via
     #   jinja2
     #   mako
+mdurl==0.1.2
+    # via markdown-it-py
 mypy==2.3.1
     # via vocabulary-app (pyproject.toml)
 mypy-extensions==1.1.0
@@ -89,6 +98,7 @@ pygments==2.21.0
     # via
     #   diff-cover
     #   pytest
+    #   rich
 pyproject-hooks==1.3.3
     # via
     #   build
@@ -103,6 +113,8 @@ python-dotenv==1.2.3
     # via uvicorn
 pyyaml==6.0.3
     # via uvicorn
+rich==15.0.0
+    # via import-linter
 ruff==0.16.9
     # via vocabulary-app (pyproject.toml)
 sqlalchemy==2.1.1
@@ -116,6 +128,7 @@ typing-extensions==4.16.0
     #   alembic
     #   anyio
     #   fastapi
+    #   import-linter
     #   mypy
     #   pydantic
     #   pydantic-core
