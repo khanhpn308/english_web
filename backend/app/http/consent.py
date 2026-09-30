@@ -1,9 +1,11 @@
-from typing import Literal, TypedDict
-from pydantic import BaseModel, ConfigDict
-from fastapi import APIRouter, Request, Response, Header, Body
-from backend.app.http.errors import error_response
-from backend.app.application.consent import ConsentService
+from secrets import token_urlsafe
+from typing import Annotated, Literal
+
+from backend.app.application.consent import ActiveAiPolicy, ConsentRejected, ConsentService
 from backend.app.application.operations import OperationLedger
+from fastapi import APIRouter, Body, Header, Request, Response
+from pydantic import BaseModel, ConfigDict
+from starlette.responses import JSONResponse
 
 router = APIRouter(prefix="/api/v1/ai-consent", tags=["consent"])
 
@@ -34,7 +36,7 @@ async def get_consent(request: Request, response: Response) -> AiConsentView:
     etag = f'"ac-r{state["revision"]}-{digest}"'
     response.headers["Cache-Control"] = "no-store"
     response.headers["ETag"] = etag
-    active = getattr(request.app.state, "active_ai_policy", None)
+    active: ActiveAiPolicy | None = getattr(request.app.state, "active_ai_policy", None)
 
     current_state = state["state"]
     can_request_ai = False
@@ -70,16 +72,16 @@ class AiConsentMutationResult(BaseModel):
 @router.put("", response_model=AiConsentMutationResult)
 async def grant_consent(
     request: Request,
-    response: Response,
-    body: GrantAiConsent = Body(..., embed=False),
+    _response: Response,
+    body: Annotated[GrantAiConsent, Body(embed=False)],
     if_match: str = Header(..., alias="If-Match"),
     idempotency_key: str = Header(..., alias="Idempotency-Key", max_length=128),
-) -> AiConsentMutationResult:
+) -> AiConsentMutationResult | JSONResponse:
     db = request.app.state.database
     ledger = OperationLedger(db.engine)
     service = ConsentService(ledger)
 
-    active = getattr(request.app.state, "active_ai_policy", None)
+    active: ActiveAiPolicy | None = getattr(request.app.state, "active_ai_policy", None)
 
     with db.engine.connect() as conn:
         res = service.grant_consent(
@@ -90,11 +92,8 @@ async def grant_consent(
             active_policy=active,
         )
 
-    if "error" in res:
-        status, code = res["error"]
-        from starlette.responses import JSONResponse
-        from secrets import token_urlsafe
-
+    if isinstance(res, ConsentRejected):
+        status, code = res.error
         # Local error mapping
         return JSONResponse(
             {"error": {"code": code, "message": code, "requestId": f"req_{token_urlsafe(12)}"}},
@@ -102,17 +101,17 @@ async def grant_consent(
         )
 
     return AiConsentMutationResult(
-        operationId=res["operation_id"],
-        appliedRevision=res["applied_revision"],
+        operationId=res.operation_id,
+        appliedRevision=res.applied_revision,
     )
 
 
 @router.delete("", response_model=AiConsentMutationResult)
 async def revoke_consent(
     request: Request,
-    response: Response,
+    _response: Response,
     idempotency_key: str = Header(..., alias="Idempotency-Key", max_length=128),
-) -> AiConsentMutationResult:
+) -> AiConsentMutationResult | JSONResponse:
     db = request.app.state.database
     ledger = OperationLedger(db.engine)
     service = ConsentService(ledger)
@@ -123,17 +122,14 @@ async def revoke_consent(
             key=idempotency_key,
         )
 
-    if "error" in res:
-        status, code = res["error"]
-        from starlette.responses import JSONResponse
-        from secrets import token_urlsafe
-
+    if isinstance(res, ConsentRejected):
+        status, code = res.error
         return JSONResponse(
             {"error": {"code": code, "message": code, "requestId": f"req_{token_urlsafe(12)}"}},
             status_code=status,
         )
 
     return AiConsentMutationResult(
-        operationId=res["operation_id"],
-        appliedRevision=res["applied_revision"],
+        operationId=res.operation_id,
+        appliedRevision=res.applied_revision,
     )

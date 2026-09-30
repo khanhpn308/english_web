@@ -1,8 +1,12 @@
-import pytest
+from collections.abc import AsyncIterator
 from pathlib import Path
-from backend.app.persistence.database import Database
+
+import pytest
+from backend.app.application.consent import ActiveAiPolicy
 from backend.app.main import create_app
+from backend.app.persistence.database import Database
 from backend.app.platform.config import AppSettings
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 
@@ -19,10 +23,15 @@ def app_settings(tmp_path: Path) -> AppSettings:
 
 
 @pytest.fixture
-async def client(app_settings: AppSettings):
+async def app(app_settings: AppSettings) -> AsyncIterator[FastAPI]:
     app = create_app(app_settings)
+    async with app.router.lifespan_context(app):
+        yield app
+
+
+@pytest.fixture
+async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     async with (
-        app.router.lifespan_context(app),
         AsyncClient(
             transport=ASGITransport(app=app),
             base_url="http://127.0.0.1:8000",
@@ -46,7 +55,7 @@ def anyio_backend() -> str:
 
 
 @pytest.mark.anyio
-async def test_get_initial_consent(client: AsyncClient):
+async def test_get_initial_consent(client: AsyncClient) -> None:
     response = await client.get("/api/v1/ai-consent")
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == "no-store"
@@ -63,14 +72,16 @@ async def test_get_initial_consent(client: AsyncClient):
 
 
 @pytest.fixture
-def synthetic_policy():
+def synthetic_policy() -> ActiveAiPolicy:
     return {"version": "policy-v1", "digest": "d_12345", "content": "You agree to everything."}
 
 
 @pytest.mark.anyio
-async def test_ready_grant(client: AsyncClient, synthetic_policy: dict):
+async def test_ready_grant(
+    client: AsyncClient, app: FastAPI, synthetic_policy: ActiveAiPolicy
+) -> None:
     # Setup policy
-    client._transport.app.state.active_ai_policy = synthetic_policy
+    app.state.active_ai_policy = synthetic_policy
 
     # 1. GET initial state
     res1 = await client.get("/api/v1/ai-consent")
@@ -99,8 +110,10 @@ async def test_ready_grant(client: AsyncClient, synthetic_policy: dict):
 
 
 @pytest.mark.anyio
-async def test_grant_idempotency_replay(client: AsyncClient, synthetic_policy: dict):
-    client._transport.app.state.active_ai_policy = synthetic_policy
+async def test_grant_idempotency_replay(
+    client: AsyncClient, app: FastAPI, synthetic_policy: ActiveAiPolicy
+) -> None:
+    app.state.active_ai_policy = synthetic_policy
 
     # First grant
     res1 = await client.put(
@@ -127,8 +140,8 @@ async def test_grant_idempotency_replay(client: AsyncClient, synthetic_policy: d
 
 
 @pytest.mark.anyio
-async def test_revoke(client: AsyncClient, synthetic_policy: dict):
-    client._transport.app.state.active_ai_policy = synthetic_policy
+async def test_revoke(client: AsyncClient, app: FastAPI, synthetic_policy: ActiveAiPolicy) -> None:
+    app.state.active_ai_policy = synthetic_policy
     await client.put(
         "/api/v1/ai-consent",
         json={"policyVersion": "policy-v1"},
@@ -147,7 +160,7 @@ async def test_revoke(client: AsyncClient, synthetic_policy: dict):
 
 
 @pytest.mark.anyio
-async def test_redundant_revoke_bumps_revision(client: AsyncClient):
+async def test_redundant_revoke_bumps_revision(client: AsyncClient) -> None:
     # Even without policy, revoke works
     res1 = await client.delete(
         "/api/v1/ai-consent", headers={"Idempotency-Key": "key-revoke-first"}
@@ -164,8 +177,10 @@ async def test_redundant_revoke_bumps_revision(client: AsyncClient):
 
 
 @pytest.mark.anyio
-async def test_grant_revision_conflict(client: AsyncClient, synthetic_policy: dict):
-    client._transport.app.state.active_ai_policy = synthetic_policy
+async def test_grant_revision_conflict(
+    client: AsyncClient, app: FastAPI, synthetic_policy: ActiveAiPolicy
+) -> None:
+    app.state.active_ai_policy = synthetic_policy
     # Wrong If-Match
     res = await client.put(
         "/api/v1/ai-consent",
@@ -177,7 +192,7 @@ async def test_grant_revision_conflict(client: AsyncClient, synthetic_policy: di
 
 
 @pytest.mark.anyio
-async def test_grant_missing_policy_returns_503(client: AsyncClient):
+async def test_grant_missing_policy_returns_503(client: AsyncClient) -> None:
     # No policy configured
     res = await client.put(
         "/api/v1/ai-consent",
@@ -189,9 +204,11 @@ async def test_grant_missing_policy_returns_503(client: AsyncClient):
 
 
 @pytest.mark.anyio
-async def test_grant_stale_policy_409(client: AsyncClient, synthetic_policy: dict):
+async def test_grant_stale_policy_409(
+    client: AsyncClient, app: FastAPI, synthetic_policy: ActiveAiPolicy
+) -> None:
     # Setup policy v1
-    client._transport.app.state.active_ai_policy = synthetic_policy
+    app.state.active_ai_policy = synthetic_policy
 
     # 1. GET initial state
     res1 = await client.get("/api/v1/ai-consent")
@@ -208,9 +225,11 @@ async def test_grant_stale_policy_409(client: AsyncClient, synthetic_policy: dic
 
 
 @pytest.mark.anyio
-async def test_get_stale_state(client: AsyncClient, synthetic_policy: dict):
+async def test_get_stale_state(
+    client: AsyncClient, app: FastAPI, synthetic_policy: ActiveAiPolicy
+) -> None:
     # Setup policy v1
-    client._transport.app.state.active_ai_policy = synthetic_policy
+    app.state.active_ai_policy = synthetic_policy
 
     res1 = await client.get("/api/v1/ai-consent")
     etag = res1.headers["ETag"]
@@ -223,7 +242,7 @@ async def test_get_stale_state(client: AsyncClient, synthetic_policy: dict):
     )
 
     # Server active policy changes to v2
-    client._transport.app.state.active_ai_policy = {
+    app.state.active_ai_policy = {
         "version": "policy-v2",
         "digest": "d_67890",
         "content": "You agree to more.",
@@ -240,8 +259,10 @@ async def test_get_stale_state(client: AsyncClient, synthetic_policy: dict):
 
 
 @pytest.mark.anyio
-async def test_grant_idempotency_conflict(client: AsyncClient, synthetic_policy: dict):
-    client._transport.app.state.active_ai_policy = synthetic_policy
+async def test_grant_idempotency_conflict(
+    client: AsyncClient, app: FastAPI, synthetic_policy: ActiveAiPolicy
+) -> None:
+    app.state.active_ai_policy = synthetic_policy
 
     res = await client.put(
         "/api/v1/ai-consent",
