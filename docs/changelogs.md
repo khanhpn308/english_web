@@ -1,3 +1,11 @@
+## 01/10/2026 - T053 generated-source coverage classification remediation
+
+- **Files:** `scripts/check_constraints.py`, `scripts/tests/test_constraints.py`, `tasks/t053-quality-security-gates.md` and this changelog; documentation follows the required documentation-and-adrs skill.
+- **Reason/fix:** The changed-coverage checker incorrectly treated T017's generated DTO as handwritten source. Added `is_generated_source()` with the sole exact path `frontend/src/shared/api/generated.ts`, applied only to changed-line classification. Similarly named handwritten paths and unmeasured backend source still fail. Reports, total ratchet, diff-cover setup and quality/security protections remain enforced; no broad exemption.
+- **TDD/evidence:** Corrected RED: 12 failed / 41 passed before implementation; GREEN: 53 passed. Full pytest 208 passed; frontend coverage tests 38 passed. Focused Ruff/format/Mypy, typecheck, lint, build, floor, coverage and fast gate pass. Changed coverage 100.00%, total 88.97%. Full Ruff exits 1 with 19 findings proven identical to the base in untouched files; no full-Ruff PASS claimed. Exact command outcomes and initial test/harness corrections are recorded in the task card.
+- **T015 read-only replay:** Temporary clone of candidate `2386f3d12730cda8e886acb593b0fadcd473778d` with its actual reports: original checker exits 1 for unmeasured generated DTO; fixed checker exits 0 with changed 94.79% / total 89.89%. All T015 tracked files/reports remain byte-identical, candidate HEAD/status unchanged.
+- **Thresholds/scope:** Minimum 80.0%, baseline 86.70%, tolerance 0.5 points unchanged. CONSTRAINTS, dependencies/locks, generated artifacts, frontend tests, T015, T062, security tooling and todo untouched. Pinned checksum-verified Gitleaks 8.30.1 reports zero findings; scanner binaries remain outside Git. Local remediation commit only; no push/main promotion/T015 edits. Next: cherry-pick into the T015 integration branch and rerun complete-candidate `check:task`.
+
 ## 01/10/2026 - T015 application-boundary architecture compatibility
 
 - **Files:** `backend/app/application/consent.py`, `backend/app/http/consent.py`, `backend/tests/test_consent.py`; this changelog, T015 card and task-index evidence. Existing integration commits `cb81d69` / `20e4e3c` are preserved.

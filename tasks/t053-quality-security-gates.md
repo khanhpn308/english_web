@@ -88,6 +88,40 @@ npm run floor:check
 
 ## Handoff
 
+### Narrow generated-source coverage classification remediation (01/10/2026)
+
+- Scope/status: remediation `DONE`, local commit authorized on `fix/t053-generated-coverage` in `/home/khanh/projects/vocabularies-t053-generated`, based on `bc0ff937b85a62fa395213d93ac4d6a5021cddcc`. This is T053 quality infrastructure only. No T015 implementation or integration, main promotion or push is authorized in this session.
+- Root cause: source suffix, test exclusion and coverage prefixes admitted `frontend/src/shared/api/generated.ts` as handwritten changed application code. T017 explicitly owns that generated artifact, and CONSTRAINTS excludes generated/vendor files from changed-code coverage.
+- Fix: `is_generated_source()` uses an immutable exact-path set containing only `frontend/src/shared/api/generated.ts`. Apply it only to changed-line coverage classification. Unknown paths still require measurement; no filename/directory heuristic, broad exemption or threshold exception. Git diff collection, total report measurements, diff-cover validation, floor, architecture, contracts and security behavior remain unchanged.
+- Thresholds unchanged: changed minimum **80.0%**, total baseline **86.70%**, tolerance **0.5 percentage points**. No dependency/config/generated artifact changes.
+- TDD RED: tests added before implementation. Initial focused run exited 1 with 14 failed / 39 passed; two failures were mistaken expected error wording, corrected before checker changes. Corrected RED (`python -m pytest scripts/tests/test_constraints.py -q --tb=short`) exited 1 with **12 failed / 41 passed**. Tracked/untracked/no-HEAD generated cases reported `no coverage measurements for changed source frontend/src/shared/api/generated.ts`; mixed cases failed before calculating handwritten coverage. Initial focused lint/format identified two new overlong test lines, subsequently corrected.
+- GREEN/adversarial: **53 passed** (37 existing, 16 new). Generated-only diffs without DTO measurements yield changed 100%; generated plus measured backend yields exactly 80% pass / 70% fail. Unmeasured `generated-helper.ts`, `not-generated.ts`, `client.ts` and `backend/app/unmeasured.py` each fail with exit 1. Missing XML/LCOV, empty LCOV and absent/invalid diff-cover retain setup exit 2. The total ratchet still fails on uncovered generated measurements present in a report. Generated-path suppression and threshold weakening still fail the floor. No fake LCOV records or frontend DTO execution tests added.
+- Actual T015 replay: isolated temporary shared Git clone checked out candidate `2386f3d12730cda8e886acb593b0fadcd473778d`, compared to the exact base above; copied its existing real XML/LCOV reports unchanged. Original checker exited **1** with the exact DTO missing-measurement failure. Fixed checker exited **0**, changed **94.79%**, total **89.89%**. The real LCOV has an SF entry for the DTO but zero measured lines; an initial replay-harness assertion incorrectly expected no SF entry and was corrected before running the comparison. SHA-256 snapshots of every T015 tracked file and both reports were identical before/after, HEAD unchanged, status clean. No writes to `/home/khanh/projects/vocabularies-integrate-t015`.
+- Environment: Ubuntu/WSL, Python 3.12.3 using the existing locked main virtualenv, Node.js 22.23.2 / npm 12.0.2. `npm ci --ignore-scripts` exited 0 with no dependency/lock edits. Task commands use `QUALITY_BASE_REF=bc0ff937b85a62fa395213d93ac4d6a5021cddcc`.
+
+| Command | Exit | Outcome |
+|---|---:|---|
+| `python -m pytest scripts/tests/test_constraints.py -q` | 0 | 53 passed; checker measured directly |
+| `python -m ruff check scripts/check_constraints.py scripts/tests/test_constraints.py` | 0 | All checks passed |
+| `python -m ruff format --check scripts/check_constraints.py scripts/tests/test_constraints.py` | 0 | Both files formatted |
+| `python -m mypy scripts/check_constraints.py` | 0 | No issues |
+| `python -m pytest -q` | 0 | 208 passed; real Cobertura report generated |
+| `python -m ruff check .` | 1 | 19 pre-existing findings, zero new findings; verified against exact base |
+| `npm run test:frontend:coverage` | 0 | 38 passed; real LCOV generated |
+| `npm run typecheck` | 0 | No errors |
+| `npm run lint` | 0 | Zero errors; two existing AppShell Fast Refresh warnings |
+| `npm run build` | 0 | Vite build passes; output remains ignored |
+| `npm run floor:check` | 0 | Clean |
+| `npm run coverage:check` | 0 | Changed 100.00%, total 88.97%; ratchet enforced |
+| `npm run check:fast` | 0 | Format/lint/type/floor/secrets pass |
+| `npm run security:secrets` | 0 | Pinned Gitleaks 8.30.1; zero working/staged/history findings |
+| `git diff --check` | 0 | No whitespace errors |
+
+- Full Ruff limitation: 19 findings in `backend/app/application/consent.py`, `backend/app/http/consent.py`, `backend/tests/test_consent.py`, `backend/tests/test_operations.py` and `scripts/tests/test_contract.py`. Each file is byte-identical to the base. Running Ruff on base contents gives the same paths/rules/locations/messages. This is a baseline failure, not a remediation regression; full repository Ruff is not claimed green and no unrelated fix/suppression is included.
+- Secret scanner provenance: `/tmp/t015-gitleaks.tar.gz` SHA-256 matches the pinned toolchain value `551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb`; `/tmp/t015-security-tools/gitleaks` matches the binary extracted from that archive. Wrapper checks exact 8.30.1 and redacts reports. Binary stays outside Git.
+- Changed files: checker, checker tests, this card and `docs/changelogs.md`. Intentionally untouched: `tasks/todo.md`, CONSTRAINTS, thresholds/baseline/tolerance, package/lockfiles, generated DTO/OpenAPI, frontend coverage tests, T015 source/worktree, T062 files, security tooling and all unrelated source. Documentation uses the required documentation-and-adrs skill; no ADR/API change is needed.
+- Remaining work: cherry-pick the remediation commit into `integration/t015-after-cp05`, then rerun complete-candidate `check:task` with the proper base. This remediation branch does not change the DTO; replay/focused evidence proves classification, but does not claim a complete integrated-candidate gate. Main remains untouched; commit is local only, not pushed.
+
 ### Narrow assertion-replacement remediation (30/09/2026)
 
 - Status: remediation `DONE`; shared workspace `NOT_READY_TO_COMMIT` because unrelated gates still fail. No commit authorized or created.

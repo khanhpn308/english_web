@@ -253,6 +253,147 @@ def test_coverage_checks_untracked_source_in_repository_without_head(tmp_path: P
     assert "no merge base" not in result.stderr.lower()
 
 
+@pytest.mark.parametrize("diff_kind", ["tracked", "untracked", "no-head"])
+def test_coverage_excludes_only_generated_lines_without_measurements(
+    tmp_path: Path, diff_kind: str
+) -> None:
+    generated = "frontend/src/shared/api/generated.ts"
+    if diff_kind == "no-head":
+        assert run_command("git", "init", "-b", "main", cwd=tmp_path).returncode == 0
+    else:
+        files = {generated: "export type DTO = string;\n"} if diff_kind == "tracked" else None
+        initialise_repository(tmp_path, files)
+    write_quality_config(tmp_path)
+    write_file(tmp_path, generated, "export type DTO = number;\n" * 100)
+    write_cobertura_report(tmp_path, "backend/app/existing.py", total_lines=1, covered_lines=1)
+    write_lcov_report(tmp_path)
+
+    result = run_checker(tmp_path, "coverage", "--base", "main")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "changed 100.00%" in result.stdout
+    assert "total 100.00%" in result.stdout
+    assert generated not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "handwritten",
+    [
+        "frontend/src/shared/api/generated-helper.ts",
+        "frontend/src/shared/api/not-generated.ts",
+        "frontend/src/shared/api/client.ts",
+        "backend/app/unmeasured.py",
+    ],
+)
+def test_coverage_requires_measurements_for_handwritten_generated_siblings(
+    tmp_path: Path, handwritten: str
+) -> None:
+    initialise_repository(tmp_path)
+    write_quality_config(tmp_path)
+    write_file(tmp_path, "frontend/src/shared/api/generated.ts", "export type DTO = number;\n")
+    write_file(tmp_path, handwritten, "value = 42\n")
+    write_cobertura_report(tmp_path, "backend/app/existing.py", total_lines=1, covered_lines=1)
+    write_lcov_report(tmp_path)
+
+    result = run_checker(tmp_path, "coverage", "--base", "main")
+
+    assert result.returncode == 1
+    assert f"no coverage measurements for changed source {handwritten}" in result.stderr
+    assert (
+        "no coverage measurements for changed source frontend/src/shared/api/generated.ts"
+        not in result.stderr
+    )
+
+
+@pytest.mark.parametrize(("covered_lines", "expected_code"), [(8, 0), (7, 1)])
+def test_coverage_mixed_diff_counts_only_handwritten_lines(
+    tmp_path: Path, covered_lines: int, expected_code: int
+) -> None:
+    initialise_repository(tmp_path)
+    write_quality_config(tmp_path)
+    write_file(
+        tmp_path, "frontend/src/shared/api/generated.ts", "export type DTO = number;\n" * 100
+    )
+    write_file(tmp_path, "backend/app/example.py", source_lines(10))
+    write_cobertura_report(
+        tmp_path, "backend/app/example.py", total_lines=10, covered_lines=covered_lines
+    )
+    write_lcov_report(tmp_path)
+
+    result = run_checker(tmp_path, "coverage", "--base", "main")
+
+    assert result.returncode == expected_code, result.stdout + result.stderr
+    assert f"changed {covered_lines * 10:.2f}% (minimum 80.00%)" in result.stdout
+    assert "no coverage measurements" not in result.stderr
+    if expected_code:
+        assert "changed-line threshold failed" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_code", "expected_fragment"),
+    [
+        ("missing-xml", 2, "coverage report missing: coverage.xml"),
+        ("missing-lcov", 2, "coverage report missing: coverage/frontend/lcov.info"),
+        ("empty-lcov", 2, "coverage report has no measured lines"),
+        ("ratchet", 1, "total baseline ratchet failed"),
+        ("diff-cover-missing", 2, "diff-cover is not installed"),
+        ("diff-cover-invalid", 2, "diff-cover could not evaluate"),
+    ],
+)
+def test_generated_only_diff_preserves_report_ratchet_and_setup_checks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+    expected_code: int,
+    expected_fragment: str,
+) -> None:
+    initialise_repository(tmp_path)
+    write_quality_config(tmp_path, baseline=90.0)
+    write_file(tmp_path, "frontend/src/shared/api/generated.ts", "export type DTO = number;\n")
+    write_cobertura_report(tmp_path, "backend/app/existing.py", total_lines=1, covered_lines=1)
+    write_lcov_report(tmp_path)
+    if failure == "missing-xml":
+        (tmp_path / "coverage.xml").unlink()
+    elif failure == "missing-lcov":
+        (tmp_path / "coverage/frontend/lcov.info").unlink()
+    elif failure == "empty-lcov":
+        write_file(tmp_path, "coverage/frontend/lcov.info", "")
+    elif failure == "ratchet":
+        # Even measurements of generated code remain in the total report ratchet.
+        write_lcov_report(tmp_path, "frontend/src/shared/api/generated.ts", hits=0)
+    elif failure == "diff-cover-missing":
+        monkeypatch.setattr(check_constraints, "find_diff_cover", lambda: None)
+    elif failure == "diff-cover-invalid":
+        monkeypatch.setattr(check_constraints, "find_diff_cover", lambda: Path(sys.executable))
+
+    result = run_checker(tmp_path, "coverage", "--base", "main")
+
+    assert result.returncode == expected_code, result.stdout + result.stderr
+    assert expected_fragment in result.stderr
+    if failure == "ratchet":
+        assert "changed 100.00%" in result.stdout
+        assert "total 50.00%" in result.stdout
+
+
+def test_generated_coverage_exclusion_does_not_exempt_floor_rules(tmp_path: Path) -> None:
+    initialise_repository(tmp_path)
+    write_quality_config(tmp_path)
+    assert run_command("git", "add", "pyproject.toml", cwd=tmp_path).returncode == 0
+    assert run_command("git", "commit", "-m", "test: quality config", cwd=tmp_path).returncode == 0
+    write_quality_config(tmp_path, changed_minimum=79.0)
+    write_file(
+        tmp_path,
+        "frontend/src/shared/api/generated.ts",
+        "// @ts" + "-ignore\nexport type DTO = number;\n",
+    )
+
+    result = run_checker(tmp_path, "floor", "--base", "main")
+
+    assert result.returncode == 1
+    assert "[silenced-checker] frontend/src/shared/api/generated.ts:1" in result.stderr
+    assert "[threshold-loosened] pyproject.toml" in result.stderr
+
+
 def test_floor_flags_untracked_suppression_without_leaking_line_content(tmp_path: Path) -> None:
     initialise_repository(tmp_path)
     suppression = "# type:" + " ignore"

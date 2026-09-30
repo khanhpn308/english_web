@@ -21,6 +21,8 @@ from typing import Any, cast
 EXIT_CLEAN = 0
 EXIT_VIOLATION = 1
 EXIT_SETUP = 2
+# Generated artifact ownership is declared by T017; unknown paths require coverage.
+GENERATED_SOURCE_PATHS = frozenset({"frontend/src/shared/api/generated.ts"})
 SOURCE_SUFFIXES = {
     ".c",
     ".cjs",
@@ -213,6 +215,10 @@ def collect_diff(repo: Path, base: str) -> DiffData:
 
 def is_source(path: str) -> bool:
     return PurePosixPath(path).suffix.lower() in SOURCE_SUFFIXES
+
+
+def is_generated_source(path: str) -> bool:
+    return path in GENERATED_SOURCE_PATHS
 
 
 def is_test(path: str) -> bool:
@@ -631,6 +637,7 @@ def check_coverage(repo: Path, base: str) -> int:
         for line in diff.added
         if is_source(line.path)
         and not is_test(line.path)
+        and not is_generated_source(line.path)
         and any(
             line.path.startswith(normalize_path(prefix).rstrip("/") + "/") for prefix in prefixes
         )
