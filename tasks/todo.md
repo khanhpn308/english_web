@@ -21,7 +21,7 @@
 - [x] [T017](t017-typed-api-client.md): Generated DTO và typed fetch client
 - [x] [T066](t066-browser-bootstrap.md): Trusted browser bootstrap page
 - [x] [T052](t052-browser-test-harness.md): Browser harness với local fake API/bridge
-- [ ] [T062](t062-architecture-gates.md): Architecture import boundary gates
+- [x] [T062](t062-architecture-gates.md): Architecture import boundary gates — implementation green (40 tests, both tools, dependency scan); inherited T007 formatting blocks aggregate.
 - [ ] [T015](t015-consent-api.md): Persist consent singleton và GET/PUT/DELETE
 - [x] [T007](t007-bridge-policy-consent-adapter.md): Antigravity transport adapter với fake proxy
 - [ ] [T016](t016-dispatch-fence.md): Consent admission fence trước AI dispatch
@@ -80,7 +80,7 @@
 - [ ] CP02: T003, T004, T005 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [x] CP03: T053, T063, T013 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [x] CP04: T006, T014, T017 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
-- [ ] CP05: T066, T052, T062 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
+- [x] CP05: T066, T052, T062 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP06: T015, T007, T016 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP07: T018, T019, T008 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP08: T009, T010, T011 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.

@@ -31,8 +31,6 @@ def main():
 
     atexit.register(cleanup_temp_dir)
 
-
-
     db_path = TEMP_DIR / "test.db"
 
     # Strict exact-origin loopback config
@@ -104,6 +102,7 @@ def main():
                 import time
 
                 from backend.app.adapters.bridge import BridgeAdapter
+
                 adapter = BridgeAdapter(api_key="dummy-key")
                 adapter._base_url = getattr(app.state, "settings", settings).bridge_url
                 try:
@@ -129,6 +128,7 @@ def main():
     finally:
         print("CLEANING UP TEMP DIR")
         cleanup_temp_dir()
+
 
 if __name__ == "__main__":
     sys.exit(main())

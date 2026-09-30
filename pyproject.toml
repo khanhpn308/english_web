@@ -19,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "import-linter==2.15",
     "diff-cover>=10.4.1",
     "pip-tools>=7.4.0",
     "ruff>=0.8.0",
@@ -98,3 +99,56 @@ total_coverage_baseline = 86.70
 total_coverage_tolerance = 0.5
 coverage_reports = ["coverage.xml", "htmlcov/frontend/lcov.info"]
 coverage_source_prefixes = ["backend/", "frontend/src/", "scripts/"]
+
+# T062: https://import-linter.readthedocs.io/en/stable/get_started/configure/
+# Analyze the actual namespace root directly. Scanning its regular parent (backend)
+# omits namespace descendants in Grimp; no __init__.py changes are needed.
+[tool.importlinter]
+root_package = "backend.app"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Application cannot depend on HTTP or composition"
+type = "forbidden"
+source_modules = ["backend.app.application"]
+forbidden_modules = ["backend.app.http", "backend.app.main"]
+
+[[tool.importlinter.contracts]]
+name = "Platform remains a leaf abstraction"
+type = "forbidden"
+source_modules = ["backend.app.platform"]
+forbidden_modules = [
+    "backend.app.application", "backend.app.http", "backend.app.adapters",
+    "backend.app.persistence", "backend.app.main",
+]
+
+[[tool.importlinter.contracts]]
+name = "Concrete implementations cannot orchestrate"
+type = "forbidden"
+source_modules = ["backend.app.adapters", "backend.app.persistence"]
+forbidden_modules = ["backend.app.application", "backend.app.http", "backend.app.main"]
+
+[[tool.importlinter.contracts]]
+name = "Concrete adapters are independent"
+type = "independence"
+modules = ["backend.app.adapters.*", "backend.app.persistence"]
+
+[[tool.importlinter.contracts]]
+name = "HTTP uses application and platform contracts"
+type = "forbidden"
+source_modules = ["backend.app.http"]
+forbidden_modules = ["backend.app.adapters", "backend.app.persistence"]
+# HTTP -> application -> adapter is permitted; direct concrete imports are not.
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Backend cannot import frontend"
+type = "forbidden"
+source_modules = ["backend.app"]
+forbidden_modules = ["frontend"]
+
+[[tool.importlinter.contracts]]
+name = "Backend ownership is acyclic"
+type = "acyclic_siblings"
+ancestors = ["backend.app"]
+depth = 10
