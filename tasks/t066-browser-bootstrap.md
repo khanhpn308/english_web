@@ -2,7 +2,7 @@
 
 **Task ID:** `T066`  
 **Title:** Trusted browser bootstrap page  
-**Status:** `TODO`  
+**Status:** `DONE`  
 **Goal:** Exchange the one-time launcher fragment into the local session before loading the main UI, clearing the token from the address bar immediately.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** One focused session, four handwritten files.
