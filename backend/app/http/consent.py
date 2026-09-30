@@ -12,10 +12,9 @@ from backend.app.application.consent import (
     choice_time,
 )
 from backend.app.http.errors import error_response
-from backend.app.persistence.database import StorageError
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, Response
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError
-from sqlalchemy.exc import SQLAlchemyError
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
 router = APIRouter(prefix="/api/v1/ai-consent", tags=["consent"])
@@ -114,10 +113,9 @@ def get_consent(
     service = service_for(request)
     if service is None:
         return unavailable_service(request)
-    try:
-        snapshot = service.get_snapshot(lambda: request.app.state.active_ai_policy)
-    except (SQLAlchemyError, ValidationError, StorageError):
-        return rejection(ConsentRejected((503, "STORAGE_BUSY")))
+    snapshot = service.read_consent(lambda: request.app.state.active_ai_policy)
+    if isinstance(snapshot, ConsentRejected):
+        return rejection(snapshot)
     response.headers["Cache-Control"] = "no-store"
     response.headers["ETag"] = snapshot.etag
     state = snapshot.state
@@ -149,18 +147,12 @@ def grant_consent(
     service = service_for(request)
     if service is None:
         return unavailable_service(request)
-    try:
-        with service.operations.engine.connect() as connection:
-            result = service.grant_consent(
-                connection,
-                idempotency_key,
-                if_match,
-                body.policyVersion,
-                lambda: request.app.state.active_ai_policy,
-            )
-    except (SQLAlchemyError, StorageError):
-        service.storage_reliable = False
-        return rejection(ConsentRejected((503, "STORAGE_BUSY")))
+    result = service.grant(
+        idempotency_key,
+        if_match,
+        body.policyVersion,
+        lambda: request.app.state.active_ai_policy,
+    )
     if isinstance(result, ConsentRejected):
         return rejection(result)
     response.headers["Cache-Control"] = "no-store"
@@ -183,20 +175,10 @@ async def revoke_consent(
     if service is None:
         return unavailable_service(request)
     # The body boundary is async; synchronous SQLite work belongs to the worker pool.
-    from starlette.concurrency import run_in_threadpool
-
-    def revoke() -> AiConsentMutationResult | JSONResponse:
-        try:
-            with service.operations.engine.connect() as connection:
-                result = service.revoke_consent(connection, idempotency_key)
-        except (SQLAlchemyError, StorageError):
-            service.storage_reliable = False
-            return rejection(ConsentRejected((503, "STORAGE_BUSY")))
-        if isinstance(result, ConsentRejected):
-            return rejection(result)
-        response.headers["Cache-Control"] = "no-store"
-        return AiConsentMutationResult(
-            operationId=result.operation_id, appliedRevision=result.applied_revision
-        )
-
-    return await run_in_threadpool(revoke)
+    result = await run_in_threadpool(service.revoke, idempotency_key)
+    if isinstance(result, ConsentRejected):
+        return rejection(result)
+    response.headers["Cache-Control"] = "no-store"
+    return AiConsentMutationResult(
+        operationId=result.operation_id, appliedRevision=result.applied_revision
+    )

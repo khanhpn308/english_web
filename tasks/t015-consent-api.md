@@ -253,3 +253,37 @@ Checks ran sequentially where they share coverage reports. The two canonical exp
 Measured combined coverage, using the unchanged T053 report parser: 1878/2091 lines = 89.81%, against unchanged 86.70% baseline and 0.5-point tolerance. This separate measurement does not turn the failing coverage command green. `architecture:check` is absent; no command/result was invented and no T062 tooling was copied. Aggregate gates remain blocked by inherited formatting. T007 files and T053 tooling/thresholds were not edited.
 
 **Final status:** T015 DONE; whole workspace `IMPLEMENTATION_DONE_BASELINE_BLOCKED`. Four additional T015 handwritten paths, two canonically regenerated artifacts and three bookkeeping paths; inherited main.py untouched. T016 and CP06 remain pending. Next consent integration owner: T016. No staging, commit, push or external messaging. Not committed — authorization not provided.
+
+
+## Post-CP05 architecture compatibility — 01/10/2026
+
+Integration candidate: `integration/t015-after-cp05`, starting HEAD `20e4e3ce0aff6040485a4272aa31e54afee4cadc`, with authorized main baseline `bc0ff937b85a62fa395213d93ac4d6a5021cddcc`. The prerequisite transplant and semantic cherry-pick are retained; this is a separate narrow remediation.
+
+T062's **HTTP uses application and platform contracts** failed because `http.consent` imported `persistence.database.StorageError`. The existing service composed in main now exposes `read_consent`, `grant` and `revoke` application methods, owns receipt-read connections and translates known storage/SQLAlchemy/validation failures into existing redacted `ConsentRejected` outcomes. HTTP receives only application snapshots/results and owns HTTP validation/rendering. No concrete import aliases, dynamic imports, broad catches or architecture exceptions were added.
+
+All original ConsentService methods are AST-identical to the starting candidate, including policy validation/canonicalization, durable CAS, immutable evidence, replay and T014 atomic writes. Main, migration, SessionGuard, T007 files, T062 configuration/tests and excluded T014/T017 qualityfix files are unchanged. DELETE's synchronous service call remains in the threadpool. Public schema and both generated artifacts remain byte-identical after two canonical exports.
+
+New regression cases cover configured application read/grant/offline revoke, typed redacted SQL/storage failures with no state/event/operation side effects, HTTP rendering of application refusals without opening storage, and missing-service configuration taxonomy. Existing production guard, zero-network, concurrency, corruption, replay and atomicity regressions remain present.
+
+| Check | Exit | Evidence |
+|---|---:|---|
+| New boundary tests before implementation | 1 | RED: 10 failed, 3 already passed |
+| npm run architecture:check, before remediation | 1 | Exact HTTP -> persistence import; six contracts kept, one broken |
+| npm run architecture:check, after remediation | 0 | Seven kept contracts, zero violations; 40 tests |
+| Actual Grimp direct-import graph audit | 0 | HTTP -> persistence/adapters and application -> HTTP/main absent |
+| python -m pytest backend/tests/test_consent.py -q | 0 | 150 passed, including existing security/network/race cases |
+| python -m pytest backend/tests/test_operations.py -q | 0 | 14 passed |
+| python -m mypy backend | 0 | 26 files clean; initial new-test union annotation diagnostics corrected |
+| Focused Ruff lint/format over application/http/main/consent tests | 0 | Clean; no suppressions |
+| npm run test:contract | 0 | Five passed |
+| npm run export:contract, twice | 0 | No generated drift, byte-identical |
+| python -m alembic heads | 0 | One head: 0003_consent |
+| python -m pytest -q | 0 | 332 passed; real architecture test now passes |
+| python -m ruff check . | 1 | INHERITED_BASELINE_FAILURE: unchanged test_operations.py E501 / test_contract.py RUF100 |
+| npm run typecheck / lint / build / floor:check / check:fast | 0 each | Clean; lint retains two inherited warnings |
+| QUALITY_BASE_REF=bc0ff937 npm run check:task | 1 | All 332 tests pass; existing generated.ts coverage classification blocks the complete candidate |
+| QUALITY_BASE_REF=20e4e3c npm run coverage:check | 0 | Remediation only: changed 100.00%, total 89.89%; unchanged thresholds |
+| Pinned security:secrets / security:code / security:deps | 0 each | Zero findings |
+| git diff --check | 0 | Clean |
+
+**Handoff:** architecture compatibility fixed and T015 semantics remain DONE in the candidate; **NOT PROMOTED** because the required complete-candidate check:task gate still fails on T053's generated-file classification. That tooling is outside this remediation's authorized scope and was not changed. Remediation-only coverage does not convert the aggregate failure into PASS. Main remains at `bc0ff937`; T016/CP06 are pending and no push is authorized.

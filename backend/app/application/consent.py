@@ -224,6 +224,34 @@ class ConsentService:
         # Storage errors keep this running process fail-closed until restart/reconciliation.
         self.storage_reliable = True
 
+    def read_consent(self, source: PolicySource) -> ConsentSnapshot | ConsentRejected:
+        """Expose application outcomes without propagating storage/validation internals."""
+        try:
+            return self.get_snapshot(source)
+        except (SQLAlchemyError, ValidationError, StorageError):
+            self.storage_reliable = False
+            return ConsentRejected((503, "STORAGE_BUSY"))
+
+    def grant(
+        self, key: str, if_match: str, policy_version: str, source: PolicySource
+    ) -> ConsentOperationResult:
+        """Own the receipt-read connection; durable writes still belong to T014's writer."""
+        try:
+            with self.operations.engine.connect() as connection:
+                return self.grant_consent(connection, key, if_match, policy_version, source)
+        except (SQLAlchemyError, StorageError):
+            self.storage_reliable = False
+            return ConsentRejected((503, "STORAGE_BUSY"))
+
+    def revoke(self, key: str) -> ConsentOperationResult:
+        """Withdraw through the same application boundary, without policy or network."""
+        try:
+            with self.operations.engine.connect() as connection:
+                return self.revoke_consent(connection, key)
+        except (SQLAlchemyError, StorageError):
+            self.storage_reliable = False
+            return ConsentRejected((503, "STORAGE_BUSY"))
+
     def get_state(self, connection: Connection) -> AiConsentState:
         row = (
             connection.exec_driver_sql("SELECT * FROM ai_consent_state WHERE id=1")

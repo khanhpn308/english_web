@@ -19,6 +19,7 @@ from backend.app.application.consent import (
     ConsentApplied,
     ConsentRejected,
     ConsentService,
+    ConsentSnapshot,
     resolve_policy,
 )
 from backend.app.application.operations import OperationLedger
@@ -150,6 +151,106 @@ async def test_get_initial_consent(client: AsyncClient) -> None:
         "policy": None,
         "canRequestAi": False,
     }
+
+
+def test_application_consent_boundary_owns_read_grant_and_revoke(
+    database: Database, synthetic_policy: dict[str, Any]
+) -> None:
+    service = ConsentService(OperationLedger(database.engine))
+    initial = service.read_consent(synthetic_policy)
+    assert isinstance(initial, ConsentSnapshot)
+    assert initial.state.state == "NOT_GRANTED"
+    applied = service.grant("boundary-grant", initial.etag, "policy-v1", synthetic_policy)
+    assert isinstance(applied, ConsentApplied)
+    assert applied.applied_revision == 1
+    current = service.read_consent(synthetic_policy)
+    assert isinstance(current, ConsentSnapshot)
+    assert current.can_request_ai is True
+    revoked = service.revoke("boundary-revoke")
+    assert isinstance(revoked, ConsentApplied)
+    assert revoked.applied_revision == 2
+    withdrawn = service.read_consent(None)
+    assert isinstance(withdrawn, ConsentSnapshot)
+    assert withdrawn.state.state == "REVOKED"
+    assert withdrawn.can_request_ai is False
+
+
+@pytest.mark.parametrize("action", ["read", "grant", "revoke"])
+@pytest.mark.parametrize("failure", ["sql", "storage"])
+def test_application_boundary_redacts_storage_failures(
+    database: Database, monkeypatch: pytest.MonkeyPatch, action: str, failure: str
+) -> None:
+    from sqlalchemy.exc import OperationalError
+
+    service = ConsentService(OperationLedger(database.engine))
+
+    def cannot_connect() -> None:
+        if failure == "storage":
+            raise StorageError("synthetic private database path")
+        raise OperationalError("synthetic private SQL", {}, RuntimeError("private driver message"))
+
+    result: ConsentSnapshot | ConsentApplied | ConsentRejected
+    with monkeypatch.context() as patch:
+        patch.setattr(database.engine, "connect", cannot_connect)
+        if action == "read":
+            result = service.read_consent(None)
+        elif action == "grant":
+            result = service.grant("failed-boundary", '"etag"', "policy-v1", None)
+        else:
+            result = service.revoke("failed-boundary")
+    assert result == ConsentRejected((503, "STORAGE_BUSY"))
+    assert service.storage_reliable is False
+    assert "private" not in repr(result)
+    with database.engine.connect() as connection:
+        assert connection.exec_driver_sql("SELECT revision FROM ai_consent_state").scalar() == 0
+        assert connection.exec_driver_sql("SELECT count(*) FROM operations").scalar() == 0
+        assert connection.exec_driver_sql("SELECT count(*) FROM ai_consent_event").scalar() == 0
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("method", ["GET", "PUT", "DELETE"])
+async def test_http_maps_application_rejection_without_database_access(
+    client: AsyncClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch, method: str
+) -> None:
+    def unavailable(*_args: object, **_kwargs: object) -> ConsentRejected:
+        return ConsentRejected((503, "STORAGE_BUSY"))
+
+    def forbidden_connection() -> None:
+        raise AssertionError("HTTP must use the application outcome without opening storage")
+
+    service = app.state.consent_service
+    operation = {"GET": "read_consent", "PUT": "grant", "DELETE": "revoke"}[method]
+    monkeypatch.setattr(service, operation, unavailable)
+    monkeypatch.setattr(app.state.database.engine, "connect", forbidden_connection)
+    response = await client.request(
+        method,
+        PATH,
+        json={"policyVersion": "policy-v1"} if method == "PUT" else None,
+        headers={"If-Match": '"etag"', "Idempotency-Key": "application-refusal"}
+        if method == "PUT"
+        else {"Idempotency-Key": "application-refusal"},
+    )
+    error(response, 503, "STORAGE_BUSY")
+    assert "private" not in response.text
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("method", ["GET", "PUT", "DELETE"])
+async def test_missing_application_service_preserves_configuration_response(
+    client: AsyncClient, app: FastAPI, method: str
+) -> None:
+    app.state.consent_service = None
+    response = await client.request(
+        method,
+        PATH,
+        json={"policyVersion": "policy-v1"} if method == "PUT" else None,
+        headers={"If-Match": '"etag"', "Idempotency-Key": "missing-service"}
+        if method == "PUT"
+        else {"Idempotency-Key": "missing-service"},
+    )
+    error(response, 503, "CONFIGURATION_REQUIRED")
+    assert rows(app, "ai_consent_event") == []
+    assert rows(app, "operations") == []
 
 
 @pytest.mark.anyio
