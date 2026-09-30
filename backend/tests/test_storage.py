@@ -14,22 +14,22 @@ from sqlalchemy import Connection
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 
-def test_fresh_and_repeat_upgrade_have_one_head_and_only_ledger(tmp_path: Path) -> None:
+def test_fresh_and_repeat_upgrade_have_one_head_and_operation_tables(tmp_path: Path) -> None:
     db = Database(tmp_path / "fresh.db")
     try:
         first = db.initialize()
-        assert first.schema_revision == "0001_storage"
+        assert first.schema_revision == "0002_operations"
         assert first.wal_supported is True
         assert first.journal_mode == "wal"
         assert db.initialize() == first
         with db.engine.connect() as connection:
             assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").all() == [
-                ("0001_storage",)
+                ("0002_operations",)
             ]
             assert connection.exec_driver_sql(
                 "SELECT name FROM sqlite_master WHERE type='table'"
-            ).all() == [("alembic_version",)]
-        assert ScriptDirectory.from_config(migration_config()).get_heads() == ["0001_storage"]
+            ).all() == [("alembic_version",), ("operations",), ("operation_keys",)]
+        assert ScriptDirectory.from_config(migration_config()).get_heads() == ["0002_operations"]
     finally:
         db.close()
 
@@ -73,7 +73,7 @@ def test_busy_writer_is_bounded_and_history_is_unchanged(tmp_path: Path) -> None
             with pytest.raises(OperationalError), db.engine.begin() as connection:
                 connection.exec_driver_sql("INSERT INTO history VALUES (2)")
             writer.rollback()
-        assert db.initialize().schema_revision == "0001_storage"
+        assert db.initialize().schema_revision == "0002_operations"
     finally:
         db.close()
 
@@ -190,7 +190,7 @@ def test_alembic_online_upgrade_and_repeat(tmp_path: Path) -> None:
     command.upgrade(config, "head")
     with sqlite3.connect(path) as connection:
         assert connection.execute("SELECT version_num FROM alembic_version").fetchall() == [
-            ("0001_storage",)
+            ("0002_operations",)
         ]
 
 
@@ -220,7 +220,7 @@ def test_failed_migration_rolls_back_ddl_and_preserves_history(tmp_path: Path) -
             revision = connection.exec_driver_sql(
                 "SELECT version_num FROM alembic_version"
             ).scalar()
-            assert revision == "0001_storage"
+            assert revision == "0002_operations"
     finally:
         db.close()
 
@@ -268,7 +268,7 @@ def test_downgrade_refuses_to_remove_ledger(tmp_path: Path) -> None:
         command.downgrade(config, "base")
     with sqlite3.connect(path) as connection:
         assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
-            "0001_storage",
+            "0002_operations",
         )
 
 

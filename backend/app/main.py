@@ -5,9 +5,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from backend.app.application.operations import OperationLedger
 from backend.app.http.bootstrap import router as bootstrap_router
 from backend.app.http.errors import error_response
 from backend.app.http.health import router as health_router
+from backend.app.http.operations import router as operations_router
 from backend.app.http.session import SessionGuard, SessionStore
 from backend.app.persistence.database import Database, StorageError
 from backend.app.platform.config import AppSettings
@@ -15,6 +17,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse
@@ -33,6 +36,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.ready = False
     app.state.storage_info = None
     app.state.storage_error = None
+    app.state.operation_ledger = None
     app.state.sessions.activate()
     try:
         if database is not None:
@@ -41,14 +45,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 # Sources: https://fastapi.tiangolo.com/advanced/events/
                 # https://www.starlette.dev/threadpool/
                 app.state.storage_info = await run_in_threadpool(database.initialize)
+                ledger = OperationLedger(database.engine)
+                await run_in_threadpool(ledger.recover_pending)
+                app.state.operation_ledger = ledger
                 app.state.ready = True
             except StorageError as error:
                 app.state.storage_error = str(error)
+            except SQLAlchemyError:
+                app.state.storage_error = "UNAVAILABLE"
         yield
     finally:
         app.state.sessions.invalidate()
         app.state.ready = False
         app.state.storage_info = None
+        app.state.operation_ledger = None
         if database is not None:
             await run_in_threadpool(database.close)
         app.state.database = None
@@ -69,6 +79,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.state.database = None
     app.state.storage_info = None
     app.state.storage_error = None
+    app.state.operation_ledger = None
     app.state.sessions = SessionStore()
 
     # FastAPI middleware runs before route handlers, including the generated OpenAPI route.
@@ -94,6 +105,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(bootstrap_router)
+    app.include_router(operations_router)
 
     # The trusted bootstrap entry is built separately by T066; never serve the main app here.
     @app.get("/bootstrap", include_in_schema=False)

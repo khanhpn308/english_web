@@ -1,3 +1,9 @@
+## 30/09/2026
+
+- **Khu vực:** `backend/app/application/operations.py`, `backend/app/http/operations.py`, `backend/app/main.py`, `backend/tests/test_operations.py`, `backend/migrations/versions/0002_operations.py`, `tasks/t014-operations-idempotency.md`, `tasks/todo.md`
+- **Thay đổi:** Hoàn thành T014: triển khai durable operation ledger. Bổ sung `OperationLedger` với cơ chế idempotency dùng `BEGIN IMMEDIATE`, kiểm tra digest chống trùng lặp; cập nhật endpoint `GET /operations/{id}` redacted, và exception handler cho `SQLAlchemyError`. Pass toàn bộ test kiểm chứng concurrency, lost response, và fault injection.
+- **Mục đích:** Đảm bảo tính idempotency và atomic cho các tác vụ AI và save, ngăn chặn duplicate dispatch, tuân thủ đúng API contract về error responses và data redaction.
+
 # Changelog
 
 ## Quy định cập nhật
