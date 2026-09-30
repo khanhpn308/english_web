@@ -5,6 +5,7 @@
         "additionalProperties": false,
         "properties": {
           "appliedRevision": {
+            "minimum": 1.0,
             "title": "Appliedrevision",
             "type": "integer"
           },
@@ -52,7 +53,8 @@
           "lastChoiceAt": {
             "anyOf": [
               {
-                "type": "number"
+                "format": "date-time",
+                "type": "string"
               },
               {
                 "type": "null"
@@ -63,15 +65,15 @@
           "policy": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/AiDisclosurePolicy"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Policy"
+            ]
           },
           "revision": {
+            "minimum": 0.0,
             "title": "Revision",
             "type": "integer"
           },
@@ -96,6 +98,171 @@
           "canRequestAi"
         ],
         "title": "AiConsentView",
+        "type": "object"
+      },
+      "AiDisclosurePolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "blockedReasons": {
+            "items": {
+              "enum": [
+                "MODEL_POLICY",
+                "QUOTA_BILLING",
+                "PROXY_DATA_POLICY",
+                "CLOUD_DATA_POLICY"
+              ],
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Blockedreasons",
+            "type": "array"
+          },
+          "costQuotaStatement": {
+            "maxLength": 4096,
+            "title": "Costquotastatement",
+            "type": "string"
+          },
+          "dataCategories": {
+            "items": {
+              "enum": [
+                "TERM",
+                "WORD_FORMS",
+                "WRITING_ANSWER"
+              ],
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Datacategories",
+            "type": "array"
+          },
+          "digest": {
+            "title": "Digest",
+            "type": "string"
+          },
+          "disclosureText": {
+            "maxLength": 4096,
+            "title": "Disclosuretext",
+            "type": "string"
+          },
+          "dispatchRules": {
+            "items": {
+              "$ref": "#/components/schemas/AiDispatchRule"
+            },
+            "maxItems": 100,
+            "title": "Dispatchrules",
+            "type": "array"
+          },
+          "recipients": {
+            "items": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Recipients",
+            "type": "array"
+          },
+          "regionStatement": {
+            "maxLength": 4096,
+            "title": "Regionstatement",
+            "type": "string"
+          },
+          "retentionStatement": {
+            "maxLength": 4096,
+            "title": "Retentionstatement",
+            "type": "string"
+          },
+          "reviewStatus": {
+            "enum": [
+              "BLOCKED",
+              "READY"
+            ],
+            "title": "Reviewstatus",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "enum": [
+                "LOOKUP",
+                "QUIZ_GENERATION",
+                "WRITING_FEEDBACK"
+              ],
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Scopes",
+            "type": "array"
+          },
+          "version": {
+            "maxLength": 80,
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$",
+            "title": "Version",
+            "type": "string"
+          },
+          "withdrawalStatement": {
+            "maxLength": 4096,
+            "title": "Withdrawalstatement",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "reviewStatus",
+          "disclosureText",
+          "dataCategories",
+          "recipients",
+          "retentionStatement",
+          "regionStatement",
+          "costQuotaStatement",
+          "withdrawalStatement",
+          "scopes",
+          "dispatchRules",
+          "blockedReasons",
+          "digest"
+        ],
+        "title": "AiDisclosurePolicy",
+        "type": "object"
+      },
+      "AiDispatchRule": {
+        "additionalProperties": false,
+        "properties": {
+          "billingMode": {
+            "const": "configured-account",
+            "title": "Billingmode",
+            "type": "string"
+          },
+          "modelId": {
+            "const": "gemini-3.8-flash-high",
+            "title": "Modelid",
+            "type": "string"
+          },
+          "providerLabel": {
+            "const": "Antigravity/Google",
+            "title": "Providerlabel",
+            "type": "string"
+          },
+          "route": {
+            "const": "primary",
+            "title": "Route",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "LOOKUP",
+              "QUIZ_GENERATION",
+              "WRITING_FEEDBACK"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "providerLabel",
+          "modelId",
+          "route",
+          "billingMode"
+        ],
+        "title": "AiDispatchRule",
         "type": "object"
       },
       "BootstrapExchange": {
@@ -123,6 +290,73 @@
         ],
         "title": "BridgeStatus",
         "type": "string"
+      },
+      "ConsentError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConsentRetryDetails"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "requestId": {
+            "title": "Requestid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "requestId"
+        ],
+        "title": "ConsentError",
+        "type": "object"
+      },
+      "ConsentErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ConsentError"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ConsentErrorResponse",
+        "type": "object"
+      },
+      "ConsentRetryDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "RETRY",
+            "title": "Kind",
+            "type": "string"
+          },
+          "operationId": {
+            "title": "Operationid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "operationId"
+        ],
+        "title": "ConsentRetryDetails",
+        "type": "object"
       },
       "ErrorDetails": {
         "anyOf": [
@@ -202,6 +436,8 @@
         "additionalProperties": false,
         "properties": {
           "policyVersion": {
+            "maxLength": 80,
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$",
             "title": "Policyversion",
             "type": "string"
           }
@@ -342,6 +578,8 @@
             "required": true,
             "schema": {
               "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[\\x20-\\x7e]+$",
               "title": "Idempotency-Key",
               "type": "string"
             }
@@ -402,11 +640,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/ConsentErrorResponse"
                 }
               }
             },
-            "description": "Error Response"
+            "description": "Conflict"
           },
           "413": {
             "content": {
@@ -452,11 +690,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/ConsentErrorResponse"
                 }
               }
             },
-            "description": "Error Response"
+            "description": "Service Unavailable"
           }
         },
         "summary": "Revoke Consent",
@@ -537,6 +775,16 @@
             },
             "description": "Error Response"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -561,11 +809,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/ConsentErrorResponse"
                 }
               }
             },
-            "description": "Error Response"
+            "description": "Service Unavailable"
           }
         },
         "summary": "Get Consent",
@@ -581,6 +829,9 @@
             "name": "If-Match",
             "required": true,
             "schema": {
+              "maxLength": 4096,
+              "minLength": 2,
+              "pattern": "^\"[\\x21\\x23-\\x7e\\x80-\\xff]*\"$",
               "title": "If-Match",
               "type": "string"
             }
@@ -591,6 +842,8 @@
             "required": true,
             "schema": {
               "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[\\x20-\\x7e]+$",
               "title": "Idempotency-Key",
               "type": "string"
             }
@@ -661,11 +914,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/ConsentErrorResponse"
                 }
               }
             },
-            "description": "Error Response"
+            "description": "Conflict"
           },
           "413": {
             "content": {
@@ -711,11 +964,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/ConsentErrorResponse"
                 }
               }
             },
-            "description": "Error Response"
+            "description": "Service Unavailable"
           }
         },
         "summary": "Grant Consent",

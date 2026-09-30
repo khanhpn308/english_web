@@ -21,8 +21,8 @@
 - [x] [T017](t017-typed-api-client.md): Generated DTO và typed fetch client
 - [x] [T066](t066-browser-bootstrap.md): Trusted browser bootstrap page
 - [x] [T052](t052-browser-test-harness.md): Browser harness với local fake API/bridge
-- [x] [T062](t062-architecture-gates.md): Architecture import boundary gates — implementation green (40 tests, both tools, dependency scan); inherited T007 formatting blocks aggregate.
-- [ ] [T015](t015-consent-api.md): Persist consent singleton và GET/PUT/DELETE
+- [x] [T062](t062-architecture-gates.md): Architecture import boundary gates — implementation green (40 tests, both tools, dependency scan).
+- [x] [T015](t015-consent-api.md): Persist consent singleton và GET/PUT/DELETE
 - [x] [T007](t007-bridge-policy-consent-adapter.md): Antigravity transport adapter với fake proxy
 - [ ] [T016](t016-dispatch-fence.md): Consent admission fence trước AI dispatch
 - [ ] [T018](t018-consent-ui.md): Consent dialog và Status panel
@@ -100,6 +100,8 @@
 - [ ] CP22: T044, T045, T057 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 
 ## Execution state
+
+- T015 semantic remediation DONE: resumed-session verification has 137 consent tests (47 added to the inherited 90), 14 operation tests and 279 full Python tests. Complete policy canonicalization, corrupt-storage denial, overlapping two-connection CAS, atomic receipts/replay and UTC event timestamps are proven. T016 remains TODO with T007 DONE; CP06 remains unchecked. The historical semantic source snapshot was IMPLEMENTATION_DONE_BASELINE_BLOCKED by T007 formatting and T053 generated-file coverage classification; exact checks and ownership are in the T015 card. The prerequisite-aware integration candidate starts from authorized post-CP05/T007 main `bc0ff937`; final candidate verification gates promotion.
 
 - Current task: T006 hoàn tất server-side bootstrap/session/HTTP guards; focused session tests, full quality/security gate và build có evidence trong thẻ T006. T066/T052 tiếp tục browser bootstrap/integration evidence.
 - T005 handoff: cả hai phần SQLite/migrations và health/lifecycle hoàn tất; full backend suite 41 PASS, focused storage 24 PASS, Ruff/format/Mypy PASS, một Alembic head. Pending release/tooling checks ghi trong thẻ T005.

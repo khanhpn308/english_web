@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from backend.app.application.consent import ConsentService
 from backend.app.application.operations import OperationLedger
 from backend.app.http.bootstrap import router as bootstrap_router
 from backend.app.http.errors import error_response
@@ -37,6 +38,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.storage_info = None
     app.state.storage_error = None
     app.state.operation_ledger = None
+    app.state.consent_service = None
     app.state.sessions.activate()
     try:
         if database is not None:
@@ -48,6 +50,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 ledger = OperationLedger(database.engine)
                 await run_in_threadpool(ledger.recover_pending)
                 app.state.operation_ledger = ledger
+                app.state.consent_service = ConsentService(ledger)
                 app.state.ready = True
             except StorageError as error:
                 app.state.storage_error = str(error)
@@ -59,6 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.ready = False
         app.state.storage_info = None
         app.state.operation_ledger = None
+        app.state.consent_service = None
         if database is not None:
             await run_in_threadpool(database.close)
         app.state.database = None
@@ -80,6 +84,8 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.state.storage_info = None
     app.state.storage_error = None
     app.state.operation_ledger = None
+    app.state.consent_service = None
+    app.state.active_ai_policy = None
     app.state.sessions = SessionStore()
 
     # FastAPI middleware runs before route handlers, including the generated OpenAPI route.
@@ -87,9 +93,11 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.add_middleware(SessionGuard, settings=app_settings, sessions=app.state.sessions)
 
     @app.exception_handler(RequestValidationError)
-    async def validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
+    async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
         # FastAPI error objects include input; expose only field and error type.
-        if any(error["type"] == "json_invalid" for error in exc.errors()):
+        if request.url.path != "/api/v1/ai-consent" and any(
+            error["type"] == "json_invalid" for error in exc.errors()
+        ):
             return error_response(400, "MALFORMED_JSON")
         return error_response(
             422,

@@ -97,9 +97,8 @@ export interface components {
             /** Canrequestai */
             canRequestAi: boolean;
             /** Lastchoiceat */
-            lastChoiceAt: number | null;
-            /** Policy */
-            policy: string | null;
+            lastChoiceAt: string | null;
+            policy: components["schemas"]["AiDisclosurePolicy"] | null;
             /** Revision */
             revision: number;
             /**
@@ -107,6 +106,66 @@ export interface components {
              * @enum {string}
              */
             state: "NOT_GRANTED" | "GRANTED" | "REVOKED" | "STALE";
+        };
+        /** AiDisclosurePolicy */
+        AiDisclosurePolicy: {
+            /** Blockedreasons */
+            blockedReasons: ("MODEL_POLICY" | "QUOTA_BILLING" | "PROXY_DATA_POLICY" | "CLOUD_DATA_POLICY")[];
+            /** Costquotastatement */
+            costQuotaStatement: string;
+            /** Datacategories */
+            dataCategories: ("TERM" | "WORD_FORMS" | "WRITING_ANSWER")[];
+            /** Digest */
+            digest: string;
+            /** Disclosuretext */
+            disclosureText: string;
+            /** Dispatchrules */
+            dispatchRules: components["schemas"]["AiDispatchRule"][];
+            /** Recipients */
+            recipients: string[];
+            /** Regionstatement */
+            regionStatement: string;
+            /** Retentionstatement */
+            retentionStatement: string;
+            /**
+             * Reviewstatus
+             * @enum {string}
+             */
+            reviewStatus: "BLOCKED" | "READY";
+            /** Scopes */
+            scopes: ("LOOKUP" | "QUIZ_GENERATION" | "WRITING_FEEDBACK")[];
+            /** Version */
+            version: string;
+            /** Withdrawalstatement */
+            withdrawalStatement: string;
+        };
+        /** AiDispatchRule */
+        AiDispatchRule: {
+            /**
+             * Billingmode
+             * @constant
+             */
+            billingMode: "configured-account";
+            /**
+             * Modelid
+             * @constant
+             */
+            modelId: "gemini-3.8-flash-high";
+            /**
+             * Providerlabel
+             * @constant
+             */
+            providerLabel: "Antigravity/Google";
+            /**
+             * Route
+             * @constant
+             */
+            route: "primary";
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "LOOKUP" | "QUIZ_GENERATION" | "WRITING_FEEDBACK";
         };
         /** BootstrapExchange */
         BootstrapExchange: {
@@ -119,6 +178,30 @@ export interface components {
          * @enum {string}
          */
         BridgeStatus: "NOT_CHECKED" | "OK" | "NOT_READY";
+        /** ConsentError */
+        ConsentError: {
+            /** Code */
+            code: string;
+            details?: components["schemas"]["ConsentRetryDetails"] | null;
+            /** Message */
+            message: string;
+            /** Requestid */
+            requestId: string;
+        };
+        /** ConsentErrorResponse */
+        ConsentErrorResponse: {
+            error: components["schemas"]["ConsentError"];
+        };
+        /** ConsentRetryDetails */
+        ConsentRetryDetails: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "RETRY";
+            /** Operationid */
+            operationId: string;
+        };
         ErrorDetails: {
             fields: {
                 field: string;
@@ -266,6 +349,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Error Response */
             500: {
                 headers: {
@@ -284,13 +376,13 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Error Response */
+            /** @description Service Unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
+                    "application/json": components["schemas"]["ConsentErrorResponse"];
                 };
             };
         };
@@ -356,13 +448,13 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Error Response */
+            /** @description Conflict */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
+                    "application/json": components["schemas"]["ConsentErrorResponse"];
                 };
             };
             /** @description Error Response */
@@ -401,13 +493,13 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Error Response */
+            /** @description Service Unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
+                    "application/json": components["schemas"]["ConsentErrorResponse"];
                 };
             };
         };
@@ -468,13 +560,13 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Error Response */
+            /** @description Conflict */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
+                    "application/json": components["schemas"]["ConsentErrorResponse"];
                 };
             };
             /** @description Error Response */
@@ -513,13 +605,13 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Error Response */
+            /** @description Service Unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
+                    "application/json": components["schemas"]["ConsentErrorResponse"];
                 };
             };
         };
