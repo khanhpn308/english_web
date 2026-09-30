@@ -1,8 +1,8 @@
 # Implementation task checklist
 
-**Planning state:** T001/T002/T058/T003/T004/T005/T053/T063/T013 đã có evidence hoàn tất; trạng thái các task còn lại theo checklist dưới đây.
+**Planning state:** T001/T002/T058/T003/T004/T005/T053/T063/T013/T006 đã có evidence hoàn tất; trạng thái các task còn lại theo checklist dưới đây.
 **Canonical plan:** [docs/task-plan.md](../docs/task-plan.md).  
-**Next ready task:** [T006](t006-api-core-contract-foundation.md).
+**Next ready task:** [T014](t014-operations-idempotency.md).
 **Handoff rule:** Chỉ check item khi thẻ tương ứng có acceptance/verification evidence và task status `DONE`. PENDING environment không được check thành PASS.
 
 ## Ordered task list
@@ -16,7 +16,7 @@
 - [x] [T053](t053-quality-security-gates.md): Coverage và quality-floor guard
 - [x] [T063](t063-security-scan-tooling.md): Secret và code/dependency security scan gates
 - [x] [T013](t013-contract-conformance.md): Chuẩn hóa ví dụ và quyết định contract còn mơ hồ
-- [ ] [T006](t006-api-core-contract-foundation.md): Bootstrap session và HTTP guards
+- [x] [T006](t006-api-core-contract-foundation.md): Bootstrap session và HTTP guards
 - [ ] [T014](t014-operations-idempotency.md): Durable operation ledger và idempotency
 - [ ] [T017](t017-typed-api-client.md): Generated DTO và typed fetch client
 - [ ] [T066](t066-browser-bootstrap.md): Trusted browser bootstrap page
@@ -101,9 +101,9 @@
 
 ## Execution state
 
-- Current task: T013 đã được tích hợp sau T063; 11 document probes và 2 negative mutation probes PASS, Gitleaks directory/current-HEAD history sạch; T063 vẫn giữ 20 focused/78 full Python, 21 frontend tests và ba security commands sạch.
+- Current task: T006 hoàn tất server-side bootstrap/session/HTTP guards; focused session tests, full quality/security gate và build có evidence trong thẻ T006. T066/T052 tiếp tục browser bootstrap/integration evidence.
 - T005 handoff: cả hai phần SQLite/migrations và health/lifecycle hoàn tất; full backend suite 41 PASS, focused storage 24 PASS, Ruff/format/Mypy PASS, một Alembic head. Pending release/tooling checks ghi trong thẻ T005.
-- Next task: T006 bootstrap session và HTTP guards; T062 architecture gate vẫn chờ T017 theo dependency graph.
+- Next task: T014 durable operation ledger/idempotency; T017 và T062 tiếp tục theo dependency graph.
 - T013: contract conformance hoàn tất; generated DTO/runtime verification tiếp tục thuộc T017 và downstream tasks.
 - T005-A commit: `8adf972`; T004 commit atomic; T005-B commit theo Git history của branch `feature/task-t005-sqlite-migrations`. Chưa push; Windows/provider evidence còn pending theo owner tasks.
 - Task ID là identifier ổn định; danh sách trên là dependency order, không sort theo số ID.

@@ -15,6 +15,11 @@
 
 ## 30/09/2026
 
+- **Khu vực:** `backend/app/http/session.py`, `errors.py`, `bootstrap.py`, `backend/app/main.py`, `backend/tests/test_session.py`, `tasks/t006-api-core-contract-foundation.md`, `tasks/todo.md`.
+- **Thay đổi:** Hoàn thành T006 với token bootstrap một lần, session cookie trong bộ nhớ theo vòng đời backend, Host/Origin/Referer/JSON/1 MiB guards, typed redacted errors và same-origin static shell refresh. Health vẫn public; OpenAPI/API/shell cần session. Test RED→GREEN cho replay, expiry, restart, hai tab, hostile headers, max/max+1 và không phản chiếu token.
+- **Verification:** 11 focused session tests, 89 full Python tests, 21 frontend tests, Mypy/Ruff/format/typecheck/build PASS; changed coverage 93,27%, total 88,50%; Gitleaks/Semgrep/OSV 0 findings. ESLint 0 errors, 2 warning Fast Refresh cũ. `npm run check:task:active` PASS; T062 architecture aggregate vẫn chưa có command.
+- **Mục đích:** Khóa HTTP trust boundary của app local theo API contract và ADR-0005 trước T014/T017/T066. Documentation-and-adrs ghi rationale/handoff trong thẻ task; không tạo ADR mới vì strategy đã được chốt. Browser page/referrer thực và launcher tiếp tục ở task owner.
+
 - **Khu vực:** `tasks/todo.md`, `docs/changelogs.md` và bộ tài liệu T013.
 - **Thay đổi:** Tích hợp commit atomic T013 `d7196f3` vào nhánh T063, giữ nguyên evidence của cả T063 và T013, hợp nhất hai xung đột bookkeeping, chuẩn hóa code fence Python trong conformance report theo Ruff và đánh dấu CP03 hoàn tất.
 - **Verification:** 11 document probes và 2 negative mutation probes PASS; staged scope/link/authority probe PASS; aggregate gate PASS với format/lint/typecheck, 21 frontend tests, 78 Python tests, changed coverage 100%, combined total 87,42% và ba security scanners đều 0 findings. ESLint còn 2 warning Fast Refresh đã tồn tại, 0 error.

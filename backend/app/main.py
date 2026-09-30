@@ -1,13 +1,27 @@
 """FastAPI application factory and ASGI entrypoint (T003)."""
 
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+from backend.app.http.bootstrap import router as bootstrap_router
+from backend.app.http.errors import error_response
 from backend.app.http.health import router as health_router
+from backend.app.http.session import SessionGuard, SessionStore
 from backend.app.persistence.database import Database, StorageError
 from backend.app.platform.config import AppSettings
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import JSONResponse
+
+STATIC_ROOT = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+_SHELL_ROUTES = {"", "lookup", "search", "review", "quiz/new", "status"}
+_DETAIL_ROUTES = re.compile(r"(?:word-forms/[^/]+|quiz/[^/]+(?:/result)?)\Z")
 
 
 @asynccontextmanager
@@ -19,6 +33,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.ready = False
     app.state.storage_info = None
     app.state.storage_error = None
+    app.state.sessions.activate()
     try:
         if database is not None:
             try:
@@ -31,6 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 app.state.storage_error = str(error)
         yield
     finally:
+        app.state.sessions.invalidate()
         app.state.ready = False
         app.state.storage_info = None
         if database is not None:
@@ -53,8 +69,53 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.state.database = None
     app.state.storage_info = None
     app.state.storage_error = None
+    app.state.sessions = SessionStore()
+
+    # FastAPI middleware runs before route handlers, including the generated OpenAPI route.
+    # Source: https://fastapi.tiangolo.com/tutorial/middleware/
+    app.add_middleware(SessionGuard, settings=app_settings, sessions=app.state.sessions)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
+        # FastAPI error objects include input; expose only field and error type.
+        if any(error["type"] == "json_invalid" for error in exc.errors()):
+            return error_response(400, "MALFORMED_JSON")
+        return error_response(
+            422,
+            "VALIDATION_ERROR",
+            {"kind": "FIELD_ERRORS", "fields": [{"field": "body", "reason": "invalid"}]},
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(_request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        if exc.status_code == 404:
+            return error_response(404, "NOT_FOUND")
+        return error_response(exc.status_code, "VALIDATION_ERROR")
 
     app.include_router(health_router)
+    app.include_router(bootstrap_router)
+
+    # The trusted bootstrap entry is built separately by T066; never serve the main app here.
+    @app.get("/bootstrap", include_in_schema=False)
+    def bootstrap_page() -> Response:
+        page = STATIC_ROOT / "bootstrap.html"
+        if not page.is_file():
+            return error_response(503, "CONFIGURATION_REQUIRED")
+        return FileResponse(page)
+
+    asset_dir = STATIC_ROOT / "assets"
+    if asset_dir.is_dir():
+        # Source: https://fastapi.tiangolo.com/tutorial/static-files/
+        app.mount("/assets", StaticFiles(directory=asset_dir), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def app_shell(full_path: str) -> Response:
+        if full_path not in _SHELL_ROUTES and _DETAIL_ROUTES.fullmatch(full_path) is None:
+            return error_response(404, "NOT_FOUND")
+        page = STATIC_ROOT / "index.html"
+        if not page.is_file():
+            return error_response(503, "CONFIGURATION_REQUIRED")
+        return FileResponse(page)
 
     return app
 
