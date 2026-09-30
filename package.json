@@ -23,6 +23,8 @@
     "typecheck": "tsc --noEmit",
     "test:frontend": "vitest run",
     "test:frontend:coverage": "vitest run --coverage.enabled --coverage.provider=v8 --coverage.reporter=text --coverage.reporter=lcov --coverage.reportsDirectory=htmlcov/frontend --coverage.include=frontend/src/**",
+    "test:e2e": "playwright test",
+    "test:a11y": "playwright test --grep @a11y",
     "build": "vite build",
     "export:contract": "PYTHONPATH=. python scripts/export_contract.py",
     "test:contract": "PYTHONPATH=. python -m pytest scripts/tests/test_contract.py"
@@ -32,7 +34,9 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.63.0",
     "@types/node": "^22.20.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

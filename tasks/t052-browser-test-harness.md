@@ -2,7 +2,7 @@
 
 **Task ID:** `T052`  
 **Title:** Browser harness với local fake API/bridge  
-**Status:** `TODO`  
+**Status:** `DONE`
 **Goal:** Cung cấp npm test:e2e và test:a11y dùng preview tạm reproducible để UI tasks chạy được.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -52,9 +52,9 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 
 ## Acceptance criteria
 
-- [ ] Smoke harness starts/tears down temporary services and browser; no orphan process/port.
-- [ ] All external provider calls denied; fake proxy dummy key only; no prod state copied.
-- [ ] Commands stable, viewport profiles and artifacts sanitized; missing browser fail actionable.
+- [x] Smoke harness starts/tears down temporary services and browser; no orphan process/port.
+- [x] All external provider calls denied; fake proxy dummy key only; no prod state copied.
+- [x] Commands stable, viewport profiles and artifacts sanitized; missing browser fail actionable.
 
 ## Test cases
 
