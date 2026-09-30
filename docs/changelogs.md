@@ -1,3 +1,8 @@
+## 30/09/2026 - T052 Browser Harness
+
+- **Files:** `frontend/tests/e2e/harness.spec.ts`, `frontend/tests/support/test_server.py`, `frontend/tests/support/fake_bridge.py`, `playwright.config.ts`, `package.json`, `package-lock.json`, `tasks/t052-browser-test-harness.md`.
+- **Mục đích:** Cung cấp môi trường kiểm thử E2E và Accessibility UI an toàn, cô lập hoàn toàn khỏi hệ thống dữ liệu thực và Google inference, sẵn sàng cho các nhiệm vụ phát triển React components phía trên.
+
 ## 30/09/2026 - T053 assertion-replacement floor remediation
 
 - **Files:** `scripts/check_constraints.py`, `scripts/tests/test_constraints.py`, `tasks/t053-quality-security-gates.md` and this changelog; existing uncommitted changes preserved.
