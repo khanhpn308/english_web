@@ -1,0 +1,730 @@
+{
+  "components": {
+    "schemas": {
+      "BootstrapExchange": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "BootstrapExchange",
+        "type": "object"
+      },
+      "BridgeStatus": {
+        "description": "AI bridge adapter status.",
+        "enum": [
+          "NOT_CHECKED",
+          "OK",
+          "NOT_READY"
+        ],
+        "title": "BridgeStatus",
+        "type": "string"
+      },
+      "ErrorDetails": {
+        "anyOf": [
+          {
+            "properties": {
+              "fields": {
+                "items": {
+                  "properties": {
+                    "field": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "reason"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "enum": [
+                  "FIELD_ERRORS"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "fields"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "currentRevision": {
+                "type": "integer"
+              },
+              "expectedRevision": {
+                "type": "integer"
+              },
+              "kind": {
+                "enum": [
+                  "CONFLICT"
+                ],
+                "type": "string"
+              },
+              "resourceId": {
+                "type": "string"
+              },
+              "resourceType": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "expectedRevision",
+              "currentRevision"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "RETRY"
+                ],
+                "type": "string"
+              },
+              "operationId": {
+                "type": "string"
+              },
+              "operationKind": {
+                "type": "string"
+              },
+              "retryAfterSeconds": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "RESOURCE"
+                ],
+                "type": "string"
+              },
+              "recovery": {
+                "enum": [
+                  "READ",
+                  "REBOOTSTRAP",
+                  "RELINK",
+                  "RESTORE"
+                ],
+                "type": "string"
+              },
+              "resourceId": {
+                "type": "string"
+              },
+              "resourceType": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "resourceType",
+              "recovery"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "answerRevision": {
+                "type": "integer"
+              },
+              "attemptId": {
+                "type": "string"
+              },
+              "guidanceCode": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "RESTORE"
+                ],
+                "type": "string"
+              },
+              "snapshotRevision": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "attemptId",
+              "guidanceCode"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "consentState": {
+                "enum": [
+                  "NOT_GRANTED",
+                  "GRANTED",
+                  "REVOKED",
+                  "STALE"
+                ],
+                "type": "string"
+              },
+              "currentPolicyVersion": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "AI_CONSENT"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "consentState"
+            ],
+            "type": "object"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "details": {
+                "$ref": "#/components/schemas/ErrorDetails"
+              },
+              "message": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "requestId"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "HealthStatus": {
+        "description": "Overall application health status.",
+        "enum": [
+          "OK",
+          "DEGRADED",
+          "NOT_READY"
+        ],
+        "title": "HealthStatus",
+        "type": "string"
+      },
+      "HealthSummary": {
+        "description": "Normative health schema matching docs/api-contract.md \u00a7183.",
+        "properties": {
+          "bridgeStatus": {
+            "$ref": "#/components/schemas/BridgeStatus"
+          },
+          "readiness": {
+            "title": "Readiness",
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HealthStatus"
+          },
+          "storageStatus": {
+            "$ref": "#/components/schemas/StorageStatus"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "storageStatus",
+          "bridgeStatus",
+          "readiness"
+        ],
+        "title": "HealthSummary",
+        "type": "object"
+      },
+      "Operation": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "errorCategory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcategory"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "operationId": {
+            "title": "Operationid",
+            "type": "string"
+          },
+          "resultRef": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resultref"
+          },
+          "status": {
+            "enum": [
+              "PENDING",
+              "SUCCEEDED",
+              "FAILED",
+              "UNKNOWN"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operationId",
+          "kind",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "Operation",
+        "type": "object"
+      },
+      "StorageStatus": {
+        "description": "Storage availability status.",
+        "enum": [
+          "OK",
+          "NOT_READY"
+        ],
+        "title": "StorageStatus",
+        "type": "string"
+      }
+    }
+  },
+  "info": {
+    "title": "Vocabulary Learning App",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "description": "Return application health summary with Cache-Control: no-store.",
+        "operationId": "get_health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          }
+        },
+        "summary": "Get Health",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/v1/operations/{operationId}": {
+      "get": {
+        "operationId": "get_operation_api_v1_operations__operation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operationId",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          }
+        },
+        "summary": "Get Operation",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/bootstrap/exchange": {
+      "post": {
+        "operationId": "exchange_bootstrap_bootstrap_exchange_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BootstrapExchange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          }
+        },
+        "summary": "Exchange Bootstrap",
+        "tags": [
+          "bootstrap"
+        ]
+      }
+    }
+  }
+}

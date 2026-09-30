@@ -18,7 +18,7 @@
 - [x] [T013](t013-contract-conformance.md): Chuẩn hóa ví dụ và quyết định contract còn mơ hồ
 - [x] [T006](t006-api-core-contract-foundation.md): Bootstrap session và HTTP guards
 - [x] [T014](t014-operations-idempotency.md): Durable operation ledger và idempotency
-- [ ] [T017](t017-typed-api-client.md): Generated DTO và typed fetch client
+- [x] [T017](t017-typed-api-client.md): Generated DTO và typed fetch client
 - [ ] [T066](t066-browser-bootstrap.md): Trusted browser bootstrap page
 - [ ] [T052](t052-browser-test-harness.md): Browser harness với local fake API/bridge
 - [ ] [T062](t062-architecture-gates.md): Architecture import boundary gates
@@ -79,7 +79,7 @@
 - [x] CP01: T001, T002, T058 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP02: T003, T004, T005 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [x] CP03: T053, T063, T013 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
-- [ ] CP04: T006, T014, T017 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp. (T017 remains)
+- [x] CP04: T006, T014, T017 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp. (T017 remains)
 - [ ] CP05: T066, T052, T062 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP06: T015, T007, T016 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP07: T018, T019, T008 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.

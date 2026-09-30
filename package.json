@@ -23,7 +23,9 @@
     "typecheck": "tsc --noEmit",
     "test:frontend": "vitest run",
     "test:frontend:coverage": "vitest run --coverage.enabled --coverage.provider=v8 --coverage.reporter=text --coverage.reporter=lcov --coverage.reportsDirectory=htmlcov/frontend --coverage.include=frontend/src/**",
-    "build": "vite build"
+    "build": "vite build",
+    "export:contract": "PYTHONPATH=. python scripts/export_contract.py",
+    "test:contract": "PYTHONPATH=. python -m pytest scripts/tests/test_contract.py"
   },
   "dependencies": {
     "react": "^19.0.0",
@@ -34,11 +36,12 @@
     "@types/node": "^22.20.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@vitest/coverage-v8": "^5.0.2",
     "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^5.0.2",
     "eslint": "^10.11.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",
+    "openapi-typescript": "7.4.2",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.71.0",
     "vite": "^8.3.1",

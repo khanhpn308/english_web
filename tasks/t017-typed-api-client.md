@@ -54,9 +54,9 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 
 ## Acceptance criteria
 
-- [ ] Generation reproducible no timestamp churn; contract diff phát hiện breaking shape.
-- [ ] Client maps error union, requestId, opaque ETag; browser session credentials same-origin.
-- [ ] No bridge URL/key/path exposed; network/unknown mutation not converted success.
+- [x] Generation reproducible no timestamp churn; contract diff phát hiện breaking shape.
+- [x] Client maps error union, requestId, opaque ETag; browser session credentials same-origin.
+- [x] No bridge URL/key/path exposed; network/unknown mutation not converted success.
 
 ## Test cases
 
