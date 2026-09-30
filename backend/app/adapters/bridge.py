@@ -110,13 +110,16 @@ class BridgeAdapter(BridgePort):
             raise BridgeConfigError("Missing proxy credentials")
 
         try:
-            async with self._get_client() as client, client.stream(
-                "POST",
-                "/chat/completions",
-                headers={"Authorization": f"Bearer {self._api_key}"},
-                json=payload,
-                timeout=self._get_timeout(deadline),
-            ) as response:
+            async with (
+                self._get_client() as client,
+                client.stream(
+                    "POST",
+                    "/chat/completions",
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                    json=payload,
+                    timeout=self._get_timeout(deadline),
+                ) as response,
+            ):
                 if response.status_code in (401, 403):
                     raise BridgeAuthError("Proxy rejected credentials")
                 if response.status_code >= 300:

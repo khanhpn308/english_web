@@ -221,9 +221,7 @@ async def test_preflight_deadline_before_first_request(start: float) -> None:
         requests.append(request)
         return httpx.Response(401)
 
-    adapter = BridgeAdapter(
-        api_key="dummy", transport=create_mock_transport(handler), clock=clock
-    )
+    adapter = BridgeAdapter(api_key="dummy", transport=create_mock_transport(handler), clock=clock)
     with pytest.raises(BridgeUnavailableError, match="Operation deadline exceeded"):
         await adapter.preflight(5.0)
 
@@ -244,9 +242,7 @@ async def test_preflight_shrinking_deadline(bridge_cases: dict[str, Any]) -> Non
         assert clock.time == 4.0
         return httpx.Response(200, json=bridge_cases["models_valid"])
 
-    adapter = BridgeAdapter(
-        api_key="dummy", transport=create_mock_transport(handler), clock=clock
-    )
+    adapter = BridgeAdapter(api_key="dummy", transport=create_mock_transport(handler), clock=clock)
     await adapter.preflight(5.0)
 
     assert clock.time == 4.0
@@ -269,9 +265,7 @@ async def test_preflight_exhausted_deadline(no_key_completion: float) -> None:
         clock.time = no_key_completion
         return httpx.Response(401)
 
-    adapter = BridgeAdapter(
-        api_key="dummy", transport=create_mock_transport(handler), clock=clock
-    )
+    adapter = BridgeAdapter(api_key="dummy", transport=create_mock_transport(handler), clock=clock)
     with pytest.raises(BridgeUnavailableError, match="Operation deadline exceeded"):
         await adapter.preflight(5.0)
 
