@@ -1,8 +1,8 @@
 # Implementation task checklist
 
-**Planning state:** T001/T002/T058/T003/T004/T005/T053 đã có evidence hoàn tất; trạng thái các task còn lại theo checklist dưới đây.
+**Planning state:** T001/T002/T058/T003/T004/T005/T053/T063 đã có evidence hoàn tất; trạng thái các task còn lại theo checklist dưới đây.
 **Canonical plan:** [docs/task-plan.md](../docs/task-plan.md).  
-**Next ready task:** [T063](t063-security-scan-tooling.md).
+**Next ready task:** [T013](t013-contract-conformance.md).
 **Handoff rule:** Chỉ check item khi thẻ tương ứng có acceptance/verification evidence và task status `DONE`. PENDING environment không được check thành PASS.
 
 ## Ordered task list
@@ -14,7 +14,7 @@
 - [x] [T004](t004-frontend-shell-routes.md): React shell, route map và landmarks
 - [x] [T005](t005-database-schema-migrations.md): SQLite connection và migration zero
 - [x] [T053](t053-quality-security-gates.md): Coverage và quality-floor guard
-- [ ] [T063](t063-security-scan-tooling.md): Secret và code/dependency security scan gates
+- [x] [T063](t063-security-scan-tooling.md): Secret và code/dependency security scan gates
 - [ ] [T013](t013-contract-conformance.md): Chuẩn hóa ví dụ và quyết định contract còn mơ hồ
 - [ ] [T006](t006-api-core-contract-foundation.md): Bootstrap session và HTTP guards
 - [ ] [T014](t014-operations-idempotency.md): Durable operation ledger và idempotency
@@ -101,9 +101,9 @@
 
 ## Execution state
 
-- Current task: T053 (Coverage và quality-floor guard) đã hoàn thành; focused 17 PASS, full Python 58 PASS, frontend 21 PASS, changed coverage 87.99%, combined baseline 86.88% và floor clean.
+- Current task: T063 hoàn thành; 20 focused/78 full Python và 21 frontend tests PASS, changed coverage 88,98%, combined total 87,42%, clean installs và ba security commands đều 0 findings.
 - T005 handoff: cả hai phần SQLite/migrations và health/lifecycle hoàn tất; full backend suite 41 PASS, focused storage 24 PASS, Ruff/format/Mypy PASS, một Alembic head. Pending release/tooling checks ghi trong thẻ T005.
-- Next task: T063 (security scan tooling); T062 architecture gate vẫn chờ T017 theo dependency graph.
+- Next task: T013 contract conformance theo dependency order; hai false-positive wording fixes đã áp dụng ở planning workspace phải được mang vào history reachable của nhánh T013 trước merge. T062 architecture gate vẫn chờ T017 theo dependency graph.
 - T013: mandatory contract-conformance trước behavior phụ thuộc; clarification ghi trong ADR/task output.
 - T005-A commit: `8adf972`; T004 commit atomic; T005-B commit theo Git history của branch `feature/task-t005-sqlite-migrations`. Chưa push; Windows/provider evidence còn pending theo owner tasks.
 - Task ID là identifier ổn định; danh sách trên là dependency order, không sort theo số ID.

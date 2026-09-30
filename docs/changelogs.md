@@ -13,6 +13,12 @@
 5. Không xóa hoặc sửa lịch sử cũ, trừ khi cần sửa lỗi ghi chép rõ ràng.
 6. Agent phải cập nhật changelog trước khi kết thúc một tác vụ có thay đổi file.
 
+## 30/09/2026
+
+- **Khu vực:** `scripts/security_checks.py`, `scripts/tests/test_security_checks.py`, `package.json`, generated `requirements-dev.lock`, `docs/toolchain.md`, `tasks/t063-security-scan-tooling.md`, `tasks/todo.md`; hai wording fixture/prose trong untracked planning `docs/api-contract.md` được sửa nhưng không stage do T013 sở hữu.
+- **Thay đổi:** Hoàn thành T063 với wrapper exact-version cho Gitleaks 8.30.1, Semgrep CE 1.178.0 và OSV-Scanner 2.6.0; report chỉ chứa metadata đã redacted, high/critical/unknown fail closed, scanner/network/report lỗi trả setup failure, no-HEAD/untracked + staged + current-HEAD history được quét. Bổ sung 20 focused tests (78 full Python), changed coverage 88,98%, combined total 87,42% và real negative probes; nối npm security scripts/aggregate gates. Remediation được owner phê duyệt không dùng suppression: rewrite hai false-positive examples và regenerate dev lock bằng `--allow-unsafe`, chỉ thêm pin `pip==26.2.1`/`setuptools==84.0.0`. Ba security gates đều 0 findings.
+- **Mục đích:** Biến ba security dimensions trong `CONSTRAINTS.md` thành executable gates mà không che finding bằng suppression/allowlist hoặc tự force-upgrade. Skill documentation-and-adrs được dùng để ghi pin/source/license/install boundary, privacy/exit contract, remediation trade-off và cross-branch T013 risk; không tạo ADR vì đây là tooling dễ đảo ngược, không đổi architecture/API.
+
 ## 29/09/2026
 
 - **Khu vực:** `scripts/check_constraints.py`, `scripts/tests/test_constraints.py`, `package.json`, `pyproject.toml`, generated lockfiles, `docs/toolchain.md`, `tasks/t053-quality-security-gates.md`, `tasks/todo.md`.
