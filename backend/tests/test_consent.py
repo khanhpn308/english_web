@@ -736,15 +736,22 @@ async def test_event_snapshots_append_only_and_receipts_redacted(
 def test_fresh_0002_to_0003_migration_repeat_and_history(tmp_path: Path) -> None:
     db = Database(tmp_path / "migration.db")
     config = migration_config()
-    assert ScriptDirectory.from_config(config).get_heads() == ["0003_consent"]
+    scripts = ScriptDirectory.from_config(config)
+    heads = scripts.get_heads()
+    assert len(heads) == 1
+    current_head = heads[0]
+
+    consent_revision = scripts.get_revision("0003_consent")
+    assert consent_revision is not None
+    assert consent_revision.down_revision == "0002_operations"
     try:
         with db.engine.begin() as connection:
             config.attributes["connection"] = connection
             command.upgrade(config, "0002_operations")
             connection.exec_driver_sql("CREATE TABLE synthetic_history (value TEXT)")
             connection.exec_driver_sql("INSERT INTO synthetic_history VALUES ('preserved')")
-        assert db.initialize().schema_revision == "0003_consent"
-        assert db.initialize().schema_revision == "0003_consent"
+        assert db.initialize().schema_revision == current_head
+        assert db.initialize().schema_revision == current_head
         with db.engine.connect() as connection:
             state = connection.exec_driver_sql("SELECT * FROM ai_consent_state").mappings().one()
             assert state["state"] == "NOT_GRANTED"
