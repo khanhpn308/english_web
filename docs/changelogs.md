@@ -1,3 +1,8 @@
+## 01/10/2026 - Dịch hướng dẫn orchestrator sang tiếng Việt (Asia/Bangkok)
+
+- **Tài liệu:** Dịch toàn bộ `docs/orchestrator.md` sang tiếng Việt, giữ nguyên cấu trúc, lệnh thực thi, đường dẫn, tên cấu hình, trạng thái và ý nghĩa kỹ thuật. Áp dụng skill documentation-and-adrs theo AGENT.md.
+- **Phạm vi:** Chỉ thay đổi hướng dẫn và mục changelog này; source, tests, cấu hình, task status và lịch sử changelog được giữ nguyên. Đối chiếu lệnh/trạng thái với bản gốc và kiểm tra `git diff --check`; không chạy lại test ứng dụng cho thay đổi tài liệu.
+
 ## 01/10/2026 - Verified Level 1 autonomous agent workflow (Asia/Bangkok)
 
 - **Implemented:** T067–T070 on `feature/task-t067-level1-orchestrator`: deterministic Python state/JSON contracts, capability-probed Codex/Gemini CLI adapters, separate outside worktrees/run artifacts, three independent processes, automatic bounded fix cycle and serialized verified-SHA integration. No database/framework or production runtime dependency.
