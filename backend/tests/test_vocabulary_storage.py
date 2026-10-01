@@ -4,6 +4,7 @@ from pathlib import Path
 from time import time
 
 import pytest
+from alembic import command
 from alembic.script import ScriptDirectory
 from backend.app.persistence.database import Database, migration_config
 from backend.app.vocabulary.models import (
@@ -518,11 +519,46 @@ def test_empty_source_inventory_handled_deterministically(repo: VocabularyReposi
 
 
 def test_migration_0004_fresh_and_repeat_reaches_head(tmp_path: Path) -> None:
-    """Migration reaches 0004_vocabulary head and repeated upgrade is idempotent."""
+    """Verify historical vocabulary migration, then stable initialization at the current head."""
     db = Database(tmp_path / "fresh_migration.db")
+    config = migration_config()
+    scripts = ScriptDirectory.from_config(config)
+    heads = scripts.get_heads()
+    assert len(heads) == 1
+    current_head = heads[0]
+    vocabulary_revision = scripts.get_revision("0004_vocabulary")
+    assert vocabulary_revision is not None
+    assert vocabulary_revision.down_revision == "0003_consent"
     try:
+        with db.engine.begin() as connection:
+            config.attributes["connection"] = connection
+            command.upgrade(config, "0003_consent")
+            connection.exec_driver_sql("CREATE TABLE synthetic_history (value TEXT)")
+            connection.exec_driver_sql("INSERT INTO synthetic_history VALUES ('preserved')")
+            command.upgrade(config, "0004_vocabulary")
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").all() == [
+                ("0004_vocabulary",)
+            ]
+            assert {
+                "word_families",
+                "word_forms",
+                "source_files",
+                "word_form_sources",
+                "lookup_previews",
+            }.issubset(
+                {
+                    row[0]
+                    for row in connection.exec_driver_sql(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    ).all()
+                }
+            )
+            assert (
+                connection.exec_driver_sql("SELECT value FROM synthetic_history").scalar_one()
+                == "preserved"
+            )
         first = db.initialize()
-        assert first.schema_revision == "0004_vocabulary"
+        assert first.schema_revision == current_head
         assert first.journal_mode == "wal"
 
         # Repeated initialize is a no-op that retains head
@@ -531,8 +567,12 @@ def test_migration_0004_fresh_and_repeat_reaches_head(tmp_path: Path) -> None:
 
         with db.engine.connect() as connection:
             assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").all() == [
-                ("0004_vocabulary",)
+                (current_head,)
             ]
+            assert (
+                connection.exec_driver_sql("SELECT value FROM synthetic_history").scalar_one()
+                == "preserved"
+            )
             tables = {
                 row[0]
                 for row in connection.exec_driver_sql(
@@ -552,7 +592,7 @@ def test_migration_0004_fresh_and_repeat_reaches_head(tmp_path: Path) -> None:
                 "lookup_previews",
             }.issubset(tables)
 
-        assert ScriptDirectory.from_config(migration_config()).get_heads() == ["0004_vocabulary"]
+        assert ScriptDirectory.from_config(config).get_heads() == [current_head]
     finally:
         db.close()
 
