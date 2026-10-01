@@ -1,3 +1,49 @@
+## 01/10/2026 - Checkpoint CP06 verification and closure (Asia/Bangkok)
+
+- **Audit/base:** Verified integrated repository state on `main` at `2dd220f368d40588fa9839237d5c4ed38a818474` (`fix(T016): linearize admission migration after review schema`). CP06 covers T015 (consent persistence/API), T007 (bridge transport adapter with fake proxy), and T016 (AI admission fence). All three tasks verified complete with sufficient evidence. Documentation follows the repository-required documentation-and-adrs skill.
+- **Task review:**
+  - T015: Confirmed initial `NOT_GRANTED` behavior, ready-only grants, stale ETag/digest denial, no implicit grants, offline revocation, atomic policy/event/receipt transactions via OperationLedger, fail-closed storage integrity, durable append-only event history, and no sensitive telemetry or real provider inference.
+  - T007: Confirmed no-key models preflight 401 requirement, keyed shape 200 via mock transport, missing key and unsafe URL fail-closed handling, loopback trust boundary preservation (`trust_env=False`, `follow_redirects=False`), absolute shrinking deadline across preflight and dispatch, 4 MiB bounded streaming, no auto-retries, no Google token/admin access, and no real inference. The known bookkeeping discrepancy (`Status: TODO` in card header vs `[x]` in todo.md) was investigated and resolved as a stale card documentation omission; updated T007 card header to `Status: DONE` and marked criteria complete.
+  - T016: Confirmed durable admission fence before dispatch, revoke-before-admission and revoke/regrant ABA denial of old intents, preflight denied by missing/revoked consent, admitted-before-revoke completing exactly once with subsequent intents denied, model/route matching captured policy, two-process SQLite race safety without process-local mutex, no open DB transaction across network, duplicate admission / PENDING->UNKNOWN recovery refusal, and linear migration chain `0005_review -> 0006_ai_admission`.
+- **Focused tests:** All focused CP06 suites exit 0:
+  - `python -m pytest backend/tests/test_consent.py -q`: exit 0 (150 passed in 26.42s).
+  - `python -m pytest backend/tests/test_bridge.py -q`: exit 0 (14 passed in 0.46s).
+  - `python -m pytest backend/tests/test_ai_admission.py -q`: exit 0 (60 passed in 13.63s).
+  - `python -m pytest backend/tests/test_operations.py -q`: exit 0 (14 passed in 3.65s).
+  - `python -m pytest backend/tests/test_vocabulary_storage.py -q`: exit 0 (16 passed in 3.41s).
+  - `python -m pytest backend/tests/test_srs.py -q`: exit 0 (60 passed in 6.72s).
+- **Full regression & gates:** Full test suites and aggregate gates exit 0:
+  - `python -m pytest -q`: exit 0 (533 passed in 87.28s).
+  - `npm run test:frontend:coverage`: exit 0 (38 passed in 776ms).
+  - `npm run check:task`: exit 0 (cleanly executing fast checks, 38 frontend tests, 533 Python tests, coverage check, all 3 security scans, and 40 architecture tests).
+- **Static, lint & build:**
+  - `python -m mypy backend`: exit 0 (43 source files checked, 0 errors).
+  - `npm run typecheck`: exit 0 (zero TypeScript errors).
+  - `npm run lint`: exit 0 (0 errors, 2 fast-refresh warnings in AppShell.tsx).
+  - `npm run build`: exit 0 (Vite build in 369ms).
+  - `npm run format:check`: exit 0 (154 files formatted).
+  - Scoped Ruff check / format on 10 CP06 files: exit 0 (clean).
+  - `npm run floor:check`: exit 0 (`floor: clean`).
+  - `npm run test:contract`: exit 0 (5 passed in 3.13s).
+- **Migration & schema:**
+  - `python -m alembic heads`: exit 0, exactly one head: `0006_ai_admission (head)`.
+  - `python -m alembic history`: exit 0, linear ancestry: `<base> -> 0001_storage -> 0002_operations -> 0003_consent -> 0004_vocabulary -> 0005_review -> 0006_ai_admission`.
+- **Coverage & architecture:**
+  - `npm run coverage:check`: exit 0, changed lines 100.00% (min 80.00%), total lines 92.72% (baseline 86.70%, tolerance 0.50 points) against clean HEAD; 97.22% when evaluated against T016 integration base `3b4faf52ba63aac30d6ea0443746eff846eb62da`. Thresholds and ratchets intact.
+  - `npm run architecture:check`: exit 0, depcruise 0 violations, import-linter 7 kept / 0 broken, 40 gate tests passed in 20.78s.
+- **Security & contract determinism:**
+  - `npm run security:secrets`: exit 0, 0 findings (Gitleaks 8.30.1).
+  - `npm run security:code`: exit 0, 0 findings (Semgrep 1.178.0).
+  - `npm run security:deps`: exit 0, 0 findings (OSV-Scanner 2.6.0).
+  - `npm run export:contract`: executed twice consecutively with byte-identical output; zero git diff in `contracts/openapi.json` and `frontend/src/shared/api/generated.ts`.
+- **Inherited baseline failure:**
+  - `python -m ruff check .`: exit 1, exactly 1 finding in untouched `scripts/tests/test_contract.py:34` (`RUF100 [*] Unused noqa directive`). Verified as `INHERITED_BASELINE_FAILURE` from commit `121d006a`, unrelated to CP06/T015/T007/T016, and left unmodified to preserve audit integrity.
+- **Bookkeeping & closure:**
+  - Updated `tasks/todo.md`: marked CP06 `[x]`, updated stale `Next ready task: T014` to current ready work (`T018, T008, T021`).
+  - Updated `tasks/t007-bridge-policy-consent-adapter.md`: aligned status to `DONE` and criteria to `[x]`.
+  - CP06 final verdict: PASS.
+- **Scope & safety:** Production files, migrations, ADRs, test fixtures, user Markdown vocabulary files, live databases, git history/remote intentionally untouched. No commits staged or pushed, no real provider inference, no real credentials accessed.
+
 ## 01/10/2026 - T016 verified linear integration after T020/T026/T031
 
 - **Base/source/audit:** frozen clean local main `3b4faf52ba63aac30d6ea0443746eff846eb62da` includes the preceding integration wave and one `0005_review` head. Source `task/t016` is already committed at `56b8e83254e1fce1d13d888aa2e4beb2952822e1`; source confirmation has 60 passing admission tests. Exact cherry-pick with provenance is `5eafd570fd82e646a4586e90dd263ad1ce90f662` on `integration/t016-after-wave`; separate ancestry/remediation commit preserves the original source. Documentation follows the required documentation-and-adrs skill.

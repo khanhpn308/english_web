@@ -2,7 +2,7 @@
 
 **Task ID:** `T007`  
 **Title:** Antigravity transport adapter với fake proxy  
-**Status:** `TODO`  
+**Status:** `DONE`
 **Goal:** Antigravity transport adapter với fake proxy. No-key models 401, keyed shape 200; auto/off, missing key và unsafe URL fail closed.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -46,9 +46,9 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 
 ## Acceptance criteria
 
-- [ ] No-key models 401, keyed shape 200; auto/off, missing key và unsafe URL fail closed.
-- [ ] Deadline bao gồm preflight/inference; bounded streaming response; no retries.
-- [ ] Không đọc Google tokens/admin config; BR-AUTH residual giả mạo được ghi đúng.
+- [x] No-key models 401, keyed shape 200; auto/off, missing key và unsafe URL fail closed.
+- [x] Deadline bao gồm preflight/inference; bounded streaming response; no retries.
+- [x] Không đọc Google tokens/admin config; BR-AUTH residual giả mạo được ghi đúng.
 
 ## Test cases
 
@@ -145,3 +145,8 @@ Full Ruff locations: `backend/app/application/consent.py` lines 1, 8, 26, 120, 1
 Changed: `bridge.py`, `bridge_port.py`, `test_bridge.py`, this task card and `docs/changelogs.md`. Intentionally untouched: fixture JSON, shared `tasks/todo.md`, all T015/T017/other implementation and tooling files. SHA-256 comparison captured independent parallel changes to `scripts/check_constraints.py`, `scripts/tests/test_constraints.py` and `tasks/t053-quality-security-gates.md` during this session; no edits to those files were made by this remediation. Checks create their configured ignored coverage/cache artifacts.
 
 Remaining downstream evidence: installed Windows/Antigravity profile, LAN isolation, T040 protected key provisioning and T016 consent/policy admission. Operation deadline enforcement itself is verified here and is not downstream. Next work: parallel owners resolve their type/lint findings; T016 consent/policy admission integration remains separate. No new product decision, migration, adapter redesign or dependency change.
+
+## CP06 verification and bookkeeping status alignment — 01/10/2026 (`Asia/Bangkok`)
+
+- Status alignment: `Status: DONE` and acceptance criteria `[x]` checked. The previous card header `Status: TODO` was identified during CP06 verification as a stale documentation omission from the 30/09/2026 deadline remediation, where implementation and tests were finished (14 passed) but full commit was blocked by parallel consent lint/mypy.
+- Fresh CP06 verification confirms: `python -m pytest backend/tests/test_bridge.py -q` exits 0 (14 passed in 0.46s), Mypy/scoped Ruff exit 0, architecture boundary exits 0, and all CP06/T016 integrated dispatch tests pass. All criteria verified complete.
