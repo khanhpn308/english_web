@@ -1,3 +1,9 @@
+## 01/10/2026 - Tích hợp orchestrator vào main cục bộ (Asia/Bangkok)
+
+- **Git:** Theo yêu cầu người dùng, commit bản dịch `69c4ff5` và merge fast-forward nhánh `feature/task-t067-level1-orchestrator` vào `main`, từ `8dba872` đến `69c4ff5`. Không push, không thay đổi các worktree khác.
+- **Bằng chứng:** `npm run check:task` trên bản tích hợp trả về 0: 590 test Python (gồm 57 test orchestrator), 38 test frontend, 40 test gate kiến trúc; coverage thay đổi 89,34%, ba scanner không có finding. Ruff, Mypy, build, Alembic head và dry-run T008 cũng đạt. Chi tiết tại `docs/reviews/orchestrator-integration-001.md`; báo cáo task-branch cũ được liên kết tới bằng chứng tích hợp mới.
+- **Phạm vi:** Commit ghi bằng chứng chỉ thay đổi tài liệu; source, cấu hình, migrations, API/client sinh tự động, dữ liệu người dùng và trạng thái checkpoint sản phẩm không thay đổi sau kiểm tra. Áp dụng skill documentation-and-adrs theo AGENT.md.
+
 ## 01/10/2026 - Dịch hướng dẫn orchestrator sang tiếng Việt (Asia/Bangkok)
 
 - **Tài liệu:** Dịch toàn bộ `docs/orchestrator.md` sang tiếng Việt, giữ nguyên cấu trúc, lệnh thực thi, đường dẫn, tên cấu hình, trạng thái và ý nghĩa kỹ thuật. Áp dụng skill documentation-and-adrs theo AGENT.md.

@@ -3,9 +3,11 @@
 ## Status
 
 DONE — T067, T068, T069 and T070 acceptance criteria satisfied on the task branch.
-Local main is intentionally not promoted. No push, PR or real provider inference.
+At this task-branch handoff, local main was intentionally not promoted. Subsequent
+user-authorized integration is recorded in the [main integration report](orchestrator-integration-001.md).
+No push, PR or real provider inference.
 The [pause checkpoint](orchestrator-checkpoint-001.md) remains historical;
-this report is the current handoff. Documentation follows the repository-required
+this report records the task-branch handoff. Documentation follows the repository-required
 `documentation-and-adrs` skill.
 
 ## Base and worktree
