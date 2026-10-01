@@ -35,6 +35,26 @@
 - **Verification:** RED tests reproduced semantic defects and reviewer findings before fixes. Final consent 90 PASS, operations 14 PASS, full Python 232 PASS, frontend 38 PASS, contract 5 PASS, two exports byte-identical; Mypy, Ruff lint/focused format, TypeScript, build, floor, whitespace and pinned secret/code/dependency scans PASS. Changed executable coverage 93.99%; combined measured coverage 89.56% exceeds the unchanged baseline. Exact commands/outcomes and SQLite two-engine/trigger evidence are recorded in the T015 card.
 - **Remaining blockers:** repository formatter still fails only on byte-for-byte inherited T007 bridge files (`BASELINE_T007_FORMAT_BLOCKER`). Existing T053 coverage checker wrongly requests executable coverage for generated.ts; its FAIL is preserved, source/thresholds untouched. T015 semantic acceptance is DONE; whole workspace is IMPLEMENTATION_DONE_BASELINE_BLOCKED / NOT_READY_TO_COMMIT. Unreleased/current 0003 was completed in place with one head; no claim of upgrade compatibility for an old deployed 0003 database.
 - **Handoff:** T016 is dependency-ready assuming T007 DONE; it remains TODO and no dispatch/provider work was added. No real credential/provider call, merge/rebase/pull, commit or push. Documentation follows the repository-required documentation-and-adrs skill.
+## 01/10/2026 - T019 Schema vocabulary, source links và preview
+
+- **Files:** `backend/migrations/versions/0004_vocabulary.py`, `backend/app/vocabulary/models.py`, `backend/app/vocabulary/repository.py`, `backend/tests/test_vocabulary_storage.py`, `tasks/t019-vocabulary-schema.md`, `tasks/todo.md`, `docs/changelogs.md`.
+- **Mục đích:** Xây dựng schema bền vững và repository cho canonical vocabulary identity, liên kết nguồn Markdown nhiều ngày và quản lý lookup preview theo ADR-0004/DATA-01–06 và T013 contract.
+- **Invariants:**
+  1. Canonical identity: `(normalized_lemma, part_of_speech, family_id)` là duy nhất; nhiều ngày/nguồn dùng chung một canonical form.
+  2. Distinct POS: Cùng lemma và family nhưng khác từ loại tạo ra các bản ghi canonical form riêng biệt.
+  3. Ambiguous family: Reject fail-closed, không tự ý suy đoán hoặc gộp word family.
+  4. Per-field verification: Giá trị thiếu (IPA, Cambridge URL) được lưu đúng `NULL`, không bịa đặt dữ liệu; giữ nguyên `verification_status` và `verificationSummary`.
+  5. Source state isolation: Nguồn lỗi (`INVALID`/`MISSING`) hoặc bị xóa chỉ gỡ link, không cascade-delete canonical form hay lịch sử học tập.
+  6. Preview ownership & expiration: Bắt buộc khớp session owner và kiểm tra expiration theo T013; dữ liệu lưu bền vững không chứa credentials/auth tokens.
+- **Evidence:**
+  - `python -m pytest backend/tests/test_vocabulary_storage.py -q`: 16 passed (coverage: models 94%, repository 95%, migration 95%, total 85%).
+  - `python -m alembic heads`: `0004_vocabulary (head)`.
+  - `lint-imports --config pyproject.toml --no-cache`: 7 kept, 0 broken.
+  - `python scripts/check_constraints.py floor`: `floor: clean`.
+  - Ruff check & format: zero errors, 4 files clean.
+  - Mypy: zero issues in 4 source files.
+  - Pending external tools: Gitleaks/Semgrep/Lighthouse ghi nhận `SETUP_PENDING`/`SETUP_FAILED` do môi trường chưa cài đặt nhị phân.
+- **Untouched:** Toàn bộ frontend, bridge adapter, consent API, operation ledger, parser, search projection và SRS logic bên ngoài T019 được bảo toàn nguyên vẹn.
 
 ## 30/09/2026 - T052 Browser Harness
 

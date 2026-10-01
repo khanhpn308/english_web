@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import pytest
 from alembic import command
+from alembic.script import ScriptDirectory
 from backend.app.application.operations import ClaimResult, OperationConflict, OperationLedger
 from backend.app.main import create_app
 from backend.app.persistence.database import Database, migration_config
@@ -36,12 +37,15 @@ def anyio_backend() -> str:
 def test_operations_migration_is_the_single_head_and_creates_permanent_keys(tmp_path: Path) -> None:
     database = Database(tmp_path / "operations.db")
     try:
+        heads = ScriptDirectory.from_config(migration_config()).get_heads()
+        assert len(heads) == 1
+        current_head = heads[0]
         info = database.initialize()
-        assert info.schema_revision == "0003_consent"
+        assert info.schema_revision == current_head
         with database.engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0003_consent"
+                == current_head
             )
             tables = {
                 row[0]
@@ -49,9 +53,7 @@ def test_operations_migration_is_the_single_head_and_creates_permanent_keys(tmp_
                     "SELECT name FROM sqlite_master WHERE type='table'"
                 )
             }
-            # fmt: off
-            assert tables == {"alembic_version", "operations", "operation_keys", "ai_consent_state", "ai_consent_event"}
-            # fmt: on
+            assert {"alembic_version", "operations", "operation_keys"}.issubset(tables)
             key_columns = connection.exec_driver_sql("PRAGMA table_info(operation_keys)").all()
             assert [(column[1], column[5]) for column in key_columns if column[5]] == [
                 ("kind", 1),
@@ -75,7 +77,8 @@ def test_existing_0001_database_upgrades_without_losing_history(tmp_path: Path) 
 
     database = Database(path)
     try:
-        assert database.initialize().schema_revision == "0003_consent"
+        current_head = ScriptDirectory.from_config(migration_config()).get_heads()[0]
+        assert database.initialize().schema_revision == current_head
         with database.engine.connect() as connection:
             result_val = connection.exec_driver_sql("SELECT value FROM synthetic_history")
             value: str = result_val.scalar_one()

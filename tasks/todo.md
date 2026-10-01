@@ -26,7 +26,7 @@
 - [x] [T007](t007-bridge-policy-consent-adapter.md): Antigravity transport adapter với fake proxy
 - [ ] [T016](t016-dispatch-fence.md): Consent admission fence trước AI dispatch
 - [ ] [T018](t018-consent-ui.md): Consent dialog và Status panel
-- [ ] [T019](t019-vocabulary-schema.md): Schema vocabulary, source links và preview
+- [x] [T019](t019-vocabulary-schema.md): Schema vocabulary, source links và preview
 - [ ] [T008](t008-lookup-api-vertical-slice.md): POST lookup trả preview đã validate
 - [ ] [T009](t009-lookup-ui-vertical-slice.md): Lookup UI gọi API thật qua client
 - [ ] [T010](t010-error-handling-recovery.md): Typed UI recovery cho common error codes

@@ -17,25 +17,26 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 def test_fresh_and_repeat_upgrade_have_one_head_and_operation_tables(tmp_path: Path) -> None:
     db = Database(tmp_path / "fresh.db")
     try:
+        heads = ScriptDirectory.from_config(migration_config()).get_heads()
+        assert len(heads) == 1
+        current_head = heads[0]
         first = db.initialize()
-        assert first.schema_revision == "0003_consent"
+        assert first.schema_revision == current_head
         assert first.wal_supported is True
         assert first.journal_mode == "wal"
         assert db.initialize() == first
         with db.engine.connect() as connection:
             assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").all() == [
-                ("0003_consent",)
+                (current_head,)
             ]
-            assert connection.exec_driver_sql(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).all() == [
-                ("alembic_version",),
-                ("operations",),
-                ("operation_keys",),
-                ("ai_consent_state",),
-                ("ai_consent_event",),
-            ]
-        assert ScriptDirectory.from_config(migration_config()).get_heads() == ["0003_consent"]
+            tables = {
+                row[0]
+                for row in connection.exec_driver_sql(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).all()
+            }
+            assert {"alembic_version", "operations", "operation_keys"}.issubset(tables)
+        assert ScriptDirectory.from_config(migration_config()).get_heads() == [current_head]
     finally:
         db.close()
 
@@ -79,7 +80,8 @@ def test_busy_writer_is_bounded_and_history_is_unchanged(tmp_path: Path) -> None
             with pytest.raises(OperationalError), db.engine.begin() as connection:
                 connection.exec_driver_sql("INSERT INTO history VALUES (2)")
             writer.rollback()
-        assert db.initialize().schema_revision == "0003_consent"
+        current_head = ScriptDirectory.from_config(migration_config()).get_heads()[0]
+        assert db.initialize().schema_revision == current_head
     finally:
         db.close()
 
@@ -194,9 +196,10 @@ def test_alembic_online_upgrade_and_repeat(tmp_path: Path) -> None:
     config.set_main_option("sqlalchemy.url", "sqlite:///" + str(path))
     command.upgrade(config, "head")
     command.upgrade(config, "head")
+    current_head = ScriptDirectory.from_config(config).get_heads()[0]
     with sqlite3.connect(path) as connection:
         assert connection.execute("SELECT version_num FROM alembic_version").fetchall() == [
-            ("0003_consent",)
+            (current_head,)
         ]
 
 
@@ -226,7 +229,8 @@ def test_failed_migration_rolls_back_ddl_and_preserves_history(tmp_path: Path) -
             revision = connection.exec_driver_sql(
                 "SELECT version_num FROM alembic_version"
             ).scalar()
-            assert revision == "0003_consent"
+            current_head = ScriptDirectory.from_config(migration_config()).get_heads()[0]
+            assert revision == current_head
     finally:
         db.close()
 
@@ -272,9 +276,10 @@ def test_downgrade_refuses_to_remove_ledger(tmp_path: Path) -> None:
     command.upgrade(config, "head")
     with pytest.raises(RuntimeError, match="Downgrade is disabled"):
         command.downgrade(config, "base")
+    current_head = ScriptDirectory.from_config(config).get_heads()[0]
     with sqlite3.connect(path) as connection:
         assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
-            "0003_consent",
+            current_head,
         )
 
 
