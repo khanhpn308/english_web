@@ -1,3 +1,17 @@
+## 01/10/2026 - Cho phép tích hợp bản sửa T071 đã kiểm tra tập trung (Asia/Bangkok)
+
+- **Quyền thực hiện:** Người dùng yêu cầu commit và merge vào main sau khi giới hạn gate tổng đã được trình bày. Tích hợp bản sửa T071 trong phạm vi hiện có; không suy diễn quyền sửa test T020 hay bỏ ràng buộc dữ liệu thật.
+- **Kiểm tra/trạng thái:** Giữ bằng chứng 76 test orchestrator, static/security/architecture đã đạt; kiểm tra lại staged diff và secret scan trước commit, rồi kiểm tra tập trung trên main. `check:task` vẫn chưa chạy do xung đột policy đã ghi; T071 và checkpoint sản phẩm không được đánh dấu DONE.
+- **Git/phạm vi:** Chỉ stage tám file T071 cho phép; ff-only main sạch từ `b9530b9` dưới khóa tích hợp repository. Không push, không sửa/xóa worktree hoặc JSON của các run T021/T059. Áp dụng skill documentation-and-adrs theo AGENT.md; kết quả tích hợp được bổ sung vào card T071.
+
+## 01/10/2026 - T071: Contract bất biến và chạy lại an toàn trước Worker (Asia/Bangkok)
+
+- **Nguyên nhân:** Plan của T021 diễn giải lại `objective`, `forbidden_scope`, `stop_conditions` và thêm glob vào danh sách đường dẫn chính xác. Validator chặn đúng nhưng prompt chưa cung cấp template nguyên văn và thông báo thiếu tên trường.
+- **Sửa hạ tầng:** Python tạo contract mẫu dùng chung với validator; Prompt Engineer phải giữ nguyên trường bất biến, tách diễn giải sang prompt Worker. Lỗi chỉ ghi tên trường/chỉ số mục, không ghi nội dung riêng tư. Không tự chuẩn hóa contract lệch, bỏ human gate hoặc sửa artifact cũ.
+- **Chạy lại:** Theo yêu cầu mới, ghi mở rộng phạm vi trước khi thêm CLI `retry`. Run/worktree mới được tạo từ main cục bộ hiện tại sau khi xác minh lần cũ dừng trước Worker, source/history/task/artifact bất biến và không có human gate; giữ toàn bộ lần cũ. Lỗi trùng worktree bị từ chối trước khi tạo bản ghi rỗng. Run mới có `retry_of`, bằng chứng nguồn và chạy lại baseline; khóa run/task ngăn cạnh tranh với tiến trình sống.
+- **Kiểm tra:** Baseline 57 pass; RED planning ba fail/một pass. RED retry 11 fail; RED artifact lịch sử một fail. Sau sửa lỗi và SOURCE FREEZE: 76 test orchestrator pass với provider giả, changed executable lines 90/94 covered (95,74%); Ruff/Mypy/check:fast đạt, Gitleaks/Semgrep không có finding; architecture giữ bảy contract, 40 test gate đạt. Kết quả 61 test/18 dòng trước mở rộng là lịch sử. Chưa chạy `check:task`: test T020 đọc dữ liệu từ vựng thật, xung đột với quy định automated tests hiện tại; không báo gate tổng PASS.
+- **Phạm vi/trạng thái:** Bốn file code/test (`core.py`, `workflow.py`, `__main__.py`, `test_workflow.py`) trong worktree T071 cùng guide/card/todo/changelog. Không sửa ứng dụng, task T021/T020, migration, dependency hay JSON các run đang tồn tại. Đối chiếu chỉ đọc xác nhận T059 có run sở hữu worktree đủ điều kiện; T021 vẫn có human gate. Bản sửa chưa commit/merge vào main; `retry` chưa có trên main. Áp dụng skill documentation-and-adrs theo AGENT.md; bằng chứng tại `tasks/t071-orchestrator-planning-contract.md`.
+
 ## 01/10/2026 - Tích hợp orchestrator vào main cục bộ (Asia/Bangkok)
 
 - **Git:** Theo yêu cầu người dùng, commit bản dịch `69c4ff5` và merge fast-forward nhánh `feature/task-t067-level1-orchestrator` vào `main`, từ `8dba872` đến `69c4ff5`. Không push, không thay đổi các worktree khác.

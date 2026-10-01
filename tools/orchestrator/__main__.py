@@ -10,7 +10,7 @@ from tools.orchestrator.workflow import Pipeline
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["run", "status", "resume"])
+    parser.add_argument("command", choices=["run", "status", "resume", "retry"])
     parser.add_argument("task")
     parser.add_argument("--config", type=Path)
     parser.add_argument("--run-id")
@@ -29,10 +29,14 @@ def main() -> int:
             raise OrchestratorError("Dry run is supported only for run")
         if args.command == "run":
             if args.run_id:
-                raise OrchestratorError("Run IDs are generated; use --run-id for status/resume")
+                raise OrchestratorError(
+                    "Run IDs are generated; use --run-id for status/resume/retry"
+                )
             state = pipeline.start(args.task, dry_run=args.dry_run)
         elif args.command == "resume":
             state = pipeline.resume(args.task, args.run_id)
+        elif args.command == "retry":
+            state = pipeline.retry(args.task, args.run_id)
         else:
             state = pipeline.status(args.task, args.run_id)
         print(json.dumps(state.model_dump(mode="json"), indent=2))

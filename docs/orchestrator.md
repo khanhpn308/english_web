@@ -36,6 +36,19 @@ lệnh không được hỗ trợ hoặc danh sách tệp được phép sửa d
 quá trình bị chặn, thay vì tự suy diễn phạm vi. Agent lập kế hoạch và kiểm tra đọc
 các tài liệu được tham chiếu cùng mã nguồn trong worktree của mình.
 
+Prompt Engineer được cung cấp contract mẫu do Python tạo từ task đã cố định.
+Agent phải sao chép nguyên văn các trường của mẫu, gồm `objective`, `forbidden_scope`
+và `stop_conditions`; diễn giải và kế hoạch triển khai nằm trong prompt Worker.
+Agent chỉ bổ sung quyết định cần con người vào `human_gates` và các tệp cấm cụ thể
+vào `forbidden_paths`. Danh sách này không chấp nhận thư mục/glob; các hạn chế rộng
+đã nằm trong `forbidden_scope` và mọi sửa đổi ngoài allowlist luôn bị chặn.
+
+Nếu agent đổi trường đã cố định, lỗi `Contract differs from repository-owned task constraints`
+liệt kê tên trường bị lệch, không ghi nội dung riêng tư. Lỗi đường dẫn nêu trường
+và chỉ số mục không hợp lệ. Đối chiếu artifact task/plan để kiểm tra; không sửa
+contract/state đã lưu nhằm ép run `BLOCKED` tiếp tục. Contract mẫu giúp tránh diễn
+giải lệch, không tự xóa human gate hay biến bằng chứng Windows còn thiếu thành PASS.
+
 Chương trình điều phối chạy các kiểm tra trước audit và sau tích hợp. Mã thoát khác
 0, hết thời gian, đầu ra quá lớn, kết quả PASS mâu thuẫn, source/index thay đổi hoặc
 tệp bàn giao bị sửa đều chặn việc đưa bản tích hợp vào nhánh đích. Giá trị băm của
@@ -101,6 +114,10 @@ python -m tools.orchestrator status T018
 python -m tools.orchestrator resume T018 --run-id <recorded-run-id>
 # Cho phép tích hợp task này vào nhánh cục bộ khi checkout đích đã sẵn sàng:
 python -m tools.orchestrator resume T018 --integrate
+# Tạo lần chạy mới sau lỗi đã được sửa, nếu lần cũ dừng trước Worker:
+python -m tools.orchestrator retry T059 --no-integrate
+# Chọn chính xác lần thất bại có worktree cần đối chiếu:
+python -m tools.orchestrator retry T059 --run-id <recorded-run-id> --no-integrate
 ```
 
 Dùng `--config <path>` để chọn tệp cấu hình khác. Status/resume chọn lần chạy mới
@@ -118,7 +135,9 @@ quy trình của repository trước khi chạy task thật trên nhánh gốc �
 
 Chạy thật yêu cầu checkout chính sạch và thư mục runtime được Git bỏ qua. Nếu task
 đã có worktree, kể cả branch task được tạo thủ công, công cụ sẽ từ chối; hãy kiểm
-tra hoặc tiếp tục lần chạy hiện có thay vì ghi đè. Worktree đã hoàn thành nhưng còn
+tra hoặc tiếp tục lần chạy hiện có thay vì ghi đè. Lỗi trùng worktree được từ chối
+trước khi tạo run mới, tránh bản ghi BLOCKED rỗng che mất lần có worktree thật.
+Worktree đã hoàn thành nhưng còn
 được giữ lại phải được kiểm tra và chủ động xóa thủ công trước khi bắt đầu lần chạy
 mới của cùng task. Orchestrator không có lệnh dọn dẹp mang tính phá hủy.
 
@@ -195,6 +214,35 @@ Hãy kiểm tra báo cáo cuối/lỗi, tệp kết quả từng vòng, Git inde
 của bản tích hợp thử và các tiến trình CLI còn sống trước khi phục hồi thủ công.
 Không thể tự xóa BLOCKED hay chỉnh state để giả vờ đã kiểm tra. Bằng chứng trước
 đó không bị âm thầm ghi đè.
+
+`run`, `resume` và `retry` có mục đích khác nhau:
+
+- `run`: bắt đầu task chưa có worktree.
+- `resume`: tiếp tục chính run ở điểm dừng ổn định; không mở lại BLOCKED.
+- `retry`: sau khi sửa nguyên nhân, tạo run/worktree/branch mới từ nhánh gốc cục bộ
+  hiện tại; chạy lại kiểm tra phụ thuộc, baseline và planning. Run trước vẫn BLOCKED.
+
+Retry chỉ chấp nhận lần BLOCKED được chứng minh dừng trước Worker, worktree sạch,
+HEAD còn đúng SHA gốc, task và toàn bộ artifact đã băm không đổi, không có contract
+đã chấp nhận, triển khai hay tích hợp. Nó giữ khóa task/run cũ để từ chối agent còn
+sống, không xóa worktree, branch, state hay log. Mọi worktree còn giữ của cùng task
+đều phải có run được quản lý và đạt điều kiện này; branch thủ công không được nhận
+thay. Human gate trong Plan vẫn buộc review, kể cả khi lỗi đầu tiên là contract.
+
+Không truyền `--run-id` thì retry chọn run có worktree thật mới nhất và bỏ qua bản
+ghi trùng rỗng từ phiên bản cũ. Status/resume vẫn chọn bản ghi mới nhất: cần chỉ định
+ID thật khi bản ghi rỗng còn tồn tại. State mới có `retry_of`, artifact `retry_origin`
+ghi SHA/state digest và các worktree giữ lại; `blocked_from` ghi giai đoạn thất bại.
+State cũ chưa có hai trường này vẫn đọc được; retry chỉ nhận lỗi baseline/setup
+hoặc contract đã biết nếu các bằng chứng khác đầy đủ. Dùng controller đã cập nhật
+để đọc state mới; controller cũ kiểm tra schema nghiêm ngặt có thể từ chối trường mới.
+
+Retry không sửa lỗi môi trường, không bỏ baseline và không hứa chạy lại mọi lỗi.
+Nếu Worker đã chạy, source/history thay đổi, bằng chứng bị sửa, có human gate hoặc
+merge chưa rõ kết quả, nó từ chối và giữ nguyên công việc để review. Khôi phục thủ
+công trong các trường hợp này cần quyết định có căn cứ, không sửa state để ép chạy.
+Run/worktree cũ được giữ để kiểm toán nên dung lượng tăng qua mỗi retry; chỉ dọn
+thủ công sau khi đã kiểm tra và lưu bằng chứng. Retry không có chế độ dry-run.
 
 Tiến trình CLI được tạo kế thừa khóa POSIX: việc kết thúc tiến trình Python cha
 không giải phóng khóa tích hợp/run nếu tiến trình CLI con trực tiếp vẫn còn sống.

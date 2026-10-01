@@ -1,3 +1,4 @@
+import json
 import re
 from multiprocessing.connection import Connection as PipeConnection
 from multiprocessing.synchronize import Barrier
@@ -13,12 +14,14 @@ from tools.orchestrator.core import (
     Criterion,
     Fix,
     IntegrationReview,
+    OrchestratorError,
     Plan,
     Role,
     RunState,
     State,
     WorkerResult,
     atomic_json,
+    digest,
     read_json,
     task_card,
 )
@@ -599,3 +602,271 @@ def test_lock_failure_after_integration_started_is_not_pending(repository: Path)
     assert result.state == State.BLOCKED
     assert "Worktree creation lock remained busy" in (result.last_error or "")
     assert Git(repository).sha() == initial
+
+
+class PlanningProbe(FakeAgents):
+    def __init__(self, mode: str) -> None:
+        super().__init__()
+        self.mode = mode
+
+    def run(
+        self,
+        prompt: str,
+        *,
+        cwd: Path,
+        role: Role,
+        timeout: int,
+        output: type[Output],
+        artifacts: Path,
+        name: str,
+        readonly: bool,
+    ) -> Output:
+        result = super().run(
+            prompt,
+            cwd=cwd,
+            role=role,
+            timeout=timeout,
+            output=output,
+            artifacts=artifacts,
+            name=name,
+            readonly=readonly,
+        )
+        if isinstance(result, Plan):
+            if self.mode == "template":
+                marker = "CONTRACT TEMPLATE JSON:\n"
+                assert marker in prompt, "Planner was not supplied a literal contract template"
+                template, _ = json.JSONDecoder().raw_decode(prompt.split(marker, 1)[1])
+                result.contract = Contract.model_validate(template)
+                card = task_card(cwd, "T100")
+                assert result.contract.objective == card.objective
+                assert result.contract.forbidden_scope == card.forbidden_scope
+                assert result.contract.stop_conditions == card.stop_conditions
+                assert result.contract.forbidden_paths == []
+                assert "Do not paraphrase" in prompt
+                assert "glob" in prompt
+                assert "read-only planning sandbox" in prompt
+            elif self.mode == "drift":
+                result.contract.objective = "PRIVATE SENTINEL changed objective"
+                result.contract.forbidden_scope = "PRIVATE SENTINEL changed forbidden scope"
+                result.contract.stop_conditions = "PRIVATE SENTINEL changed stop conditions"
+            elif self.mode == "gate":
+                result.contract.human_gates = ["Native Windows evidence unavailable"]
+            elif self.mode == "glob":
+                result.contract.forbidden_paths = ["private-sentinel/**"]
+        return result
+
+
+def test_planner_receives_and_consumes_exact_contract_template(repository: Path) -> None:
+    card = repository / "tasks/t100-fixture.md"
+    card.write_text(
+        card.read_text().replace("Preserve good behavior.", "Preserve temp→fsync→replace.")
+        + "\n## Files không được sửa\n- Nội dung riêng tư; không mở rộng phạm vi.\n"
+        + "\n## Stop conditions\n- Thiếu Windows proof → pending, not pass.\n"
+    )
+    Git(repository).run("add", str(card))
+    Git(repository).run("commit", "-m", "synthetic unicode constraints")
+    agents = PlanningProbe("template")
+    pipeline = Pipeline(repository, configuration(integrate=False), agents)
+    state = pipeline.start("T100")
+    assert state.state == State.AUDIT_PASS
+    assert agents.calls == ["Plan", "WorkerResult", "Audit"]
+    frozen = pipeline.contract(pipeline.run_path("T100", state.run_id), state)
+    assert frozen.stop_conditions == task_card(repository, "T100").stop_conditions
+
+
+def test_planning_drift_lists_field_names_without_private_text(repository: Path) -> None:
+    agents = PlanningProbe("drift")
+    state = Pipeline(repository, configuration(), agents).start("T100")
+    assert state.state == State.BLOCKED
+    error = state.last_error or ""
+    for field in ["objective", "forbidden_scope", "stop_conditions"]:
+        assert field in error
+    assert "PRIVATE SENTINEL" not in error
+    assert agents.calls == ["Plan"]
+    assert state.contract_digest == ""
+    assert state.implementation_sha is None
+
+
+@pytest.mark.parametrize("mode", ["gate", "glob"])
+def test_planner_cannot_bypass_human_gates_or_exact_paths(repository: Path, mode: str) -> None:
+    agents = PlanningProbe(mode)
+    state = Pipeline(repository, configuration(), agents).start("T100")
+    assert state.state == State.BLOCKED
+    error = state.last_error or ""
+    if mode == "gate":
+        assert "human gates" in error
+    else:
+        assert "forbidden_paths[0]" in error
+        assert "private-sentinel" not in error
+    assert agents.calls == ["Plan"]
+    assert state.implementation_sha is None
+
+
+def test_retry_preserves_failed_run_and_creates_fresh_worktree(repository: Path) -> None:
+    pipeline = Pipeline(repository, configuration(integrate=False), PlanningProbe("drift"))
+    old = pipeline.start("T100")
+    old_directory = pipeline.run_path("T100", old.run_id)
+    evidence = {p.name: p.read_bytes() for p in old_directory.iterdir() if p.is_file()}
+    old_tree = Path(old.worktree_path)
+    original_head = Git(old_tree).sha()
+    (repository / "independent.txt").write_text("Independent base advance\n")
+    Git(repository).run("add", "independent.txt")
+    Git(repository).run("commit", "-m", "independent local base advance")
+    pipeline.provider = FakeAgents()
+    result = pipeline.retry("T100", old.run_id)
+    assert result.state == State.AUDIT_PASS
+    assert result.retry_of == old.run_id
+    assert result.run_id != old.run_id
+    assert result.base_sha == Git(repository).sha()
+    assert result.worktree_path != old.worktree_path
+    assert result.worktree_branch != old.worktree_branch
+    assert old_tree.is_dir() and Git(old_tree).sha() == original_head
+    assert evidence == {p.name: p.read_bytes() for p in old_directory.iterdir() if p.is_file()}
+    assert pipeline.status("T100", old.run_id).state == State.BLOCKED
+
+
+def test_duplicate_run_refuses_without_creating_empty_run(repository: Path) -> None:
+    pipeline = Pipeline(repository, configuration(integrate=False), PlanningProbe("drift"))
+    old = pipeline.start("T100")
+    before = sorted((pipeline.runs / "T100").iterdir())
+    with pytest.raises(OrchestratorError, match="retry"):
+        pipeline.start("T100")
+    assert sorted((pipeline.runs / "T100").iterdir()) == before
+    assert pipeline.status("T100").run_id == old.run_id
+
+
+def test_retry_default_ignores_legacy_empty_duplicate_record(repository: Path) -> None:
+    pipeline = Pipeline(repository, configuration(integrate=False), PlanningProbe("drift"))
+    old = pipeline.start("T100")
+    empty = RunState(
+        task_id="T100",
+        run_id="zz-legacy-duplicate",
+        state=State.BLOCKED,
+        base_sha=old.base_sha,
+        repository=str(repository),
+        worktree_path=str(pipeline.worktrees / "T100-zz-legacy-duplicate"),
+        worktree_branch="agent/T100-zz-legacy-duplicate",
+        last_error="Task already has a worktree",
+    )
+    pipeline.save(pipeline.run_path("T100", empty.run_id), empty)
+    pipeline.provider = FakeAgents()
+    result = pipeline.retry("T100")
+    assert result.state == State.AUDIT_PASS
+    assert result.retry_of == old.run_id
+    assert pipeline.status("T100", empty.run_id).artifacts == {}
+
+
+@pytest.mark.parametrize("unsafe", ["worker", "dirty", "history", "artifact", "gate", "active"])
+def test_retry_refuses_unsafe_or_human_blocked_run(repository: Path, unsafe: str) -> None:
+    agents = (
+        FakeAgents(failures=1)
+        if unsafe == "worker"
+        else PlanningProbe("gate" if unsafe == "gate" else "drift")
+    )
+    pipeline = Pipeline(repository, configuration(integrate=False, cycles=0), agents)
+    old = pipeline.start("T100")
+    old_directory = pipeline.run_path("T100", old.run_id)
+    tree = Path(old.worktree_path)
+    if unsafe in {"dirty", "history"}:
+        (tree / "feature.txt").write_text("Preserve user change\n")
+        if unsafe == "history":
+            Git(tree).run("add", "feature.txt")
+            Git(tree).run("commit", "-m", "preserve user commit")
+    elif unsafe == "artifact":
+        (old_directory / old.artifacts["plan"]).write_text("Tampered synthetic report")
+    elif unsafe == "active":
+        old.current_agent = "worker"
+        pipeline.save(old_directory, old)
+    evidence = (old_directory / "state.json").read_bytes()
+    branches = Git(repository).run("for-each-ref", "--format=%(refname)", "refs/heads")
+    with pytest.raises(OrchestratorError):
+        pipeline.retry("T100", old.run_id)
+    assert (old_directory / "state.json").read_bytes() == evidence
+    assert Git(repository).run("for-each-ref", "--format=%(refname)", "refs/heads") == branches
+    assert tree.is_dir()
+    if unsafe in {"dirty", "history"}:
+        assert (tree / "feature.txt").read_text() == "Preserve user change\n"
+
+
+def test_retry_cannot_adopt_unmanaged_task_worktree(repository: Path) -> None:
+    pipeline = Pipeline(repository, configuration(integrate=False), PlanningProbe("drift"))
+    old = pipeline.start("T100")
+    unmanaged = repository.parent / "manual-worktree"
+    Git(repository).create_worktree(unmanaged, "task/T100-manual", old.base_sha)
+    with pytest.raises(OrchestratorError, match="managed"):
+        pipeline.retry("T100", old.run_id)
+    assert unmanaged.is_dir()
+    assert Git(unmanaged).branch() == "task/T100-manual"
+
+
+def test_cli_retry_uses_explicit_run_id(repository: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    from tools.orchestrator.__main__ import main
+
+    pipeline = Pipeline(repository, configuration(integrate=False), PlanningProbe("drift"))
+    old = pipeline.start("T100")
+    pipeline.provider = FakeAgents()
+    monkeypatch.setattr(Pipeline, "load", lambda _directory, _config_path: pipeline)
+    monkeypatch.setattr(
+        sys, "argv", ["orchestrator", "retry", "T100", "--run-id", old.run_id, "--no-integrate"]
+    )
+    assert main() == 0
+    states = [
+        pipeline.status("T100", p.parent.name)
+        for p in (pipeline.runs / "T100").glob("*/state.json")
+    ]
+    retried = [state for state in states if state.run_id != old.run_id]
+    assert len(retried) == 1 and retried[0].retry_of == old.run_id
+    assert retried[0].state == State.AUDIT_PASS
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_retry_rechecks_baseline_after_environment_repair(repository: Path, legacy: bool) -> None:
+    config = configuration(integrate=False)
+    config.verification = [["python", "-m", "pytest", "missing_test.py", "-q"]]
+    agents = FakeAgents()
+    pipeline = Pipeline(repository, config, agents)
+    old = pipeline.start("T100")
+    assert old.state == State.BLOCKED and agents.calls == []
+    assert (old.last_error or "").startswith("INHERITED_BASELINE_FAILURE:")
+    directory = pipeline.run_path("T100", old.run_id)
+    if legacy:
+        payload = old.model_dump(mode="json", exclude={"blocked_from", "retry_of"})
+        atomic_json(directory / "state.json", payload)
+    previous = (directory / "state.json").read_bytes()
+    pipeline.config = configuration(integrate=False)
+    retried = pipeline.retry("T100", old.run_id)
+    assert retried.state == State.AUDIT_PASS
+    assert "baseline" in retried.artifacts and retried.retry_of == old.run_id
+    assert agents.calls == ["Plan", "WorkerResult", "Audit"]
+    assert (directory / "state.json").read_bytes() == previous
+
+
+def test_retry_refuses_tampered_historical_evidence(repository: Path) -> None:
+    pipeline = Pipeline(repository, configuration(integrate=False), PlanningProbe("drift"))
+    old = pipeline.start("T100")
+    directory = pipeline.run_path("T100", old.run_id)
+    historical = directory / "old-baseline.json"
+    historical.write_text("Synthetic previous check\n")
+    old.artifact_digests[historical.name] = digest(historical.read_bytes())
+    pipeline.save(directory, old)
+    historical.write_text("Changed previous check\n")
+    pipeline.provider = FakeAgents()
+    with pytest.raises(OrchestratorError, match="artifact"):
+        pipeline.retry("T100", old.run_id)
+    assert pipeline.provider.calls == []
+
+
+def test_retry_refuses_live_run_lock_without_new_state(repository: Path) -> None:
+    from tools.orchestrator.runtime import LockBusy
+
+    pipeline = Pipeline(repository, configuration(integrate=False), PlanningProbe("drift"))
+    old = pipeline.start("T100")
+    directory = pipeline.run_path("T100", old.run_id)
+    previous = (directory / "state.json").read_bytes()
+    runs = sorted((pipeline.runs / "T100").iterdir())
+    with lock(directory / ".run.lock"), pytest.raises(LockBusy):
+        pipeline.retry("T100", old.run_id)
+    assert sorted((pipeline.runs / "T100").iterdir()) == runs
+    assert (directory / "state.json").read_bytes() == previous

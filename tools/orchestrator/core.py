@@ -195,11 +195,20 @@ class IntegrationReview(Model):
     findings: list[str]
 
 
+class RetryOrigin(Model):
+    run_id: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]+$")]
+    base_sha: Sha
+    state_digest: Nonempty
+    retained_worktrees: list[Nonempty]
+
+
 class RunState(Model):
     schema_version: Version = 1
     task_id: TaskId
     run_id: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]+$")]
+    retry_of: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]+$")] | None = None
     state: State = State.PENDING
+    blocked_from: State | None = None
     repository: Nonempty
     base_branch: Nonempty = "main"
     base_sha: Sha
@@ -453,24 +462,47 @@ def task_card(repository: Path, task_id: str) -> TaskCard:
     )
 
 
+def contract_template(card: TaskCard, state: RunState) -> Contract:
+    """Construct literal owner constraints; agents may elaborate only outside them."""
+    return Contract(
+        schema_version=1,
+        task_id=card.task_id,
+        title=card.title,
+        objective=card.objective,
+        dependencies=card.dependencies,
+        base_sha=state.base_sha,
+        allowed_paths=card.allowed_paths,
+        forbidden_paths=[],
+        acceptance_criteria=card.acceptance_criteria,
+        required_verification=card.required_verification,
+        risk_level=card.risk_level,
+        forbidden_scope=card.forbidden_scope,
+        stop_conditions=card.stop_conditions,
+        human_gates=[],
+        max_fix_cycles=state.max_fix_cycles,
+    )
+
+
 def validate_contract(contract: Contract, card: TaskCard, state: RunState) -> None:
-    if (
-        contract.task_id != card.task_id
-        or contract.base_sha != state.base_sha
-        or contract.title != card.title
-        or contract.objective != card.objective
-        or sorted(contract.dependencies) != card.dependencies
-        or sorted(contract.allowed_paths) != card.allowed_paths
-        or contract.acceptance_criteria != card.acceptance_criteria
-        or contract.required_verification != card.required_verification
-        or contract.max_fix_cycles != state.max_fix_cycles
-        or contract.risk_level != card.risk_level
-        or contract.forbidden_scope != card.forbidden_scope
-        or contract.stop_conditions != card.stop_conditions
+    exclusions = {"human_gates", "forbidden_paths"}
+    expected = contract_template(card, state).model_dump(exclude=exclusions)
+    actual = contract.model_dump(exclude=exclusions)
+    for field in ("dependencies", "allowed_paths"):
+        actual[field] = sorted(actual[field])
+    mismatches = [field for field in expected if actual[field] != expected[field]]
+    if mismatches:
+        raise OrchestratorError(
+            "Contract differs from repository-owned task constraints: " + ", ".join(mismatches)
+        )
+    for field, paths in (
+        ("allowed_paths", contract.allowed_paths),
+        ("forbidden_paths", contract.forbidden_paths),
     ):
-        raise OrchestratorError("Contract differs from repository-owned task constraints")
-    for path in contract.allowed_paths + contract.forbidden_paths:
-        safe_path(path)
+        for index, path in enumerate(paths):
+            try:
+                safe_path(path)
+            except OrchestratorError as error:
+                raise OrchestratorError(f"Invalid contract path: {field}[{index}]") from error
     if set(contract.allowed_paths) & set(contract.forbidden_paths):
         raise OrchestratorError("Conflicting allowed and forbidden paths")
 

@@ -16,11 +16,13 @@ from tools.orchestrator.core import (
     IntegrationReview,
     OrchestratorError,
     Plan,
+    RetryOrigin,
     RunState,
     State,
     TaskCard,
     WorkerResult,
     atomic_json,
+    contract_template,
     digest,
     now,
     read_json,
@@ -53,6 +55,22 @@ Prompt Engineer, Auditor, Integrator: inspect only; never modify source or share
 Auditor: review real diff and test evidence, test weakening, scope, migration/contract and failure
 paths independently; no false PASS and no silent fixes. Integrator: return READY or BLOCKED;
 Python alone performs merge, verification and target promotion. Never assume a claim is evidence.
+"""
+
+PLANNING_RULES = """
+The contract template below is constructed by the orchestrator from the frozen repository card.
+Copy every template field verbatim except human_gates and forbidden_paths. Do not paraphrase,
+translate, summarize, strengthen or weaken objective, forbidden_scope, stop_conditions or any
+other pinned field. Put implementation details and additional reasoning in worker_prompt.
+Populate human_gates with genuine unresolved product, scope, security or environment decisions;
+never omit a genuine gate just to allow execution. Normal orchestrator Git ownership is not
+a human gate. Your read-only planning sandbox applies only to this role; Worker has separately
+assigned editing permissions. Do not infer Worker permission failure from your planning sandbox.
+forbidden_paths accepts exact repository-relative files only: no directory, glob or wildcard.
+Leave it empty when broad restrictions are already expressed by forbidden_scope; the host
+always rejects changes outside allowed_paths. Never alter the template's allowed_paths.
+Return Plan JSON with this contract and worker_prompt, not a different worker result schema.
+CONTRACT TEMPLATE JSON:
 """
 
 
@@ -161,7 +179,110 @@ class Pipeline:
         )
         (directory / "final_report.md").write_text(report, encoding="utf-8")
 
-    def start(self, task: str, *, dry_run: bool = False) -> RunState:
+    def task_worktrees(self, task: str) -> dict[Path, str]:
+        registered = {}
+        for block in self.git.run("worktree", "list", "--porcelain").split("\n\n"):
+            fields = dict(line.split(" ", 1) for line in block.splitlines() if " " in line)
+            branch = fields.get("branch", "").removeprefix("refs/heads/")
+            if re.search(r"(?:/|-)" + task.lower() + r"(?:-|/|$)", branch.lower()):
+                registered[Path(fields["worktree"]).resolve()] = branch
+        return registered
+
+    def retry_source(
+        self, task: str, run_id: str | None, registered: dict[Path, str], resources: ExitStack
+    ) -> RunState:
+        owners = {}
+        for path in (self.runs / task).glob("*/state.json"):
+            recorded = self.status(task, path.parent.name)
+            tree = Path(recorded.worktree_path).resolve()
+            if tree in registered and recorded.worktree_branch == registered[tree]:
+                owners[tree] = recorded
+        if not owners or set(owners) != set(registered):
+            raise OrchestratorError("Retry requires recorded, managed task worktrees only")
+        sources = list(owners.values())
+        selected = (
+            next((s for s in sources if s.run_id == run_id), None)
+            if run_id
+            else max(sources, key=lambda s: s.created_at)
+        )
+        if selected is None:
+            raise OrchestratorError("Retry run ID does not own a registered task worktree")
+        for old in sources:
+            directory = self.run_path(task, old.run_id)
+            resources.enter_context(lock(directory / ".run.lock"))
+            if self.status(task, old.run_id) != old:
+                raise OrchestratorError("Previous run changed while acquiring retry lock")
+            preworker = old.blocked_from in {State.PENDING, State.PLANNING}
+            legacy_preworker = old.blocked_from is None and (old.last_error or "").startswith(
+                (
+                    "INHERITED_BASELINE_FAILURE:",
+                    "SETUP_FAILED:",
+                    "Contract differs from repository-owned task constraints",
+                    "Invalid contract path:",
+                    "Unsafe or non-exact repository path",
+                    "Conflicting allowed and forbidden paths",
+                )
+            )
+            if (
+                old.state != State.BLOCKED
+                or not (preworker or legacy_preworker)
+                or old.current_agent not in {None, "prompt_engineer"}
+                or old.contract_digest
+                or old.implementation_sha
+                or old.integration_path
+                or old.integration_branch
+                or old.integrated_sha
+                or old.audited_digest
+                or not old.task_digest
+                or "task_card" not in old.artifacts
+                or set(old.artifacts) - {"task_card", "setup", "baseline", "plan", "retry_origin"}
+            ):
+                raise OrchestratorError("Retry requires a BLOCKED run proven to be before Worker")
+            self.git.assert_worktree(Path(old.worktree_path), old.worktree_branch)
+            git = Git(Path(old.worktree_path))
+            if git.sha() != old.base_sha or not git.clean():
+                raise OrchestratorError(
+                    "Retry refused: previous source/history changed; preserve work"
+                )
+            self.check_artifacts(directory, old)
+            for name, expected in old.artifact_digests.items():
+                safe_path(name)
+                path = directory / name
+                if (
+                    "/" in name
+                    or path.is_symlink()
+                    or not path.is_file()
+                    or digest(path.read_bytes()) != expected
+                ):
+                    raise OrchestratorError("Retry refused: historical artifact changed or missing")
+            card = TaskCard.model_validate(read_json(directory / old.artifacts["task_card"]))
+            safe_path(card.path)
+            original = self.git.run("show", f"{old.base_sha}:{card.path}", preserve_newlines=True)
+            if (
+                card.task_id != task
+                or digest(original.encode()) != old.task_digest
+                or card.content_digest != old.task_digest
+            ):
+                raise OrchestratorError("Retry refused: original task evidence changed")
+            if old.verified_digest and git.snapshot(old.base_sha) != old.verified_digest:
+                raise OrchestratorError("Retry refused: previous source evidence changed")
+            if "plan" in old.artifacts:
+                plan = Plan.model_validate(read_json(directory / old.artifacts["plan"]))
+                if plan.contract.human_gates:
+                    raise OrchestratorError("Retry refused: unresolved human gates require review")
+        return selected
+
+    def retry(self, task: str, run_id: str | None = None) -> RunState:
+        return self.start(task, retry=True, previous_run_id=run_id)
+
+    def start(
+        self,
+        task: str,
+        *,
+        dry_run: bool = False,
+        retry: bool = False,
+        previous_run_id: str | None = None,
+    ) -> RunState:
         run_id = re.sub(r"[^0-9]", "", now()) + "-" + uuid4().hex[:8]
         base = self.git.sha(f"refs/heads/{self.config.base_branch}")
         state = RunState(
@@ -200,11 +321,35 @@ class Pipeline:
         with ExitStack() as resources:
             resources.enter_context(slot(self.locks))
             resources.enter_context(lock(self.locks / f"{task}.lock"))
+            registered = self.task_worktrees(task)
+            previous = None
+            if retry:
+                previous = self.retry_source(task, previous_run_id, registered, resources)
+                state.retry_of = previous.run_id
+            elif registered:
+                raise OrchestratorError(
+                    "Task already has a worktree; use status/resume --run-id for its owner, "
+                    "or retry for a proven pre-worker BLOCKED run"
+                )
             directory = self.run_path(task, run_id)
             directory.mkdir(parents=True, exist_ok=False, mode=0o700)
             resources.enter_context(lock(directory / ".run.lock"))
             self.save(directory, state)
             try:
+                if previous is not None:
+                    self.artifact(
+                        directory,
+                        state,
+                        "retry_origin",
+                        RetryOrigin(
+                            run_id=previous.run_id,
+                            base_sha=previous.base_sha,
+                            state_digest=digest(
+                                (self.run_path(task, previous.run_id) / "state.json").read_bytes()
+                            ),
+                            retained_worktrees=sorted(str(p) for p in registered),
+                        ),
+                    )
                 if not self.git.clean():
                     raise OrchestratorError("Base checkout is dirty; preserve user work")
                 # Runtime artifacts must not become task changes or secret scanner inputs.
@@ -215,11 +360,6 @@ class Pipeline:
                 )
                 if ignored.exit_code:
                     raise OrchestratorError("Configured run directory must be gitignored")
-                existing = self.git.run("worktree", "list", "--porcelain").lower()
-                if re.search(r"^branch .*(?:/|-)" + task.lower() + r"(?:-|/|$)", existing, re.M):
-                    raise OrchestratorError(
-                        "Task already has a worktree; inspect or resume existing work"
-                    )
                 with lock(self.locks / "worktrees.lock", wait_seconds=60):
                     self.git.create_worktree(Path(state.worktree_path), state.worktree_branch, base)
                 card = task_card(Path(state.worktree_path), task)
@@ -248,6 +388,7 @@ class Pipeline:
             str(error) if isinstance(error, OrchestratorError) else type(error).__name__
         )
         if state.state not in {State.DONE, State.BLOCKED, State.FAILED}:
+            state.blocked_from = state.state
             self.move(directory, state, State.BLOCKED)
         self.report(directory, state)
         print(f"ERROR {state.task_id}: {state.last_error}")
@@ -466,8 +607,15 @@ class Pipeline:
         )
         if state.state == State.READY:
             self.move(directory, state, State.PLANNING)
+            planning_context = (
+                context
+                + PLANNING_RULES
+                + json.dumps(
+                    contract_template(card, state).model_dump(mode="json"), ensure_ascii=False
+                )
+            )
             plan = Plan.model_validate(
-                self.invoke(directory, state, "prompt_engineer", Plan, context)
+                self.invoke(directory, state, "prompt_engineer", Plan, planning_context)
             )
             self.artifact(directory, state, "plan", plan)
             validate_contract(plan.contract, card, state)
