@@ -13,6 +13,7 @@ from tools.orchestrator.core import (
     Criterion,
     Fix,
     OrchestratorError,
+    Plan,
     Role,
     RunState,
     State,
@@ -99,7 +100,6 @@ def contract() -> Contract:
         risk_level="high",
         forbidden_scope="Outside allowlist is forbidden",
         stop_conditions="Block on ambiguity",
-        human_gates=[],
         max_fix_cycles=3,
     )
 
@@ -113,6 +113,60 @@ def test_contract_requires_criteria_and_valid_types() -> None:
     data["max_fix_cycles"] = True
     with pytest.raises(ValidationError):
         Contract.model_validate(data)
+
+
+def test_new_agent_schema_omits_human_gates() -> None:
+    assert "human_gates" not in Contract.model_json_schema()["properties"]
+    assert "human_gates" not in Plan.model_json_schema()["$defs"]["Contract"]["properties"]
+
+
+def test_new_agent_output_rejects_removed_gate_field() -> None:
+    data = contract().model_dump()
+    data["human_gates"] = ["Invented approval step"]
+    with pytest.raises(ValidationError):
+        Contract.model_validate(data)
+
+
+def test_legacy_contract_is_read_without_rewriting_or_relaxing_fields() -> None:
+    from tools.orchestrator.core import stored_contract
+
+    data = contract().model_dump()
+    data["human_gates"] = ["Legacy approval step"]
+    before = json.dumps(data, sort_keys=True)
+    restored = stored_contract(data)
+    assert "human_gates" not in restored.model_dump()
+    assert json.dumps(data, sort_keys=True) == before
+    data["unowned_override"] = True
+    with pytest.raises(ValidationError):
+        stored_contract(data)
+
+
+def test_legacy_plan_preserves_prompt_and_pinned_fields() -> None:
+    from tools.orchestrator.core import stored_plan
+
+    data: dict[str, object] = {
+        "contract": contract().model_dump(),
+        "worker_prompt": "Legacy worker prompt",
+    }
+    legacy = contract().model_dump()
+    legacy["human_gates"] = ["Legacy gate"]
+    data["contract"] = legacy
+    before = json.dumps(data, sort_keys=True)
+    restored = stored_plan(data)
+    assert restored.worker_prompt == "Legacy worker prompt"
+    assert restored.contract.objective == "Implement"
+    assert "human_gates" not in restored.contract.model_dump()
+    assert json.dumps(data, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("invalid", [None, "approval", [False]])
+def test_legacy_gate_compatibility_still_rejects_malformed_input(invalid: object) -> None:
+    from tools.orchestrator.core import stored_contract
+
+    data = contract().model_dump()
+    data["human_gates"] = invalid
+    with pytest.raises(ValidationError):
+        stored_contract(data)
 
 
 def test_audit_invalid_status_and_false_pass_rejected() -> None:

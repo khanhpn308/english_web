@@ -11,7 +11,15 @@ from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictInt,
+    TypeAdapter,
+    field_validator,
+)
 
 TASK_PATTERN = r"T[0-9]{3}"
 SHA_PATTERN = r"[0-9a-f]{40,64}"
@@ -139,13 +147,26 @@ class Contract(Model):
     risk_level: Literal["low", "medium", "high", "critical"]
     forbidden_scope: str
     stop_conditions: str
-    human_gates: list[str]
     max_fix_cycles: Count
 
 
 class Plan(Model):
     contract: Contract
     worker_prompt: Nonempty
+
+
+def stored_contract(value: object) -> Contract:
+    """Read the retired field only in saved evidence; never mutate the raw artifact."""
+    if isinstance(value, dict) and "human_gates" in value:
+        TypeAdapter(list[str]).validate_python(value["human_gates"])
+        value = {key: item for key, item in value.items() if key != "human_gates"}
+    return Contract.model_validate(value)
+
+
+def stored_plan(value: object) -> Plan:
+    if isinstance(value, dict):
+        value = {**value, "contract": stored_contract(value.get("contract"))}
+    return Plan.model_validate(value)
 
 
 class Fix(Model):
@@ -478,13 +499,12 @@ def contract_template(card: TaskCard, state: RunState) -> Contract:
         risk_level=card.risk_level,
         forbidden_scope=card.forbidden_scope,
         stop_conditions=card.stop_conditions,
-        human_gates=[],
         max_fix_cycles=state.max_fix_cycles,
     )
 
 
 def validate_contract(contract: Contract, card: TaskCard, state: RunState) -> None:
-    exclusions = {"human_gates", "forbidden_paths"}
+    exclusions = {"forbidden_paths"}
     expected = contract_template(card, state).model_dump(exclude=exclusions)
     actual = contract.model_dump(exclude=exclusions)
     for field in ("dependencies", "allowed_paths"):

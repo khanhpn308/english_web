@@ -129,7 +129,6 @@ class FakeAgents:
                     risk_level="medium",
                     forbidden_scope=card.forbidden_scope,
                     stop_conditions=card.stop_conditions,
-                    human_gates=[],
                     max_fix_cycles=int(matched[1]),
                 ),
                 worker_prompt="Implement only the task and preserve good behavior.",
@@ -649,8 +648,10 @@ class PlanningProbe(FakeAgents):
                 result.contract.objective = "PRIVATE SENTINEL changed objective"
                 result.contract.forbidden_scope = "PRIVATE SENTINEL changed forbidden scope"
                 result.contract.stop_conditions = "PRIVATE SENTINEL changed stop conditions"
-            elif self.mode == "gate":
-                result.contract.human_gates = ["Native Windows evidence unavailable"]
+            elif self.mode == "notes":
+                result.worker_prompt = (
+                    "Record inherited verification concerns as notes; implement the task."
+                )
             elif self.mode == "glob":
                 result.contract.forbidden_paths = ["private-sentinel/**"]
         return result
@@ -687,18 +688,21 @@ def test_planning_drift_lists_field_names_without_private_text(repository: Path)
     assert state.implementation_sha is None
 
 
-@pytest.mark.parametrize("mode", ["gate", "glob"])
-def test_planner_cannot_bypass_human_gates_or_exact_paths(repository: Path, mode: str) -> None:
+@pytest.mark.parametrize("mode", ["notes", "glob"])
+def test_planning_notes_do_not_veto_but_exact_paths_still_apply(
+    repository: Path, mode: str
+) -> None:
     agents = PlanningProbe(mode)
-    state = Pipeline(repository, configuration(), agents).start("T100")
-    assert state.state == State.BLOCKED
+    state = Pipeline(repository, configuration(integrate=False), agents).start("T100")
     error = state.last_error or ""
-    if mode == "gate":
-        assert "human gates" in error
+    if mode == "notes":
+        assert state.state == State.AUDIT_PASS
+        assert agents.calls == ["Plan", "WorkerResult", "Audit"]
     else:
+        assert state.state == State.BLOCKED
         assert "forbidden_paths[0]" in error
         assert "private-sentinel" not in error
-    assert agents.calls == ["Plan"]
+        assert agents.calls == ["Plan"]
     assert state.implementation_sha is None
 
 
@@ -756,13 +760,9 @@ def test_retry_default_ignores_legacy_empty_duplicate_record(repository: Path) -
     assert pipeline.status("T100", empty.run_id).artifacts == {}
 
 
-@pytest.mark.parametrize("unsafe", ["worker", "dirty", "history", "artifact", "gate", "active"])
-def test_retry_refuses_unsafe_or_human_blocked_run(repository: Path, unsafe: str) -> None:
-    agents = (
-        FakeAgents(failures=1)
-        if unsafe == "worker"
-        else PlanningProbe("gate" if unsafe == "gate" else "drift")
-    )
+@pytest.mark.parametrize("unsafe", ["worker", "dirty", "history", "artifact", "active"])
+def test_retry_refuses_unsafe_run(repository: Path, unsafe: str) -> None:
+    agents = FakeAgents(failures=1) if unsafe == "worker" else PlanningProbe("drift")
     pipeline = Pipeline(repository, configuration(integrate=False, cycles=0), agents)
     old = pipeline.start("T100")
     old_directory = pipeline.run_path("T100", old.run_id)
@@ -870,3 +870,91 @@ def test_retry_refuses_live_run_lock_without_new_state(repository: Path) -> None
         pipeline.retry("T100", old.run_id)
     assert sorted((pipeline.runs / "T100").iterdir()) == runs
     assert (directory / "state.json").read_bytes() == previous
+
+
+@pytest.mark.parametrize("legacy_phase", [False, True])
+def test_retry_legacy_planning_gate_uses_fresh_plan_and_preserves_evidence(
+    repository: Path, legacy_phase: bool
+) -> None:
+    pipeline = Pipeline(repository, configuration(integrate=False), PlanningProbe("drift"))
+    old = pipeline.start("T100")
+    directory = pipeline.run_path("T100", old.run_id)
+    path = directory / old.artifacts["plan"]
+    plan = json.loads(path.read_text())
+    plan["contract"]["human_gates"] = ["Legacy model veto about existing repository checks"]
+    plan["worker_prompt"] = "Legacy prompt says BLOCKED; never replay this prompt."
+    atomic_json(path, plan)
+    old.artifact_digests[path.name] = digest(path.read_bytes())
+    old.last_error = "Planning identified human gates; inspect plan"
+    if legacy_phase:
+        old.blocked_from = None
+    pipeline.save(directory, old)
+    preserved = {p.name: p.read_bytes() for p in directory.iterdir() if p.is_file()}
+    agents = FakeAgents()
+    pipeline.provider = agents
+    result = pipeline.retry("T100", old.run_id)
+    assert result.state == State.AUDIT_PASS
+    assert result.retry_of == old.run_id
+    assert agents.calls == ["Plan", "WorkerResult", "Audit"]
+    assert (
+        "human_gates"
+        not in pipeline.contract(pipeline.run_path("T100", result.run_id), result).model_dump()
+    )
+    assert preserved == {p.name: p.read_bytes() for p in directory.iterdir() if p.is_file()}
+
+
+def test_planning_respects_owner_configured_verification_authority(repository: Path) -> None:
+    from tools.orchestrator.workflow import PLANNING_RULES, ROLE_RULES
+
+    assert "repository-configured verification" in ROLE_RULES
+    assert (
+        "Do not access credentials, real provider inference, remote Git, "
+        "or real user vocabulary data." not in ROLE_RULES
+    )
+    assert "human_gates" not in PLANNING_RULES
+    assert "baseline checks have already passed" in PLANNING_RULES
+    assert "invent human approval" in PLANNING_RULES
+    agents = PlanningProbe("template")
+    pipeline = Pipeline(repository, configuration(integrate=False), agents)
+    result = pipeline.start("T100")
+    assert result.state == State.AUDIT_PASS
+    assert agents.calls == ["Plan", "WorkerResult", "Audit"]
+
+
+def test_resume_legacy_prompt_ready_preserves_original_contract_and_plan(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    agents = FakeAgents()
+    pipeline = Pipeline(repository, configuration(integrate=False), agents)
+    original_move = Pipeline.move
+
+    def pause(self: Pipeline, directory: Path, state: RunState, destination: State) -> None:
+        original_move(self, directory, state, destination)
+        if destination == State.PROMPT_READY:
+            raise RuntimeError("Synthetic crash after a stable handoff")
+
+    with monkeypatch.context() as context:
+        context.setattr(Pipeline, "move", pause)
+        with pytest.raises(RuntimeError, match="Synthetic crash"):
+            pipeline.start("T100")
+    old = pipeline.status("T100")
+    assert old.state == State.PROMPT_READY and agents.calls == ["Plan"]
+    directory = pipeline.run_path("T100", old.run_id)
+    preserved = {}
+    for key in ("contract", "plan"):
+        path = directory / old.artifacts[key]
+        payload = json.loads(path.read_text())
+        if key == "contract":
+            payload["human_gates"] = []
+        else:
+            payload["contract"]["human_gates"] = []
+        atomic_json(path, payload)
+        old.artifact_digests[path.name] = digest(path.read_bytes())
+        preserved[path] = path.read_bytes()
+        if key == "contract":
+            old.contract_digest = digest(path.read_bytes())
+    pipeline.save(directory, old)
+    result = pipeline.resume("T100", old.run_id)
+    assert result.state == State.AUDIT_PASS
+    assert agents.calls == ["Plan", "WorkerResult", "Audit"]
+    assert preserved == {p: p.read_bytes() for p in preserved}

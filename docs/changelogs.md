@@ -1,3 +1,15 @@
+## 02/10/2026 - T072 hoàn tất kiểm tra với quyền verification rõ ràng (Asia/Bangkok)
+
+- **Kiểm tra cuối:** Sau SOURCE FREEZE, nguyên `check:task` đạt: 619 test Python (86 orchestrator), frontend coverage tests và 40 test architecture; coverage thay đổi100%, tổng92,12%; Gitleaks/Semgrep/OSV không có finding. Ruff/Mypy/formatter đạt, manifest/lock không đổi. Giữ nguyên lệnh/phạm vi test/scanner; không skip hoặc giảm threshold. Bốn case bổ sung xác minh input legacy sai vẫn bị từ chối và resume legacy giữ nguyên artifact.
+- **Khôi phục/phạm vi:** T059 run `202610011631074539710000-7d6c660f` đã đủ điều kiện retry theo cơ chế mới; đối chiếu chỉ đọc, JSON/run/worktree cũ nguyên vẹn, không gọi model hoặc chạy task thật. T072 DONE; không thay status task/checkpoint sản phẩm hay viết lại bằng chứng lịch sử T071.
+- **Tích hợp:** Người dùng yêu cầu hoàn tất rồi commit/merge main. Stage đúng bốn file code/test cùng năm file tài liệu/bookkeeping; scan secrets, ff-only main sạch dưới khóa tích hợp, không push. Chỉ bookkeeping đổi sau test; source hash và metadata kiểm tra được lưu trong runtime ignored. Áp dụng documentation-and-adrs theo AGENT.md.
+
+## 01/10/2026 - T072: Bỏ human_gates theo yêu cầu chủ repository (Asia/Bangkok)
+
+- **Quyết định/phạm vi:** Bỏ trường `human_gates` trong contract/template/schema mới và veto planning/retry trong Python. Ghi ADR-0007, không sửa/xóa ADR cũ. Test/scanner có sẵn giữ lệnh, phạm vi và threshold do repository chọn; agent không tự đưa approval mới vì chúng đọc file cục bộ. Không tự đọc/sao chép dữ liệu học hoặc credentials vào prompt/report, không sửa dữ liệu và vẫn dùng fixture tổng hợp cho test mới.
+- **Tương thích:** Đọc Plan/Contract cũ qua lớp chuyển đổi hẹp trong bộ nhớ, chỉ xử lý trường đã bỏ; giữ file/hash/worker prompt gốc. Retry tạo run/Plan mới cho lỗi gate cũ đủ bằng chứng trước Worker; không nới kiểm tra phạm vi, dependency, source/Git/artifact, khóa, exit code, audit hoặc tích hợp.
+- **TDD:** Baseline 76 test pass; RED bảy test mới fail đúng schema/compatibility/retry/prompt authority. GREEN selection chín test pass. Test veto cũ được thay bằng hành vi chủ repository vừa yêu cầu và regression schema strict/old gate retry; không skip test hay xóa assertions bảo vệ độc lập. Kiểm tra cuối đang thực hiện; áp dụng documentation-and-adrs theo AGENT.md.
+
 ## 01/10/2026 - T071 đã tích hợp vào main theo yêu cầu người dùng (Asia/Bangkok)
 
 - **Git:** Commit tập trung `c4924cd33014d6c55bac5a035e7e71e930a34034`, ff-only main từ `b9530b9` dưới khóa tích hợp. Kiểm tra staged scope tám file, source hash bất biến, staged diff và Gitleaks trước commit đều đạt. Không push hoặc thay đổi các worktree task khác.
