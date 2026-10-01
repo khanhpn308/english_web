@@ -120,3 +120,25 @@ under the explicit owner decision rather than rewriting that history.
 Owner subsequently instructed: "xong thì commit và merge vào main luôn". Commit
 only this scope, inspect staged diff and scan secrets, then ff-only clean unchanged
 local main under the integration lock and verify promoted code. No push authorized.
+
+## Local main integration evidence (02/10/2026, Asia/Bangkok)
+
+Implementation commit: `3574e166dc1ad7d4a01de5c75ae98c41917681d2`.
+Staged scope was exactly nine authorized files; frozen implementation/test hashes
+matched the final aggregate snapshot. Staged diff check and Gitleaks exited 0
+(zero findings). Clean local main at `e7c1ad5` was advanced ff-only under the
+repository integration lock to the implementation commit; no conflicts or push.
+
+Post-merge main: `python -m pytest tests/orchestrator -q --no-cov`, exit 0,
+**86 passed in 81.18s**. Ruff format check (six files), whole-repository Ruff,
+Mypy backend/orchestrator/tests (49 files), and diff check exited 0. Read-only
+retry validation on main selected the recorded T059 gated run; all prior JSON
+digests remained identical. No actual task/provider was launched. The full gate
+was not repeated unnecessarily: the ff-only promotion contains the identical
+implementation/tests already verified by the final 619-test aggregate.
+
+This evidence follow-up modifies only this card and docs/changelogs.md. Source,
+tests, configuration, application data and all other tasks remain unchanged.
+Both implementation and evidence commits are authorized for local ff-only main
+promotion; existing worktrees/branches stay available for review. Next action:
+`python -m tools.orchestrator retry T059 --no-integrate` from updated local main.

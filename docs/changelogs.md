@@ -1,3 +1,8 @@
+## 02/10/2026 - T072 đã commit và tích hợp vào main (Asia/Bangkok)
+
+- **Git:** Commit `3574e166dc1ad7d4a01de5c75ae98c41917681d2`, ff-only main sạch từ `e7c1ad5` dưới khóa tích hợp. Staged diff đúng chín file, source hash khớp bản đã qua gate tổng, Gitleaks trước commit không có finding. Không push hoặc thay đổi worktree/run cũ.
+- **Sau merge:** Trên main, 86 test orchestrator đạt trong 81,18s; formatter/Ruff/Mypy đạt (49 file). Kiểm tra chỉ đọc xác nhận T059 run `202610011631074539710000-7d6c660f` đủ điều kiện retry; JSON cũ nguyên vẹn, không gọi model. Bằng chứng bổ sung chỉ sửa card T072 và changelog, implementation/tests giữ nguyên. Áp dụng documentation-and-adrs theo AGENT.md.
+
 ## 02/10/2026 - T072 hoàn tất kiểm tra với quyền verification rõ ràng (Asia/Bangkok)
 
 - **Kiểm tra cuối:** Sau SOURCE FREEZE, nguyên `check:task` đạt: 619 test Python (86 orchestrator), frontend coverage tests và 40 test architecture; coverage thay đổi100%, tổng92,12%; Gitleaks/Semgrep/OSV không có finding. Ruff/Mypy/formatter đạt, manifest/lock không đổi. Giữ nguyên lệnh/phạm vi test/scanner; không skip hoặc giảm threshold. Bốn case bổ sung xác minh input legacy sai vẫn bị từ chối và resume legacy giữ nguyên artifact.
