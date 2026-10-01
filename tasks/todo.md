@@ -33,7 +33,7 @@
 - [ ] [T011](t011-observability-instrumentation.md): Local JSON logs, correlation và span boundary
 - [ ] [T012](t012-ci-pipeline.md): CI lõi cho build và tests
 - [x] [T020](t020-markdown-parser.md): Lossless Markdown parser/serializer
-- [ ] [T026](t026-search-projection.md): Vietnamese normalized n-gram projection
+- [x] [T026](t026-search-projection.md): Vietnamese normalized n-gram projection
 - [ ] [T031](t031-review-schema.md): Review/card schema và deterministic SRS
 - [ ] [T021](t021-safe-source-files.md): Allowlisted Windows source file adapter
 - [ ] [T022](t022-source-journal.md): Durable source journal và crash reconciliation

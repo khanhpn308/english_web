@@ -1,3 +1,32 @@
+## 01/10/2026 - T026 Vietnamese normalized n-gram projection
+
+- **Local integration checkpoint:** Resolved the in-progress T026 merge on main by preserving T020 and T026 history, checking both tasks and leaving T031 pending. Consent retains dynamic single-head initialization plus the exact 0003→0002 ancestry assertion. Focused search/roundtrip/consent tests: exit 0, 199 passed in 23.76s. `python -m alembic heads`: exit 0, exactly `0004_vocabulary (head)`. No unmerged paths or conflict markers; staged whitespace check clean.
+- **Files:** `backend/app/vocabulary/normalization.py`, `backend/app/vocabulary/search_index.py`, `backend/tests/test_search_index.py`, `backend/tests/test_consent.py` (narrow legacy head remediation authorized by owner), `tasks/t026-search-projection.md`, `tasks/todo.md`, `docs/changelogs.md`.
+- **Mục đích:** Xây dựng Vietnamese normalized n-gram projection cho canonical vocabulary theo FR-VOC-01, ADR-0004, api-contract §7:
+  - Chuẩn hóa Unicode NFC, Unicode casefold, và accent-folded Vietnamese projection với đ/Đ -> d mapping xác định.
+  - Infix / substring matching cho cả truy vấn có dấu và không dấu, hỗ trợ truy vấn ngắn (1 ký tự).
+  - Tách bạch rõ rệt giữa biểu diễn chính xác (exact) và biểu diễn gập dấu (accent-folded).
+  - Giới hạn n-gram sinh ra ở mức $n \in \{1, 2, 3\}$, chặn bùng nổ tổ hợp, đảm bảo độ phức tạp $O(L)$ tuyến tính.
+  - Tôn trọng ranh giới nguồn: chỉ các dạng từ có ít nhất một nguồn `VALID` mới hiển thị trong projection tìm kiếm; nguồn `INVALID`/`MISSING` không hiển thị nhưng không xóa dữ liệu canonical hay lịch sử học tập.
+  - Bảo toàn định danh riêng biệt của từng từ loại (distinct POS): cùng lemma/family khác POS vẫn giữ nguyên các `word_form_id` độc lập.
+  - Không suy đoán ngữ nghĩa (no semantic/synonym guessing), không embedding/AI, không phụ thuộc vào FTS5, an toàn tuyệt đối trước SQL injection và metacharacters (`%`, `_`, `'`, `"`).
+  - Quản lý phiên bản projection và tính nhất quán của source revision: phát hiện và từ chối cập nhật source có revision cũ (`StaleSourceRevisionError`), kiểm tra phiên bản projection (`ProjectionVersionMismatchError`), không trả về kết quả rỗng giả mạo khi sai version.
+  - Rebuild an toàn, có thể lặp lại (idempotent), không đụng chạm tới các bảng canonical hay bảng lịch sử.
+- **Evidence:**
+  - Focused tests: `python -m pytest backend/tests/test_search_index.py -q`: 25 passed in 1.22s (100% coverage on `normalization.py`, 95% on `search_index.py`).
+  - Full tests: `python -m pytest`: 389 passed in 75.53s.
+  - `npm run test:frontend:coverage`: 4 files, 38 passed.
+  - `npm run coverage:check`: changed 97.66% (min 80.00%), total 91.85% (baseline 86.70%).
+  - `npm run architecture:check`: 7 kept, 0 broken, 40 passed.
+  - `npm run security:secrets`: 0 findings (Gitleaks 8.30.1).
+  - `npm run security:code`: 0 findings (Semgrep 1.178.0).
+  - `npm run security:deps`: 0 findings (OSV-Scanner 2.6.0).
+  - `npm run check:task`: exit code 0.
+  - Ruff check & format: zero diagnostics, all formatted.
+  - Mypy: zero issues in 4 source files.
+  - Floor check: clean, zero violations.
+- **Untouched:** `backend/migrations/*`, `backend/app/vocabulary/models.py`, `backend/app/vocabulary/repository.py`, `backend/app/markdown_sync/*`, `backend/app/review/*`, `backend/app/http/*`, `frontend/*`, `contracts/*`, `docs/vocabularies/*`.
+
 ## 01/10/2026 - T020 Lossless Markdown parser and serializer
 
 - **Files:** `backend/app/markdown_sync/parser.py`, `backend/app/markdown_sync/serializer.py`, `backend/tests/fixtures/legacy.md`, `backend/tests/test_markdown_roundtrip.py`, `backend/tests/test_consent.py`, `tasks/t020-markdown-parser.md`, `tasks/todo.md`, `docs/changelogs.md`.
