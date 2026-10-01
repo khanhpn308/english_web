@@ -213,7 +213,7 @@ def test_fix_limit_blocks_without_promoting(repository: Path) -> None:
     agents = FakeAgents(failures=5)
     pipeline = Pipeline(repository, configuration(cycles=1), agents)
     state = pipeline.start("T100")
-    assert state.state == State.BLOCKED
+    assert state.state == State.FAILED
     assert state.fix_cycle == 1
     assert "Maximum fix" in (state.last_error or "")
     assert Git(repository).sha() == initial
@@ -223,7 +223,7 @@ def test_fix_limit_blocks_without_promoting(repository: Path) -> None:
 
 def test_failed_test_cannot_be_audit_pass(repository: Path) -> None:
     state = Pipeline(repository, configuration(), FakeAgents(failures=1, lie=True)).start("T100")
-    assert state.state == State.BLOCKED
+    assert state.state == State.FAILED
     assert "contradicts failed" in (state.last_error or "")
 
 
@@ -245,7 +245,7 @@ def test_stale_audit_does_not_merge(repository: Path) -> None:
         state = pipeline.start("T100")
     (Path(state.worktree_path) / "feature.txt").write_text("changed after audit")
     result = pipeline.resume("T100", state.run_id)
-    assert result.state == State.BLOCKED
+    assert result.state == State.FAILED
     assert "evidence stale" in (result.last_error or "")
 
 
@@ -254,7 +254,7 @@ def test_dirty_base_never_stashes_or_resets(repository: Path) -> None:
     agents = FakeAgents()
     pipeline = Pipeline(repository, configuration(), agents)
     result = pipeline.start("T100")
-    assert result.state == State.BLOCKED
+    assert result.state == State.FAILED
     assert (repository / "user.txt").read_text() == "preserve"
     assert agents.calls == []
 
@@ -275,7 +275,7 @@ def test_resume_interrupted_mutation_blocks(repository: Path) -> None:
     state.state = State.WORKER_RUNNING
     directory = pipeline.run_path("T100")
     pipeline.save(directory, state)
-    assert pipeline.resume("T100").state == State.BLOCKED
+    assert pipeline.resume("T100").state == State.FAILED
 
 
 def test_contract_tamper_blocks_resume(repository: Path) -> None:
@@ -286,7 +286,7 @@ def test_contract_tamper_blocks_resume(repository: Path) -> None:
     contract = Contract.model_validate(read_json(directory / state.artifacts["contract"]))
     contract.allowed_paths.append("user.txt")
     atomic_json(directory / state.artifacts["contract"], contract.model_dump())
-    assert pipeline.resume("T100", state.run_id).state == State.BLOCKED
+    assert pipeline.resume("T100", state.run_id).state == State.FAILED
 
 
 def test_hidden_staged_change_cannot_escape_scope(repository: Path) -> None:
@@ -321,7 +321,7 @@ def test_hidden_staged_change_cannot_escape_scope(repository: Path) -> None:
 
     initial = Git(repository).sha()
     result = Pipeline(repository, configuration(), HiddenIndex()).start("T100")
-    assert result.state == State.BLOCKED
+    assert result.state == State.FAILED
     assert "BLOCKED_FOR_SCOPE_EXTENSION: test_app.py" in (result.last_error or "")
     assert Git(repository).sha() == initial
 
@@ -343,7 +343,7 @@ def test_source_change_between_checks_and_audit_blocks(repository: Path) -> None
             return super().invoke(directory, state, role_name, output, context, cwd=cwd)
 
     result = Race(repository, configuration(), FakeAgents()).start("T100")
-    assert result.state == State.BLOCKED
+    assert result.state == State.FAILED
     assert "between verification and audit" in (result.last_error or "")
 
 
@@ -367,7 +367,7 @@ def test_no_integrate_resume_still_rejects_stale_evidence(repository: Path) -> N
     assert state.state == State.AUDIT_PASS
     (Path(state.worktree_path) / "feature.txt").write_text("bad")
     result = pipeline.resume("T100", state.run_id)
-    assert result.state == State.BLOCKED
+    assert result.state == State.FAILED
     assert "evidence stale" in (result.last_error or "")
 
 
@@ -411,7 +411,7 @@ def test_contract_risk_and_stop_rules_cannot_be_downgraded(repository: Path) -> 
 
     agents = Downgrade()
     result = Pipeline(repository, configuration(), agents).start("T100")
-    assert result.state == State.BLOCKED
+    assert result.state == State.FAILED
     assert "WorkerResult" not in agents.calls
     assert (Path(result.worktree_path) / "feature.txt").read_text() == "good\n"
 
@@ -537,7 +537,7 @@ def test_snapshot_artifact_tamper_blocks_resume(repository: Path) -> None:
     data["allowed_paths"].append("user.txt")
     atomic_json(path, data)
     result = pipeline.resume("T100")
-    assert result.state == State.BLOCKED
+    assert result.state == State.FAILED
     assert "artifact changed" in (result.last_error or "")
 
 
@@ -547,7 +547,7 @@ def test_incomplete_resumable_state_blocks_without_traceback(repository: Path) -
     state.artifacts = {}
     pipeline.save(pipeline.run_path("T100"), state)
     result = pipeline.resume("T100")
-    assert result.state == State.BLOCKED
+    assert result.state == State.FAILED
     assert "Incomplete state" in (result.last_error or "")
 
 
@@ -560,7 +560,7 @@ def test_worker_prompt_tamper_prevents_implementation(repository: Path) -> None:
 
     agents = FakeAgents()
     result = Tamper(repository, configuration(), agents).start("T100")
-    assert result.state == State.BLOCKED
+    assert result.state == State.FAILED
     assert "Worker prompt changed" in (result.last_error or "")
     assert "WorkerResult" not in agents.calls
 
@@ -581,7 +581,7 @@ def test_native_windows_promotion_refuses_unverified_recovery(
     initial = Git(repository).sha()
     monkeypatch.setattr("tools.orchestrator.workflow.sys.platform", "win32")
     result = Pipeline(repository, configuration(), FakeAgents()).start("T100")
-    assert result.state == State.BLOCKED
+    assert result.state == State.FAILED
     assert "ENVIRONMENT_BLOCKED" in (result.last_error or "")
     assert Git(repository).sha() == initial
 
@@ -598,7 +598,7 @@ def test_lock_failure_after_integration_started_is_not_pending(repository: Path)
 
     initial = Git(repository).sha()
     result = InterruptedIntegration(repository, configuration(), FakeAgents()).start("T100")
-    assert result.state == State.BLOCKED
+    assert result.state == State.FAILED
     assert "Worktree creation lock remained busy" in (result.last_error or "")
     assert Git(repository).sha() == initial
 
@@ -678,12 +678,12 @@ def test_planner_receives_and_consumes_exact_contract_template(repository: Path)
 def test_planning_drift_lists_field_names_without_private_text(repository: Path) -> None:
     agents = PlanningProbe("drift")
     state = Pipeline(repository, configuration(), agents).start("T100")
-    assert state.state == State.BLOCKED
+    assert state.state == State.FAILED
     error = state.last_error or ""
     for field in ["objective", "forbidden_scope", "stop_conditions"]:
         assert field in error
     assert "PRIVATE SENTINEL" not in error
-    assert agents.calls == ["Plan"]
+    assert agents.calls == ["Plan"] * 3
     assert state.contract_digest == ""
     assert state.implementation_sha is None
 
@@ -699,10 +699,10 @@ def test_planning_notes_do_not_veto_but_exact_paths_still_apply(
         assert state.state == State.AUDIT_PASS
         assert agents.calls == ["Plan", "WorkerResult", "Audit"]
     else:
-        assert state.state == State.BLOCKED
+        assert state.state == State.FAILED
         assert "forbidden_paths[0]" in error
         assert "private-sentinel" not in error
-        assert agents.calls == ["Plan"]
+        assert agents.calls == ["Plan"] * 3
     assert state.implementation_sha is None
 
 
@@ -726,17 +726,17 @@ def test_retry_preserves_failed_run_and_creates_fresh_worktree(repository: Path)
     assert result.worktree_branch != old.worktree_branch
     assert old_tree.is_dir() and Git(old_tree).sha() == original_head
     assert evidence == {p.name: p.read_bytes() for p in old_directory.iterdir() if p.is_file()}
-    assert pipeline.status("T100", old.run_id).state == State.BLOCKED
+    assert pipeline.status("T100", old.run_id).state == State.FAILED
 
 
-def test_duplicate_run_refuses_without_creating_empty_run(repository: Path) -> None:
+def test_run_retries_preworker_failure_without_manual_command(repository: Path) -> None:
     pipeline = Pipeline(repository, configuration(integrate=False), PlanningProbe("drift"))
     old = pipeline.start("T100")
-    before = sorted((pipeline.runs / "T100").iterdir())
-    with pytest.raises(OrchestratorError, match="retry"):
-        pipeline.start("T100")
-    assert sorted((pipeline.runs / "T100").iterdir()) == before
-    assert pipeline.status("T100").run_id == old.run_id
+    pipeline.provider = FakeAgents()
+    state = pipeline.start("T100")
+    assert state.state == State.AUDIT_PASS and state.retry_of == old.run_id
+    assert pipeline.status("T100", old.run_id).state == State.FAILED
+    assert len(list((pipeline.runs / "T100").glob("*/state.json"))) == 2
 
 
 def test_retry_default_ignores_legacy_empty_duplicate_record(repository: Path) -> None:
@@ -828,7 +828,7 @@ def test_retry_rechecks_baseline_after_environment_repair(repository: Path, lega
     agents = FakeAgents()
     pipeline = Pipeline(repository, config, agents)
     old = pipeline.start("T100")
-    assert old.state == State.BLOCKED and agents.calls == []
+    assert old.state == State.FAILED and agents.calls == []
     assert (old.last_error or "").startswith("INHERITED_BASELINE_FAILURE:")
     directory = pipeline.run_path("T100", old.run_id)
     if legacy:
@@ -958,3 +958,182 @@ def test_resume_legacy_prompt_ready_preserves_original_contract_and_plan(
     assert result.state == State.AUDIT_PASS
     assert agents.calls == ["Plan", "WorkerResult", "Audit"]
     assert preserved == {p: p.read_bytes() for p in preserved}
+
+
+class RecoveryAgents(FakeAgents):
+    def __init__(self, mode: str) -> None:
+        super().__init__()
+        self.mode = mode
+        self.attempts = 0
+
+    def run(
+        self,
+        prompt: str,
+        *,
+        cwd: Path,
+        role: Role,
+        timeout: int,
+        output: type[Output],
+        artifacts: Path,
+        name: str,
+        readonly: bool,
+    ) -> Output:
+        if output == WorkerResult:
+            self.attempts += 1
+            if self.mode == "worker_empty" and self.attempts == 1:
+                self.calls.append("WorkerResult")
+                return output.model_validate(
+                    {
+                        "status": "BLOCKED",
+                        "summary": "Synthetic limitation",
+                        "changed_files": [],
+                        "commands_run": [],
+                        "known_issues": ["Repair limitation"],
+                    }
+                )
+            if self.mode in {"transient", "persistent", "mutating", "trust"}:
+                failing = self.mode != "transient" or self.attempts < 3
+                if failing:
+                    if self.mode == "mutating":
+                        (cwd / "feature.txt").write_text("Preserve partial implementation")
+                    if self.mode == "trust":
+                        atomic_json(
+                            artifacts / f"{name}.log.json",
+                            {
+                                "provider": "gemini",
+                                "execution": {
+                                    "cwd": str(cwd),
+                                    "exit_code": 55,
+                                    "timed_out": False,
+                                    "oversized": False,
+                                    "stdout_bytes": 0,
+                                    "stderr_bytes": 100,
+                                },
+                            },
+                        )
+                    raise OrchestratorError("Agent process failed (exit 55, timeout=False)")
+        result = super().run(
+            prompt,
+            cwd=cwd,
+            role=role,
+            timeout=timeout,
+            output=output,
+            artifacts=artifacts,
+            name=name,
+            readonly=readonly,
+        )
+        if self.mode == "worker_blocked" and output == WorkerResult and self.attempts == 1:
+            data = result.model_dump()
+            data.update(status="BLOCKED", known_issues=["Synthetic repairable limitation"])
+            return output.model_validate(data)
+        if self.mode == "audit_blocked" and output == Audit and self.worker_calls == 1:
+            data = result.model_dump()
+            data.update(
+                status="BLOCKED",
+                findings=["Synthetic repairable limitation"],
+                required_fixes=["Repair synthetic limitation"],
+            )
+            return output.model_validate(data)
+        return result
+
+
+@pytest.mark.parametrize("mode", ["transient", "worker_blocked", "worker_empty", "audit_blocked"])
+def test_automatic_agent_recovery_reaches_done(repository: Path, mode: str) -> None:
+    agents = RecoveryAgents(mode)
+    state = Pipeline(repository, configuration(), agents).start("T100")
+    assert state.state == State.DONE
+    assert agents.attempts == (3 if mode == "transient" else 2)
+    assert state.fix_cycle == (0 if mode == "transient" else 1)
+    assert (repository / "feature.txt").read_text() == "good"
+
+
+@pytest.mark.parametrize("mode", ["persistent", "mutating"])
+def test_agent_failure_is_finite_and_preserves_partial_work(repository: Path, mode: str) -> None:
+    agents = RecoveryAgents(mode)
+    original = Git(repository).sha()
+    pipeline = Pipeline(repository, configuration(), agents)
+    state = pipeline.start("T100")
+    assert state.state == State.FAILED
+    assert agents.attempts == (3 if mode == "persistent" else 1)
+    assert Git(repository).sha() == original
+    assert "IntegrationReview" not in agents.calls
+    if mode == "mutating":
+        assert (
+            Path(state.worktree_path) / "feature.txt"
+        ).read_text() == "Preserve partial implementation"
+
+
+@pytest.mark.parametrize("unsafe", ["none", "dirty", "wrong_exit", "output", "missing"])
+def test_run_recovers_known_gemini_trust_failure_only(repository: Path, unsafe: str) -> None:
+    config = configuration(integrate=False)
+    config.roles["worker"].provider = "gemini"
+    agents = RecoveryAgents("trust")
+    pipeline = Pipeline(repository, config, agents)
+    old = pipeline.start("T100")
+    directory = pipeline.run_path("T100", old.run_id)
+    if unsafe == "dirty":
+        (Path(old.worktree_path) / "feature.txt").write_text("Preserve unrelated work")
+    logs = list(directory.glob("00-worker-*.log.json"))
+    assert logs
+    if unsafe in {"wrong_exit", "output"}:
+        data = json.loads(logs[-1].read_text())
+        data["execution"]["exit_code" if unsafe == "wrong_exit" else "stdout_bytes"] = 8
+        atomic_json(logs[-1], data)
+    elif unsafe == "missing":
+        for path in logs:
+            path.unlink()
+    preserved = {p.name: p.read_bytes() for p in directory.iterdir() if p.is_file()}
+    pipeline.provider = FakeAgents()
+    if unsafe != "none":
+        with pytest.raises(OrchestratorError):
+            pipeline.start("T100")
+        assert pipeline.provider.calls == []
+    else:
+        state = pipeline.start("T100")
+        assert state.state == State.AUDIT_PASS
+        assert state.retry_of == old.run_id
+        assert pipeline.provider.calls == ["Plan", "WorkerResult", "Audit"]
+    assert preserved == {p.name: p.read_bytes() for p in directory.iterdir() if p.is_file()}
+
+
+def test_run_resumes_stable_audited_run_without_repeating_worker(repository: Path) -> None:
+    agents = FakeAgents()
+    pipeline = Pipeline(repository, configuration(integrate=False), agents)
+    old = pipeline.start("T100")
+    pipeline.config.integrate = True
+    state = pipeline.start("T100")
+    assert state.state == State.DONE and state.run_id == old.run_id
+    assert agents.worker_calls == 1
+
+
+def test_planning_drift_is_corrected_automatically(repository: Path) -> None:
+    class Once(PlanningProbe):
+        def run(
+            self,
+            prompt: str,
+            *,
+            cwd: Path,
+            role: Role,
+            timeout: int,
+            output: type[Output],
+            artifacts: Path,
+            name: str,
+            readonly: bool,
+        ) -> Output:
+            result = super().run(
+                prompt,
+                cwd=cwd,
+                role=role,
+                timeout=timeout,
+                output=output,
+                artifacts=artifacts,
+                name=name,
+                readonly=readonly,
+            )
+            self.mode = "template"
+            return result
+
+    agents = Once("drift")
+    state = Pipeline(repository, configuration(), agents).start("T100")
+    assert state.state == State.DONE
+    assert agents.calls == ["Plan", "Plan", "WorkerResult", "Audit", "IntegrationReview"]

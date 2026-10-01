@@ -323,19 +323,20 @@ class CliProvider:
                 command.extend(["--model", role.model])
             command.append("-")
         else:
-            for flag in ["--prompt", "--output-format", "--approval-mode"]:
+            for flag in ["--prompt", "--output-format", "--approval-mode", "--skip-trust"]:
                 if flag not in help_result.stdout:
                     raise OrchestratorError(f"Gemini lacks required capability: {flag}")
             if role.reasoning:
                 raise OrchestratorError("Gemini CLI exposes no reasoning-effort flag; set null")
             command = [
                 role.executable,
+                "--skip-trust",
                 "--prompt",
                 "Follow the JSON instructions supplied on stdin.",
                 "--output-format",
                 "json",
                 "--approval-mode",
-                "plan" if readonly else "auto_edit",
+                "plan" if readonly else "yolo",
             ]
             if role.model:
                 command.extend(["--model", role.model])

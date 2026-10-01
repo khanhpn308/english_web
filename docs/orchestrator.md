@@ -84,8 +84,10 @@ Codex; nếu thiếu khả năng cần thiết, công cụ báo lỗi rõ ràng.
 `-a never exec --ephemeral --sandbox`, `--output-schema`, `--output-last-message`,
 cờ `--model` tùy chọn và cấu hình mức suy luận; prompt được truyền qua stdin.
 Gemini sử dụng `--prompt`, `--output-format json`, `--approval-mode plan` khi kiểm
-tra hoặc `auto_edit` khi triển khai, cùng cờ `--model` tùy chọn; ngữ cảnh được truyền
-qua stdin. Công cụ hỗ trợ cấu trúc JSON bao ngoài của Gemini và phản hồi JSON nằm
+tra hoặc `yolo` khi triển khai, cùng cờ `--model` tùy chọn; ngữ cảnh được truyền
+qua stdin. Adapter kiểm tra và truyền `--skip-trust` cho phiên trong worktree được
+giao: không sửa trusted-folders hay credentials toàn máy. Worker dùng `yolo` theo
+yêu cầu chạy tự động, nên các tool không chờ duyệt tương tác. Công cụ hỗ trợ cấu trúc JSON bao ngoài của Gemini và phản hồi JSON nằm
 trong khối Markdown có định dạng chính xác. Phiên bản này không có cờ điều chỉnh
 mức suy luận: hãy đặt `reasoning: null`.
 
@@ -133,7 +135,7 @@ Dùng `--config <path>` để chọn tệp cấu hình khác. Status/resume ch�
 nhất đã lưu, trừ khi có `--run-id`. Mã thoát 0 nghĩa là thao tác yêu cầu đã thành
 công, kể cả khi đang ở AUDIT_PASS chờ tích hợp; không nhất thiết là DONE. Mã thoát
 2 nghĩa là từ chối thực hiện, BLOCKED hoặc FAILED. Ctrl+C trước khi pipeline tiếp
-nhận tác vụ trả về 130; ngắt trong một giai đoạn sẽ ghi BLOCKED và trả về 2.
+nhận tác vụ trả về 130; ngắt trong một giai đoạn sẽ ghi FAILED và trả về 2.
 
 Dry run đọc bằng chứng từ task, phụ thuộc, cấu hình và Git, rồi in bản gốc, branch,
 worktree, phân công vai trò, các kiểm tra và luồng dự kiến. Nó không tạo tệp kết quả
@@ -159,7 +161,7 @@ Lần chạy thứ tư hoặc tiến trình cạnh tranh cho cùng task sẽ b�
 
 Nếu khóa tích hợp đang bận, task giữ trạng thái AUDIT_PASS; chạy
 `resume --integrate` khi khóa đã được giải phóng. Nếu lỗi khóa xảy ra sau khi tích
-hợp đã bắt đầu, trạng thái chuyển sang BLOCKED để giữ nguyên kết quả chưa xác định,
+hợp đã bắt đầu, trạng thái chuyển sang FAILED để giữ nguyên kết quả chưa xác định,
 thay vì báo đang chờ. Không có daemon chạy nền để tự thử lại. Các task độc lập có
 thể tiếp tục thực thi trong khi một lần tích hợp khác đang chạy, tùy giới hạn
 CPU/bộ nhớ của máy; hạn chế chạy nhiều gate nặng cùng lúc.
@@ -193,8 +195,9 @@ AUDIT_RUNNING -> AUDIT_FAIL -> FIX_PROMPT_READY -> FIX_RUNNING
 
 `MERGED` chỉ bản tích hợp thử được cô lập, chưa phải đã đưa vào nhánh đích. Chỉ bản
 đã kiểm tra thành công mới được đưa vào nhánh đích bằng merge ff-only với đúng SHA
-của nó. Giai đoạn không an toàn sẽ chuyển sang BLOCKED; chuyển trạng thái không hợp
-lệ bị từ chối. DONE, BLOCKED và FAILED là trạng thái kết thúc. Contract không được
+của nó. T073 bỏ trạng thái BLOCKED khỏi luồng mới. Lỗi thực tế không phục hồi
+được kết thúc bằng FAILED (exit khác0), không được gọi là DONE. BLOCKED chỉ còn
+được đọc để tương thích bằng chứng lịch sử; chuyển trạng thái không hợp lệ vẫn bị từ chối. Contract không được
 nới lỏng tiêu chí hay kiểm tra, mở rộng đường dẫn hoặc tự đưa ra lựa chọn sản phẩm
 mới. Lỗi capability/phạm vi, kiểm tra thất bại hoặc tích hợp không an toàn vẫn chặn
 quá trình; không có danh sách human gate do model tạo để phủ quyết planning.
@@ -219,27 +222,38 @@ Các điểm dừng ổn định (READY, PROMPT_READY, IMPLEMENTED, AUDIT_FAIL,
 FIX_PROMPT_READY, AUDIT_PASS) có thể tiếp tục sau khi kiểm tra cấu hình ban đầu,
 bản chụp task, định danh worktree và bằng chứng đã cố định. Chỉ được thay đổi tùy
 chọn bật/tắt tích hợp. Khi agent đang chạy, commit/merge hoặc kiểm tra bị ngắt,
-kết quả chưa xác định: resume ghi BLOCKED thay vì thực hiện lại thao tác thay đổi.
+kết quả chưa xác định: resume ghi FAILED thay vì thực hiện lại thao tác thay đổi.
 Hãy kiểm tra báo cáo cuối/lỗi, tệp kết quả từng vòng, Git index/lịch sử, worktree
 của bản tích hợp thử và các tiến trình CLI còn sống trước khi phục hồi thủ công.
 Không thể tự xóa BLOCKED hay chỉnh state để giả vờ đã kiểm tra. Bằng chứng trước
 đó không bị âm thầm ghi đè.
 
-`run`, `resume` và `retry` có mục đích khác nhau:
+T073 tự thử tối đa ba lần cho một lần gọi agent thất bại hoặc output/planning
+không hợp lệ, chỉ khi source/history, state và các handoff vẫn bất biến. Mỗi lần
+có tên artifact riêng; log thất bại/Plan bị từ chối được băm, không ghi đè. Không
+đổi provider/model hoặc gọi lại một Worker đã sửa source rồi crash. Worker/Auditor
+báo BLOCKED được đưa vào vòng Fix hiện có (mặc định tối đa ba vòng); tiêu chí,
+phạm vi, test và audit vẫn phải đạt trước tích hợp. Lỗi thật hết số lần thử trả
+FAILED cùng báo cáo cuối. Số lần gọi agent có thể tăng; giới hạn áp dụng cho từng
+lần gọi, tách khỏi số vòng sửa code. Không retry application AI.
 
-- `run`: bắt đầu task chưa có worktree.
-- `resume`: tiếp tục chính run ở điểm dừng ổn định; không mở lại BLOCKED.
-- `retry`: sau khi sửa nguyên nhân, tạo run/worktree/branch mới từ nhánh gốc cục bộ
-  hiện tại; chạy lại kiểm tra phụ thuộc, baseline và planning. Run trước vẫn BLOCKED.
+- `run`: bắt đầu task mới; nếu có run ổn định thì tự tiếp tục. Nếu lần cũ thất bại
+  trước triển khai đủ bằng chứng, tự tạo run/worktree mới để thử lại.
+- `resume`: tiếp tục chính run ở điểm ổn định. Không sửa state kết thúc cũ.
+- `retry`: yêu cầu rõ lần thử mới; giữ nguyên run/worktree/branch và log trước đó.
 
-Retry chỉ chấp nhận lần BLOCKED được chứng minh dừng trước Worker, worktree sạch,
-HEAD còn đúng SHA gốc, task và toàn bộ artifact đã băm không đổi, không có contract
-đã chấp nhận, triển khai hay tích hợp. Nó giữ khóa task/run cũ để từ chối agent còn
-sống, không xóa worktree, branch, state hay log. Mọi worktree còn giữ của cùng task
-đều phải có run được quản lý và đạt điều kiện này; branch thủ công không được nhận
-thay. Lỗi planning do `human_gates` của phiên bản cũ cũng đủ điều kiện retry nếu
-mọi kiểm tra nguồn/Git/bằng chứng trước Worker đều đạt. Lần mới lập Plan mới;
-không phát lại prompt Worker cũ có nội dung yêu cầu BLOCKED.
+Retry nhận FAILED mới hoặc BLOCKED lịch sử đã được chứng minh dừng trước Worker,
+worktree sạch, HEAD đúng SHA gốc, task và các artifact đã băm không đổi. Khóa task/
+run vẫn từ chối agent sống; mọi worktree giữ lại phải có chủ sở hữu được quản lý.
+Có một ngoại lệ hẹp cho Gemini CLI0.59.0 exit55: lỗi untrusted-workspace diễn ra
+trước inference/tool dispatch. Phải có log Worker providerGemini, exit55 không
+timeout/oversized, không stdout, đúng cwd; chưa có Worker result/audit/integration,
+contract đã băm và toàn bộ source phải khớp baseline sạch. Log mới được niêm phong;
+log phiên bản cũ chưa được băm được đọc theo metadata lịch sử cùng các điều kiện
+nguồn/contract trên. Không suy đoán mọi mã lỗi Worker là an toàn để gọi lại.
+
+Lỗi planning do human_gates của phiên bản cũ vẫn retry được nếu bằng chứng đạt.
+Lần mới chạy lại baseline và tạo Plan mới, không phát lại prompt cũ bị chặn.
 
 Không truyền `--run-id` thì retry chọn run có worktree thật mới nhất và bỏ qua bản
 ghi trùng rỗng từ phiên bản cũ. Status/resume vẫn chọn bản ghi mới nhất: cần chỉ định
@@ -253,7 +267,8 @@ Dùng controller đã cập nhật
 để đọc state mới; controller cũ kiểm tra schema nghiêm ngặt có thể từ chối trường mới.
 
 Retry không sửa lỗi môi trường, không bỏ baseline và không hứa chạy lại mọi lỗi.
-Nếu Worker đã chạy, source/history thay đổi, bằng chứng bị sửa hoặc
+Nếu Worker đã triển khai hoặc có kết quả chưa rõ (ngoài exit55 đã kiểm chứng),
+source/history thay đổi, bằng chứng bị sửa hoặc
 merge chưa rõ kết quả, nó từ chối và giữ nguyên công việc để review. Khôi phục thủ
 công trong các trường hợp này cần quyết định có căn cứ, không sửa state để ép chạy.
 Run/worktree cũ được giữ để kiểm toán nên dung lượng tăng qua mỗi retry; chỉ dọn
@@ -279,7 +294,7 @@ thực hay dữ liệu từ vựng thật vào. Thông báo INFO/STATE/AGENT/GIT
 chẩn đoán tại máy; không ghi toàn bộ biến môi trường vào log.
 
 Chế độ phê duyệt của CLI và kiểm tra phạm vi sau khi thực thi **không tạo ranh giới
-bảo mật trước agent cục bộ độc hại**, đặc biệt với Gemini `auto_edit`. Chỉ chạy agent
+bảo mật trước agent cục bộ độc hại**, đặc biệt với Gemini Worker `yolo`. Chỉ chạy agent
 cục bộ đáng tin cậy. Chúng có cùng quyền filesystem/Git với người dùng; tiến trình
 độc hại có thể sửa metadata Git hoặc phớt lờ hướng dẫn trước khi các kiểm tra phát
 hiện. Cô lập mạnh hơn ở cấp hệ điều hành và phục hồi sau khi tiến trình cha trên

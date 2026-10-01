@@ -199,6 +199,38 @@ class Pipeline:
                 registered[Path(fields["worktree"]).resolve()] = branch
         return registered
 
+    def trust_failure(self, directory: Path, state: RunState) -> bool:
+        if not (
+            state.blocked_from == State.WORKER_RUNNING
+            and state.current_agent == "worker"
+            and state.config is not None
+            and state.config.roles["worker"].provider == "gemini"
+            and state.last_error == "Agent process failed (exit 55, timeout=False)"
+            and state.fix_cycle == 0
+            and state.verified_digest
+            and {"plan", "contract"}.issubset(state.artifacts)
+        ):
+            return False
+        logs = list(directory.glob("00-worker-*.log.json"))
+        if not logs:
+            return False
+        for path in logs:
+            value = read_json(path)
+            if not isinstance(value, dict) or value.get("provider") != "gemini":
+                return False
+            execution = value.get("execution")
+            if not isinstance(execution, dict) or not (
+                execution.get("exit_code") == 55
+                and execution.get("cwd") == state.worktree_path
+                and execution.get("timed_out") is False
+                and execution.get("oversized") is False
+                and execution.get("stdout_bytes") == 0
+                and isinstance(execution.get("stderr_bytes"), int)
+                and execution["stderr_bytes"] > 0
+            ):
+                return False
+        return True
+
     def retry_source(
         self, task: str, run_id: str | None, registered: dict[Path, str], resources: ExitStack
     ) -> RunState:
@@ -235,11 +267,12 @@ class Pipeline:
                     "Planning identified human gates;",
                 )
             )
+            trust_failure = self.trust_failure(directory, old)
             if (
-                old.state != State.BLOCKED
-                or not (preworker or legacy_preworker)
-                or old.current_agent not in {None, "prompt_engineer"}
-                or old.contract_digest
+                old.state not in {State.BLOCKED, State.FAILED}
+                or not (preworker or legacy_preworker or trust_failure)
+                or (old.current_agent not in {None, "prompt_engineer"} and not trust_failure)
+                or (old.contract_digest and not trust_failure)
                 or old.implementation_sha
                 or old.integration_path
                 or old.integration_branch
@@ -247,9 +280,19 @@ class Pipeline:
                 or old.audited_digest
                 or not old.task_digest
                 or "task_card" not in old.artifacts
-                or set(old.artifacts) - {"task_card", "setup", "baseline", "plan", "retry_origin"}
+                or set(old.artifacts)
+                - {
+                    "task_card",
+                    "setup",
+                    "baseline",
+                    "plan",
+                    "retry_origin",
+                    *({"contract"} if trust_failure else set()),
+                }
             ):
-                raise OrchestratorError("Retry requires a BLOCKED run proven to be before Worker")
+                raise OrchestratorError(
+                    "Retry requires a failed run proven to precede implementation"
+                )
             self.git.assert_worktree(Path(old.worktree_path), old.worktree_branch)
             git = Git(Path(old.worktree_path))
             if git.sha() != old.base_sha or not git.clean():
@@ -280,6 +323,8 @@ class Pipeline:
                 raise OrchestratorError("Retry refused: previous source evidence changed")
             if "plan" in old.artifacts:
                 stored_plan(read_json(directory / old.artifacts["plan"]))
+            if trust_failure:
+                validate_contract(self.contract(directory, old), card, old)
         return selected
 
     def retry(self, task: str, run_id: str | None = None) -> RunState:
@@ -293,6 +338,15 @@ class Pipeline:
         retry: bool = False,
         previous_run_id: str | None = None,
     ) -> RunState:
+        if not dry_run and not retry and self.task_worktrees(task):
+            recorded = [
+                self.status(task, path.parent.name)
+                for path in (self.runs / task).glob("*/state.json")
+            ]
+            owners = [s for s in recorded if Path(s.worktree_path) in self.task_worktrees(task)]
+            latest = max(owners, key=lambda s: s.created_at) if owners else None
+            if latest is not None and self.resumable(latest.state):
+                return self.resume(task, latest.run_id)
         run_id = re.sub(r"[^0-9]", "", now()) + "-" + uuid4().hex[:8]
         base = self.git.sha(f"refs/heads/{self.config.base_branch}")
         state = RunState(
@@ -333,14 +387,9 @@ class Pipeline:
             resources.enter_context(lock(self.locks / f"{task}.lock"))
             registered = self.task_worktrees(task)
             previous = None
-            if retry:
+            if retry or registered:
                 previous = self.retry_source(task, previous_run_id, registered, resources)
                 state.retry_of = previous.run_id
-            elif registered:
-                raise OrchestratorError(
-                    "Task already has a worktree; use status/resume --run-id for its owner, "
-                    "or retry for a proven pre-worker BLOCKED run"
-                )
             directory = self.run_path(task, run_id)
             directory.mkdir(parents=True, exist_ok=False, mode=0o700)
             resources.enter_context(lock(directory / ".run.lock"))
@@ -386,20 +435,20 @@ class Pipeline:
                 self.move(directory, state, State.READY)
                 return self.drive(directory, state, card)
             except (OrchestratorError, OSError, ValidationError) as error:
-                return self.block(directory, state, error)
+                return self.fail(directory, state, error)
             except KeyboardInterrupt:
-                return self.block(
+                return self.fail(
                     directory, state, OrchestratorError("Interrupted; outcome uncertain")
                 )
 
-    def block(self, directory: Path, state: RunState, error: Exception) -> RunState:
+    def fail(self, directory: Path, state: RunState, error: Exception) -> RunState:
         # ValidationError/OS errors can embed agent input or system details.
         state.last_error = (
             str(error) if isinstance(error, OrchestratorError) else type(error).__name__
         )
         if state.state not in {State.DONE, State.BLOCKED, State.FAILED}:
             state.blocked_from = state.state
-            self.move(directory, state, State.BLOCKED)
+            self.move(directory, state, State.FAILED)
         self.report(directory, state)
         print(f"ERROR {state.task_id}: {state.last_error}")
         return state
@@ -454,9 +503,9 @@ class Pipeline:
                     raise OrchestratorError("Task snapshot changed during run")
                 return self.drive(directory, state, card)
             except (OrchestratorError, OSError, ValidationError) as error:
-                return self.block(directory, state, error)
+                return self.fail(directory, state, error)
             except KeyboardInterrupt:
-                return self.block(
+                return self.fail(
                     directory, state, OrchestratorError("Interrupted; outcome uncertain")
                 )
 
@@ -515,16 +564,75 @@ class Pipeline:
             )
             if p.is_file()
         }
-        result = self.provider.run(
-            prompt,
-            cwd=working,
-            role=self.config.roles[role_name],
-            timeout=self.config.timeout_seconds,
-            output=output,
-            artifacts=directory,
-            name=name,
-            readonly=role_name != "worker",
-        )
+        for attempt in range(3):
+            rejected_plan: Plan | None = None
+            try:
+                result = self.provider.run(
+                    prompt,
+                    cwd=working,
+                    role=self.config.roles[role_name],
+                    timeout=self.config.timeout_seconds,
+                    output=output,
+                    artifacts=directory,
+                    name=name,
+                    readonly=role_name != "worker",
+                )
+                if isinstance(result, Plan):
+                    rejected_plan = result
+                    card = TaskCard.model_validate(
+                        read_json(directory / state.artifacts["task_card"])
+                    )
+                    validate_contract(result.contract, card, state)
+                break
+            except (OrchestratorError, ValidationError) as error:
+                unchanged = (
+                    digest((directory / "state.json").read_bytes()) == saved_state
+                    and all(
+                        p.is_file() and digest(p.read_bytes()) == checksum
+                        for p, checksum in protected.items()
+                    )
+                    and git.snapshot(state.base_sha) == snapshot
+                    and git.branch() in {state.worktree_branch, state.integration_branch}
+                )
+                retryable = isinstance(error, ValidationError) or str(error).startswith(
+                    (
+                        "Agent process failed",
+                        "Agent returned malformed",
+                        "Contract differs from repository-owned task constraints",
+                        "Invalid contract path:",
+                        "Unsafe or non-exact repository path",
+                        "Conflicting allowed and forbidden paths",
+                    )
+                )
+                if unchanged:
+                    log_path = directory / f"{name}.log.json"
+                    if log_path.is_file() and not log_path.is_symlink():
+                        state.artifact_digests[log_path.name] = digest(log_path.read_bytes())
+                        protected[log_path] = state.artifact_digests[log_path.name]
+                    if rejected_plan is not None:
+                        rejected_path = directory / f"{name}.rejected.json"
+                        atomic_json(rejected_path, rejected_plan.model_dump(mode="json"))
+                        state.artifact_digests[rejected_path.name] = digest(
+                            rejected_path.read_bytes()
+                        )
+                        protected[rejected_path] = state.artifact_digests[rejected_path.name]
+                        if attempt == 2:
+                            state.artifacts["plan"] = rejected_path.name
+                    self.save(directory, state)
+                    saved_state = digest((directory / "state.json").read_bytes())
+                if not unchanged or not retryable or attempt == 2:
+                    raise
+                print(f"WARNING {state.task_id}: retrying {role_name}, attempt {attempt + 2}/3")
+                prompt += (
+                    "\nPrevious attempt failed validation/execution. Keep the pinned template "
+                )
+                prompt += "and schema exactly; correct the response and return valid JSON.\n"
+                name = f"{state.fix_cycle:02d}-{role_name}-{uuid4().hex[:8]}"
+                retry_prompt = directory / f"{name}.prompt.md"
+                retry_prompt.write_text(prompt, encoding="utf-8")
+                protected[retry_prompt] = digest(retry_prompt.read_bytes())
+        else:
+            raise OrchestratorError("Agent attempts exhausted")
         if digest((directory / "state.json").read_bytes()) != saved_state:
             raise OrchestratorError("Agent modified orchestration state")
         if any(
@@ -698,13 +806,13 @@ class Pipeline:
                 self.contract(directory, state)
                 self.artifact(directory, state, "worker", result)
                 changed = self.scope(state, contract)
-                if result.status != "IMPLEMENTED":
-                    raise OrchestratorError("Worker reported BLOCKED; inspect worker artifact")
-                if sorted(result.changed_files) != changed or not changed:
+                if sorted(result.changed_files) != changed or (
+                    not changed and result.status == "IMPLEMENTED"
+                ):
                     raise OrchestratorError(
                         "Worker changed-file claim differs from actual Git diff"
                     )
-                if "docs/changelogs.md" not in changed:
+                if changed and "docs/changelogs.md" not in changed:
                     raise OrchestratorError("Repository requires worker changelog before handoff")
                 self.move(directory, state, State.IMPLEMENTED)
             if state.state == State.IMPLEMENTED:
@@ -749,11 +857,12 @@ class Pipeline:
                 self.artifact(directory, state, "audit", audit)
                 self.contract(directory, state)
                 self.scope(state, contract)
-                if audit.status == "BLOCKED":
-                    raise OrchestratorError("Auditor reported BLOCKED; inspect audit artifact")
+                worker_result = WorkerResult.model_validate(
+                    read_json(directory / state.artifacts["worker"])
+                )
                 if checks_failed and audit.status == "PASS":
                     raise OrchestratorError("Audit PASS contradicts failed executable verification")
-                passed = audit.status == "PASS"
+                passed = audit.status == "PASS" and worker_result.status == "IMPLEMENTED"
                 self.move(
                     directory,
                     state,

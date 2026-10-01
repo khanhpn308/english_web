@@ -288,9 +288,11 @@ if '--version' in args:
     print('fixture-cli 1.0')
 elif '--help' in args:
     print('--ask-for-approval --output-schema --output-last-message --sandbox --ephemeral '
-          '--prompt --output-format --approval-mode')
+          '--prompt --output-format --approval-mode --skip-trust')
 else:
     prompt = sys.stdin.read()
+    if '--output-format' in args and '--skip-trust' not in args:
+        raise SystemExit(55)
     if 'CRASH' in prompt:
         raise SystemExit(8)
     response = ('broken' if 'MALFORMED' in prompt
@@ -494,3 +496,52 @@ def test_owned_paths_include_annotated_and_approved_extensions() -> None:
         owned_paths("## Files được phép sửa\nNo source ownership\n")
     with pytest.raises(OrchestratorError, match="Unsupported task allowlist"):
         owned_paths("## Files được phép sửa\n- all application files\n")
+
+
+def test_gemini_worker_is_headless_with_session_trust(
+    fake_cli: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator import runtime
+
+    commands: list[list[str]] = []
+    original = runtime.execute
+
+    def capture(
+        command: list[str], cwd: Path, *, timeout: int = 1800, stdin: str | None = None
+    ) -> runtime.ProcessResult:
+        commands.append(command)
+        return original(command, cwd, timeout=timeout, stdin=stdin)
+
+    monkeypatch.setattr(runtime, "execute", capture)
+    result = CliProvider().run(
+        "OK",
+        cwd=tmp_path,
+        role=Role(provider="gemini", executable=str(fake_cli)),
+        timeout=5,
+        output=Fix,
+        artifacts=tmp_path,
+        name="worker",
+        readonly=False,
+    )
+    assert result.fix_prompt == "Fix synthetic issue"
+    command = commands[-1]
+    assert "--skip-trust" in command
+    assert command[command.index("--approval-mode") + 1] == "yolo"
+
+
+def test_gemini_missing_session_trust_capability_stops_before_dispatch(
+    fake_cli: Path, tmp_path: Path
+) -> None:
+    fake_cli.write_text(fake_cli.read_text().replace("--skip-trust", "--unknown-trust"))
+    with pytest.raises(OrchestratorError, match="required capability: --skip-trust"):
+        CliProvider().run(
+            "OK",
+            cwd=tmp_path,
+            role=Role(provider="gemini", executable=str(fake_cli)),
+            timeout=5,
+            output=Fix,
+            artifacts=tmp_path,
+            name="unsupported",
+            readonly=False,
+        )
+    assert not list(tmp_path.glob("*.log.json"))

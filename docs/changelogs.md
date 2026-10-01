@@ -1,3 +1,9 @@
+## 02/10/2026 - T073: Tự phục hồi agent, bỏ điểm chờ BLOCKED trong luồng mới (Asia/Bangkok)
+
+- **Nguyên nhân:** Gemini0.59.0 exit55 là FatalUntrustedWorkspaceError trước dispatch, worktree mới chưa trusted. Adapter kiểm tra/truyền --skip-trust cho phiên được giao; Worker dùng yolo theo yêu cầu chạy không duyệt tương tác, không đổi trust/credentials toàn máy.
+- **Luồng:** Thử lại agent/planning tối đa ba lần chỉ khi source/state/handoff bất biến; output Worker/Auditor BLOCKED đi vào vòng Fix; lỗi thực tế hết khả năng sửa trả FAILED, không giả PASS/DONE. run tự resume bước ổn định hoặc retry lỗi trước triển khai đủ bằng chứng; ngoại lệ hẹp cho exit55, giữ run/worktree cũ. Scope/test/security/integration fencing vẫn được kiểm tra.
+- **TDD/phạm vi:** Baseline86pass; RED7fail/9pass chứng minh thiếu session trust, retry, remediation và recovery. Chỉ hạ tầng orchestrator/tests và tài liệu task T073, không đổi ứng dụng/dữ liệu/credentials hoặc artifact cũ. Dùng documentation-and-adrs theo AGENT.md; SOURCE FREEZE cuối: check:task exit0,634 test Python (101 orchestrator), frontend coverage và40 test architecture; changed coverage94,44%, total92,23%, ba scanner0finding. Ruff/formatter/Mypy đạt49file. Gate đầu bị lệch snapshot do chỉnh lời guide đã được chạy lại nguyên vẹn; gate cuối source bất biến. T059/T021 đủ điều kiện retry chỉ bằng kiểm tra đọc, không gọi model/task thật.
+
 ## 02/10/2026 - T072 đã commit và tích hợp vào main (Asia/Bangkok)
 
 - **Git:** Commit `3574e166dc1ad7d4a01de5c75ae98c41917681d2`, ff-only main sạch từ `e7c1ad5` dưới khóa tích hợp. Staged diff đúng chín file, source hash khớp bản đã qua gate tổng, Gitleaks trước commit không có finding. Không push hoặc thay đổi worktree/run cũ.
