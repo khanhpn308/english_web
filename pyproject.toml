@@ -62,10 +62,10 @@ strict = true
 explicit_package_bases = true
 warn_return_any = true
 warn_unused_configs = true
-files = ["backend", "scripts/check_constraints.py"]
+files = ["backend", "scripts/check_constraints.py", "tools/orchestrator"]
 
 [tool.pytest.ini_options]
-testpaths = ["backend/tests", "scripts/tests"]
+testpaths = ["backend/tests", "scripts/tests", "tests/orchestrator"]
 pythonpath = ["."]
 addopts = [
     "--strict-markers",
@@ -83,6 +83,7 @@ source = ["."]
 omit = [
     "backend/tests/*",
     "scripts/tests/*",
+    "tests/*",
 ]
 
 [tool.coverage.report]
@@ -98,7 +99,7 @@ changed_coverage_min = 80.0
 total_coverage_baseline = 86.70
 total_coverage_tolerance = 0.5
 coverage_reports = ["coverage.xml", "htmlcov/frontend/lcov.info"]
-coverage_source_prefixes = ["backend/", "frontend/src/", "scripts/"]
+coverage_source_prefixes = ["backend/", "frontend/src/", "scripts/", "tools/orchestrator/"]
 
 # T062: https://import-linter.readthedocs.io/en/stable/get_started/configure/
 # Analyze the actual namespace root directly. Scanning its regular parent (backend)

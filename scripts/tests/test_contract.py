@@ -31,7 +31,7 @@ def test_full_schema_matches_checked_in(tmp_path):
         ["npx", "openapi-typescript", str(temp_openapi), "-o", str(temp_ts)],
         check=True,
         stdout=subprocess.DEVNULL,
-    )  # noqa: E501
+    )
 
     # 4. Compare TS output against checked-in generated.ts
     checked_in_ts_path = Path("frontend/src/shared/api/generated.ts")

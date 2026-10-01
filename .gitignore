@@ -70,3 +70,8 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Local development-agent runs and browser verification artifacts
+.agent-runs/
+test-results/
+playwright-report/

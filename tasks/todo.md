@@ -113,3 +113,12 @@
 - T013: contract conformance hoàn tất; generated DTO/runtime verification tiếp tục thuộc T017 và downstream tasks.
 - T005-A commit: `8adf972`; T004 commit atomic; T005-B commit theo Git history của branch `feature/task-t005-sqlite-migrations`. Chưa push; Windows/provider evidence còn pending theo owner tasks.
 - Task ID là identifier ổn định; danh sách trên là dependency order, không sort theo số ID.
+
+## Local agent infrastructure (explicit owner request, outside product checkpoints)
+
+- [x] [T067](t067-orchestrator-core.md): Typed contracts/state, bounded subprocesses, CLI adapters and safe worktrees.
+- [x] [T068](t068-orchestrator-workflow.md): Autonomous role/fix pipeline, isolated concurrent runs and serialized integration.
+- [x] [T069](t069-orchestrator-quality.md): Include infrastructure in test/type/coverage gates.
+- [x] [T070](t070-orchestrator-baseline-lint.md): Mechanical inherited Ruff baseline remediation.
+
+Infrastructure verification: [final evidence](../docs/reviews/orchestrator-verification-001.md). Product checkpoints unchanged; implementation stays on its feature branch pending authorized integration.

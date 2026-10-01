@@ -374,3 +374,24 @@ Trước khi xác nhận plan complete phải kiểm tra: một task/card, uniqu
 Kết quả kiểm tra structure/graph/order/links đã ghi trong [planning-validation-001](reviews/planning-validation-001.md): 66 cards, 225 edges, 22 checkpoints và không có lỗi validation. Application lint/build/tests/security scans và Windows/provider evidence chưa được chạy; các task cards là yêu cầu cho implementation sessions.
 
 PLAN_STATUS: READY_FOR_IMPLEMENTATION
+
+## Local development-agent infrastructure (01/10/2026)
+
+The owner explicitly authorized Level 1 implementation outside the T001–T066 product
+DAG. Its bounded slices are [T067](../tasks/t067-orchestrator-core.md) (deterministic
+core), [T068](../tasks/t068-orchestrator-workflow.md) (depends T067, workflow/CLI),
+[T069](../tasks/t069-orchestrator-quality.md) (depends T068, verification ownership)
+and [T070](../tasks/t070-orchestrator-baseline-lint.md) (comment-only inherited lint
+blocker). Each owns at most five handwritten implementation/config/test files.
+Common bookkeeping and the user-authorized [guide](orchestrator.md) and
+[ADR-0006](adr/0006-local-agent-orchestration.md) are separate documentation.
+No product task or checkpoint is marked complete by this infrastructure request.
+
+The host runs one synchronous pipeline per process, at most three independent tasks
+with isolated outside worktrees and JSON run directories. Planning/Worker/Auditor can
+run concurrently; repository-global integration is serialized and promoted only after
+candidate verification. Dependent tasks start after actual integration, not from a
+numbered task ordering. No DAG scheduling, remote Git, database or paid smoke test
+is introduced. Existing manual/dirty worktrees are preserved and never reused blindly.
+
+T067–T070 are DONE on their feature branch with [final verification](reviews/orchestrator-verification-001.md). This is implementation completion, not promotion to main or a product checkpoint closure.

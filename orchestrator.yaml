@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "base_branch": "main",
+  "paths": {
+    "run_dir": ".agent-runs",
+    "worktree_root": "../english_web-worktrees"
+  },
+  "roles": {
+    "prompt_engineer": {
+      "provider": "codex",
+      "executable": "codex",
+      "model": null,
+      "reasoning": "high"
+    },
+    "worker": {
+      "provider": "gemini",
+      "executable": "gemini",
+      "model": null,
+      "reasoning": null
+    },
+    "auditor": {
+      "provider": "codex",
+      "executable": "codex",
+      "model": null,
+      "reasoning": "high"
+    },
+    "integrator": {
+      "provider": "codex",
+      "executable": "codex",
+      "model": null,
+      "reasoning": "high"
+    }
+  },
+  "max_fix_cycles": 3,
+  "timeout_seconds": 1800,
+  "verification": [
+    [
+      "npm",
+      "run",
+      "check:task"
+    ],
+    [
+      "python",
+      "-m",
+      "ruff",
+      "check",
+      "."
+    ],
+    [
+      "python",
+      "-m",
+      "mypy",
+      "backend",
+      "tools/orchestrator"
+    ]
+  ],
+  "integrate": false,
+  "setup_commands": [
+    [
+      "npm",
+      "ci"
+    ]
+  ]
+}

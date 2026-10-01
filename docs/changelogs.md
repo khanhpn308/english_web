@@ -1,3 +1,20 @@
+## 01/10/2026 - Verified Level 1 autonomous agent workflow (Asia/Bangkok)
+
+- **Implemented:** T067–T070 on `feature/task-t067-level1-orchestrator`: deterministic Python state/JSON contracts, capability-probed Codex/Gemini CLI adapters, separate outside worktrees/run artifacts, three independent processes, automatic bounded fix cycle and serialized verified-SHA integration. No database/framework or production runtime dependency.
+- **Remediation:** Independent review findings are covered by regression tests. Resumed RED proved LockBusy after integration entry incorrectly remained active/pending; the minimal guard now records BLOCKED. T070 removes only the inherited unused suppression; AST unchanged.
+- **Verification:** 57 focused tests and 590 full Python tests pass; 38 frontend tests, 40 architecture tests and all `check:task` gates pass. Ruff/format/Mypy/build/contract pass; changed coverage 89.34%, total 91.98%; Gitleaks/Semgrep/OSV each zero findings. Initial sandbox gate exit 130 is recorded as interrupted, never PASS. Final evidence uses the frozen remediated source.
+- **Documentation/bookkeeping:** Added [guide](orchestrator.md), [ADR-0006](adr/0006-local-agent-orchestration.md) and [final handoff](reviews/orchestrator-verification-001.md); completed only infrastructure cards/todo entries. The prior pause checkpoint remains historical. Required documentation-and-adrs skill applied.
+- **Safety/limits:** No real inference, credentials, package/lock drift, migration/contract drift, main promotion or push. Existing task worktrees and product checkpoints unchanged. Linux/WSL validated; native Windows integration blocks pending recovery evidence. Trusted local agents, conservative conflict handling and explicit integration opt-in remain required.
+- **Git:** User-authorized focused Conventional Commit follows staged scope and secret review; implementation remains on its feature branch.
+
+## 01/10/2026 - Level 1 orchestrator implementation paused with checkpoint (Asia/Bangkok)
+
+- **Status:** PAUSED_BY_USER, not DONE; requested pause preserved all unstaged work on `feature/task-t067-level1-orchestrator`, base/HEAD `8dba8726c49585effc3c72ae790bf0b766eeea44`. No commit, main merge, push or real provider inference.
+- **Infrastructure:** Added typed JSON contracts/atomic state, bounded CLI providers, outside Git worktrees, autonomous planning/Worker/audit/fix flow, 1–3 isolated processes and repository-global serialized verified-SHA integration under `tools/orchestrator/`; added tests under `tests/orchestrator/`, config and runtime ignores. T067–T070 split explicit file ownership; existing product task/checkpoint state remains unchanged.
+- **Quality/docs:** Extended Python verification ownership without weakening thresholds; T070 removes only the inherited unused E501 suppression in `scripts/tests/test_contract.py` (AST equal). Added orchestrator guide, ADR-0006 and infrastructure planning/todo entries using the required documentation skill.
+- **Evidence limits:** Latest focused snapshot passed 56 tests; final annotated multi-file scope parser change followed that run, so final tests/static evidence need rerunning. Current T018/T008 dry runs exit 0 without invoking agents. No current full-suite/aggregate/security/build/coverage verdict exists.
+- **Handoff:** [Checkpoint](reviews/orchestrator-checkpoint-001.md) records implementation, independent review remediation, exact checks, limitations and remaining verification/commit steps. Existing dirty T018 and other worktrees remain untouched; no matching test/orchestrator job was running at pause.
+
 ## 01/10/2026 - Checkpoint CP06 verification and closure (Asia/Bangkok)
 
 - **Audit/base:** Verified integrated repository state on `main` at `2dd220f368d40588fa9839237d5c4ed38a818474` (`fix(T016): linearize admission migration after review schema`). CP06 covers T015 (consent persistence/API), T007 (bridge transport adapter with fake proxy), and T016 (AI admission fence). All three tasks verified complete with sufficient evidence. Documentation follows the repository-required documentation-and-adrs skill.
