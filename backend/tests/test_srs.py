@@ -589,6 +589,11 @@ def test_failed_schedule_write_rolls_back_event_and_receipt(db: Database) -> Non
 def test_0004_to_0005_preserves_rows_and_repeat_is_stable(tmp_path: Path) -> None:
     db = Database(tmp_path / "prior.db")
     config = migration_config()
+    scripts = ScriptDirectory.from_config(config)
+    heads = scripts.get_heads()
+    assert len(heads) == 1
+    revision = scripts.get_revision("0005_review")
+    assert revision is not None and revision.down_revision == "0004_vocabulary"
     try:
         with db.engine.begin() as connection:
             config.attributes["connection"] = connection
@@ -600,12 +605,13 @@ def test_0004_to_0005_preserves_rows_and_repeat_is_stable(tmp_path: Path) -> Non
                 table: connection.exec_driver_sql(f"SELECT * FROM {table}").all()
                 for table in tables
             }
-        assert db.initialize().schema_revision == "0005_review"
-        assert db.initialize().schema_revision == "0005_review"
-        scripts = ScriptDirectory.from_config(config)
-        assert scripts.get_heads() == ["0005_review"]
-        revision = scripts.get_revision("0005_review")
-        assert revision is not None and revision.down_revision == "0004_vocabulary"
+        for _ in range(2):
+            with db.engine.begin() as connection:
+                config.attributes["connection"] = connection
+                command.upgrade(config, "0005_review")
+                assert connection.exec_driver_sql(
+                    "SELECT version_num FROM alembic_version"
+                ).all() == [("0005_review",)]
         with db.engine.connect() as connection:
             for table in tables:
                 assert connection.exec_driver_sql(f"SELECT * FROM {table}").all() == before[table]
@@ -625,6 +631,7 @@ def test_0004_to_0005_preserves_rows_and_repeat_is_stable(tmp_path: Path) -> Non
         ):
             config.attributes["connection"] = connection
             command.downgrade(config, "0004_vocabulary")
-        assert db.initialize().schema_revision == "0005_review"
+        assert db.initialize().schema_revision == heads[0]
+        assert db.initialize().schema_revision == heads[0]
     finally:
         db.close()

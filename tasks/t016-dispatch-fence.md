@@ -28,9 +28,10 @@ Mọi dependency phải có evidence hoàn tất. Task ID không biểu thị th
 - `backend/app/application/ai_admission.py`
 - `backend/app/platform/bridge_port.py`
 - `backend/tests/test_ai_admission.py`
-- `backend/migrations/versions/0005_ai_admission.py` — explicitly authorized additive admission schema after `0004_vocabulary`.
+- `backend/migrations/versions/0006_ai_admission.py` — integrated admission schema after `0005_review`; original source revision was `0005_ai_admission`.
 - `backend/tests/test_consent.py` — explicitly authorized historical migration-test maintenance only.
 - `backend/tests/test_vocabulary_storage.py` — explicitly authorized historical migration-test maintenance only.
+- `backend/tests/test_srs.py` — INTEGRATION_TEST_REMEDIATION limited to the historical review migration test after the admission revision becomes the new head.
 
 Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa generated file bằng tay. Common bookkeeping được phép: thẻ task này, [todo.md](todo.md), [changelog](../docs/changelogs.md), artifact verification đã loại dữ liệu nhạy cảm.
 
@@ -72,7 +73,46 @@ python -m pytest backend/tests/test_ai_admission.py -q
 - Evidence ghi command, exit code, môi trường và artifact. Thiếu Windows/browser/provider environment là PENDING; không hoàn tất gate thiếu evidence.
 - Handoff ghi files sửa, files chủ ý không sửa, kết quả, risk còn lại và next task. Chỉ cập nhật `DONE`/checklist sau verification; commit khi đã được ủy quyền.
 
-## Completion evidence — 01/10/2026
+## Verified integration after T020/T026/T031 — 01/10/2026
+
+- **Frozen integration base:** `3b4faf52ba63aac30d6ea0443746eff846eb62da`, clean local main with T020/T026/T031 DONE and one `0005_review` head. Source branch `task/t016` was already clean/committed at `56b8e83254e1fce1d13d888aa2e4beb2952822e1`; its 60 admission tests passed again before Git integration.
+- **Audit separation:** integration branch `integration/t016-after-wave` starts exactly at the frozen base. Exact source cherry-pick, with provenance, is `5eafd570fd82e646a4586e90dd263ad1ce90f662`. Conflicts were confined to the two previously authorized historical migration tests and changelog. Both histories/statuses survive; main's seeded-history and native consent downgrade checks are retained, with T016 historical repeat checks added. An additional ancestry/remediation commit follows the source transplant; the source branch is not rewritten.
+- **Final migration:** file/revision `0006_ai_admission`, predecessor `0005_review`. Only the original admission migration filename, revision and down_revision change; normalized bytes prove all columns, constraints, triggers and downgrade behavior are preserved. Final chain: `0003_consent -> 0004_vocabulary -> 0005_review -> 0006_ai_admission`; exactly one head, `0006_ai_admission`. No merge migration or competing head remains.
+- **Real upgrade proof:** a temporary database explicitly starts at `0005_review`, with seeded vocabulary, an operation, a review card and an applied review event. Upgrade to `0006_ai_admission` and repeat initialization preserve every row in all ten existing vocabulary/operation/consent/review tables; foreign-key checks remain clean and admission starts empty. The first seed attempt incorrectly used an ordinary transaction for the review write and was rejected by T031; correcting the probe to its required caller-owned BEGIN IMMEDIATE writer gives exit 0. No production change was needed.
+- **INTEGRATION_TEST_REMEDIATION:** `test_0004_to_0005_preserves_rows_and_repeat_is_stable` initially fails (exit 1) because it expects initialization to stop at `0005_review`. It now checks exactly one head and the exact review predecessor, explicitly upgrades/repeats at `0005_review`, retains all row/uniqueness checks and exercises review's own downgrade refusal there, then initializes/repeats at the discovered current head. No literal replacement with the latest admission revision, skip or weakened assertion. All other SRS test functions are AST-identical to the frozen main. The T016 upgrade test now targets `0005_review -> 0006_ai_admission` and directly checks admission's predecessor; every admission race/restart test remains AST-identical to the original source.
+- **Critical semantics:** all 60 admission tests pass after integration: revoke-first and revoke/regrant ABA deny with no row/dispatch; admission-first permits exactly one dispatch and denies later intent. Two spawn processes share SQLite with bounded Event/Pipe barriers; revoke commits while fake transport is still blocked. Duplicate admission and PENDING -> UNKNOWN recovery never redispatch. Coordinator and port bytes remain identical to the source commit; no real inference, automatic retry or fallback.
+- **Scope/contract preservation:** T020/T026/T031 production, `0005_review` semantics, T015/T014/T007 production, configuration/thresholds/security, and generated contracts match frozen main byte-for-byte. Both exports are deterministic and unchanged (OpenAPI SHA-256 `ef25d8665b16cb0f226b9e6122873960660740687a243e5b5899394fce5031d6`; generated client `8e4b7c62a60e1d6f9338105d0d84cd30b2f3ed27de6d98d978eef0a5ec8abfde`).
+
+| Candidate command | Exit | Result |
+|---|---:|---|
+| `python -m alembic heads` | 0 | Exactly `0006_ai_admission` |
+| `python -m alembic history` | 0 | Linear review -> admission chain |
+| `python -m pytest backend/tests/test_ai_admission.py -q` | 0 | 60 passed |
+| `python -m pytest backend/tests/test_markdown_roundtrip.py -q` | 0 | T020: 24 passed |
+| `python -m pytest backend/tests/test_search_index.py -q` | 0 | T026: 25 passed |
+| `python -m pytest backend/tests/test_srs.py -q` | 0 | T031: 60 passed |
+| `python -m pytest backend/tests/test_consent.py -q` | 0 | 150 passed |
+| `python -m pytest backend/tests/test_vocabulary_storage.py -q` | 0 | 16 passed |
+| `python -m pytest backend/tests/test_operations.py -q` | 0 | 14 passed |
+| `python -m pytest backend/tests/test_bridge.py -q` | 0 | 14 passed |
+| `python -m pytest -q` | 0 | 533 passed |
+| `python -m mypy backend` | 0 | 43 source files; repeated after full tests |
+| `python -m ruff check backend/app/application/ai_admission.py backend/app/platform/bridge_port.py backend/migrations/versions/0006_ai_admission.py backend/tests/test_ai_admission.py backend/tests/test_consent.py backend/tests/test_vocabulary_storage.py backend/tests/test_srs.py` | 0 | All seven changed Python files pass |
+| `python -m ruff format --check backend/app/application/ai_admission.py backend/app/platform/bridge_port.py backend/migrations/versions/0006_ai_admission.py backend/tests/test_ai_admission.py backend/tests/test_consent.py backend/tests/test_vocabulary_storage.py backend/tests/test_srs.py` | 0 | All seven files formatted |
+| `npm run typecheck` / `npm run lint` / `npm run build` | 0 each | Two existing frontend warnings, zero errors |
+| `QUALITY_BASE_REF=3b4faf52ba63aac30d6ea0443746eff846eb62da npm run floor:check` | 0 | Clean |
+| `npm run architecture:check` | 0 | Seven contracts kept; 40 tests passed |
+| `QUALITY_BASE_REF=3b4faf52ba63aac30d6ea0443746eff846eb62da npm run check:fast` | 0 | Complete fast gate passes |
+| `QUALITY_BASE_REF=3b4faf52ba63aac30d6ea0443746eff846eb62da npm run coverage:check` | 0 | Changed 97.22%, total 92.69%; minimum remains 80% |
+| `QUALITY_BASE_REF=3b4faf52ba63aac30d6ea0443746eff846eb62da npm run check:task` | 0 | Repeats 533 Python/38 frontend tests, coverage, all security gates and architecture |
+| `npm run security:secrets` / `npm run security:code` / `npm run security:deps` | 0 each | Zero findings |
+| `npm run export:contract` twice | 0 / 0 | Byte-identical generated files, unchanged from frozen main |
+| `python -m ruff check .` | 1 | Same sole RUF100 at `scripts/tests/test_contract.py:34`, reproduced on frozen main archive; file byte-identical |
+| `git diff --check` | 0 | Clean |
+
+Documentation uses the repository-required documentation-and-adrs skill. Full Ruff remains explicitly INHERITED_BASELINE_FAILURE, not PASS. All promotion-critical gates pass against the current integration base, not the old source base. T016 remains DONE; T020/T026/T031 remain DONE and CP06 remains PENDING. Local promotion is authorized only via ff-only after rechecking main at the frozen SHA; the required post-promotion smoke follows. No push or checkpoint completion is part of this integration.
+
+## Original source completion evidence — 01/10/2026 (before T031 integration)
 
 Documentation follows the repository-required documentation-and-adrs skill. This implements the existing ADR-0003 admission/revocation decision; no HTTP endpoint or public contract is added.
 

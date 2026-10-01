@@ -550,21 +550,24 @@ def test_two_process_ordering_and_transaction_closed(
         receiver.close()
 
 
-def test_upgrade_from_0004_preserves_data_and_one_head(tmp_path: Path) -> None:
+def test_upgrade_from_0005_preserves_data_and_one_head(tmp_path: Path) -> None:
     db = Database(tmp_path / "upgrade.db")
     config = migration_config()
-    assert ScriptDirectory.from_config(config).get_heads() == ["0005_ai_admission"]
+    scripts = ScriptDirectory.from_config(config)
+    assert scripts.get_heads() == ["0006_ai_admission"]
+    revision = scripts.get_revision("0006_ai_admission")
+    assert revision is not None and revision.down_revision == "0005_review"
     try:
         with db.engine.begin() as conn:
             config.attributes["connection"] = conn
-            command.upgrade(config, "0004_vocabulary")
+            command.upgrade(config, "0005_review")
             conn.exec_driver_sql(
                 "INSERT INTO word_families VALUES ('synthetic', 'synthetic', 'time', 'time')"
             )
         ledger = OperationLedger(db.engine)
         operation_id = claim(ledger)
-        assert db.initialize().schema_revision == "0005_ai_admission"
-        assert db.initialize().schema_revision == "0005_ai_admission"
+        assert db.initialize().schema_revision == "0006_ai_admission"
+        assert db.initialize().schema_revision == "0006_ai_admission"
         assert ledger.get(operation_id) is not None
         with db.engine.connect() as conn:
             assert (
@@ -587,7 +590,7 @@ def test_upgrade_from_0004_preserves_data_and_one_head(tmp_path: Path) -> None:
             }
         with pytest.raises(RuntimeError, match="Downgrade is disabled"), db.engine.begin() as conn:
             config.attributes["connection"] = conn
-            command.downgrade(config, "0004_vocabulary")
+            command.downgrade(config, "0005_review")
     finally:
         db.close()
 
