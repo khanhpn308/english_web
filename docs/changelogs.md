@@ -1,3 +1,30 @@
+## 01/10/2026 - T020 Lossless Markdown parser and serializer
+
+- **Files:** `backend/app/markdown_sync/parser.py`, `backend/app/markdown_sync/serializer.py`, `backend/tests/fixtures/legacy.md`, `backend/tests/test_markdown_roundtrip.py`, `backend/tests/test_consent.py`, `tasks/t020-markdown-parser.md`, `tasks/todo.md`, `docs/changelogs.md`.
+- **Purpose/change:** Implement pure deterministic Markdown parser and serializer boundary for daily vocabulary notes (`DD-MM-YYYY.md`) per ADR-0004, ADR-0005, and spec DATA-01–06; perform owner-authorized narrow remediation on `backend/tests/test_consent.py` to replace hard-coded `0003_consent` migration head with dynamic derivation from Alembic `ScriptDirectory` metadata while strictly preserving T015 migration guarantees and history assertions.
+- **Invariants & behavior:**
+  1. Lossless round-trip: `serialize(parse(original)) == original` preserved byte-for-byte on synthetic and read-only real legacy fixtures (`28-09-2026.md`), including exact spacing, blank lines, table pipes, markdown links, and prose formatting.
+  2. Multi-POS splitting: Comma-separated `Từ loại` tokens in primary entries and related forms produce distinct POS-specific semantic forms with independent identities under the same family root.
+  3. Related forms: Family members created only with explicit lemma and deterministically interpretable POS; rows with ambiguous or missing POS remain opaque context and never create cards.
+  4. Opaque content preservation: Unknown sections (e.g. `### Ghi chú bổ sung`, `## Ghi chú tài liệu`) and opaque contextual rows survive parse/serialize roundtrip untouched without generating semantic cards or forms.
+  5. Deterministic validation & diagnostics: Fail-closed structured diagnostics for malformed filename, invalid calendar dates (e.g. `31-02-2026`), filename/H1 date mismatch, missing/malformed H1, truncated or malformed tables, and ambiguous POS.
+  6. Source size boundary: Enforced 8 MiB (8,388,608 bytes) limit with `PAYLOAD_TOO_LARGE` diagnostic; no silent truncation.
+  7. Unicode fidelity: NFD/combining-mark inputs preserve raw byte representation in serialization, while semantic normalized lemmas consistently resolve to NFC.
+  8. Inert data: Untrusted instruction-like text, HTML/scripts, unusual links, and SQL strings remain completely inert text data.
+  9. Absolute purity: Zero filesystem writes, zero disk reads in parser/serializer functions, zero SQLite database access, zero network/AI calls, zero global mutable state.
+  10. Stale migration head remediation: `test_fresh_0002_to_0003_migration_repeat_and_history` dynamically checks `len(heads) == 1`, verifies `0003_consent` down-revision is `0002_operations`, and asserts `db.initialize().schema_revision == current_head` twice to verify repeat stability while keeping all T015 schema, table existence, event column, and history preservation assertions intact.
+- **Evidence:**
+  - Focused roundtrip pytest: `python -m pytest backend/tests/test_markdown_roundtrip.py -q` Exit 0, 24 passed in 0.51s (parser 91%, serializer 89%, total 91% coverage).
+  - Remediated consent + roundtrip suite: `python -m pytest backend/tests/test_consent.py backend/tests/test_markdown_roundtrip.py -q` Exit 0, 174 passed in 31.57s.
+  - Full pytest test suite: `python -m pytest` Exit 0, 388 passed in 75.85s (total coverage 90%).
+  - Full task gate (`npm run check:task`): Exit 0, coverage changed lines 94.24% (minimum 80.00%), total lines 91.75% (baseline 86.70%), architecture gate 7 kept / 0 broken (40 passed), security scans all 0 findings.
+  - Fast active check (`npm run check:fast:active`): Exit 0 (ESLint 0 errors, TS 0 errors, floor clean, ruff format 144 files formatted).
+  - Focused Ruff check & format: Exit 0, 0 diagnostics across all modified files.
+  - Full backend Mypy (`python -m mypy backend`): Exit 0, 33 source files checked, 0 errors.
+  - Quality floor guard (`python scripts/check_constraints.py floor`): Exit 0, `floor: clean`.
+  - Security scans (`npm run security:secrets`, `security:code`, `security:deps`): Exit 0, zero findings across all three scanners (Gitleaks 8.30.1, Semgrep 1.178.0, OSV-Scanner 2.6.0).
+- **Files untouched:** `docs/vocabularies/28-09-2026.md` (read-only real sample preserved), frontend code, database models/migrations, HTTP routes, application services, and parallel worktrees (T026, T031).
+
 ## 01/10/2026 - T053 generated-source coverage classification remediation
 
 - **Files:** `scripts/check_constraints.py`, `scripts/tests/test_constraints.py`, `tasks/t053-quality-security-gates.md` and this changelog; documentation follows the required documentation-and-adrs skill.

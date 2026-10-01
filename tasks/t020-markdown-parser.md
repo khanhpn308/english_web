@@ -2,7 +2,7 @@
 
 **Task ID:** `T020`  
 **Title:** Lossless Markdown parser/serializer  
-**Status:** `TODO`  
+**Status:** `DONE`
 **Goal:** Lossless Markdown parser/serializer. Roundtrip preserves legacy fields/format; comma POS produces expected forms.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -47,9 +47,9 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 
 ## Acceptance criteria
 
-- [ ] Roundtrip preserves legacy fields/format; comma POS produces expected forms.
-- [ ] Malformed date/H1/POS gives INVALID structured diagnostic; opaque rows not cards.
-- [ ] Parse/serialize size caps enforced and content remains untrusted.
+- [x] Roundtrip preserves legacy fields/format; comma POS produces expected forms.
+- [x] Malformed date/H1/POS gives INVALID structured diagnostic; opaque rows not cards.
+- [x] Parse/serialize size caps enforced and content remains untrusted.
 
 ## Test cases
 
@@ -63,6 +63,26 @@ Chạy tại project root, Python trong venv đã cài lock T001/T058. Sau focus
 ```text
 python -m pytest backend/tests/test_markdown_roundtrip.py -q
 ```
+
+## Verification evidence (01/10/2026)
+
+- `python -m pytest backend/tests/test_markdown_roundtrip.py -q`: Exit 0, 24 passed in 0.51s. Line coverage: parser 91%, serializer 89%, total 91%.
+- Remediated consent + roundtrip suite (`python -m pytest backend/tests/test_consent.py backend/tests/test_markdown_roundtrip.py -q`): Exit 0, 174 passed in 31.57s.
+- Full pytest test suite (`python -m pytest`): Exit 0, 388 passed in 75.85s (total coverage 90%).
+- Full task gate (`npm run check:task`): Exit 0, coverage changed lines 94.24% (minimum 80.00%), total lines 91.75% (baseline 86.70%), architecture gate 7 kept / 0 broken (40 passed), security scans all 0 findings.
+- Focused Ruff check: Exit 0, 0 diagnostics across `backend/app/markdown_sync`, `backend/tests/test_markdown_roundtrip.py`, and `backend/tests/test_consent.py`.
+- Focused Ruff format: Exit 0, files already formatted.
+- Focused Mypy (`python -m mypy backend/app/markdown_sync`): Exit 0, 0 errors.
+- Full backend Mypy (`python -m mypy backend`): Exit 0, 33 source files checked, 0 errors.
+- Quality floor guard (`python scripts/check_constraints.py floor`): Exit 0, `floor: clean`.
+- Fast gate (`npm run check:fast:active`): Exit 0, ESLint 0 errors, TS 0 errors, floor clean, ruff format clean.
+- Frontend test coverage (`npm run test:frontend:coverage`): Exit 0, 38 tests passed.
+- Architecture boundaries (`npm run architecture:check`): Exit 0, 7 kept contracts, 0 broken, 40 tests passed.
+- Secret scan (`npm run security:secrets`): Exit 0, Gitleaks 8.30.1 zero leaks detected.
+- Code vulnerability scan (`npm run security:code`): Exit 0, Semgrep 1.178.0 zero findings.
+- Dependency vulnerability scan (`npm run security:deps`): Exit 0, OSV-Scanner 2.6.0 zero vulnerabilities detected.
+- Real sample fidelity: Tested read-only roundtrip against `docs/vocabularies/28-09-2026.md` without modifying it (`assert serialize(parse(real)) == real`).
+- Authorized narrow test remediation: In `backend/tests/test_consent.py::test_fresh_0002_to_0003_migration_repeat_and_history`, replaced hardcoded `0003_consent` head assumption with dynamic Alembic `ScriptDirectory` metadata (`heads = scripts.get_heads()`, `assert len(heads) == 1`, `current_head = heads[0]`). Verified `0003_consent` down-revision is `0002_operations`, and verified both initial and repeated `db.initialize().schema_revision == current_head` while preserving all T015 schema, table existence, column subset, synthetic history preservation, and downgrade prevention assertions.
 
 ## Expected output
 
