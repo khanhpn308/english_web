@@ -749,6 +749,17 @@ def test_fresh_0002_to_0003_migration_repeat_and_history(tmp_path: Path) -> None
             command.upgrade(config, "0002_operations")
             connection.exec_driver_sql("CREATE TABLE synthetic_history (value TEXT)")
             connection.exec_driver_sql("INSERT INTO synthetic_history VALUES ('preserved')")
+            command.upgrade(config, "0003_consent")
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").all() == [
+                ("0003_consent",)
+            ]
+        # Exercise consent's own downgrade refusal before later migrations can refuse first.
+        with (
+            pytest.raises(RuntimeError, match="Downgrade is disabled"),
+            db.engine.begin() as connection,
+        ):
+            config.attributes["connection"] = connection
+            command.downgrade(config, "0002_operations")
         assert db.initialize().schema_revision == current_head
         assert db.initialize().schema_revision == current_head
         with db.engine.connect() as connection:
@@ -765,12 +776,7 @@ def test_fresh_0002_to_0003_migration_repeat_and_history(tmp_path: Path) -> None
                 row[1] for row in connection.exec_driver_sql("PRAGMA table_info(ai_consent_event)")
             }
             assert {"scopes", "dispatch_rules", "operation_id"} <= columns
-        with (
-            pytest.raises(RuntimeError, match="Downgrade is disabled"),
-            db.engine.begin() as connection,
-        ):
-            config.attributes["connection"] = connection
-            command.downgrade(config, "0002_operations")
+        assert ScriptDirectory.from_config(config).get_heads() == [current_head]
     finally:
         db.close()
 

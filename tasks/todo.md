@@ -34,7 +34,7 @@
 - [ ] [T012](t012-ci-pipeline.md): CI lõi cho build và tests
 - [x] [T020](t020-markdown-parser.md): Lossless Markdown parser/serializer
 - [x] [T026](t026-search-projection.md): Vietnamese normalized n-gram projection
-- [ ] [T031](t031-review-schema.md): Review/card schema và deterministic SRS
+- [x] [T031](t031-review-schema.md): Review/card schema và deterministic SRS — DONE: 60 SRS cases, 226 targeted/424 full Python tests; owner-authorized legacy-head maintenance preserves lineage/history; coverage, architecture, security and check:task all exit 0.
 - [ ] [T021](t021-safe-source-files.md): Allowlisted Windows source file adapter
 - [ ] [T022](t022-source-journal.md): Durable source journal và crash reconciliation
 - [ ] [T023](t023-source-sync.md): Startup/watcher sync và source API
