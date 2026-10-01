@@ -1,3 +1,24 @@
+## 01/10/2026 - T019 Schema vocabulary, source links và preview
+
+- **Files:** `backend/migrations/versions/0004_vocabulary.py`, `backend/app/vocabulary/models.py`, `backend/app/vocabulary/repository.py`, `backend/tests/test_vocabulary_storage.py`, `tasks/t019-vocabulary-schema.md`, `tasks/todo.md`, `docs/changelogs.md`.
+- **Mục đích:** Xây dựng schema bền vững và repository cho canonical vocabulary identity, liên kết nguồn Markdown nhiều ngày và quản lý lookup preview theo ADR-0004/DATA-01–06 và T013 contract.
+- **Invariants:**
+  1. Canonical identity: `(normalized_lemma, part_of_speech, family_id)` là duy nhất; nhiều ngày/nguồn dùng chung một canonical form.
+  2. Distinct POS: Cùng lemma và family nhưng khác từ loại tạo ra các bản ghi canonical form riêng biệt.
+  3. Ambiguous family: Reject fail-closed, không tự ý suy đoán hoặc gộp word family.
+  4. Per-field verification: Giá trị thiếu (IPA, Cambridge URL) được lưu đúng `NULL`, không bịa đặt dữ liệu; giữ nguyên `verification_status` và `verificationSummary`.
+  5. Source state isolation: Nguồn lỗi (`INVALID`/`MISSING`) hoặc bị xóa chỉ gỡ link, không cascade-delete canonical form hay lịch sử học tập.
+  6. Preview ownership & expiration: Bắt buộc khớp session owner và kiểm tra expiration theo T013; dữ liệu lưu bền vững không chứa credentials/auth tokens.
+- **Evidence:**
+  - `python -m pytest backend/tests/test_vocabulary_storage.py -q`: 16 passed (coverage: models 94%, repository 95%, migration 95%, total 85%).
+  - `python -m alembic heads`: `0004_vocabulary (head)`.
+  - `lint-imports --config pyproject.toml --no-cache`: 7 kept, 0 broken.
+  - `python scripts/check_constraints.py floor`: `floor: clean`.
+  - Ruff check & format: zero errors, 4 files clean.
+  - Mypy: zero issues in 4 source files.
+  - Pending external tools: Gitleaks/Semgrep/Lighthouse ghi nhận `SETUP_PENDING`/`SETUP_FAILED` do môi trường chưa cài đặt nhị phân.
+- **Untouched:** Toàn bộ frontend, bridge adapter, consent API, operation ledger, parser, search projection và SRS logic bên ngoài T019 được bảo toàn nguyên vẹn.
+
 ## 30/09/2026 - T052 Browser Harness
 
 - **Files:** `frontend/tests/e2e/harness.spec.ts`, `frontend/tests/support/test_server.py`, `frontend/tests/support/fake_bridge.py`, `playwright.config.ts`, `package.json`, `package-lock.json`, `tasks/t052-browser-test-harness.md`.

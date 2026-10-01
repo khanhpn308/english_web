@@ -6,9 +6,10 @@ from unittest.mock import patch
 
 import httpx
 import pytest
+from alembic.script import ScriptDirectory
 from backend.app.http.health import get_settings
 from backend.app.main import create_app
-from backend.app.persistence.database import Database
+from backend.app.persistence.database import Database, migration_config
 from backend.app.platform.config import AppSettings
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
@@ -193,7 +194,8 @@ async def test_asgi_startup_shutdown_lifespan(temp_storage_path: Path) -> None:
         assert getattr(app.state, "ready", False) is True
         database = app.state.database
         assert isinstance(database, Database)
-        assert app.state.storage_info.schema_revision == "0003_consent"
+        current_head = ScriptDirectory.from_config(migration_config()).get_heads()[0]
+        assert app.state.storage_info.schema_revision == current_head
 
     assert getattr(app.state, "ready", False) is False
     assert app.state.database is None

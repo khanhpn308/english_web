@@ -2,7 +2,7 @@
 
 **Task ID:** `T019`  
 **Title:** Schema vocabulary, source links và preview  
-**Status:** `TODO`  
+**Status:** `DONE`
 **Goal:** Schema vocabulary, source links và preview. Same normalized lemma+POS+family unique; multiple dates share canonical form.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -45,9 +45,9 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 
 ## Acceptance criteria
 
-- [ ] Same normalized lemma+POS+family unique; multiple dates share canonical form.
-- [ ] Per-field verification/missing nullable preserved; invalid/deleted source state không cascade learning history.
-- [ ] Preview ownership and expiration T013 contract; saved data durable, no credentials.
+- [x] Same normalized lemma+POS+family unique; multiple dates share canonical form.
+- [x] Per-field verification/missing nullable preserved; invalid/deleted source state không cascade learning history.
+- [x] Preview ownership and expiration T013 contract; saved data durable, no credentials.
 
 ## Test cases
 
@@ -62,6 +62,23 @@ Chạy tại project root, Python trong venv đã cài lock T001/T058. Sau focus
 python -m pytest backend/tests/test_vocabulary_storage.py -q
 python -m alembic heads
 ```
+
+## Verification evidence (01/10/2026)
+
+- `python -m pytest backend/tests/test_vocabulary_storage.py -q`: Exit 0, 16 passed in 3.14s. Line coverage: models 94%, repository 95%, migration 95%, total 85%.
+- `python -m alembic heads`: Exit 0, output `0004_vocabulary (head)`.
+- `lint-imports --config pyproject.toml --no-cache`: Exit 0, 7 kept, 0 broken.
+- `python scripts/check_constraints.py floor`: Exit 0, `floor: clean`.
+- `python -m ruff check ...`: Exit 0, zero diagnostics.
+- `python -m ruff format --check ...`: Exit 0, 4 files formatted.
+- `python -m mypy ...`: Exit 0, zero errors.
+- Negative probes:
+  - Preview owner mismatch fails strictly with `PreviewOwnerMismatchError`.
+  - Expired preview fails strictly with `PreviewExpiredError`.
+  - Ambiguous/missing family fails fail-closed with `AmbiguousFamilyError`.
+  - Duplicate canonical identity reuses single form ID in `word_forms` and links multiple sources.
+  - Distinct POS creates distinct canonical entries.
+  - Invalid/deleted source does not cascade-delete word form or history.
 
 ## Expected output
 
