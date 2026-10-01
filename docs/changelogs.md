@@ -1,3 +1,9 @@
+## 02/10/2026 - T073 đã tích hợp vào main và kiểm tra sau merge (Asia/Bangkok)
+
+- **Git:** Commit `da6349c9cc86870d4e2f83546362bafb15c909bb`, ff-only main sạch từ6bc055a dưới integration lock. Staged diff đúng tám file, Gitleaks trước commit0finding; không push hay sửa worktree/run cũ.
+- **Kiểm tra:** Trên main,101 test orchestrator đạt109,07s; formatter/Ruff/Mypy đạt49file. T059/T021 vẫn đủ điều kiện phục hồi bằng kiểm tra chỉ đọc, mọi JSON cũ nguyên vẹn; không gọi provider/task thật. Bằng chứng bổ sung chỉ sửa card/changelog, code/tests giữ nguyên bản đã đạt full gate634test.
+- **Sử dụng:** `run T059 --no-integrate` tự tạo lần thử mới đủ bằng chứng; run ổn định được tiếp tục. Lỗi agent có thể sửa được thử lại tối đa ba lần; hết khả năng sửa trả FAILED, không dừng bằng BLOCKED mới hay giả DONE. Áp dụng documentation-and-adrs theo AGENT.md.
+
 ## 02/10/2026 - T073: Tự phục hồi agent, bỏ điểm chờ BLOCKED trong luồng mới (Asia/Bangkok)
 
 - **Nguyên nhân:** Gemini0.59.0 exit55 là FatalUntrustedWorkspaceError trước dispatch, worktree mới chưa trusted. Adapter kiểm tra/truyền --skip-trust cho phiên được giao; Worker dùng yolo theo yêu cầu chạy không duyệt tương tác, không đổi trust/credentials toàn máy.

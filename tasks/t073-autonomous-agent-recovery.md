@@ -117,3 +117,22 @@ Historical exit55 logs lacked a stored digest: recovery reads their metadata und
 clean-source/contract guards; newly failed attempt logs are sealed. Agents remain
 trusted local processes; yolo is not an OS sandbox. No automatic provider fallback,
 real LLM smoke test, application AI retry or Level2 scheduler added.
+
+## Local main promotion (02/10/2026, Asia/Bangkok)
+
+Focused implementation commit: `da6349c9cc86870d4e2f83546362bafb15c909bb`.
+Before commit, staged scope exactly eight owned files; staged diff/secret scan
+exit0, zero findings. Clean unchanged main advanced ff-only from6bc055a under
+repository integration lock, no conflicts/push or other worktree changes.
+
+On promoted main: `python -m pytest tests/orchestrator -q --no-cov`, exit0,
+**101passed109.07s**. Formatter (six files), Ruff, Mypy (49 files), diff check
+exit0. Read-only T059/T021 eligibility still succeeds and all old JSON byte hashes
+are unchanged. No real provider/task invoked. Full gate not repeated after ff-only
+promotion because code/tests are identical to the final verified snapshot.
+
+This evidence follow-up changes only this card and docs/changelogs.md; keep
+implementation/tests identical and promote documentation ff-only under lock.
+Next user action from updated main: `python -m tools.orchestrator run T059 --no-integrate`.
+Existing historical BLOCKED states are kept as evidence; new eligible run is created
+automatically. `retry` also remains supported. No push or cleanup authorized.
