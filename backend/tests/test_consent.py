@@ -753,6 +753,13 @@ def test_fresh_0002_to_0003_migration_repeat_and_history(tmp_path: Path) -> None
             assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").all() == [
                 ("0003_consent",)
             ]
+        # Repeat the historical upgrade before advancing to the current repository head.
+        with db.engine.begin() as connection:
+            config.attributes["connection"] = connection
+            command.upgrade(config, "0003_consent")
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").all() == [
+                ("0003_consent",)
+            ]
         # Exercise consent's own downgrade refusal before later migrations can refuse first.
         with (
             pytest.raises(RuntimeError, match="Downgrade is disabled"),

@@ -557,6 +557,13 @@ def test_migration_0004_fresh_and_repeat_reaches_head(tmp_path: Path) -> None:
                 connection.exec_driver_sql("SELECT value FROM synthetic_history").scalar_one()
                 == "preserved"
             )
+        # Repeat the historical upgrade before advancing to the current repository head.
+        with db.engine.begin() as connection:
+            config.attributes["connection"] = connection
+            command.upgrade(config, "0004_vocabulary")
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").all() == [
+                ("0004_vocabulary",)
+            ]
         first = db.initialize()
         assert first.schema_revision == current_head
         assert first.journal_mode == "wal"

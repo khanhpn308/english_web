@@ -46,6 +46,11 @@ class BridgeProfile:
     This captures only the transport-level authenticated response.
     Consent and policy gates (e.g., T016) must consume this to determine
     final AI admission.
+
+    Model entries carry id/owned_by evidence. When the proxy also supplies
+    providerLabel/modelId/route/billingMode or fallback metadata, the admission
+    coordinator checks it against server policy; it never selects policy from
+    these dictionaries. Raw evidence must never be persisted as provenance.
     """
 
     models: list[dict[str, Any]]

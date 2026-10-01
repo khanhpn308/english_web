@@ -24,7 +24,7 @@
 - [x] [T062](t062-architecture-gates.md): Architecture import boundary gates — implementation green (40 tests, both tools, dependency scan).
 - [x] [T015](t015-consent-api.md): Persist consent singleton và GET/PUT/DELETE
 - [x] [T007](t007-bridge-policy-consent-adapter.md): Antigravity transport adapter với fake proxy
-- [ ] [T016](t016-dispatch-fence.md): Consent admission fence trước AI dispatch
+- [x] [T016](t016-dispatch-fence.md): Consent admission fence trước AI dispatch
 - [ ] [T018](t018-consent-ui.md): Consent dialog và Status panel
 - [x] [T019](t019-vocabulary-schema.md): Schema vocabulary, source links và preview
 - [ ] [T008](t008-lookup-api-vertical-slice.md): POST lookup trả preview đã validate
@@ -100,6 +100,8 @@
 - [ ] CP22: T044, T045, T057 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 
 ## Execution state
+
+- T016 DONE on authorized base `de9725ba1e79658f5bebc583ba09422692e5df9c`: migration `0005_ai_admission` follows `0004_vocabulary`; immutable per-operation evidence commits atomically with the final consent revision/version/digest/rule fence before transport. All 60 admission tests, 150 consent tests, 16 vocabulary-storage tests and 424 full Python tests pass. Two spawn processes prove revoke-first/ABA denial and admission-first completion while revoke commits during blocked transport; UNKNOWN recovery never redispatches. Historical migration tests now target their own revision/ancestry. Changed coverage 97.22%; complete check:task, scoped static checks, architecture, security and deterministic contract exports pass. Full Ruff retains the sole byte-identical inherited RUF100 finding, explicitly classified in the card. CP06 remains unchecked; all changes unstaged/uncommitted, no push.
 
 - T015 semantic remediation DONE: resumed-session verification has 137 consent tests (47 added to the inherited 90), 14 operation tests and 279 full Python tests. Complete policy canonicalization, corrupt-storage denial, overlapping two-connection CAS, atomic receipts/replay and UTC event timestamps are proven. T016 remains TODO with T007 DONE; CP06 remains unchecked. The historical semantic source snapshot was IMPLEMENTATION_DONE_BASELINE_BLOCKED by T007 formatting and T053 generated-file coverage classification; exact checks and ownership are in the T015 card. The prerequisite-aware integration candidate starts from authorized post-CP05/T007 main `bc0ff937`; post-CP05 architecture compatibility now passes seven contracts/40 gate tests, 150 consent tests and 332 full Python tests. Main is NOT PROMOTED: complete-candidate check:task still fails on T053 generated DTO coverage classification. Remediation-only coverage is 100%; this does not clear that required aggregate gate.
 
