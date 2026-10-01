@@ -197,3 +197,31 @@ under the repository integration lock. Stage exactly the eight authorized files;
 inspect the staged diff and run a secret scan. Preserve all existing task worktrees,
 runtime JSON and unrelated application files. Run focused checks on promoted main
 and record resulting SHAs/outcomes here. No remote operations or push.
+
+## Local main integration evidence (01/10/2026, Asia/Bangkok)
+
+Focused code commit: `c4924cd33014d6c55bac5a035e7e71e930a34034`,
+`fix(orchestrator): preserve task constraints and safely restart pre-worker runs`.
+Committed exactly the eight authorized files after staged-scope/source-hash checks,
+`git diff --cached --check` (exit 0) and a fresh Gitleaks scan (exit 0, zero findings).
+Main advanced ff-only from `b9530b97118131ffa4c266d47979a46550ef015d` to that SHA
+under `.agent-runs/.locks/integration.lock`, with both checkouts clean and identities
+confirmed. No unrelated branch was merged, reset or removed.
+
+| Verification | Exit | Outcome |
+|---|---|---|
+| `npm run check:fast` on the task branch, pinned Gitleaks override | 0 | Format/lint/types/floor/secrets passed; two inherited frontend warnings |
+| `python -m tools.orchestrator --help` on promoted main | 0 | `run,status,resume,retry` exposed |
+| `python -m pytest tests/orchestrator -q --no-cov` on promoted main | 0 | 76 passed in 71.32s, synthetic repositories/providers only |
+| `python -m ruff format --check tools/orchestrator tests/orchestrator` on main | 0 | Six files formatted |
+| `python -m ruff check .` on main | 0 | No lint errors |
+| `python -m mypy backend tools/orchestrator tests/orchestrator` on main | 0 | No issues in 49 files |
+| `npm run check:task` | NOT RUN | Inherited real-data policy conflict remains unresolved |
+
+The follow-up evidence commit changes only this card, todo and changelog; implementation
+and tests remain byte-identical to the verified code commit. Main now provides `retry`.
+Task status remains IMPLEMENTATION_DONE_BASELINE_BLOCKED, todo/checkpoints stay unchecked,
+and no aggregate PASS or T021/T059 completion is claimed. Application source/tests,
+migrations, generated files, dependency/lock files, credentials, real vocabulary data,
+all existing task worktrees and runtime JSON are intentionally unchanged. No paid
+model execution, automatic task retry, remote operation or push was performed.

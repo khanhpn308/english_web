@@ -120,6 +120,6 @@
 - [x] [T068](t068-orchestrator-workflow.md): Autonomous role/fix pipeline, isolated concurrent runs and serialized integration.
 - [x] [T069](t069-orchestrator-quality.md): Include infrastructure in test/type/coverage gates.
 - [x] [T070](t070-orchestrator-baseline-lint.md): Mechanical inherited Ruff baseline remediation.
-- [ ] [T071](t071-orchestrator-planning-contract.md): Exact planning constraints, safe diagnostics and explicit pre-worker retry; 76 focused tests pass, aggregate real-data policy conflict unresolved; feature branch only.
+- [ ] [T071](t071-orchestrator-planning-contract.md): Exact planning constraints, safe diagnostics and explicit pre-worker retry; owner-authorized ff-only promotion `c4924cd` to main, 76 focused tests pass on main; aggregate real-data policy conflict unresolved.
 
-Infrastructure verification: [final evidence](../docs/reviews/orchestrator-verification-001.md), [T067–T070 local main integration](../docs/reviews/orchestrator-integration-001.md). Product checkpoints unchanged; T071 remediation remains isolated on its feature branch.
+Infrastructure verification: [final evidence](../docs/reviews/orchestrator-verification-001.md), [T067–T070 local main integration](../docs/reviews/orchestrator-integration-001.md), [T071 focused promotion evidence](t071-orchestrator-planning-contract.md). Product checkpoints unchanged; T071 aggregate verdict remains unavailable.

@@ -1,3 +1,9 @@
+## 01/10/2026 - T071 đã tích hợp vào main theo yêu cầu người dùng (Asia/Bangkok)
+
+- **Git:** Commit tập trung `c4924cd33014d6c55bac5a035e7e71e930a34034`, ff-only main từ `b9530b9` dưới khóa tích hợp. Kiểm tra staged scope tám file, source hash bất biến, staged diff và Gitleaks trước commit đều đạt. Không push hoặc thay đổi các worktree task khác.
+- **Sau tích hợp:** CLI main có `retry`; 76 test orchestrator trên main đạt trong 71,32s, Ruff/formatter/Mypy đạt (49 file). Bổ sung bằng chứng vào card T071, cập nhật todo về việc đã promotion; commit bằng chứng chỉ sửa ba file bookkeeping, giữ nguyên implementation/tests đã kiểm tra.
+- **Giới hạn:** `check:task` vẫn chưa chạy do test T020 đọc dữ liệu thật; không báo gate tổng PASS, không sửa test ngoài phạm vi, không đánh dấu T071/checkpoint DONE. Không chạy lại T021/T059 thật, gọi model trả phí hay thay đổi run JSON. Áp dụng skill documentation-and-adrs theo AGENT.md.
+
 ## 01/10/2026 - Cho phép tích hợp bản sửa T071 đã kiểm tra tập trung (Asia/Bangkok)
 
 - **Quyền thực hiện:** Người dùng yêu cầu commit và merge vào main sau khi giới hạn gate tổng đã được trình bày. Tích hợp bản sửa T071 trong phạm vi hiện có; không suy diễn quyền sửa test T020 hay bỏ ràng buộc dữ liệu thật.
