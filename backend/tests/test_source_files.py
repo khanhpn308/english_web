@@ -2366,3 +2366,52 @@ def test_check_windows_ownership_deterministic_failure_paths(
     # Verifies both token handle and security descriptor memory were reliably freed
     assert len(closed_handles_5) == 1
     assert len(freed_mem_5) == 1
+
+
+@pytest.mark.parametrize(
+    "tamper", [None, "canonical", "traversal", "absolute", "hash", "inode", "hardlink", "symlink"]
+)
+def test_restart_cleanup_accepts_only_adapter_owned_staged_identity(
+    tmp_path: Path,
+    tamper: str | None,
+) -> None:
+    from dataclasses import replace
+
+    root = tmp_path / "restart-root"
+    root.mkdir()
+    original = _make_valid_markdown(word="old")
+    canonical = root / "29-09-2026.md"
+    canonical.write_bytes(original.encode())
+    source = _make_source_file(content_hash=_sha256(original))
+    adapter = SourceFileAdapter(root, {source.id: source})
+    staged = adapter.prepare_staged_write(
+        source.id, _make_valid_markdown(word="new"), _sha256(original)
+    )
+    handle = staged.recovery_handle
+    temp = root / handle.relative_path
+    if tamper == "canonical":
+        handle = replace(handle, relative_path=source.relative_path)
+    elif tamper == "traversal":
+        handle = replace(handle, relative_path="../owned.tmp")
+    elif tamper == "absolute":
+        handle = replace(handle, relative_path=str(temp))
+    elif tamper == "hash":
+        temp.write_bytes(b"changed")
+    elif tamper == "inode":
+        temp.rename(root / "retained-original-temp")
+        temp.write_bytes(_make_valid_markdown(word="new").encode())
+    elif tamper == "hardlink":
+        os.link(temp, root / "linked-temp")
+    elif tamper == "symlink":
+        temp.unlink()
+        temp.symlink_to(canonical)
+    restarted = SourceFileAdapter(root, {source.id: source})
+    if tamper is not None:
+        with pytest.raises(SourceFileError):
+            restarted.cleanup_abandoned_temp(handle)
+        assert temp.exists()
+    else:
+        restarted.cleanup_abandoned_temp(handle)
+        assert not temp.exists()
+        restarted.cleanup_abandoned_temp(handle)
+    assert canonical.read_bytes() == original.encode()

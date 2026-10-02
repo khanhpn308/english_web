@@ -160,6 +160,12 @@ class OperationLedger:
                 raise RuntimeError("Claim was not persisted")
             return ClaimResult(operation, replayed=False)
 
+    @staticmethod
+    def validate_receipt(response_status: int, result_ref: str) -> None:
+        """Validate a receipt before any external mutation is attempted."""
+        if not 200 <= response_status < 300 or _RESULT_REF.fullmatch(result_ref) is None:
+            raise ValueError("Invalid operation receipt")
+
     def complete(
         self,
         operation_id: str,
@@ -169,8 +175,7 @@ class OperationLedger:
         local_write: Callable[[Connection], None] | None = None,
     ) -> OperationRecord:
         """Commit the local revision and immutable result reference together."""
-        if not 200 <= response_status < 300 or _RESULT_REF.fullmatch(result_ref) is None:
-            raise ValueError("Invalid operation receipt")
+        self.validate_receipt(response_status, result_ref)
         with self._writer() as connection:
             operation = _operation(connection, operation_id)
             if operation is None:
@@ -192,6 +197,110 @@ class OperationLedger:
             if completed is None:
                 raise RuntimeError("Receipt was not persisted")
             return completed
+
+    def reconcile_source_write(
+        self,
+        operation_id: str,
+        *,
+        expected_new_hash: str,
+        response_status: int,
+        result_ref: str,
+        local_write: Callable[[Connection], None],
+    ) -> OperationRecord:
+        """Finish only an UNKNOWN T022 write backed by durable replacement evidence.
+
+        The caller must first verify the live source through T021. This method also
+        verifies T022's journal and the post-callback local state in one transaction.
+        It never redispatches a filesystem or network operation.
+        """
+        self.validate_receipt(response_status, result_ref)
+        with self._writer() as connection:
+            operation = _operation(connection, operation_id)
+            if operation is None:
+                raise OperationConflict(404, "NOT_FOUND")
+            if operation.status != "UNKNOWN":
+                raise OperationConflict(409, "IDEMPOTENCY_IN_FLIGHT", operation_id)
+            journal = connection.exec_driver_sql(
+                "SELECT source_id,new_hash,intended_projection_revision,state,"
+                "response_status,result_ref "
+                "FROM source_write_journal WHERE operation_id=?",
+                (operation_id,),
+            ).first()
+            if (
+                journal is None
+                or journal.state != "SOURCE_REPLACED"
+                or journal.new_hash != expected_new_hash
+                or journal.response_status != response_status
+                or journal.result_ref != result_ref
+            ):
+                raise OperationConflict(409, "SOURCE_EVIDENCE_MISMATCH", operation_id)
+            local_write(connection)
+            committed: str = connection.exec_driver_sql(
+                "SELECT state FROM source_write_journal WHERE operation_id=?", (operation_id,)
+            ).scalar_one()
+            source = connection.exec_driver_sql(
+                "SELECT content_hash,revision FROM source_files WHERE id=?",
+                (journal.source_id,),
+            ).first()
+            if (
+                committed != "COMMITTED"
+                or source is None
+                or source.content_hash != expected_new_hash
+                or source.revision != journal.intended_projection_revision
+            ):
+                raise OperationConflict(409, "SOURCE_EVIDENCE_MISMATCH", operation_id)
+            connection.exec_driver_sql(
+                "UPDATE operations SET status='SUCCEEDED', result_ref=?, response_status=?, "
+                "error_category=NULL, updated_at=? WHERE operation_id=?",
+                (result_ref, response_status, _now(), operation_id),
+            )
+            completed = _operation(connection, operation_id)
+            if completed is None:
+                raise RuntimeError("Source receipt was not persisted")
+            return completed
+
+    def abort_source_write(self, operation_id: str, *, expected_old_hash: str) -> OperationRecord:
+        """Record a proven unreplaced T022 intent and its failure atomically.
+
+        Only startup reconciliation or the failed writer calls this after checking
+        the old source through T021 and cleaning its owned staged material.
+        """
+        with self._writer() as connection:
+            operation = _operation(connection, operation_id)
+            if operation is None:
+                raise OperationConflict(404, "NOT_FOUND")
+            journal = connection.exec_driver_sql(
+                "SELECT state,old_hash,source_id,intended_projection_revision "
+                "FROM source_write_journal WHERE operation_id=?",
+                (operation_id,),
+            ).first()
+            if operation.status not in {"PENDING", "UNKNOWN"} or journal is None:
+                raise OperationConflict(409, "SOURCE_EVIDENCE_MISMATCH", operation_id)
+            source = connection.exec_driver_sql(
+                "SELECT content_hash,revision FROM source_files WHERE id=?", (journal.source_id,)
+            ).first()
+            if (
+                journal.state != "PREPARED"
+                or journal.old_hash != expected_old_hash
+                or source is None
+                or source.content_hash != expected_old_hash
+                or source.revision + 1 != journal.intended_projection_revision
+            ):
+                raise OperationConflict(409, "SOURCE_EVIDENCE_MISMATCH", operation_id)
+            connection.exec_driver_sql(
+                "UPDATE source_write_journal SET state='ABORTED',updated_at=? WHERE operation_id=?",
+                (_now(), operation_id),
+            )
+            connection.exec_driver_sql(
+                "UPDATE operations SET status='FAILED',"
+                "error_category='SOURCE_REPLACEMENT_ABORTED', "
+                "response_status=409,updated_at=? WHERE operation_id=?",
+                (_now(), operation_id),
+            )
+            result = _operation(connection, operation_id)
+            if result is None:
+                raise RuntimeError("Source abort was not persisted")
+            return result
 
     def record_failure(
         self,

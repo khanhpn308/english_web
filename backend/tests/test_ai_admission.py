@@ -554,9 +554,11 @@ def test_upgrade_from_0005_preserves_data_and_one_head(tmp_path: Path) -> None:
     db = Database(tmp_path / "upgrade.db")
     config = migration_config()
     scripts = ScriptDirectory.from_config(config)
-    assert scripts.get_heads() == ["0006_ai_admission"]
+    assert scripts.get_heads() == ["0007_source_journal"]
     revision = scripts.get_revision("0006_ai_admission")
     assert revision is not None and revision.down_revision == "0005_review"
+    journal_revision = scripts.get_revision("0007_source_journal")
+    assert journal_revision is not None and journal_revision.down_revision == "0006_ai_admission"
     try:
         with db.engine.begin() as conn:
             config.attributes["connection"] = conn
@@ -566,8 +568,18 @@ def test_upgrade_from_0005_preserves_data_and_one_head(tmp_path: Path) -> None:
             )
         ledger = OperationLedger(db.engine)
         operation_id = claim(ledger)
-        assert db.initialize().schema_revision == "0006_ai_admission"
-        assert db.initialize().schema_revision == "0006_ai_admission"
+        with db.engine.begin() as conn:
+            config.attributes["connection"] = conn
+            command.upgrade(config, "0006_ai_admission")
+        service = ConsentService(ledger)
+        policy = policy_fixture()
+        grant(service, policy)
+        asyncio.run(dispatch(AiAdmissionCoordinator(service, FakeBridge(), policy), operation_id))
+        previous_admissions = admissions(db)
+        assert len(previous_admissions) == 1
+        assert db.initialize().schema_revision == "0007_source_journal"
+        assert db.initialize().schema_revision == "0007_source_journal"
+        assert admissions(db) == previous_admissions
         assert ledger.get(operation_id) is not None
         with db.engine.connect() as conn:
             assert (

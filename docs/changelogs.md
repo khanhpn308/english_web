@@ -1,4 +1,36 @@
-<<<<<<< HEAD
+## 03/10/2026 - T022: Integrate independently audited durable source journal into current main (Asia/Bangkok)
+
+- Integrated the owner-reported `AUDIT_PASS` candidate `da270b3337c192636f07fa0f917831c2ed7ab966` with current local main `035430d668f1f754afd38e3cca9d630eb90a69a7`, preserving all 13 audited Python files and current-main T042/T075 behavior. Only changelog history conflicted; retained both histories and removed conflict markers previously committed on main.
+- Verified PREPARED-before-replace, shared projection/card/receipt transactions, terminal late-H3 rollback then DEGRADED, restricted UNKNOWN reconciliation without redispatch, exactly-once reset/history retention, T021 protections and T026 search behavior. Critical focused suites: **339 passed**; explicit normal/UNKNOWN H3/H2 controls at both late boundaries: **8 passed**; current-main T042 search oracle: **1 passed**.
+- Alembic heads/history: one linear `0007_source_journal` after `0006_ai_admission`, with historical migrations untouched. T078 task loader: **16 paths, 13 concrete commands**. Scoped Ruff/format, full backend Mypy (**52 files**), architecture (**7 kept contracts, 40 tests**) and diff checks pass. Exact verification outputs are recorded in `/tmp/t022-integration-035430d-da270b3` and the T022 integration handoff.
+- Marked T022 DONE and its todo entry checked after mandatory integration verification; preserved every unrelated task status and CP10. T027/T008 remain separate; no parallel code, frontend, generated API, tooling or downstream task change was introduced. Source branch remains immutable; no push.
+- `WINDOWS_NATIVE_EVIDENCE: DEFERRED_TO_WINDOWS_RELEASE_EVIDENCE`. T023/T034 may proceed subject to remaining dependencies; T034 must rediscover the current head rather than reuse stale `0007_quiz`. Future T027 integration must preserve T022 caller-owned transaction/source projection primitives.
+
+## 03/10/2026 - T022: Fix terminal external-edit race and executable task card (Asia/Bangkok)
+
+- `source_write.py` revalidates the canonical hash through T021 after projection/reset and the last local-effect hook, before terminal persistence. Normal and UNKNOWN completion share this linearization point; mismatch rolls back real DB effects/receipt and then persists DEGRADED, retaining external bytes and history.
+- `test_source_journal.py` adds eight bounded Event-synchronized H3/control cases at projection/reset boundaries, checks nine persisted tables, non-success receipts, restart idempotency and refusal of new writes after DEGRADED. RED reproduced all four race defects before the fix.
+- `tasks/t022-source-journal.md` now conforms to T078's existing allowlist grammar, uses full paths and concrete static commands, and records the remediation evidence. Actual loader assertions prove exactly 16 authorized paths and 13 placeholder-free commands; no tooling was changed.
+- Focused final checks: journal 74 and operations 15 passed; scoped Ruff/format/Mypy, one-head Alembic and diff check exit 0. Dependency files/migrations, main/T031, contracts/frontend and todo status were preserved in this round. Full gates and native Windows evidence remain owner-deferred; startup composition belongs to T023 and pre-handle temp retention is unchanged.
+- Status: `READY_FOR_T022_RE_AUDIT`, not DONE. MAIN_DRIFT remains; no commit, push, merge or rebase. Independent re-audit must precede owner-authorized integration.
+
+## 03/10/2026 - T022: Real durable effects and restart reconciliation ready for independent audit (Asia/Bangkok)
+
+- Preserved the partial candidate and completed owner-authorized transaction primitives in vocabulary repository/search index, authenticated T021 restart temp cleanup, and dedicated T014 journal-evidence UNKNOWN reconciliation/old-state abort.
+- Revised uncommitted `0007_source_journal` in place to persist minimal immutable effect identifiers/baselines, reset intent, receipt and relative staged ownership evidence; no Markdown copy, historical migration edit or competing head.
+- T022 now reconstructs real canonical/source/search/card effects after restart and commits them atomically with the operation receipt and journal terminal marker. Ambiguous bytes, missing/stale evidence and unsafe temp cleanup fail closed without overwriting sources or deleting review/quiz references.
+- Added actual-effect crash tests for PENDING/UNKNOWN, SQLite/disk failures, bounded concurrent intents, replay, reset policy and seeded 0005→0006→0007 preservation. Maintained only T016 migration-head assertions and strengthened admission preservation; existing admission/race tests remain intact.
+- Final task-local verification: 331 passed (journal 66, adapter 86, operations 15, vocabulary 18, search 26, SRS 60, admission 60); scoped Ruff/format/Mypy, single-head Alembic heads/history and diff check all exit 0. Frozen 13 Python files were unchanged after verification.
+- State is `READY_FOR_T022_AUDIT`, not DONE; CP10 remains unchecked. Native Windows evidence and full integration/coverage/security gates are deferred per owner instructions. Temps without a durable authenticated handle are retained; startup recovery runs before source writers. MAIN_DRIFT is reported, with no integration or commit performed.
+
+## 02/10/2026 - T022: Incomplete source journal candidate blocked on integration scope (Asia/Bangkok)
+
+- Added the linear `0007_source_journal` migration after the discovered `0006_ai_admission` head, with immutable journal evidence, deterministic state-transition guards and history-preserving downgrade refusal.
+- Added candidate `SourceWriteCoordinator` and `SourceRecovery` primitives for durable intent, T021 replacement, T014 receipt callbacks and hash reconciliation. Complete durable projection/reset reconstruction and crash/recovery proofs remain unfinished.
+- Added 21 focused fault-injection, idempotency, migration, card-history and ambiguity tests. The focused suite and dependency regressions pass.
+- Worker handoff is blocked for a narrow scope extension because the unchanged T016 integration test still hardcodes `0006_ai_admission` as the latest head; updating that non-allowlisted assertion is required to validate the new linear head. Latest aggregate result: exit 1, 908 passed and 12 failed; the later test-only annotation/style correction has focused/static evidence only. Native Windows tests remain PENDING on this Linux host. T022 and CP10 remain incomplete.
+- Resumption audit also found missing caller-transaction projection interfaces in T019/T026, no T021 public restart-safe temp cleanup handle, and no T014 UNKNOWN completion path. These require dependency-owned scope extensions or an explicit startup-order contract before T022 can prove durable completion; the callback-only candidate remains incomplete.
+
 ## 02/10/2026 - T042: Tạo fixture tìm kiếm tổng hợp 100k xác định (Asia/Bangkok)
 
 - Thêm generator, test và README cho fixture T042; dữ liệu hoàn toàn tổng hợp,
@@ -154,7 +186,6 @@
 
 - Portable source tests rerun in the T021 worktree: 78 passed; T020 dependency tests: 24 passed; Ruff and Mypy passed with zero errors.
 - Windows-native suite remains 11 fail-closed failures on the Linux host because genuine `win32`, NTFS reparse/junction and ACL evidence is unavailable. The implementation is committed on its task branch for preservation; it is not merged into `main`, because doing so would make the repository test gate fail.
-=======
 ## 02/10/2026 - T075: Khắc phục hạ tầng kiểm thử Design System & Test Oracle (Remediation Round 3) (Asia/Bangkok)
 
 - **Mục tiêu & Bối cảnh:** Giải quyết 3 blocking findings từ Independent Re-Audit #3 đối với hạ tầng test `frontend/tests/design-system.test.tsx` mà không làm thay đổi bất kỳ code production hay hành vi nào đã được thẩm định PASS.
@@ -206,7 +237,6 @@
   - Toàn bộ checks đạt chuẩn: `npm run typecheck` exit 0, `npm run lint` exit 0, `npm run architecture:frontend` exit 0 (24 modules, 27 dependencies cruised), `npm run build` exit 0 (main, bootstrap, compiled theme CSS), `npm run check:fast` exit 0.
   - `npm run check:task` exit 0: 810 Python tests, 70 frontend tests (38 T004 + 32 design system), 40 architecture tests, coverage changed 100.00%, total 92.96%, 0 security findings (secrets/code/deps).
 - **Phạm vi bảo toàn:** Không thay đổi `frontend/src/app/AppShell.tsx`, `shell.css`, backend, migrations, hay API contracts. T076 giữ nguyên trạng thái `TODO`. Thay đổi để uncommitted cho re-audit độc lập.
->>>>>>> feature/task-t075-shadcn-ui-foundation
 
 ## 02/10/2026 - Remediation kiến trúc UI và kế hoạch task shadcn/ui (Asia/Bangkok)
 

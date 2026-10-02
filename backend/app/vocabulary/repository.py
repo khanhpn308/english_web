@@ -60,6 +60,12 @@ class VocabularyRepository:
         self.engine = engine
 
     @contextmanager
+    def _borrow(self, connection: Connection) -> Iterator[Connection]:
+        if connection.engine is not self.engine or not connection.in_transaction():
+            raise ValueError("Caller must own an active transaction on this database engine")
+        yield connection
+
+    @contextmanager
     def _writer(self) -> Iterator[Connection]:
         with (
             self.engine.connect().execution_options(sqlite_begin_immediate=True) as connection,
@@ -80,13 +86,15 @@ class VocabularyRepository:
         self,
         root_lemma: str,
         family_id: str | None = None,
+        *,
+        connection: Connection | None = None,
     ) -> WordFamily:
         """Get an existing word family by root lemma or create a new deterministic one."""
         norm_root = normalize_lemma(root_lemma)
         if not norm_root:
             raise AmbiguousFamilyError("Root lemma cannot be empty for word family")
 
-        with self._writer() as conn:
+        with self._writer() if connection is None else self._borrow(connection) as conn:
             if family_id:
                 row = (
                     conn.exec_driver_sql(
@@ -136,9 +144,11 @@ class VocabularyRepository:
                 updated_at=now,
             )
 
-    def get_family(self, family_id: str) -> WordFamily | None:
+    def get_family(
+        self, family_id: str, *, connection: Connection | None = None
+    ) -> WordFamily | None:
         """Fetch word family by ID."""
-        with self._reader() as conn:
+        with self._reader() if connection is None else self._borrow(connection) as conn:
             row = (
                 conn.exec_driver_sql(
                     "SELECT id, root_lemma, created_at, updated_at FROM word_families WHERE id = ?",
@@ -155,6 +165,22 @@ class VocabularyRepository:
                 created_at=row["created_at"],
                 updated_at=row["updated_at"],
             )
+
+    def get_families_for_root(
+        self, root_lemma: str, *, connection: Connection | None = None
+    ) -> list[WordFamily]:
+        """Read all matches so a caller can refuse ambiguous family identity."""
+        with self._reader() if connection is None else self._borrow(connection) as conn:
+            rows = (
+                conn.exec_driver_sql(
+                    "SELECT id,root_lemma,created_at,updated_at "
+                    "FROM word_families WHERE root_lemma=?",
+                    (normalize_lemma(root_lemma),),
+                )
+                .mappings()
+                .all()
+            )
+            return [WordFamily(**row) for row in rows]
 
     # -------------------------------------------------------------------------
     # Canonical Word Forms
@@ -174,6 +200,7 @@ class VocabularyRepository:
         cambridge_url: str | None = None,
         cambridge_status: VerificationStatus | None = None,
         word_form_id: str | None = None,
+        connection: Connection | None = None,
     ) -> WordForm:
         """Save a canonical word form, reusing existing row if (norm_lemma, POS, family) matches.
 
@@ -195,7 +222,7 @@ class VocabularyRepository:
         if not pos:
             raise ValueError("Part of speech cannot be empty")
 
-        fam = self.get_family(family_id)
+        fam = self.get_family(family_id, connection=connection)
         if fam is None:
             raise AmbiguousFamilyError(f"Word family '{family_id}' does not exist")
 
@@ -223,7 +250,7 @@ class VocabularyRepository:
             cambridge_status=eff_cambridge_status,
         )
 
-        with self._writer() as conn:
+        with self._writer() if connection is None else self._borrow(connection) as conn:
             existing = (
                 conn.exec_driver_sql(
                     "SELECT id, family_id, lemma, normalized_lemma, part_of_speech, meanings_en, "
@@ -331,11 +358,13 @@ class VocabularyRepository:
         lemma: str,
         part_of_speech: str,
         family_id: str,
+        *,
+        connection: Connection | None = None,
     ) -> WordForm | None:
         """Fetch canonical word form by exact (norm_lemma, POS, family) identity."""
         norm_lemma = normalize_lemma(lemma)
         pos = part_of_speech.strip().upper()
-        with self._reader() as conn:
+        with self._reader() if connection is None else self._borrow(connection) as conn:
             row = (
                 conn.exec_driver_sql(
                     "SELECT id, family_id, lemma, normalized_lemma, part_of_speech, "
@@ -353,9 +382,11 @@ class VocabularyRepository:
             source_refs = self._get_source_refs(conn, row["id"])
             return self._row_to_word_form(row, source_refs)
 
-    def get_word_form(self, word_form_id: str) -> WordForm | None:
+    def get_word_form(
+        self, word_form_id: str, *, connection: Connection | None = None
+    ) -> WordForm | None:
         """Fetch canonical word form by ID."""
-        with self._reader() as conn:
+        with self._reader() if connection is None else self._borrow(connection) as conn:
             row = (
                 conn.exec_driver_sql(
                     "SELECT id, family_id, lemma, normalized_lemma, part_of_speech, "
@@ -388,11 +419,12 @@ class VocabularyRepository:
         content_hash: str | None = None,
         last_parsed_at: str | None = None,
         error_code: str | None = None,
+        connection: Connection | None = None,
     ) -> SourceFile:
         """Save or update a Markdown source file entry."""
         now = _now_iso()
         actual_etag = etag or f'"src-r{revision}-{source_id}"'
-        with self._writer() as conn:
+        with self._writer() if connection is None else self._borrow(connection) as conn:
             existing = (
                 conn.exec_driver_sql(
                     "SELECT id, created_at FROM source_files WHERE id = ?",
@@ -456,9 +488,11 @@ class VocabularyRepository:
                 updated_at=now,
             )
 
-    def get_source_file(self, source_id: str) -> SourceFile | None:
+    def get_source_file(
+        self, source_id: str, *, connection: Connection | None = None
+    ) -> SourceFile | None:
         """Fetch source file by ID."""
-        with self._reader() as conn:
+        with self._reader() if connection is None else self._borrow(connection) as conn:
             row = (
                 conn.exec_driver_sql(
                     "SELECT id, relative_path, note_date, status, revision, etag, content_hash, "
@@ -525,9 +559,11 @@ class VocabularyRepository:
         word_form_id: str,
         source_id: str,
         note_date: str,
+        *,
+        connection: Connection | None = None,
     ) -> None:
         """Idempotently link a canonical word form to a source file and note date."""
-        with self._writer() as conn:
+        with self._writer() if connection is None else self._borrow(connection) as conn:
             wf = conn.exec_driver_sql(
                 "SELECT id FROM word_forms WHERE id = ?", (word_form_id,)
             ).first()
@@ -547,17 +583,21 @@ class VocabularyRepository:
                 (word_form_id, source_id, note_date, now),
             )
 
-    def unlink_source_from_form(self, word_form_id: str, source_id: str) -> None:
+    def unlink_source_from_form(
+        self, word_form_id: str, source_id: str, *, connection: Connection | None = None
+    ) -> None:
         """Unlink a source from a word form without deleting the word form itself."""
-        with self._writer() as conn:
+        with self._writer() if connection is None else self._borrow(connection) as conn:
             conn.exec_driver_sql(
                 "DELETE FROM word_form_sources WHERE word_form_id = ? AND source_id = ?",
                 (word_form_id, source_id),
             )
 
-    def get_forms_for_source(self, source_id: str) -> list[WordForm]:
+    def get_forms_for_source(
+        self, source_id: str, *, connection: Connection | None = None
+    ) -> list[WordForm]:
         """Fetch all canonical word forms linked to a specific source file."""
-        with self._reader() as conn:
+        with self._reader() if connection is None else self._borrow(connection) as conn:
             rows = (
                 conn.exec_driver_sql(
                     "SELECT wf.id, wf.family_id, wf.lemma, wf.normalized_lemma, "
