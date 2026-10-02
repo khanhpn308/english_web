@@ -32,7 +32,32 @@ Output = TypeVar("Output", bound=BaseModel)
 
 
 @pytest.fixture
-def repository(tmp_path: Path) -> Path:
+def repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    pack = tmp_path / "agent-skills" / "skills"
+    for name in (
+        "incremental-implementation",
+        "test-driven-development",
+        "git-workflow-and-versioning",
+        "documentation-and-adrs",
+        "debugging-and-error-recovery",
+        "code-review-and-quality",
+        "api-and-interface-design",
+        "frontend-ui-engineering",
+        "security-and-hardening",
+        "doubt-driven-development",
+        "browser-testing-with-devtools",
+        "ci-cd-and-automation",
+        "performance-optimization",
+        "observability-and-instrumentation",
+        "deprecation-and-migration",
+        "source-driven-development",
+    ):
+        path = pack / name / "SKILL.md"
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            f"---\nname: {name}\ndescription: Synthetic workflow\n---\nApply synthetic checks.\n"
+        )
+    monkeypatch.setenv("AGENT_SKILLS_ROOT", str(pack))
     repo = tmp_path / "repo"
     repo.mkdir()
     git = Git(repo)
@@ -1535,3 +1560,131 @@ def test_opt_in_timeout_reaches_roles_checks_and_saved_state(
     assert loaded.config is not None
     assert loaded.config.timeout_seconds == expected
     assert pipeline.resume("T100", state.run_id).state == State.DONE
+
+
+@pytest.mark.parametrize("failures", [0, 1])
+def test_relevant_skills_required_in_planner_worker_fix_and_auditor(
+    repository: Path, failures: int
+) -> None:
+    class SkillAgents(FakeAgents):
+        def run(
+            self,
+            prompt: str,
+            *,
+            cwd: Path,
+            role: Role,
+            timeout: int | None,
+            output: type[Output],
+            artifacts: Path,
+            name: str,
+            readonly: bool,
+        ) -> Output:
+            if output in {Plan, Fix, WorkerResult}:
+                assert "REQUIRED AGENT SKILLS" in prompt
+                assert "test-driven-development" in prompt
+                assert "SKILL.md" in prompt
+                assert "Do not commit" in prompt
+            if output == Fix or (output == WorkerResult and self.worker_calls):
+                assert "debugging-and-error-recovery" in prompt
+            if output == Audit:
+                assert "code-review-and-quality" in prompt
+                assert "mention is not proof" in prompt
+            return super().run(
+                prompt,
+                cwd=cwd,
+                role=role,
+                timeout=timeout,
+                output=output,
+                artifacts=artifacts,
+                name=name,
+                readonly=readonly,
+            )
+
+    pipeline = Pipeline(repository, configuration(), SkillAgents(failures=failures))
+    state = pipeline.start("T100")
+    assert state.state == State.DONE
+    directory = pipeline.run_path("T100", state.run_id)
+    assert "skills" in state.artifacts
+    plan = Plan.model_validate(read_json(directory / state.artifacts["plan"]))
+    assert "REQUIRED AGENT SKILLS" in plan.worker_prompt
+    assert (directory / "worker_prompt.md").read_text() == plan.worker_prompt
+    if failures:
+        fix = Fix.model_validate(read_json(directory / state.artifacts["fix"]))
+        assert "debugging-and-error-recovery" in fix.fix_prompt
+        assert "REQUIRED AGENT SKILLS" in fix.fix_prompt
+
+
+def test_missing_required_skill_does_not_invoke_worker(
+    repository: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("AGENT_SKILLS_ROOT", str(tmp_path / "absent-pack"))
+    agents = FakeAgents()
+    state = Pipeline(repository, configuration(), agents).start("T100")
+    assert state.state == State.FAILED
+    assert "SETUP_FAILED" in (state.last_error or "")
+    assert not agents.calls
+    assert state.implementation_sha is None
+
+
+@pytest.mark.parametrize("stage", [Plan, WorkerResult])
+def test_skill_mutation_during_agent_execution_never_promotes(
+    repository: Path, monkeypatch: pytest.MonkeyPatch, stage: type[BaseModel]
+) -> None:
+    agents = FakeAgents()
+    original_run = agents.run
+
+    def run_agent(
+        prompt: str,
+        *,
+        cwd: Path,
+        role: Role,
+        timeout: int | None,
+        output: type[Output],
+        artifacts: Path,
+        name: str,
+        readonly: bool,
+    ) -> Output:
+        result = original_run(
+            prompt,
+            cwd=cwd,
+            role=role,
+            timeout=timeout,
+            output=output,
+            artifacts=artifacts,
+            name=name,
+            readonly=readonly,
+        )
+        if output == stage:
+            manifest = read_json(artifacts / "00-skills.json")
+            assert isinstance(manifest, dict)
+            skill = Path(manifest["worker"][0]["path"])
+            skill.write_text(skill.read_text() + "Changed by agent\n")
+        return result
+
+    monkeypatch.setattr(agents, "run", run_agent)
+    base = Git(repository).sha()
+    state = Pipeline(repository, configuration(), agents).start("T100")
+    assert state.state == State.FAILED
+    assert "agent skill changed since planning" in (state.last_error or "")
+    assert "Audit" not in agents.calls and "IntegrationReview" not in agents.calls
+    assert Git(repository).sha() == base
+    assert state.implementation_sha is None
+
+
+def test_legacy_handoff_without_skills_resumes_unchanged(repository: Path) -> None:
+    # Build a synthetic old run at a safe resume barrier, without a skill artifact.
+    agents = FakeAgents()
+    pipeline = Pipeline(repository, configuration(integrate=False), agents)
+    state = pipeline.start("T100")
+    assert state.state == State.AUDIT_PASS
+    directory = pipeline.run_path("T100", state.run_id)
+    skill_file = state.artifacts.pop("skills")
+    state.artifact_digests.pop(skill_file)
+    (directory / skill_file).unlink()
+    pipeline.save(directory, state)
+    handoff = (directory / "worker_prompt.md").read_bytes()
+    assert pipeline.skill_handoff(directory, state, "Legacy prompt", "worker") == "Legacy prompt"
+    assert pipeline.skill_manifest(directory, state) is None
+    pipeline.config.integrate = True
+    assert pipeline.resume("T100", state.run_id).state == State.DONE
+    assert (directory / "worker_prompt.md").read_bytes() == handoff

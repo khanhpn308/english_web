@@ -124,6 +124,7 @@ class Config(Model):
     timeout_seconds: Annotated[StrictInt, Field(ge=1, le=86400)] | None = None
     verification: list[list[str]] = Field(min_length=1)
     setup_commands: list[list[str]] = Field(default_factory=list)
+    skills_root: Nonempty | None = None
     integrate: StrictBool = False
 
     def validate_roles(self) -> None:

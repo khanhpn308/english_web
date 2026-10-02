@@ -134,3 +134,5 @@ Infrastructure verification: [final evidence](../docs/reviews/orchestrator-verif
 - [x] [T076](t076-audit-report-retry.md): Actionable audit findings, criterion evidence and bounded semantic JSON correction before terminating a run; check:task exit0, 718 Python/185 orchestrator tests, 40 architecture tests, changed coverage96.30%, zero scanner findings. Historical T059 implementation/evidence remains unchanged.
 
 - [x] [T077](t077-optional-task-timeout.md): Opt-in development task deadlines; default null, manual positive seconds, preserved cancellation/output/fix limits and historical run evidence.
+
+- [x] [T078](t078-task-skill-prompts.md): Task-relevant installed skill references, pinned run policy and required Worker/Fix handoff blocks; no scope/Git expansion or historical prompt rewrite.

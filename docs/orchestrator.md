@@ -27,6 +27,7 @@ Thay `T018` bằng task cần chạy; thay `RUN_ID` bằng `run_id` trong kết 
 - `--no-integrate` vẫn tạo worktree task riêng khi bắt đầu run mới; dry-run không tạo worktree hay gọi model.
 - Mặc định Worker dùng **agy / Gemini**. Task GPT cần cấu hình riêng chọn `codex`, model ID thực và reasoning theo Prompt Engineer; bảng task-plan chưa tự đổi model khi chạy.
 - `run` tự tiếp tục run ổn định hoặc tạo lần thử mới nếu bằng chứng cho phép. `retry` giữ lại run cũ; lỗi sau khi Worker đã sửa source cần kiểm tra worktree/log, không bảo đảm retry được.
+- Prompt Worker và Fix tự kèm skill phù hợp với task, đường dẫn `SKILL.md` và lý do chọn; không cần thêm cờ chạy. Bộ skill đã cài được phát hiện tự động hoặc chọn bằng `skills_root`.
 - Mặc định không giới hạn thời gian chạy agent, setup và kiểm tra: `"timeout_seconds": null` (hoặc bỏ trường này). Muốn giới hạn 90 phút cho mỗi lần gọi, đặt `"timeout_seconds": 5400` trong cấu hình.
 - Auditor trả JSON sai quy ước được yêu cầu sửa trong tối đa ba lượt của cùng lần gọi; không chạy lại Worker chỉ để sửa báo cáo.
 - Chạy thật cần checkout chính sạch. `--integrate` chỉ đưa vào main sau audit và kiểm tra đạt; công cụ không push.
@@ -138,6 +139,81 @@ Worker dùng `agy` với `gemini-3.8-flash-high`, có trong danh sách `agy mode
 lập kế hoạch, audit và tích hợp dùng Codex. Gemini CLI (`gemini`) không tự sử dụng
 model/tài khoản đang chạy qua `agy`. Có thể thay provider
 qua giao thức có kiểu dữ liệu mà không phải viết lại máy trạng thái.
+
+### Tích hợp agent-skills và yêu cầu dùng skill
+
+Công cụ dùng bộ [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills).
+Skill là workflow phải đọc và áp dụng khi liên quan, không chỉ là tên để liệt kê.
+Theo hướng dẫn upstream, có thể cài native vào CLI nếu máy chưa có:
+
+```bash
+# Antigravity
+agy plugin install https://github.com/addyosmani/agent-skills.git
+agy plugin list
+
+# Codex
+codex plugin marketplace add addyosmani/agent-skills
+codex plugin add agent-skills@agent-skills
+
+# Gemini CLI độc lập
+gemini skills install https://github.com/addyosmani/agent-skills.git --path skills
+```
+
+Các cách cài được mô tả ở [agy setup](https://github.com/addyosmani/agent-skills/blob/main/docs/antigravity-setup.md),
+[Codex setup](https://github.com/addyosmani/agent-skills/blob/main/docs/codex-setup.md)
+và [Gemini setup](https://github.com/addyosmani/agent-skills/blob/main/docs/gemini-cli-setup.md).
+Orchestrator không tự tải/cài/nâng cấp plugin hay sửa cấu hình CLI toàn máy.
+Trên máy đã kiểm tra, pack agy0.6.11 có ở `~/.gemini/config/plugins/agent-skills/skills`;
+không cần cài lại.
+
+Mặc định tìm skill theo thứ tự: workspace `.agents/skills`, `.gemini/skills`, pack
+agy nêu trên, rồi các thư mục skill người dùng Gemini/Agents/Codex và cache plugin
+Codex. Muốn chọn rõ một pack hoặc thư mục skills, thêm vào cấu hình JSON:
+
+```json
+"skills_root": "~/.gemini/config/plugins/agent-skills/skills"
+```
+
+Hoặc đặt `AGENT_SKILLS_ROOT` trỏ tới pack. `skills_root` có ưu tiên hơn biến môi
+trường; đường dẫn tương đối được tính từ checkout chính. Khi đã cấu hình rõ một
+root, không âm thầm dùng pack khác nếu root đó thiếu skill.
+
+| Tính chất task | Skill yêu cầu thêm ngoài workflow chung |
+|---|---|
+| Logic/behavior | `incremental-implementation`, `test-driven-development` |
+| React/UI | `frontend-ui-engineering` |
+| API/typed interface | `api-and-interface-design` |
+| Input, filesystem, persistence, consent/security | `security-and-hardening` |
+| Race, atomicity, durable state, crash recovery, migration | `doubt-driven-development` |
+| Migration sở hữu trong task | `deprecation-and-migration` |
+| Browser/a11y harness | `browser-testing-with-devtools` |
+| CI, performance, observability hoặc semantics CLI/provider | Skill chuyên môn tương ứng |
+| Fix sau audit | Thêm `debugging-and-error-recovery` |
+| Auditor/Integrator review | `code-review-and-quality` và các skill review liên quan |
+
+Mọi task giữ `git-workflow-and-versioning` cho diff/branch an toàn và
+`documentation-and-adrs` cho bookkeeping bắt buộc. Task chỉ sửa tài liệu không bị
+buộc làm TDD. Chọn theo file task sở hữu, title/goal và acceptance criteria; không
+chọn theo số Txxx hoặc boilerplate references tới API/UI/security trong mọi card.
+
+Run mới lưu `00-skills.json` gồm task digest, danh sách theo phase, lý do chọn,
+đường dẫn thật và SHA256 của từng `SKILL.md`. Prompt Engineer được cung cấp policy;
+Python bảo đảm khối `REQUIRED AGENT SKILLS` có trong Plan/Worker và Fix handoff đã
+lưu, kể cả khi model quên thêm. Worker đọc file và áp dụng workflow; Auditor xem
+bằng chứng trong code/tests và các trường JSON hiện có. Một lời khai "đã dùng skill"
+không chứng minh skill thực sự được áp dụng. Không thêm field JSON ngoài schema.
+
+Headless dùng đường dẫn file trực tiếp, không phụ thuộc slash commands bị tắt ở
+agy; không nạp toàn bộ pack hay meta-router. Chỉ đọc supporting references khi cần.
+Skill không được mở rộng allowlist, tiêu chí, threshold, Git quyền hạn hoặc yêu cầu
+sản phẩm; Worker vẫn không được commit/merge và không dừng để chờ review khác model
+chỉ vì skill gợi ý. Task-owned tests/tools và chỉ dẫn chủ repo có ưu tiên.
+
+Skill bắt buộc thiếu/không đọc được hoặc entrypoint thay đổi giữa run là
+`SETUP_FAILED`; phải sửa setup, không giả vờ đã sử dụng. Manifest pin entrypoint,
+không pin toàn bộ supporting references. Không sửa manifest/prompt/hash bằng tay.
+Config và run cũ vẫn đọc được; run đã planning trước tính năng này giữ nguyên
+handoff lịch sử, không bị tự viết lại. Run FAILED cũ không được mở lại.
 
 ### Quyền Worker GPT và Gemini qua agy
 

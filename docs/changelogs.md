@@ -1,3 +1,10 @@
+## 02/10/2026 - T078: Skill phù hợp trong prompt Worker/Fix (Asia/Bangkok)
+
+- Theo yêu cầu chủ repository và hướng dẫn addyosmani/agent-skills, `tools/orchestrator/skills.py` chọn workflow theo phạm vi và tính chất task; phát hiện pack native hoặc `skills_root`/`AGENT_SKILLS_ROOT`, không tự cài plugin.
+- `core.py`/`workflow.py`: thêm cấu hình root tùy chọn và manifest skill có path/hash/reason theo phase. Planning nhận policy; Python bảo đảm prompt Worker/Fix yêu cầu đọc/áp dụng skill. Auditor đánh giá bằng chứng thực tế, không tin chỉ lời khai.
+- `tests/orchestrator/`: kiểm tra pure scoring/API/UI/Windows source/migration/docs/browser/CI/performance/observability, root precedence và nội dung skill thay đổi; fake-agent flow chứng minh cả prompt triển khai lẫn Fix có yêu cầu.
+- `docs/orchestrator.md`: bổ sung cách cài native, discovery/override, mapping, precedence task/host và giới hạn evidence. Không đổi provider/model/CLI flags, source sản phẩm hay run lịch sử. Verification ghi trong thẻ T078: check:task exit0, 810 Python/232 orchestrator tests, 38 frontend/40 architecture tests, changed coverage96.27%, tổng92.90%, ba scanner zero findings; Ruff/format/Mypy đạt. Source freeze giữ nguyên; không gọi model thật.
+
 ## 02/10/2026 - T059: Audit lại và tích hợp phần scoring đã triển khai (Asia/Bangkok)
 
 ## 02/10/2026 - T077: Timeout phát triển chỉ bật khi cấu hình (Asia/Bangkok)
