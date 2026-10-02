@@ -1,8 +1,40 @@
+## 02/10/2026 - T059: Audit lại và tích hợp phần scoring đã triển khai (Asia/Bangkok)
+
+- **Bối cảnh:** Run 202610020538470149160000-77174ceb dừng vì JSON PASS chứa findings thông tin. Giữ nguyên run/source/artifact cũ; audit độc lập phần scoring đã có, không chạy lại Worker hoặc inference.
+- **Tích hợp:** Candidate dựa trên local main b47d599; scoring/test được sao chép nguyên byte. Todo/changelog cộng dồn với T076, không ghi đè trạng thái task khác hoặc đánh dấu checkpoint. Áp dụng documentation-and-adrs. Audit độc lập PASS cả ba tiêu chí; source/test không đổi. 105 focused tests, probe45tổ hợp/270hoán vị và checks tĩnh đạt; check:task exit0 trên snapshot đóng băng:763 Python/38 frontend/40 architecture, scoring line/branch100%, changed100%, total92.78%, ba scanner0finding. Chỉ cập nhật bookkeeping ghi bằng chứng sau gate; promotion dưới khóa tích hợp, main sạch/không đổi và ff-only; không push.
+
 ## 02/10/2026 - T076: Làm rõ báo cáo audit và sửa JSON trước khi kết thúc (Asia/Bangkok)
 
 - **Thay đổi:** Schema và prompt Auditor quy định findings chỉ chứa lỗi chưa giải quyết; bằng chứng đạt/kết quả lệnh nằm trong acceptance_criteria[].evidence. Kiểm tra semantic trong vòng gọi agent tối đa ba lượt, lưu/băm JSON bị từ chối và gửi phản hồi để Auditor sửa cùng snapshot, không thêm lượt Worker hay tăng fix_cycle. FAIL thật vẫn vào vòng Fix; không tự xóa finding, đổi verdict hoặc chấp nhận bằng chứng lệnh thất bại.
 - **TDD/phạm vi:** Baseline 171 pass (132.56s); RED 11 fail/3 pass (20.18s); GREEN 14 pass (24.30s). Bốn file code/test cùng guide/card/todo/changelog T076; không sửa ứng dụng/config/provider/dependencies/threshold hay gọi inference thật. 89 artifact và snapshot source T059 giữ nguyên; phục hồi run FAILED lịch sử nằm ngoài task. Áp dụng documentation-and-adrs.
 - **SOURCE FREEZE/kiểm tra:** 185 test orchestrator pass (171.09s); check:task exit0 trên source bất biến, 718 Python/38 frontend/40 architecture tests, changed coverage96.30%, total92.40%, ba scanner0finding. Ruff/formatter/Mypy49file/diff check đạt; chỉ cập nhật bookkeeping ghi evidence sau gate. Promotion yêu cầu khóa tích hợp, local main sạch/không đổi và ff-only; không push.
+
+## 02/10/2026 - T059: Khắc phục lỗi P1 kiểm tra quyền sở hữu câu trả lời (Asia/Bangkok)
+
+- **Nguyên nhân/mục tiêu:** Khắc phục lỗi bảo mật P1 đã kiểm toán (Answer Ownership Defect). Trước đây, `score_mcq`, `score_cloze`, và `score_writing` không kiểm tra `AnswerInput.question_id` khớp với `question.id`, và `score_quiz` chỉ kiểm tra tập key của `Mapping[str, AnswerInput]` thay vì kiểm tra `ans.question_id == key`. Điều này dẫn đến nguy cơ gán điểm tự đánh giá writing của câu hỏi khác sang word form của câu hỏi đích.
+- **Giải pháp xử lý (pure validation):**
+  - Trong từng hàm chấm câu đơn (`score_mcq`, `score_cloze`, `score_writing`): khi tham số là `AnswerInput`, bắt buộc `answer.question_id == question.id` trước khi xử lý câu trả lời hoặc điểm tự chấm (kể cả trường hợp rỗng, null hoặc pending). Nếu không khớp, raise `QuizScoringError` với thông báo chẩn đoán định danh cụ thể, tuyệt đối không để lộ nội dung câu trả lời hay dữ liệu bài học. Giữ nguyên hành vi của các dạng input raw (string/tuple/None).
+  - Trong `score_quiz`: duyệt và xác thực từng key trong mapping với `AnswerInput.question_id` tương ứng trước khi vào vòng lặp chấm điểm. Bất kỳ sai lệch nào đều raise `QuizScoringError` ngay lập tức, không ghi đè, không re-key hay thay thế câu trả lời rỗng.
+- **TDD / Kiểm chứng:**
+  - RED: Viết regression tests cho cả 3 hàm chấm đơn và aggregate mapping (foreign ID, swapped values giữa 2 câu writing có word form khác nhau, reused input dưới 2 key khác nhau). Lệnh `python -m pytest backend/tests/test_quiz_scoring.py -q` ghi nhận RED với 6 failures / 39 passed (exit code 1).
+  - GREEN: Sau khi sửa, 45 test focused đều PASS trong 0.23s, đạt 100% line & branch coverage trên `backend/app/assessment/scoring.py` (242 stmts, 80 branches).
+  - Gate tổng thể: `npm run check:task` exit 0 (749 test Python, 38 test frontend, 40 test architecture; changed coverage 100.00%, total coverage 92.74%; 0 findings từ Gitleaks, Semgrep, OSV-Scanner; 7 architecture contracts kept). `npm run architecture:check` exit 0. `mypy backend` và `ruff check`/`format` đều exit 0.
+- **Phạm vi:** Chỉ sửa 2 file implementation/test (`backend/app/assessment/scoring.py`, `backend/tests/test_quiz_scoring.py`) cùng bookkeeping T059 (`tasks/t059-quiz-scoring.md`, `tasks/todo.md`, `docs/changelogs.md`). Giữ nguyên các module database, HTTP, UI và dữ liệu từ vựng; áp dụng documentation-and-adrs theo AGENT.md.
+
+## 02/10/2026 - T059: Pure quiz scoring và weakest-rating oracle (Asia/Bangkok)
+
+- **Nguyên nhân/mục tiêu:** Triển khai module pure domain scoring cho bài kiểm tra (MCQ, cloze, writing) và quy tắc weakest-rating oracle theo ADR-0005 C013-03 / docs/spec.md FR-ASM-05–08; AC-16/19/30.
+- **Quy tắc chấm/oracles:**
+  - MCQ: so khớp option ID chính xác với snapshot correct_option_id; rỗng/None là BLANK/AGAIN; option ID ngoài snapshot options bị từ chối; selfScore bị cấm.
+  - Cloze: chuẩn hóa NFC, trim/collapse ASCII whitespace (`[ \t\r\n\x0c\x0b]+`), Unicode casefold; giữ nghiêm ngặt chính tả, dấu, punctuation và non-ASCII whitespace; rỗng là BLANK/AGAIN.
+  - Writing: tự chấm điểm nguyên 0..4 (0/1->AGAIN, 2->HARD, 3->GOOD, 4->EASY); null là pending chặn nộp; text rỗng chỉ hợp lệ với điểm 0; text rỗng có điểm dương bị từ chối.
+  - Weakest rating: xác định duy nhất một rating yếu nhất theo wordFormId theo thứ tự `AGAIN < HARD < GOOD < EASY`, độc lập với thứ tự câu hỏi và không tính trung bình.
+  - Objective scores: tính toán chính xác tổng câu, số câu đã trả lời (attempted), số câu đúng (correct), và độ chính xác accuracy (null khi attempted bằng 0).
+- **TDD / Kiểm chứng:**
+  - RED: kiểm tra import khi chưa có module báo lỗi `ModuleNotFoundError: No module named 'backend.app.assessment'` (pytest exit 2).
+  - GREEN: 38 test focused đạt trong 0.38s, đạt 100% line và branch coverage trên `backend/app/assessment/scoring.py`.
+  - Gate tổng hợp: `npm run check:task` exit 0 (742 test Python/frontend/architecture, changed coverage 100%, total coverage 92.73%, 0 findings từ Gitleaks/Semgrep/OSV-Scanner, 7 architecture contracts kept).
+  - Phạm vi: đúng 2 file source/test (`backend/app/assessment/scoring.py`, `backend/tests/test_quiz_scoring.py`) cùng bookkeeping T059 (`tasks/t059-quiz-scoring.md`, `tasks/todo.md`, `docs/changelogs.md`). Giữ nguyên các module database, HTTP, UI và dữ liệu từ vựng; áp dụng documentation-and-adrs theo AGENT.md.
 
 ## 02/10/2026 - T075: Sửa kiểm tra capability agy trên stderr (Asia/Bangkok)
 

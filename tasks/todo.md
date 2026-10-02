@@ -46,7 +46,7 @@
 - [ ] [T030](t030-edit-ui.md): Edit form và conflict dialog
 - [ ] [T032](t032-review-api.md): Review queue và review event API
 - [ ] [T033](t033-review-ui.md): Flashcard review flow
-- [ ] [T059](t059-quiz-scoring.md): Pure quiz scoring và weakest-rating oracle
+- [x] [T059](t059-quiz-scoring.md): Pure quiz scoring và weakest-rating oracle — independently re-audited PASS; 45 scoring/60 SRS tests, 100% scoring line/branch coverage; integrated candidate check:task exit0 (763 Python, 38 frontend, 40 architecture tests, changed coverage100%, total92.78%, zero security findings). Historical automated FAILED run preserved.
 - [ ] [T034](t034-quiz-schema.md): Quiz immutable snapshot schema
 - [ ] [T035](t035-quiz-api.md): Quiz creation và snapshot retrieval API
 - [ ] [T036](t036-quiz-ui.md): Quiz builder UI dùng generation API
