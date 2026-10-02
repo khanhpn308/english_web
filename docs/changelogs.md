@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ## 02/10/2026 - T042: Tạo fixture tìm kiếm tổng hợp 100k xác định (Asia/Bangkok)
 
 - Thêm generator, test và README cho fixture T042; dữ liệu hoàn toàn tổng hợp,
@@ -153,6 +154,59 @@
 
 - Portable source tests rerun in the T021 worktree: 78 passed; T020 dependency tests: 24 passed; Ruff and Mypy passed with zero errors.
 - Windows-native suite remains 11 fail-closed failures on the Linux host because genuine `win32`, NTFS reparse/junction and ACL evidence is unavailable. The implementation is committed on its task branch for preservation; it is not merged into `main`, because doing so would make the repository test gate fail.
+=======
+## 02/10/2026 - T075: Khắc phục hạ tầng kiểm thử Design System & Test Oracle (Remediation Round 3) (Asia/Bangkok)
+
+- **Mục tiêu & Bối cảnh:** Giải quyết 3 blocking findings từ Independent Re-Audit #3 đối với hạ tầng test `frontend/tests/design-system.test.tsx` mà không làm thay đổi bất kỳ code production hay hành vi nào đã được thẩm định PASS.
+- **Khắc phục Blocker 1 (Compiled CSS trong Real Browser):**
+  - Cấu trúc lại browser test để nạp CSS thực tế được biên dịch từ `frontend/src/index.css` qua Vite và plugin `@tailwindcss/vite`.
+  - Fixture chạy trên React components thực tế, Radix Portal thực tế gắn vào DOM `document.body`, và Playwright Chromium thực tế.
+  - Xác thực toàn diện các rendered styles và độ tương phản ở cả Light Mode và Dark Mode (`class="dark"` trên root), kiểm tra destructive normal, destructive hover (sau khi transition ổn định), Dialog surface, Dialog title, Dialog description, và Dialog close focus ring.
+- **Khắc phục Blocker 2 (Test Oracle & Mô hình Alpha Compositing):**
+  - Chuyển oracle kiểm định độ tương phản từ công thức OKLab interpolation toán học trước đây sang trích xuất giá trị màu thực tế từ Chromium và thực hiện alpha-compositing qua Canvas 2D / display sRGB tiêu chuẩn.
+  - Tỉ lệ tương phản Destructive hover đo được trên browser thực tế đạt 5.09:1 (Light) và 5.74:1 (Dark), thỏa mãn WCAG AA (>= 4.5:1).
+  - Tách bạch rõ ràng giữa STATIC TOKEN CHECK (kiểm tra token tĩnh opaque) và RENDERED STATE CHECK (kiểm tra runtime trên browser).
+  - Bổ sung kiểm thử độc lập đối chiếu (independent cross-check) không dùng helper dùng chung cho 5 trạng thái nhạy cảm (light/dark destructive hover, light/dark close focus, dark dialog title).
+- **Khắc phục Blocker 3 (Độ ổn định test, Explicit Timeout & Dọn dẹp Fixture):**
+  - Di chuyển hoàn toàn file fixture tạm từ `frontend/src` sang thư mục tạm độc lập của hệ thống (`os.tmpdir()` / `mkdtempSync`), liên kết `node_modules` và dọn dẹp bằng khối `try ... finally` trong `beforeAll` / `afterAll`. Tuyệt đối không để lại file rác trong workspace repository.
+  - Thiết lập timeout tường minh 30s (`30000ms`) cho các test browser nặng để bảo đảm không bị timeout dưới tải song song hoặc cold-start của Chromium.
+- **Bảo toàn & Verification:**
+  - Không sửa đổi bất kỳ file production nào trong `frontend/src` (giữ nguyên `main.tsx`, `index.css`, primitives, `AppShell.tsx`, `shell.css`).
+  - Toàn bộ checks đạt chuẩn: `npm run typecheck` exit 0, `npm run lint` exit 0 (0 errors, 3 fast-refresh warnings), `npm run architecture:frontend` exit 0 (24 modules, 27 dependencies cruised), `npm run build` exit 0, `npm run check:fast` exit 0.
+  - Focused test `npm run test:frontend -- frontend/tests/design-system.test.tsx` pass 27/27 trong ~5.4s–7.1s qua 2 lần chạy độc lập liên tiếp.
+  - Full frontend test: 65/65 pass (38 pre-existing + 27 design-system). T004 AppShell test: 17/17 pass.
+  - `npm run check:task` exit 0 (810 Python tests, 65 frontend tests, 40 architecture tests, coverage changed 100.00%, total 92.96%, 0 security findings).
+  - Giữ nguyên duplicate task ID T075/T076 theo quy định; không commit; để sẵn sàng cho Independent Re-Audit #4.
+
+## 02/10/2026 - T075: shadcn/ui foundation & Tailwind CSS v4 integration (Asia/Bangkok)
+
+- **Mục tiêu & Bối cảnh:** Tích hợp canonical frontend design-system foundation (shadcn/ui + Tailwind CSS v4) vào ứng dụng React 19 / Vite 8 hiện có; thiết lập path alias `@/*`, `components.json`, semantic tokens, tiện ích `cn()`, và minimal primitives (Button, Card, Dialog); bảo toàn 100% code và hành vi của T004 (AppShell, shell.css).
+- **Thực thi Source-Driven & Cấu hình (Remediation Round 2):**
+  - Tra cứu tài liệu chính thức: `https://ui.shadcn.com/docs/installation/vite`, `https://ui.shadcn.com/docs/components-json`, `https://ui.shadcn.com/docs/theming`, và registry official shadcn (`https://ui.shadcn.com/r/styles/new-york/*.json`).
+  - Thêm dependencies cần thiết: `clsx`, `tailwind-merge`, `class-variance-authority`, `@radix-ui/react-slot`, `@radix-ui/react-dialog`, `lucide-react` và devDependencies `@tailwindcss/vite`, `tailwindcss` (v4).
+  - Cấu hình path alias `@/*` -> `frontend/src/*` trong `tsconfig.json` (`baseUrl: "."`, `paths: { "@/*": ["frontend/src/*"] }`) và `vite.config.ts` (`resolve.alias: { '@': resolve(process.cwd(), 'frontend/src') }`).
+  - Loại bỏ hoàn toàn workaround Vite transform plugin (`inject-theme-css`) trong `vite.config.ts`.
+  - Bổ sung `import '@/index.css';` trực tiếp vào `frontend/src/main.tsx` theo scope extension được chủ repository phê duyệt (chỉ thêm duy nhất 1 dòng import này).
+  - Cấu hình Tailwind CSS v4 không dùng Preflight để loại bỏ triệt để hồi quy style của T004: sử dụng `@layer theme, base, components, utilities; @import "tailwindcss/theme.css" layer(theme); @import "tailwindcss/utilities.css" layer(utilities);` và `@source "./components";`. Không import `preflight.css` để bảo toàn heading font-weight (700) và paragraph margins của AppShell T004.
+  - Tạo `components.json` chuẩn schema shadcn v4 với style `new-york`, `baseColor: "neutral"`, `cssVariables: true`, `"iconLibrary": "lucide"`, và aliases `@/components`, `@/components/ui`, `@/lib/utils`, `@/lib`, `@/hooks`.
+- **Design system tokens & Primitives & A11y:**
+  - Thiết lập `frontend/src/index.css` sử dụng cú pháp Tailwind CSS v4 layer imports, `@custom-variant dark`, `@theme inline` với các semantic tokens đáp ứng độ tương phản WCAG 2.2 AA.
+  - Điều chỉnh `--destructive: oklch(0.52 0.24 27.325)` trong `:root` để bảo đảm destructive hover với 90% alpha trên nền trắng đạt tỉ lệ tương phản 4.82:1 (>= 4.5:1).
+  - Thêm `focus:opacity-100 focus-visible:opacity-100` cho `DialogPrimitive.Close` để focus ring đạt 100% opacity và tỉ lệ tương phản 3.64:1 (>= 3.0:1).
+  - Thêm class `text-foreground` tường minh cho `DialogContent` và `DialogTitle` để text trong dark Dialog không bị thừa hưởng màu chữ của legacy shell, đạt tỉ lệ tương phản 17.1:1 (>= 4.5:1).
+  - Tạo tiện ích `frontend/src/lib/utils.ts` (`cn()`) dựa trên `clsx` và `tailwind-merge`.
+  - Thêm minimal primitives chính thức tại `frontend/src/components/ui/`: `Button` (với variants, asChild, disabled a11y), `Card` (với Header, Title, Description, Content, Footer), `Dialog` (với Trigger, Content, Header, Footer, Title, Description, Overlay, Close).
+- **Kiểm thử & Bằng chứng thực tế:**
+  - Mở rộng `frontend/tests/design-system.test.tsx` lên 32 tests có bằng chứng thực tế:
+    1. Kiểm tra Playwright Chromium headless thực tế đối với Dialog interaction (mở dialog, xác thực DOM và a11y labels `role="dialog"`, bấm nút Close, bấm phím Escape, phục hồi focus về trigger element).
+    2. Kiểm tra Playwright Chromium thực tế đối với style của T004 AppShell (xác nhận `.screen-view__title` giữ nguyên `font-weight: 700`, và `.feature-unavailable-note` giữ nguyên `margin-top: 14px`).
+    3. Kiểm tra build Vite độc lập trong thư mục tạm có cleanup tự động, xác minh bundle `dist/` tạo ra CSS hợp lệ.
+    4. Kiểm tra import tường minh của `index.css` trong `main.tsx`.
+    5. Kiểm thử toán học 16 điểm tương phản WCAG AA sử dụng mô hình OKLab alpha-blending cho hover states và focus rings.
+  - Toàn bộ checks đạt chuẩn: `npm run typecheck` exit 0, `npm run lint` exit 0, `npm run architecture:frontend` exit 0 (24 modules, 27 dependencies cruised), `npm run build` exit 0 (main, bootstrap, compiled theme CSS), `npm run check:fast` exit 0.
+  - `npm run check:task` exit 0: 810 Python tests, 70 frontend tests (38 T004 + 32 design system), 40 architecture tests, coverage changed 100.00%, total 92.96%, 0 security findings (secrets/code/deps).
+- **Phạm vi bảo toàn:** Không thay đổi `frontend/src/app/AppShell.tsx`, `shell.css`, backend, migrations, hay API contracts. T076 giữ nguyên trạng thái `TODO`. Thay đổi để uncommitted cho re-audit độc lập.
+>>>>>>> feature/task-t075-shadcn-ui-foundation
 
 ## 02/10/2026 - Remediation kiến trúc UI và kế hoạch task shadcn/ui (Asia/Bangkok)
 
