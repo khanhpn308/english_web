@@ -1,3 +1,14 @@
+## 02/10/2026 - T042: Tạo fixture tìm kiếm tổng hợp 100k xác định (Asia/Bangkok)
+
+- Thêm generator, test và README cho fixture T042; dữ liệu hoàn toàn tổng hợp,
+  streaming JSONL, checksum SHA-256 ổn định và ghi artifact theo cơ chế tạm rồi
+  replace nguyên tử.
+- Sinh chính xác 100.000 forms và 100 query tiếng Việt cố định với seed 29,
+  ground truth brute-force độc lập, coverage Unicode/NFC/combining/accent-fold,
+  `đ`/`Đ`, infix, POS và các trường hợp zero/single/multi-match.
+- Ghi rõ profile Windows 11/Python 3.12/SQLite và ranh giới bằng chứng: T042
+  không tuyên bố kết quả hiệu năng; T065 sở hữu timing/p95.
+
 ## 02/10/2026 - T021: Tích hợp adapter source Windows sau xác nhận native PASS (Asia/Bangkok)
 
 - T021 được đánh dấu DONE sau xác nhận của chủ repo rằng bộ kiểm thử Windows native trên NTFS đã PASS, gồm junction/reparse, hardlink, read-only, CRLF, ownership/DACL và privacy. Báo cáo gốc không có trong checkout Linux nên được ghi là owner-attested evidence.
