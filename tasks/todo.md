@@ -66,7 +66,7 @@
 - [ ] [T040](t040-first-run-recovery.md): Native first-run configuration và protected key store
 - [ ] [T054](t054-restore-recovery-drill.md): Staging restore và migration recovery drill
 - [ ] [T041](t041-security-hardening.md): Browser/API/filesystem hardening evidence
-- [ ] [T042](t042-performance-fixture.md): Deterministic100k search benchmark fixture
+- [x] [T042](t042-performance-fixture.md): Deterministic100k search benchmark fixture
 - [ ] [T065](t065-search-performance-evidence.md): Search browser timing trên100k fixture
 - [ ] [T064](t064-ui-performance-harness.md): Local Lighthouse performance harness
 - [ ] [T043](t043-accessibility-evidence.md): WCAG 2.2 AA browser/manual evidence
