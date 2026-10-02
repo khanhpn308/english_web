@@ -1,3 +1,9 @@
+## 02/10/2026 - T076: Làm rõ báo cáo audit và sửa JSON trước khi kết thúc (Asia/Bangkok)
+
+- **Thay đổi:** Schema và prompt Auditor quy định findings chỉ chứa lỗi chưa giải quyết; bằng chứng đạt/kết quả lệnh nằm trong acceptance_criteria[].evidence. Kiểm tra semantic trong vòng gọi agent tối đa ba lượt, lưu/băm JSON bị từ chối và gửi phản hồi để Auditor sửa cùng snapshot, không thêm lượt Worker hay tăng fix_cycle. FAIL thật vẫn vào vòng Fix; không tự xóa finding, đổi verdict hoặc chấp nhận bằng chứng lệnh thất bại.
+- **TDD/phạm vi:** Baseline 171 pass (132.56s); RED 11 fail/3 pass (20.18s); GREEN 14 pass (24.30s). Bốn file code/test cùng guide/card/todo/changelog T076; không sửa ứng dụng/config/provider/dependencies/threshold hay gọi inference thật. 89 artifact và snapshot source T059 giữ nguyên; phục hồi run FAILED lịch sử nằm ngoài task. Áp dụng documentation-and-adrs.
+- **SOURCE FREEZE/kiểm tra:** 185 test orchestrator pass (171.09s); check:task exit0 trên source bất biến, 718 Python/38 frontend/40 architecture tests, changed coverage96.30%, total92.40%, ba scanner0finding. Ruff/formatter/Mypy49file/diff check đạt; chỉ cập nhật bookkeeping ghi evidence sau gate. Promotion yêu cầu khóa tích hợp, local main sạch/không đổi và ff-only; không push.
+
 ## 02/10/2026 - T075: Sửa kiểm tra capability agy trên stderr (Asia/Bangkok)
 
 - **Nguyên nhân:** agy1.2.14 in --help ra stderr, adapter chỉ đọc stdout nên báo thiếu --print trước Worker. Kiểm tra cả hai kênh, từ chối probe lỗi/timeout/quá giới hạn và bỏ yêu cầu --print không dùng trong lệnh stdin headless; các cờ thực sự dùng vẫn bắt buộc.

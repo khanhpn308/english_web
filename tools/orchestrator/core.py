@@ -189,15 +189,29 @@ class WorkerResult(Model):
 class Criterion(Model):
     criterion: Nonempty
     status: Literal["PASS", "FAIL", "BLOCKED"]
-    evidence: Nonempty
+    evidence: Nonempty = Field(
+        description="Observable evidence for this criterion, including successful checks, "
+        "command outcomes and verification limitations. Positive notes belong here."
+    )
 
 
 class Audit(Model):
-    status: Literal["PASS", "FAIL", "BLOCKED"]
-    findings: list[str]
+    status: Literal["PASS", "FAIL", "BLOCKED"] = Field(
+        description="PASS requires every criterion PASS and empty findings, scope_violations "
+        "and required_fixes. FAIL requires actionable defects; BLOCKED means incomplete review."
+    )
+    findings: list[str] = Field(
+        description="Only actionable, unresolved problems requiring remediation. Return [] "
+        "for PASS. Record successful checks and informational notes in "
+        "acceptance_criteria[].evidence, never in findings."
+    )
     acceptance_criteria: list[Criterion]
-    scope_violations: list[str]
-    required_fixes: list[str]
+    scope_violations: list[str] = Field(
+        description="Unresolved scope violations only; return [] when none exist."
+    )
+    required_fixes: list[str] = Field(
+        description="Concrete required remediation for unresolved problems; return [] for PASS."
+    )
 
     def check(self, contract: Contract) -> None:
         criteria = [item.criterion for item in self.acceptance_criteria]

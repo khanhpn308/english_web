@@ -1309,3 +1309,162 @@ def test_agy_legacy_help_failure_retry_preserves_evidence(repository: Path, unsa
             pipeline.start("T100")
         assert pipeline.provider.calls == []
     assert retained == {p.name: p.read_bytes() for p in directory.iterdir() if p.is_file()}
+
+
+class AuditCorrectionAgents(FakeAgents):
+    def __init__(self, mode: str) -> None:
+        super().__init__()
+        self.mode = mode
+        self.audit_attempts = 0
+        self.prompts: list[str] = []
+
+    def run(
+        self,
+        prompt: str,
+        *,
+        cwd: Path,
+        role: Role,
+        timeout: int,
+        output: type[Output],
+        artifacts: Path,
+        name: str,
+        readonly: bool,
+    ) -> Output:
+        result = super().run(
+            prompt,
+            cwd=cwd,
+            role=role,
+            timeout=timeout,
+            output=output,
+            artifacts=artifacts,
+            name=name,
+            readonly=readonly,
+        )
+        if output != Audit:
+            return result
+        self.audit_attempts += 1
+        self.prompts.append(prompt)
+        correction = self.audit_attempts > 1 and not (
+            self.mode == "real_fail" and self.audit_attempts == 3
+        )
+        if correction:
+            rejected = list(artifacts.glob("*-auditor-*.rejected.json"))
+            assert rejected, "Invalid Audit must remain structured evidence before retry"
+            assert "AUDIT REPORT CORRECTION" in prompt
+            assert "Do not remove real defects" in prompt
+            if self.mode == "tamper_rejected":
+                rejected[0].write_text(rejected[0].read_text() + " ")
+        invalid = self.audit_attempts == 1 or self.mode == "persistent"
+        data = result.model_dump()
+        if invalid:
+            data["findings"] = ["Independent tests passed; informational evidence"]
+            if self.mode == "real_fail":
+                data["findings"].append("Actual defect remains")
+            if self.mode == "coverage":
+                data["findings"] = []
+                data["acceptance_criteria"] = []
+            if self.mode == "empty_fail":
+                data.update(status="FAIL", findings=[], required_fixes=[])
+            if self.mode == "criterion_fail":
+                data["findings"] = []
+                data["acceptance_criteria"][0]["status"] = "FAIL"
+            if self.mode == "scope":
+                data["findings"] = []
+                data["scope_violations"] = ["Unexpected feature path"]
+            if self.mode == "required_fix":
+                data["findings"] = []
+                data["required_fixes"] = ["Unresolved defect"]
+            if self.mode == "source_mutation":
+                (cwd / "feature.txt").write_text("Unknown auditor edit")
+            if self.mode == "state_mutation":
+                state = artifacts / "state.json"
+                state.write_text(state.read_text() + " ")
+            if self.mode == "handoff_mutation":
+                contract = artifacts / "00-contract.json"
+                contract.write_text(contract.read_text() + " ")
+        elif self.mode == "real_fail" and self.audit_attempts == 2:
+            data.update(
+                status="FAIL",
+                findings=["Actual defect remains"],
+                required_fixes=["Fix the actual defect"],
+            )
+            data["acceptance_criteria"][0]["status"] = "FAIL"
+        elif self.mode == "correct":
+            data["acceptance_criteria"][0]["evidence"] = (
+                "Independent tests passed; informational evidence"
+            )
+        return output.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    "mode", ["correct", "coverage", "empty_fail", "criterion_fail", "scope", "required_fix"]
+)
+def test_semantic_audit_report_is_corrected_without_worker_repeat(
+    repository: Path, mode: str
+) -> None:
+    agents = AuditCorrectionAgents(mode)
+    pipeline = Pipeline(repository, configuration(integrate=False), agents)
+    state = pipeline.start("T100")
+    assert state.state == State.AUDIT_PASS
+    assert agents.worker_calls == 1 and agents.audit_attempts == 2
+    assert state.fix_cycle == 0
+    directory = pipeline.run_path("T100", state.run_id)
+    rejected = list(directory.glob("*-auditor-*.rejected.json"))
+    assert len(rejected) == 1
+    assert state.artifact_digests[rejected[0].name] == digest(rejected[0].read_bytes())
+    audit = read_json(directory / state.artifacts["audit"])
+    assert isinstance(audit, dict) and audit["status"] == "PASS" and audit["findings"] == []
+    if mode == "correct":
+        assert audit["acceptance_criteria"][0]["evidence"] == (
+            "Independent tests passed; informational evidence"
+        )
+    assert "findings" in agents.prompts[0] and "acceptance_criteria" in agents.prompts[0]
+
+
+@pytest.mark.parametrize(
+    "mode",
+    ["persistent", "source_mutation", "state_mutation", "handoff_mutation", "tamper_rejected"],
+)
+def test_invalid_audit_correction_is_bounded_and_never_promotes(
+    repository: Path, mode: str
+) -> None:
+    agents = AuditCorrectionAgents(mode)
+    pipeline = Pipeline(repository, configuration(), agents)
+    base = Git(repository).sha()
+    state = pipeline.start("T100")
+    assert state.state == State.FAILED
+    assert agents.worker_calls == 1
+    assert agents.audit_attempts == (
+        3 if mode == "persistent" else 2 if mode == "tamper_rejected" else 1
+    )
+    assert state.fix_cycle == 0 and Git(repository).sha() == base
+    assert "IntegrationReview" not in agents.calls
+    directory = pipeline.run_path("T100", state.run_id)
+    if mode == "persistent":
+        rejected = list(directory.glob("*-auditor-*.rejected.json"))
+        assert len(rejected) == 3
+        assert all(state.artifact_digests[p.name] == digest(p.read_bytes()) for p in rejected)
+        assert "Contradictory audit PASS" in (state.last_error or "")
+
+
+def test_corrected_audit_real_failure_still_uses_worker_fix_loop(repository: Path) -> None:
+    agents = AuditCorrectionAgents("real_fail")
+    pipeline = Pipeline(repository, configuration(), agents)
+    state = pipeline.start("T100")
+    assert state.state == State.DONE
+    assert agents.audit_attempts == 3
+    assert agents.worker_calls == 2 and state.fix_cycle == 1
+    assert "AUDIT REPORT CORRECTION" not in agents.prompts[2]
+    first_audit = read_json(pipeline.run_path("T100", state.run_id) / "00-audit.json")
+    assert isinstance(first_audit, dict) and first_audit["status"] == "FAIL"
+    assert first_audit["findings"] == ["Actual defect remains"]
+
+
+def test_failed_execution_cannot_be_hidden_by_audit_json_correction(repository: Path) -> None:
+    agents = FakeAgents(failures=1, lie=True)
+    state = Pipeline(repository, configuration(), agents).start("T100")
+    assert state.state == State.FAILED
+    assert agents.worker_calls == 1
+    assert agents.calls.count("Audit") == 3
+    assert "contradicts failed executable verification" in (state.last_error or "")
+    assert "IntegrationReview" not in agents.calls

@@ -85,6 +85,20 @@ CONTRACT TEMPLATE JSON:
 """
 
 
+AUDIT_RULES = """
+AUDITOR OUTPUT CONTRACT:
+findings contains only actionable unresolved problems, never successful checks or positive notes.
+Put successful verification, named command outcomes and review limitations in
+acceptance_criteria[].evidence. Use each original criterion exactly once and verbatim.
+PASS requires every criterion PASS and findings=[], scope_violations=[], required_fixes=[].
+FAIL requires actionable findings or required_fixes. Preserve actual unresolved defects;
+do not remove them merely to make a PASS report valid. Failed executable evidence cannot be PASS.
+Inspect provided Python verification evidence for this source alongside independent review.
+Distinguish a read-only sandbox's cache/temp limitation from a source defect, and record it
+accurately in evidence. Never claim an independent command passed when it did not execute.
+"""
+
+
 def task_context(card: TaskCard, state: RunState) -> str:
     return (
         json.dumps(card.model_dump(mode="json"))
@@ -96,6 +110,7 @@ def agent_prompt(role: str, context: str, output: type[BaseModel]) -> str:
     return (
         ROLE_RULES
         + f"\nROLE: {role}\n"
+        + (AUDIT_RULES if role == "auditor" else "")
         + context
         + "\nOUTPUT SCHEMA:\n"
         + json.dumps(output.model_json_schema())
@@ -636,7 +651,7 @@ class Pipeline:
             if p.is_file()
         }
         for attempt in range(3):
-            rejected_plan: Plan | None = None
+            rejected_result: Plan | Audit | None = None
             try:
                 result = self.provider.run(
                     prompt,
@@ -649,11 +664,27 @@ class Pipeline:
                     readonly=role_name != "worker",
                 )
                 if isinstance(result, Plan):
-                    rejected_plan = result
+                    rejected_result = result
                     card = TaskCard.model_validate(
                         read_json(directory / state.artifacts["task_card"])
                     )
                     validate_contract(result.contract, card, state)
+                elif isinstance(result, Audit):
+                    rejected_result = result
+                    result.check(self.contract(directory, state))
+                    checks = read_json(directory / state.artifacts["audit_checks"])
+                    if not isinstance(checks, dict) or not isinstance(checks.get("results"), list):
+                        raise OrchestratorError("Incomplete audit verification evidence")
+                    if result.status == "PASS" and any(
+                        not isinstance(check, dict)
+                        or check.get("exit_code") != 0
+                        or check.get("timed_out") is not False
+                        or check.get("oversized") is not False
+                        for check in checks["results"]
+                    ):
+                        raise OrchestratorError(
+                            "Audit PASS contradicts failed executable verification"
+                        )
                 break
             except (OrchestratorError, ValidationError) as error:
                 unchanged = (
@@ -665,14 +696,24 @@ class Pipeline:
                     and git.snapshot(state.base_sha) == snapshot
                     and git.branch() in {state.worktree_branch, state.integration_branch}
                 )
-                retryable = isinstance(error, ValidationError) or str(error).startswith(
-                    (
-                        "Agent process failed",
-                        "Agent returned malformed",
-                        "Contract differs from repository-owned task constraints",
-                        "Invalid contract path:",
-                        "Unsafe or non-exact repository path",
-                        "Conflicting allowed and forbidden paths",
+                audit_invalid = isinstance(rejected_result, Audit) and str(error) in {
+                    "Contradictory audit PASS",
+                    "Audit must cover every criterion exactly once",
+                    "Audit FAIL needs actionable findings",
+                    "Audit PASS contradicts failed executable verification",
+                }
+                retryable = (
+                    audit_invalid
+                    or isinstance(error, ValidationError)
+                    or str(error).startswith(
+                        (
+                            "Agent process failed",
+                            "Agent returned malformed",
+                            "Contract differs from repository-owned task constraints",
+                            "Invalid contract path:",
+                            "Unsafe or non-exact repository path",
+                            "Conflicting allowed and forbidden paths",
+                        )
                     )
                 )
                 if unchanged:
@@ -680,24 +721,38 @@ class Pipeline:
                     if log_path.is_file() and not log_path.is_symlink():
                         state.artifact_digests[log_path.name] = digest(log_path.read_bytes())
                         protected[log_path] = state.artifact_digests[log_path.name]
-                    if rejected_plan is not None:
+                    if rejected_result is not None:
                         rejected_path = directory / f"{name}.rejected.json"
-                        atomic_json(rejected_path, rejected_plan.model_dump(mode="json"))
+                        atomic_json(rejected_path, rejected_result.model_dump(mode="json"))
                         state.artifact_digests[rejected_path.name] = digest(
                             rejected_path.read_bytes()
                         )
                         protected[rejected_path] = state.artifact_digests[rejected_path.name]
-                        if attempt == 2:
+                        if isinstance(rejected_result, Audit):
+                            state.artifacts["rejected_audit"] = rejected_path.name
+                        elif attempt == 2:
                             state.artifacts["plan"] = rejected_path.name
                     self.save(directory, state)
                     saved_state = digest((directory / "state.json").read_bytes())
                 if not unchanged or not retryable or attempt == 2:
                     raise
                 print(f"WARNING {state.task_id}: retrying {role_name}, attempt {attempt + 2}/3")
-                prompt += (
-                    "\nPrevious attempt failed validation/execution. Keep the pinned template "
-                )
-                prompt += "and schema exactly; correct the response and return valid JSON.\n"
+                if audit_invalid and rejected_result is not None:
+                    prompt += (
+                        "\nAUDIT REPORT CORRECTION\n"
+                        + f"Deterministic validation rejected the previous report: {error}.\n"
+                        + "Do not remove real defects or weaken criteria to obtain PASS. "
+                        "Move informational positives into acceptance_criteria[].evidence; "
+                        "retain actual issues and choose FAIL/BLOCKED when appropriate. "
+                        "Recheck the same source and executable evidence. "
+                        "Return a complete corrected Audit JSON with the same schema.\n"
+                        + json.dumps(rejected_result.model_dump(mode="json"))
+                    )
+                else:
+                    prompt += (
+                        "\nPrevious attempt failed validation/execution. Keep the pinned template "
+                    )
+                    prompt += "and schema exactly; correct the response and return valid JSON.\n"
                 name = f"{state.fix_cycle:02d}-{role_name}-{uuid4().hex[:8]}"
                 retry_prompt = directory / f"{name}.prompt.md"
                 retry_prompt.write_text(prompt, encoding="utf-8")

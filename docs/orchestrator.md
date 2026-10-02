@@ -27,6 +27,7 @@ Thay `T018` bằng task cần chạy; thay `RUN_ID` bằng `run_id` trong kết 
 - `--no-integrate` vẫn tạo worktree task riêng khi bắt đầu run mới; dry-run không tạo worktree hay gọi model.
 - Mặc định Worker dùng **agy / Gemini**. Task GPT cần cấu hình riêng chọn `codex`, model ID thực và reasoning theo Prompt Engineer; bảng task-plan chưa tự đổi model khi chạy.
 - `run` tự tiếp tục run ổn định hoặc tạo lần thử mới nếu bằng chứng cho phép. `retry` giữ lại run cũ; lỗi sau khi Worker đã sửa source cần kiểm tra worktree/log, không bảo đảm retry được.
+- Auditor trả JSON sai quy ước được yêu cầu sửa trong tối đa ba lượt của cùng lần gọi; không chạy lại Worker chỉ để sửa báo cáo.
 - Chạy thật cần checkout chính sạch. `--integrate` chỉ đưa vào main sau audit và kiểm tra đạt; công cụ không push.
 - Scanner đã cấu hình trong `~/.bashrc` được terminal Bash tương tác mới tự nạp. Sau khi vừa sửa `.bashrc`, chạy `source "$HOME/.bashrc"` một lần trong terminal hiện tại; nhập lệnh không kèm dấu backtick.
 
@@ -340,6 +341,26 @@ báo BLOCKED được đưa vào vòng Fix hiện có (mặc định tối đa b
 phạm vi, test và audit vẫn phải đạt trước tích hợp. Lỗi thật hết số lần thử trả
 FAILED cùng báo cáo cuối. Số lần gọi agent có thể tăng; giới hạn áp dụng cho từng
 lần gọi, tách khỏi số vòng sửa code. Không retry application AI.
+
+### Quy ước báo cáo Auditor và sửa JSON
+
+`findings` chỉ chứa lỗi còn tồn tại cần xử lý. Bằng chứng đạt, kết quả lệnh và giới
+hạn kiểm tra được ghi vào `acceptance_criteria[].evidence`. Mỗi tiêu chí ban đầu
+phải xuất hiện đúng một lần, nguyên văn. Báo cáo PASS cần mọi tiêu chí PASS và
+`findings`, `scope_violations`, `required_fixes` đều là danh sách rỗng.
+
+Nếu báo cáo mâu thuẫn (ví dụ PASS nhưng ghi kết quả test đạt vào `findings`),
+Python lưu JSON bị từ chối thành `NN-auditor-ID.rejected.json`, băm artifact và
+gửi lại lỗi kiểm tra cùng báo cáo để Auditor sửa. Tổng cộng tối đa ba lượt trả
+báo cáo trong một lần gọi, dùng cùng source/contract/bằng chứng; không tăng
+`fix_cycle` hay gọi thêm Worker. Báo cáo FAIL hợp lệ vẫn vào vòng sửa code thông
+thường. Python không tự xóa findings hoặc đổi trạng thái thành PASS.
+
+Lệnh kiểm tra thất bại không thể được báo PASS. Source, lịch sử Git, state,
+handoff hoặc báo cáo đã lưu bị sửa sẽ khiến quá trình dừng; JSON vẫn không hợp
+lệ sau ba lượt thì run kết thúc FAILED và giữ bằng chứng. Thay đổi này áp dụng
+khi gọi Auditor, không tự phục hồi hay viết lại run lịch sử đã FAILED sau khi
+Worker triển khai (như lỗi `Contradictory audit PASS` cũ).
 
 - `run`: bắt đầu task mới; nếu có run ổn định thì tự tiếp tục. Nếu lần cũ thất bại
   trước triển khai đủ bằng chứng, tự tạo run/worktree mới để thử lại.

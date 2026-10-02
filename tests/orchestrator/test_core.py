@@ -943,3 +943,21 @@ def test_codex_missing_full_access_capability_stops_before_dispatch(
             readonly=False,
         )
     assert not list(tmp_path.glob("*.log.json"))
+
+
+def test_audit_schema_explains_actionable_findings_and_positive_evidence() -> None:
+    schema = Audit.model_json_schema()
+    findings = schema["properties"]["findings"]["description"]
+    evidence = schema["$defs"]["Criterion"]["properties"]["evidence"]["description"]
+    status = schema["properties"]["status"]["description"]
+    assert "actionable" in findings and "unresolved" in findings
+    assert "acceptance_criteria" in findings and "evidence" in findings
+    assert "successful" in evidence
+    assert "PASS" in status and "empty" in status
+    assert set(schema["required"]) == {
+        "status",
+        "findings",
+        "acceptance_criteria",
+        "scope_violations",
+        "required_fixes",
+    }
