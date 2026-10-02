@@ -1,3 +1,148 @@
+## 02/10/2026 - T021: Tích hợp adapter source Windows sau xác nhận native PASS (Asia/Bangkok)
+
+- T021 được đánh dấu DONE sau xác nhận của chủ repo rằng bộ kiểm thử Windows native trên NTFS đã PASS, gồm junction/reparse, hardlink, read-only, CRLF, ownership/DACL và privacy. Báo cáo gốc không có trong checkout Linux nên được ghi là owner-attested evidence.
+- Candidate giữ nguyên source/test từ commit `ef93413`; portable 78 test source + 24 test dependency, Ruff và Mypy đạt. Linux native suite vẫn fail-closed do không có `win32`; không sửa test để che điều kiện môi trường.
+- T021 được tích hợp local fast-forward vào main; không push. T022 chỉ tiếp tục từ snapshot đã tích hợp sau verification phù hợp.
+
+## 02/10/2026 - T021: Chuẩn bị tích hợp sau báo cáo PASS của chủ repo (Asia/Bangkok)
+
+- Candidate riêng từ main9135c03 giữ nguyên byte ba file source/test của commit ef93413, bảo toàn task list và changelog cộng dồn. 102 focused tests đạt; Ruff/format đạt.
+- Chủ repo thông báo Windows PASS; chưa tìm được file report/log để đối chiếu snapshot. T021 chưa đánh dấu DONE, chưa promote main. Worktree/run lịch sử và cấu hình/threshold không thay đổi.
+
+## 02/10/2026 - T021: Đính chính và hoàn thiện xác thực dọn dẹp file tạm, kiểm tra DACL Win32 và fixture Windows (Asia/Bangkok)
+
+- **Đính chính & Hiệu chỉnh lỗi theo kết quả audit:**
+  - **Đính chính về an toàn dọn dẹp file tạm (`StagedWrite.cleanup` & `prepare_staged_write`):**
+    - Đính chính tuyên bố trước đây: Tuyên bố trước đây về việc dọn dẹp an toàn tuyệt đối là chưa chính xác. Trước đây `StagedWrite.cleanup()` chỉ xác thực thư mục cha trực tiếp của file tạm (`self._temp_path.parent`). Nếu thư mục tổ tiên cấp cao bị thay thế bằng liên kết tượng trưng (symlink/junction) trong khi thư mục cha trực tiếp và file tạm vẫn giữ nguyên inode, hàm dọn dẹp có thể unlink file bên ngoài allowlist. Đồng thời `prepare_staged_write()` trước đây unlink vô điều kiện `temp_path` khi gặp lỗi staging mà chưa có bằng chứng sở hữu đã xác thực qua descriptor.
+    - Khắc phục: Đã thống nhất một đường dẫn xác thực dọn dẹp dùng chung `_safe_cleanup_temp` cho cả `StagedWrite.cleanup()` và dọn dẹp khi hủy `prepare_staged_write()`. Duyệt kiểm tra nghiêm ngặt từ root đến temp: xác thực thư mục root, toàn bộ danh sách thư mục trung gian theo thứ tự, thư mục cha trực tiếp, và file tạm khớp đúng danh tính descriptor ban đầu (`os.fstat`), định dạng regular file, không có reparse/link, đúng 1 hardlink (`st_nlink == 1`). Danh tính descriptor được ghi nhận độc quyền ngay sau `tempfile.mkstemp` thành công, trước khi `os.chmod`, `os.fdopen` hay các thao tác ghi có thể thất bại. Nếu ranh giới hoặc quyền sở hữu bị thay thế, giữ nguyên file tạm và bảo toàn ngoại lệ gốc.
+    - Củng cố kiểm thử dọn dẹp: Bổ sung assertion kiểm tra bảo toàn chính liên kết tượng trưng bị thay thế (`assert real_temp.is_symlink()`, `assert real_temp.exists()`) trong `test_cleanup_safe_after_staged_file_substitution` bên cạnh việc kiểm tra bảo toàn file đích ngoài.
+  - **Đính chính và mở rộng kiểm tra DACL Win32 (`_inspect_windows_security_info` & `_check_windows_ownership`):**
+    - Đính chính tuyên bố trước đây: `_check_windows_ownership` chỉ truy vấn `OWNER_SECURITY_INFORMATION` và không cung cấp bằng chứng DACL.
+    - Khắc phục: Đã bổ sung `_inspect_windows_security_info` truy vấn cả `OWNER_SECURITY_INFORMATION` và `DACL_SECURITY_INFORMATION` thông qua `advapi32.GetNamedSecurityInfoW`, kiểm tra tính hợp lệ của DACL qua `advapi32.IsValidAcl`, đối chiếu ownership qua `advapi32.EqualSid`, giải phóng tài nguyên tin cậy (`kernel32.CloseHandle`, `kernel32.LocalFree`) và chỉ ghi nhận bằng chứng dạng boolean/categorical. Bổ sung bộ test deterministic failure paths cho các trường hợp API không khả dụng, lỗi truy vấn token, lỗi truy vấn thông tin bảo mật, ownership mismatch (`EqualSid == 0`), và DACL không hợp lệ, xác nhận hành vi fail-closed và giải phóng tài nguyên tin cậy.
+  - **Chuẩn hóa fixture byte-exact và xử lý xuống dòng Windows:**
+    - Cấu hình autouse fixture `_disable_newline_translation` trên cả hai file kiểm thử (`test_source_files.py` và `test_source_paths.py`), đảm bảo `Path.write_text` không bị platform newline translation (CRLF trên Windows) làm sai lệch hash.
+    - Bổ sung test case synthetic CRLF trên cả hai bộ test chứng minh dữ liệu đĩa CRLF khớp chính xác thành công và hash LF cũ bị từ chối fail-closed với `REVISION_CONFLICT`.
+  - **Vệ sinh thông điệp chẩn đoán & bảo mật thông tin (Privacy):**
+    - Loại bỏ việc chèn stderr/stdout của tiến trình con vào `pytest.fail`, thay bằng thông điệp chẩn đoán tĩnh đã được vệ sinh.
+    - Bổ sung kiểm tra privacy sentinels qua `str`, `repr`, `args` và `caplog.text` trong cả hai bộ test, đảm bảo không làm rò rỉ đường dẫn Windows, nội dung Markdown hay SID trong bất kỳ kênh nào.
+
+- **Phân định bằng chứng lịch sử và hiện tại:**
+  - *Bằng chứng lịch sử (chu kỳ 1 & 2):* 70 passed (chu kỳ 1) / 78 passed (chu kỳ 2) portable tests; 9 Windows-native tests fail-closed; một số lỗi về DACL và thay thế tổ tiên chưa được kiểm chứng đầy đủ.
+  - *Bằng chứng hiện tại (chu kỳ 3):*
+    - `python -m pytest backend/tests/test_markdown_roundtrip.py -q`: 24 passed in 0.53s (T020 dependency verified).
+    - `python -m pytest backend/tests/test_source_files.py -q`: 78 passed in 1.19s, line coverage trên `backend/app/adapters/source_files.py` đạt 92%, changed-code coverage đạt 93.63% (vượt sàn 80.00%).
+    - `python -m pytest backend/tests/windows/test_source_paths.py -q`: 11 failed (báo lỗi fail-closed trung thực `_require_native_windows()` do thiếu môi trường Windows OS native; không dùng early return/skip/xfail giả pass; PENDING genuine Windows OS environment).
+    - `python -m mypy backend`: 0 errors (46 source files).
+    - `python -m ruff check .`: 0 errors.
+    - `npm run format:check`: exit 0 (178 files already formatted).
+    - `npm run check:fast`: exit 0 (format, lint, typecheck, floor, secrets clean).
+    - `npm run architecture:check`: exit 0 (7 contracts kept, 40 tests passed in 22.02s).
+    - `npm run coverage:check`: exit 0 khi chạy toàn bộ test suite (changed coverage 93.63% >= 80.00%, total coverage 91.75% >= 86.70%).
+    - `npm run security:secrets`: exit 0 (0 finding).
+    - `npm run security:code`: exit 0 (0 finding).
+    - `npm run security:deps`: exit 0 (0 finding).
+    - `npm run check:task`: dừng tại `python -m pytest` do 11 test Windows native fail-closed trung thực trên host Linux (782 passed, 11 failed); toàn bộ các kiểm tra hạ nguồn độc lập đều đạt PASS.
+
+- **Trạng thái & Rào cản còn lại (BLOCKED/PENDING):**
+  - Task T021 giữ trạng thái `BLOCKED` (tiêu chí Windows acceptance giữ nguyên `[ ]`) cho đến khi có bằng chứng thực thi đầy đủ trên hệ điều hành Windows native (NTFS junction, reparse point, hardlink, DACL). Không mở khóa T022 trên bằng chứng portable đơn thuần.
+  - Files đã sửa: `backend/app/adapters/source_files.py`, `backend/tests/test_source_files.py`, `backend/tests/windows/test_source_paths.py`, `docs/changelogs.md`, `tasks/t021-safe-source-files.md`, `tasks/todo.md`.
+  - Files chủ ý không sửa: `CONSTRAINTS.md`, `package.json`, `pyproject.toml`, `docs/vocabularies/*`, models/migrations ngoài phạm vi.
+  - Rủi ro tồn dư: Same-user filesystem race giữa kiểm tra cuối và `os.replace` là rủi ro tồn dư đã được chấp nhận trong `docs/security-review.md` (T-07) và ADR-0005.
+
+## 02/10/2026 - T021: Hiệu chỉnh xác thực dọn dẹp file tạm, kiểm tra DACL và fixture Windows (Asia/Bangkok) [Lịch sử vòng sửa 2]
+
+- **Đính chính & Hiệu chỉnh lỗi theo kết quả audit:**
+  - **Khắc phục lỗi dọn dẹp khi thay thế tổ tiên cấp cao (`StagedWrite.cleanup`):** Trước đây `StagedWrite.cleanup()` chỉ xác thực thư mục cha trực tiếp của file tạm (`self._temp_path.parent`). Nếu thư mục tổ tiên cấp cao bị thay thế bằng liên kết tượng trưng (symlink/junction) trong khi thư mục cha trực tiếp và file tạm vẫn giữ nguyên inode, hàm dọn dẹp có thể unlink file bên ngoài allowlist. Đã thay thế bằng đường dẫn xác thực dọn dẹp dùng chung `_safe_cleanup_temp`, duyệt kiểm tra từ root đến temp: xác thực thư mục root, toàn bộ danh sách thư mục trung gian theo thứ tự, thư mục cha trực tiếp, và file tạm khớp đúng danh tính descriptor ban đầu, định dạng regular file, không có reparse/link, đúng 1 hardlink (`st_nlink == 1`).
+  - **Khắc phục dọn dẹp khi chuẩn bị bị hủy (`prepare_staged_write`):** Trước đây khi gặp lỗi trong quá trình ghi staged, hàm đã unlink file tạm mà chưa có bằng chứng sở hữu đã xác thực qua descriptor (do chỉ lưu danh tính sau khi flush/fsync thành công). Đã hiệu chỉnh để ghi nhận danh tính descriptor (`os.fstat`) ngay lập tức sau khi `tempfile.mkstemp` thành công, trước khi `os.chmod`, `os.fdopen` hay các thao tác ghi có thể thất bại; đồng thời gọi `_safe_cleanup_temp` để chỉ xóa file tạm khi ranh giới và danh tính descriptor đã được xác thực an toàn. Nếu ranh giới hoặc quyền sở hữu bị thay thế, giữ nguyên file tạm và bảo toàn ngoại lệ gốc.
+  - **Hiệu chỉnh fixture Windows và kiểm tra byte-exact:** Các fixture Windows trước đây ghi file văn bản với cơ chế chuyển đổi xuống dòng mặc định của nền tảng (CRLF trên Windows) nhưng lại hash chuỗi LF ban đầu, dẫn đến `REVISION_CONFLICT` ngoài dự kiến. Đã chuẩn hóa ghi UTF-8 byte tường minh (`write_bytes`), hash chính xác byte trên đĩa và bổ sung test case synthetic CRLF chứng minh byte thực tế khớp thành công và hash LF cũ bị từ chối fail-closed không thay thế.
+  - **Bổ sung xác minh DACL Win32:** Hiệu chỉnh `test_windows_ownership_and_dacl_verification` để truy vấn cả `OWNER_SECURITY_INFORMATION` và `DACL_SECURITY_INFORMATION` thông qua `advapi32.GetNamedSecurityInfoW`, kiểm tra tính hợp lệ của DACL qua `advapi32.IsValidAcl`, đối chiếu user SID của process token qua `EqualSid`, giải phóng token handle và security descriptor đúng cách và chỉ ghi nhận bằng chứng dạng boolean/categorical (không làm lộ raw SID hay tài khoản). Đồng thời bổ sung các test kiểm tra fail-closed cho `_check_windows_ownership` trên các đường dẫn lỗi mô phỏng.
+  - **Vệ sinh thông điệp lỗi tạo junction:** Thay thế việc chèn trực tiếp `proc.stderr` vào `pytest.fail` bằng thông điệp chẩn đoán tĩnh đã được vệ sinh, loại bỏ hoàn toàn nguy cơ rò rỉ đường dẫn fixture trong lỗi.
+
+- **Kết quả kiểm tra hiện tại:**
+  - `python -m pytest backend/tests/test_markdown_roundtrip.py -q`: 24 passed (dependency T020).
+  - `python -m pytest backend/tests/test_source_files.py -q`: 78 passed in 1.23s, line coverage trên `backend/app/adapters/source_files.py` đạt 85% (changed coverage đạt 85.83%, vượt ngưỡng 80.00%).
+  - `python -m pytest backend/tests/windows/test_source_paths.py -q`: 9 failed (báo lỗi trung thực fail-closed `_require_native_windows()` do chạy trên Linux, PENDING môi trường Windows native).
+  - `python -m mypy backend`: 0 errors (46 source files).
+  - `python -m ruff check .`: 0 errors.
+  - `npm run format:check`: exit 0 (178 files already formatted).
+  - `npm run check:fast`: exit 0.
+  - `npm run architecture:check`: exit 0 (7 contracts kept, 40 tests passed).
+  - `npm run coverage:check`: exit 0 (changed coverage 85.83% >= 80.00%, total coverage 91.75% >= 86.70%).
+  - `npm run security:secrets`: exit 0 (0 finding).
+  - `npm run security:code`: exit 0 (0 finding).
+  - `npm run security:deps`: exit 0 (0 finding).
+  - `npm run check:task`: dừng tại `python -m pytest` do 9 test Windows native fail-closed trung thực trên host Linux (782 passed, 9 failed).
+
+- **Trạng thái & Rủi ro tồn dư (BLOCKED/PENDING):**
+  - Task T021 giữ trạng thái `BLOCKED` (tiêu chí Windows acceptance giữ nguyên `[ ]`) cho đến khi có bằng chứng thực thi đầy đủ trên hệ điều hành Windows native (NTFS junction, reparse point, hardlink, DACL).
+  - Files đã sửa: `backend/app/adapters/source_files.py`, `backend/tests/test_source_files.py`, `backend/tests/windows/test_source_paths.py`, `docs/changelogs.md`, `tasks/t021-safe-source-files.md`, `tasks/todo.md`.
+  - Files chủ ý không sửa: `CONSTRAINTS.md`, `package.json`, `pyproject.toml`, `docs/vocabularies/*`, models/migrations ngoài phạm vi.
+  - Rủi ro tồn dư: Same-user filesystem race giữa kiểm tra cuối và `os.replace` là rủi ro tồn dư đã được chấp nhận trong `docs/security-review.md` (T-07) và ADR-0005.
+
+## 02/10/2026 - T021: Khắc phục lỗi kiểm tra bảo mật và xác minh theo kết quả audit (Asia/Bangkok) [Lịch sử vòng sửa 1]
+
+- **Bối cảnh & Quyết định sửa đổi (`backend/app/adapters/source_files.py`):**
+  - **Tái kiểm tra toàn diện ranh giới đích tại commit:** Bổ sung bước re-verify toàn bộ các thư mục trung gian từ root đến target; đối chiếu danh tính filesystem (`st_dev`, `st_ino`), chặn symlink, junction, reparse point, thay đổi inode thư mục, quyền truy cập (`os.W_OK | os.X_OK`) và quyền sở hữu Windows. Đảm bảo tấn công thay thế thư mục tổ tiên sau `prepare` (kể cả khi giữ nguyên target inode ngoài root) bị từ chối triệt để với `SECURITY_VIOLATION`, không bao giờ gọi thay thế và giữ nguyên file ngoài.
+  - **Xác thực file tạm trước khi thay thế:** Ghi nhận danh tính file descriptor (`st_dev`, `st_ino`) của file tạm độc quyền qua open descriptor (`os.fstat`) ngay khi tạo; tại `commit` kiểm tra khớp đúng danh tính inode ban đầu, định dạng regular file, không có reparse/symlink, đúng 1 hardlink (`st_nlink == 1`), kích thước giới hạn và so khớp byte/hash thực tế với bản ghi đã chuẩn bị. Ngăn chặn triệt để sửa đổi nội dung cùng kích thước, hoán đổi inode/file, thêm hardlink hay link giả mạo.
+  - **Dọn dẹp file tạm an toàn:** `cleanup()` chỉ xóa file tạm do chính adapter sở hữu khi nằm trong đúng ranh giới thư mục đích hợp lệ và khớp danh tính descriptor; từ chối unlink qua thư mục hoặc file bị thay thế/symlink, không làm lộ hoặc che giấu ngoại lệ gốc. Việc giữ lại file tạm không thể truy cập an toàn được ghi nhận là giới hạn dọn dẹp chủ động thay vì xóa qua đường dẫn không an toàn.
+  - **Tái kiểm tra phân quyền source:** Trước khi thay thế, tải lại bản ghi allowlist hiện tại từ adapter, yêu cầu trạng thái `VALID`, so khớp metadata (`relative_path`, `note_date`, `revision`, `etag`, `content_hash`). Mọi thay đổi về đường dẫn, trạng thái (`INVALID`, `MISSING`), metadata hoặc việc xóa source đều fail-closed và bảo tồn cả hai vị trí đích.
+  - **Đóng lỗ hổng chẩn đoán và quyền riêng tư:** Đưa `tempfile.mkstemp` vào khối bắt ngoại lệ đã được vệ sinh; chuyển đổi lỗi tạo, ghi, flush, fsync và replace thành các exception có kiểu rõ ràng với thông điệp tĩnh, không để lộ đường dẫn OS hay nội dung thô. Đóng descriptor an toàn và dọn dẹp file tạm khi lỗi xảy ra trước `fdopen`. Bổ sung hàm kiểm tra `_is_valid_source_id` và `_sanitize_source_id`: chỉ cho phép định danh mờ có giới hạn (alphanumeric, `_`, `-`, tối đa 64 ký tự) xuất hiện trong diagnostics; các giá trị không hợp lệ (path-like, newlines, control chars, oversized) bị loại bỏ hoàn toàn (`source_id=None`) trong `SourceFileError`, `str`, `repr`, `args` và traceback. Loại bỏ việc chèn metadata chưa kiểm tra (như `status`) vào thông điệp lỗi.
+  - **64-bit ctypes Win32:** Khai báo tường minh `argtypes` và `restype` cho `advapi32` và `kernel32` (`OpenProcessToken`, `GetTokenInformation`, `GetNamedSecurityInfoW`, `EqualSid`, `LocalFree`, `CloseHandle`, `GetCurrentProcess`), đảm bảo an toàn handle trên Windows 64-bit và fail-closed khi API không khả dụng.
+
+- **Kiểm thử (`backend/tests/test_source_files.py` & `backend/tests/windows/test_source_paths.py`):**
+  - **TDD RED phase:** Bổ sung 21 regression test mới trong `test_source_files.py`; xác nhận 12 test thất bại đúng các failure mode được audit (thay thế ancestor, đổi danh tính thư mục, sửa nội dung file tạm cùng kích thước, hoán đổi inode, thêm hardlink, hủy source hoặc đổi status/revision/destination tại commit, mkstemp unhandled errors, rò rỉ source_id sentinels).
+  - **TDD GREEN phase:** Cập nhật adapter đưa toàn bộ 70 test portable trong `test_source_files.py` đạt kết quả PASS (100%); line coverage trên `backend/app/adapters/source_files.py` đạt 84.53% (vượt ngưỡng 80.00% theo CONSTRAINTS.md).
+  - **Bộ kiểm thử Windows truthful failure (`backend/tests/windows/test_source_paths.py`):** Loại bỏ hoàn toàn các lệnh early return giả lập PASS trên Linux; thay bằng kiểm tra bắt buộc `_require_native_windows()`, báo lỗi rõ ràng `Native Windows runtime unavailable: platform is linux (PENDING genuine Windows environment)` (9 FAILED trên Linux). Bổ sung test thay thế ancestor trên Windows và kiểm tra quyền sở hữu/DACL advapi32 trả về bằng chứng dạng boolean/categorical, không lộ SID hay thông tin tài khoản thô.
+
+- **Kết quả xác minh độc lập:**
+  - `python -m pytest backend/tests/test_markdown_roundtrip.py -q`: 24 passed (dependency T020 verified).
+  - `python -m pytest backend/tests/test_source_files.py -q`: 70 passed in 1.23s, coverage 84.53%.
+  - `python -m pytest backend/tests/windows/test_source_paths.py -q`: 9 failed (báo lỗi trung thực do thiếu môi trường Windows native).
+  - `python -m mypy backend`: 0 errors (46 source files).
+  - `python -m ruff check .`: 0 errors.
+  - `npm run check:fast`: exit 0 (format, lint, typecheck, floor, secrets clean).
+  - `npm run architecture:check`: exit 0 (7 kept, 40 gate tests passed).
+  - `npm run coverage:check`: exit 0 (changed coverage 84.53%, total coverage 91.67%).
+  - `npm run security:secrets`: exit 0 (0 finding).
+  - `npm run security:code`: exit 0 (0 finding).
+  - `npm run security:deps`: exit 0 (0 finding).
+  - `npm run check:task`: dừng tại `python -m pytest` do 9 test Windows native fail-closed trung thực trên host Linux (774 passed, 9 failed).
+
+- **Trạng thái & Rủi ro tồn dư (BLOCKED/PENDING):**
+  - Task T021 giữ trạng thái `BLOCKED` (hoặc `TODO`) và tiêu chí Windows acceptance được giữ nguyên chưa check (`[ ]`) cho đến khi có bằng chứng thực thi đầy đủ trên hệ điều hành Windows native (NTFS junction, reparse point, hardlink, ACL/DACL và token verification).
+  - Rủi ro tồn dư: race condition cùng user trên filesystem giữa lần revalidation cuối và `os.replace` là rủi ro tồn dư đã được chấp nhận và ghi nhận trong `docs/security-review.md` (T-07) và ADR-0005.
+  - Files đã sửa: `backend/app/adapters/source_files.py`, `backend/tests/test_source_files.py`, `backend/tests/windows/test_source_paths.py`, `docs/changelogs.md`, `tasks/t021-safe-source-files.md`, `tasks/todo.md`.
+  - Files chủ ý không sửa: `CONSTRAINTS.md`, `package.json`, `pyproject.toml`, `docs/vocabularies/*`, các models/migrations ngoài phạm vi.
+  - Môi trường xác minh tiếp theo cần thiết: Máy trạm Windows 11 native (NTFS filesystem, Win32 APIs).
+
+## 02/10/2026 - T021: Triển khai allowlisted source file adapter ban đầu (Asia/Bangkok) [Lịch sử - Đã được cập nhật sửa đổi bên trên]
+
+- **Triển khai adapter (`backend/app/adapters/source_files.py`):**
+  - Xử lý mutation qua opaque `source_id`, tra cứu metadata allowlisted, từ chối client-supplied path.
+  - Kiểm tra tính hợp lệ của path và root directory: chặn path traversal (`..`), absolute/rooted path, Windows drive syntax, alternate data streams (`:`), UNC/device namespace (`//`, `\\`, `\\?\`), reserved device names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`), trailing dots và trailing spaces.
+  - Kiểm tra và re-verify danh tính thư mục gốc (`st_dev`, `st_ino`), chặn root depth <= 1 (drive root), phát hiện symlink, junction và reparse point.
+  - Kiểm tra target file: bắt buộc regular file, chặn hardlinks (`st_nlink > 1`), phát hiện read-only (`FILE_ATTRIBUTE_READONLY`, access denial).
+  - Xác thực nội dung: giới hạn tối đa 8 MiB (`MAX_SOURCE_SIZE_BYTES`), giải mã UTF-8 nghiêm ngặt, kiểm tra cú pháp Markdown hiện tại và mới qua `parse_markdown`.
+  - Pre-replacement validation và hash precondition: so khớp SHA-256 hash với `expected_content_hash`, phát hiện sửa đổi đồng thời / stale revision và trả về `REVISION_CONFLICT`.
+  - Quy trình ghi bền vững: ghi file tạm độc quyền trong cùng thư mục đích (`.{name}.tmp_*.tmp`), phân quyền an toàn (0600 trên POSIX), `flush` và `fsync`, kiểm tra lại toàn bộ danh tính/hash trước khi thay thế nguyên tử qua `os.replace`. Thất bại trước khi thay thế fail-closed, giữ nguyên file gốc và dọn dẹp file tạm.
+  - Giao diện hai pha cho T022: cung cấp `prepare_staged_write` (trả về `StagedWrite` với `commit()` và `cleanup()`) cùng phương thức tiện ích `replace_source_content`.
+  - Bảo mật chẩn đoán/privacy: ngoại lệ `SourceFileError` và thông điệp chỉ chứa bounded `source_id` và error code, tuyệt đối không lộ path thật, nội dung Markdown, tài khoản hay SID.
+  - Ghi nhận accepted residual risk: race condition cùng user trên hệ thống tệp giữa lần kiểm tra cuối và `os.replace` là rủi ro tồn dư đã được chấp nhận trong `docs/security-review.md` (T-07) và ADR-0005.
+
+- **Kiểm thử (`backend/tests/test_source_files.py` & `backend/tests/windows/test_source_paths.py`):**
+  - RED phase ban đầu: 36 test thất bại có chủ đích trên các oracle âm.
+  - GREEN phase: 49 test portable trong `test_source_files.py` vượt qua toàn bộ; line coverage trên `source_files.py` đạt 84.62%.
+  - Hiệu chỉnh ghi nhận kiểm thử Windows native: Các test Windows trước đây sử dụng early return khi chạy trên Linux, không cấu thành bằng chứng Windows hợp lệ. Điều này đã được thay thế bằng kiểm tra fail-closed trung thực (`_require_native_windows()`) trong bản sửa đổi mới.
+
+- **Trạng thái & Rào cản (BLOCKED/PENDING):**
+  - Môi trường chạy hiện tại là Linux (Python 3.12.3). Chưa có môi trường Windows native thực tế để sinh Windows-native evidence cho junction/ACL/reparse.
+  - Tiêu chí Windows-native được giữ trạng thái `PENDING`. Task T021 giữ trạng thái `TODO`/`BLOCKED` (chưa đánh dấu `DONE`).
+
+## 02/10/2026 - T021: Independent audit remains environment-blocked (Asia/Bangkok)
+
+- Portable source tests rerun in the T021 worktree: 78 passed; T020 dependency tests: 24 passed; Ruff and Mypy passed with zero errors.
+- Windows-native suite remains 11 fail-closed failures on the Linux host because genuine `win32`, NTFS reparse/junction and ACL evidence is unavailable. The implementation is committed on its task branch for preservation; it is not merged into `main`, because doing so would make the repository test gate fail.
+
 ## 02/10/2026 - Remediation kiến trúc UI và kế hoạch task shadcn/ui (Asia/Bangkok)
 
 - **Mục tiêu & Bối cảnh:** Thiết lập shadcn/ui làm canonical UI component foundation cho toàn bộ feature UI tương lai theo chỉ định của chủ repository; bảo toàn 100% hành vi và bằng chứng của T004 (AppShell routing, landmarks, accessibility, ErrorBoundary, 404).

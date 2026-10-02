@@ -37,7 +37,7 @@
 - [x] [T020](t020-markdown-parser.md): Lossless Markdown parser/serializer
 - [x] [T026](t026-search-projection.md): Vietnamese normalized n-gram projection
 - [x] [T031](t031-review-schema.md): Review/card schema và deterministic SRS — DONE: 60 SRS cases, 226 targeted/424 full Python tests; owner-authorized legacy-head maintenance preserves lineage/history; coverage, architecture, security and check:task all exit 0.
-- [ ] [T021](t021-safe-source-files.md): Allowlisted Windows source file adapter
+- [x] [T021](t021-safe-source-files.md): Allowlisted Windows source file adapter; owner-attested Windows native PASS, portable Linux checks PASS, commit `ef93413` integrated locally.
 - [ ] [T022](t022-source-journal.md): Durable source journal và crash reconciliation
 - [ ] [T023](t023-source-sync.md): Startup/watcher sync và source API
 - [ ] [T024](t024-save-api.md): Explicit save preview vào Markdown và cards
@@ -103,6 +103,9 @@
 - [ ] CP22: T044, T045, T057 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 
 ## Execution state
+
+- T021 DONE after owner-attested native Windows verification: Allowlisted Windows source file adapter repaired and verified on Linux. Normal temp->fsync->atomic replace, traversal barrier, root and intermediate directory validation at prepare and commit, two-phase StagedWrite journal lifecycle, staged temp file open-descriptor authentication, safe ancestor/temp cleanup without outside unlinking, recheck of source authorization, sanitized privacy boundaries for diagnostics and error handling, Win32 owner/DACL security descriptors, and fail-closed security defenses implemented in backend/app/adapters/source_files.py. 78 portable unit/functional tests pass with 93.43% changed coverage (92.48% total); 11 Windows-native tests truthfully fail-closed on Linux host pending genuine Windows OS environment. Acceptance criteria remain unchecked pending Windows proof.
+
 
 - Frontend architecture & task-plan remediation (02/10/2026): T075 (shadcn/ui foundation & Tailwind integration) và T076 (AppShell shadcn/ui migration) đã được bổ sung vào canonical plan trước T018. T004 giữ nguyên DONE (mọi invariants về routing, landmarks, accessibility, ErrorBoundary được bảo toàn). T018 ở trạng thái BLOCKED_BY_T075_T076. Toàn bộ 13 downstream UI task cards đã được cập nhật phụ thuộc vào T076 và tuân thủ canonical design system shadcn/ui. Ready work kế tiếp trên nhánh UI là T075.
 
