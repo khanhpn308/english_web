@@ -98,6 +98,12 @@ class SearchIndex:
         self._init_schema()
 
     @contextmanager
+    def _borrow(self, connection: Connection) -> Iterator[Connection]:
+        if connection.engine is not self.engine or not connection.in_transaction():
+            raise ValueError("Caller must own an active transaction on this database engine")
+        yield connection
+
+    @contextmanager
     def _writer(self) -> Iterator[Connection]:
         with (
             self.engine.connect().execution_options(sqlite_begin_immediate=True) as connection,
@@ -264,9 +270,17 @@ class SearchIndex:
         self,
         source_file: SourceFile,
         linked_forms: list[WordForm],
+        *,
+        connection: Connection | None = None,
     ) -> None:
-        """Update a source file's revision/status and refresh linked word forms."""
-        with self._writer() as conn:
+        """Refresh a source in a standalone or caller-owned writer transaction."""
+        with self._writer() if connection is None else self._borrow(connection) as conn:
+            if connection is not None:
+                stored_version = conn.exec_driver_sql(
+                    "SELECT value FROM search_projection_metadata WHERE key='version'"
+                ).scalar_one_or_none()
+                if stored_version != self.version:
+                    raise ProjectionVersionMismatchError("Projection version mismatch")
             row = (
                 conn.exec_driver_sql(
                     "SELECT revision, status FROM search_projection_sources WHERE source_id = ?",

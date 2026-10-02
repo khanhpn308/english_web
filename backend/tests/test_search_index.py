@@ -756,3 +756,34 @@ def test_update_source_brand_new_source() -> None:
     res = index.search("mới lạ")
     assert len(res) == 1
     assert res[0].word_form_id == "wf_new"
+
+
+def test_caller_owned_search_update_is_atomic_and_preserves_guards(tmp_path: Path) -> None:
+    index = SearchIndex(create_engine("sqlite:///" + str(tmp_path / "borrow.db")))
+    src = make_source_file("borrowed")
+    form = make_word_form(
+        form_id="borrowed-form",
+        lemma="robust",
+        pos="ADJECTIVE",
+        meanings_vi=["bền vững"],
+        source_refs=[SourceReference(src.id, src.note_date, src.status)],
+    )
+    with pytest.raises(RuntimeError, match="rollback"), index.engine.begin() as conn:
+        index.update_source(src, [form], connection=conn)
+        assert (
+            conn.exec_driver_sql("SELECT count(*) FROM search_projection_entries").scalar_one() == 1
+        )
+        raise RuntimeError("rollback")
+    assert index.search("ben vung") == []
+    index.update_source(src, [form])
+    newer = make_source_file("borrowed", revision=2)
+    with index.engine.begin() as conn:
+        index.update_source(newer, [form], connection=conn)
+    with index.engine.begin() as conn, pytest.raises(StaleSourceRevisionError):
+        index.update_source(src, [form], connection=conn)
+    index.set_version("different")
+    with index.engine.begin() as conn, pytest.raises(ProjectionVersionMismatchError):
+        index.update_source(newer, [form], connection=conn)
+    with index.engine.connect() as conn, pytest.raises(ValueError, match="active transaction"):
+        index.update_source(newer, [form], connection=conn)
+    index.engine.dispose()

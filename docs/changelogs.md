@@ -1,3 +1,28 @@
+## 03/10/2026 - T022: Fix terminal external-edit race and executable task card (Asia/Bangkok)
+
+- `source_write.py` revalidates the canonical hash through T021 after projection/reset and the last local-effect hook, before terminal persistence. Normal and UNKNOWN completion share this linearization point; mismatch rolls back real DB effects/receipt and then persists DEGRADED, retaining external bytes and history.
+- `test_source_journal.py` adds eight bounded Event-synchronized H3/control cases at projection/reset boundaries, checks nine persisted tables, non-success receipts, restart idempotency and refusal of new writes after DEGRADED. RED reproduced all four race defects before the fix.
+- `tasks/t022-source-journal.md` now conforms to T078's existing allowlist grammar, uses full paths and concrete static commands, and records the remediation evidence. Actual loader assertions prove exactly 16 authorized paths and 13 placeholder-free commands; no tooling was changed.
+- Focused final checks: journal 74 and operations 15 passed; scoped Ruff/format/Mypy, one-head Alembic and diff check exit 0. Dependency files/migrations, main/T031, contracts/frontend and todo status were preserved in this round. Full gates and native Windows evidence remain owner-deferred; startup composition belongs to T023 and pre-handle temp retention is unchanged.
+- Status: `READY_FOR_T022_RE_AUDIT`, not DONE. MAIN_DRIFT remains; no commit, push, merge or rebase. Independent re-audit must precede owner-authorized integration.
+
+## 03/10/2026 - T022: Real durable effects and restart reconciliation ready for independent audit (Asia/Bangkok)
+
+- Preserved the partial candidate and completed owner-authorized transaction primitives in vocabulary repository/search index, authenticated T021 restart temp cleanup, and dedicated T014 journal-evidence UNKNOWN reconciliation/old-state abort.
+- Revised uncommitted `0007_source_journal` in place to persist minimal immutable effect identifiers/baselines, reset intent, receipt and relative staged ownership evidence; no Markdown copy, historical migration edit or competing head.
+- T022 now reconstructs real canonical/source/search/card effects after restart and commits them atomically with the operation receipt and journal terminal marker. Ambiguous bytes, missing/stale evidence and unsafe temp cleanup fail closed without overwriting sources or deleting review/quiz references.
+- Added actual-effect crash tests for PENDING/UNKNOWN, SQLite/disk failures, bounded concurrent intents, replay, reset policy and seeded 0005→0006→0007 preservation. Maintained only T016 migration-head assertions and strengthened admission preservation; existing admission/race tests remain intact.
+- Final task-local verification: 331 passed (journal 66, adapter 86, operations 15, vocabulary 18, search 26, SRS 60, admission 60); scoped Ruff/format/Mypy, single-head Alembic heads/history and diff check all exit 0. Frozen 13 Python files were unchanged after verification.
+- State is `READY_FOR_T022_AUDIT`, not DONE; CP10 remains unchecked. Native Windows evidence and full integration/coverage/security gates are deferred per owner instructions. Temps without a durable authenticated handle are retained; startup recovery runs before source writers. MAIN_DRIFT is reported, with no integration or commit performed.
+
+## 02/10/2026 - T022: Incomplete source journal candidate blocked on integration scope (Asia/Bangkok)
+
+- Added the linear `0007_source_journal` migration after the discovered `0006_ai_admission` head, with immutable journal evidence, deterministic state-transition guards and history-preserving downgrade refusal.
+- Added candidate `SourceWriteCoordinator` and `SourceRecovery` primitives for durable intent, T021 replacement, T014 receipt callbacks and hash reconciliation. Complete durable projection/reset reconstruction and crash/recovery proofs remain unfinished.
+- Added 21 focused fault-injection, idempotency, migration, card-history and ambiguity tests. The focused suite and dependency regressions pass.
+- Worker handoff is blocked for a narrow scope extension because the unchanged T016 integration test still hardcodes `0006_ai_admission` as the latest head; updating that non-allowlisted assertion is required to validate the new linear head. Latest aggregate result: exit 1, 908 passed and 12 failed; the later test-only annotation/style correction has focused/static evidence only. Native Windows tests remain PENDING on this Linux host. T022 and CP10 remain incomplete.
+- Resumption audit also found missing caller-transaction projection interfaces in T019/T026, no T021 public restart-safe temp cleanup handle, and no T014 UNKNOWN completion path. These require dependency-owned scope extensions or an explicit startup-order contract before T022 can prove durable completion; the callback-only candidate remains incomplete.
+
 ## 02/10/2026 - T021: Tích hợp adapter source Windows sau xác nhận native PASS (Asia/Bangkok)
 
 - T021 được đánh dấu DONE sau xác nhận của chủ repo rằng bộ kiểm thử Windows native trên NTFS đã PASS, gồm junction/reparse, hardlink, read-only, CRLF, ownership/DACL và privacy. Báo cáo gốc không có trong checkout Linux nên được ghi là owner-attested evidence.

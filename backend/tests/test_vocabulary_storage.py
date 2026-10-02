@@ -738,3 +738,58 @@ def test_save_preview_with_explicit_or_invalid_family(repo: VocabularyRepository
     )
     assert len(saved) == 1
     assert saved[0].family_id == fam.id
+
+
+def test_caller_owned_projection_transaction_rolls_back_every_canonical_effect(
+    repo: VocabularyRepository,
+) -> None:
+    with (
+        pytest.raises(RuntimeError, match="rollback"),
+        repo.engine.connect().execution_options(sqlite_begin_immediate=True) as conn,
+        conn.begin(),
+    ):
+        family = repo.get_or_create_family("borrowed", connection=conn)
+        assert repo.get_family(family.id, connection=conn) == family
+        assert repo.get_families_for_root("borrowed", connection=conn) == [family]
+        form = repo.save_canonical_word_form(
+            lemma="borrowed",
+            part_of_speech="ADJECTIVE",
+            family_id=family.id,
+            meanings_vi=[MeaningVi("mượn")],
+            connection=conn,
+        )
+        source = repo.save_source_file(
+            source_id="borrowed-source",
+            relative_path="29-09-2026.md",
+            note_date="2026-09-29",
+            connection=conn,
+        )
+        repo.link_word_form_to_source(form.id, source.id, source.note_date, connection=conn)
+        assert repo.get_word_form_by_identity("borrowed", "ADJECTIVE", family.id, connection=conn)
+        assert repo.get_forms_for_source(source.id, connection=conn)[0].id == form.id
+        repo.unlink_source_from_form(form.id, source.id, connection=conn)
+        assert repo.get_forms_for_source(source.id, connection=conn) == []
+        assert repo.get_source_file(source.id, connection=conn) == source
+        raise RuntimeError("rollback")
+    assert repo.get_families_for_root("borrowed") == []
+    assert repo.get_source_file("borrowed-source") is None
+    with repo.engine.connect() as conn, pytest.raises(ValueError, match="active transaction"):
+        repo.get_or_create_family("unowned", connection=conn)
+
+
+def test_projection_rejects_a_connection_from_another_database(
+    repo: VocabularyRepository,
+    tmp_path: Path,
+) -> None:
+    other = Database(tmp_path / "different.db")
+    try:
+        other.initialize()
+        with other.engine.begin() as conn, pytest.raises(ValueError, match="database engine"):
+            repo.save_source_file(
+                source_id="wrong",
+                relative_path="29-09-2026.md",
+                note_date="2026-09-29",
+                connection=conn,
+            )
+    finally:
+        other.close()

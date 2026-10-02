@@ -531,3 +531,47 @@ async def test_app_restart_exposes_unknown_without_reclaim(tmp_path: Path) -> No
                 preconditions={},
             )
         assert blocked.value.status_code == 409
+
+
+def test_unknown_source_reconciliation_refuses_operations_without_journal_evidence(
+    tmp_path: Path,
+) -> None:
+    db = Database(tmp_path / "unknown-source.db")
+    try:
+        db.initialize()
+        ledger = OperationLedger(db.engine)
+        operation = ledger.claim(
+            kind="LOOKUP",
+            key="unknown-proof",
+            method="POST",
+            path="/lookup",
+            body={},
+            preconditions={},
+        ).operation
+        ledger.recover_pending()
+
+        def forbidden(_connection: Connection) -> None:
+            raise AssertionError("No local effects without journal evidence")
+
+        with pytest.raises(OperationConflict) as rejection:
+            ledger.reconcile_source_write(
+                operation.operation_id,
+                expected_new_hash="a" * 64,
+                response_status=200,
+                result_ref="forbidden",
+                local_write=forbidden,
+            )
+        assert rejection.value.code == "SOURCE_EVIDENCE_MISMATCH"
+        with pytest.raises(OperationConflict):
+            ledger.complete(
+                operation.operation_id,
+                response_status=200,
+                result_ref="forbidden",
+                local_write=forbidden,
+            )
+        with pytest.raises(OperationConflict):
+            ledger.abort_source_write(operation.operation_id, expected_old_hash="a" * 64)
+        current = ledger.get(operation.operation_id)
+        assert current is not None and current.status == "UNKNOWN" and current.result_ref is None
+    finally:
+        db.close()

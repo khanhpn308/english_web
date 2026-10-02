@@ -157,6 +157,17 @@ class ReplacementReceipt:
     replaced_at: float
 
 
+@dataclass(frozen=True)
+class StagedTempHandle:
+    """Validated source-relative locator and descriptor identity for restart cleanup."""
+
+    source_id: str
+    relative_path: str
+    device: int
+    inode: int
+    content_hash: str
+
+
 def validate_relative_path(relative_path: str, source_id: str | None = None) -> list[str]:
     """Validate relative path string against traversal, ADS, and Windows namespace escapes.
 
@@ -470,6 +481,17 @@ class StagedWrite:
         self._intermediate_dirs = intermediate_dirs
         self._committed = False
         self._cleaned_up = False
+
+    @property
+    def recovery_handle(self) -> StagedTempHandle:
+        """Expose only the bounded relative locator and authenticated staged identity."""
+        return StagedTempHandle(
+            source_id=self.source_id,
+            relative_path=self._temp_path.relative_to(self._adapter.root_path).as_posix(),
+            device=self._initial_temp_stat[0],
+            inode=self._initial_temp_stat[1],
+            content_hash=self.new_content_hash,
+        )
 
     def commit(self) -> ReplacementReceipt:
         """Perform final pre-replacement revalidation and atomically replace target."""
@@ -949,6 +971,74 @@ class SourceFileAdapter:
         """Compute SHA-256 hash of existing source content."""
         content = self.read_source_content(source_id)
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+    def cleanup_abandoned_temp(self, handle: StagedTempHandle) -> None:
+        """Remove only a staged T021 file whose saved identity still matches.
+
+        The caller supplies a journal-backed handle. Path and ownership checks remain
+        here, so the journal never unlinks paths itself.
+        """
+        self._recheck_root()
+        source = self.get_source(handle.source_id)
+        if source is None:
+            raise SourceFileError("SOURCE_NOT_FOUND", "Staged source is not registered")
+        target_path, _, intermediate_dirs = self._resolve_and_inspect_path(source)
+        components = validate_relative_path(handle.relative_path, source.id)
+        expected_parent = tuple(validate_relative_path(source.relative_path, source.id)[:-1])
+        temp_name = components[-1]
+        if (
+            tuple(components[:-1]) != expected_parent
+            or not temp_name.startswith(f".{target_path.name}.tmp_")
+            or not temp_name.endswith(".tmp")
+            or len(temp_name) <= len(f".{target_path.name}.tmp_.tmp")
+        ):
+            raise SourceSecurityError("SECURITY_VIOLATION", "Staged locator is not adapter-owned")
+        temp_path = self._root_path.joinpath(*components)
+        try:
+            temp_st = os.stat(temp_path, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        except OSError:
+            raise SourceFileError("IO_ERROR", "Cannot inspect staged file") from None
+        try:
+            parent_st = os.stat(target_path.parent, follow_symlinks=False)
+        except OSError:
+            raise SourceFileError("IO_ERROR", "Cannot inspect staged parent") from None
+        if (
+            (temp_st.st_dev, temp_st.st_ino) != (handle.device, handle.inode)
+            or not stat.S_ISREG(temp_st.st_mode)
+            or temp_st.st_nlink != 1
+            or _is_reparse_or_link(temp_path, temp_st)
+            or temp_st.st_size > MAX_SOURCE_SIZE_BYTES
+        ):
+            raise SourceSecurityError("SECURITY_VIOLATION", "Staged file identity changed")
+        descriptor: int | None = None
+        try:
+            descriptor = os.open(temp_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            stream = os.fdopen(descriptor, "rb")
+            descriptor = None
+            with stream:
+                opened = os.fstat(stream.fileno())
+                if (opened.st_dev, opened.st_ino) != (handle.device, handle.inode):
+                    raise SourceSecurityError("SECURITY_VIOLATION", "Staged file identity changed")
+                temp_bytes = stream.read(MAX_SOURCE_SIZE_BYTES + 1)
+        except OSError:
+            raise SourceFileError("IO_ERROR", "Cannot read staged file") from None
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+        if hashlib.sha256(temp_bytes).hexdigest() != handle.content_hash:
+            raise SourceSecurityError("SECURITY_VIOLATION", "Staged file content changed")
+        if not _safe_cleanup_temp(
+            root_path=self._root_path,
+            expected_root_id=self._root_identity,
+            intermediate_dirs=intermediate_dirs,
+            target_dir=target_path.parent,
+            target_dir_stat=(parent_st.st_dev, parent_st.st_ino),
+            temp_path=temp_path,
+            initial_temp_stat=(handle.device, handle.inode),
+        ):
+            raise SourceSecurityError("SECURITY_VIOLATION", "Staged cleanup boundary changed")
 
     def prepare_staged_write(
         self,
