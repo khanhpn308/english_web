@@ -13,10 +13,12 @@
       "reasoning": "high"
     },
     "worker": {
-      "provider": "gemini",
-      "executable": "gemini",
-      "model": null,
-      "reasoning": null
+      "provider": "agy",
+      "executable": "agy",
+      "model": "gemini-3.8-flash-high",
+      "reasoning": "high",
+      "worker_access": "workspace-write",
+      "allow_process": true
     },
     "auditor": {
       "provider": "codex",

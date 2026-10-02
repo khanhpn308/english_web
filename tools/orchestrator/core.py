@@ -102,10 +102,12 @@ def safe_path(value: str) -> str:
 
 
 class Role(Model):
-    provider: Literal["codex", "gemini"]
+    provider: Literal["codex", "gemini", "agy"]
     executable: Nonempty
     model: str | None = None
     reasoning: Literal["low", "medium", "high", "xhigh"] | None = None
+    worker_access: Literal["workspace-write", "full-access"] = "workspace-write"
+    allow_process: StrictBool = False
 
 
 class Paths(Model):
@@ -127,6 +129,9 @@ class Config(Model):
     def validate_roles(self) -> None:
         if set(self.roles) != {"prompt_engineer", "worker", "auditor", "integrator"}:
             raise OrchestratorError("Configure exactly the four agent roles")
+        for name, role in self.roles.items():
+            if name != "worker" and (role.worker_access == "full-access" or role.allow_process):
+                raise OrchestratorError("Elevated execution permissions belong to Worker only")
         for command in self.verification:
             validate_command(command)
         if any(command != ["npm", "ci"] for command in self.setup_commands):

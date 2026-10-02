@@ -200,12 +200,22 @@ class Pipeline:
         return registered
 
     def trust_failure(self, directory: Path, state: RunState) -> bool:
+        # Explicit owner correction of the Gemini CLI route, not a model fallback.
+        corrected_route = (
+            state.config is not None
+            and state.config.roles["worker"].provider == "gemini"
+            and self.config.roles["worker"].provider == "agy"
+            and state.last_error == "Agent process failed (exit 1, timeout=False)"
+        )
         if not (
             state.blocked_from == State.WORKER_RUNNING
             and state.current_agent == "worker"
             and state.config is not None
             and state.config.roles["worker"].provider == "gemini"
-            and state.last_error == "Agent process failed (exit 55, timeout=False)"
+            and (
+                corrected_route
+                or state.last_error == "Agent process failed (exit 55, timeout=False)"
+            )
             and state.fix_cycle == 0
             and state.verified_digest
             and {"plan", "contract"}.issubset(state.artifacts)
@@ -215,12 +225,16 @@ class Pipeline:
         if not logs:
             return False
         for path in logs:
+            if corrected_route and state.artifact_digests.get(path.name) != digest(
+                path.read_bytes()
+            ):
+                return False
             value = read_json(path)
             if not isinstance(value, dict) or value.get("provider") != "gemini":
                 return False
             execution = value.get("execution")
             if not isinstance(execution, dict) or not (
-                execution.get("exit_code") == 55
+                execution.get("exit_code") == (1 if corrected_route else 55)
                 and execution.get("cwd") == state.worktree_path
                 and execution.get("timed_out") is False
                 and execution.get("oversized") is False

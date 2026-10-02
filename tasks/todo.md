@@ -126,3 +126,5 @@
 Infrastructure verification: [final evidence](../docs/reviews/orchestrator-verification-001.md), [T067–T070 local main integration](../docs/reviews/orchestrator-integration-001.md), [T071 historical promotion evidence](t071-orchestrator-planning-contract.md), [T072 full verification and owner decision](t072-remove-model-human-gates.md). Product checkpoints unchanged; T071's prior unavailable aggregate verdict remains historical, superseded for current verification authority by T072/ADR-0007.
 
 - [x] [T073](t073-autonomous-agent-recovery.md): Autonomous development-agent recovery; session trust, bounded safe agent retries and FAILED terminal errors. Full check:task exit0: 634 Python tests (101 orchestrator), 40 architecture tests, changed coverage94.44%, zero scanner findings.
+
+- [x] [T074](t074-agy-worker-permissions.md): Antigravity CLI Worker, explicit GPT full access and agy process auto-approval; check:task exit0, 677 Python/144 orchestrator tests, 40 architecture tests, changed coverage100%, zero scanner findings.

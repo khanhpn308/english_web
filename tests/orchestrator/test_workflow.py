@@ -1137,3 +1137,62 @@ def test_planning_drift_is_corrected_automatically(repository: Path) -> None:
     state = Pipeline(repository, configuration(), agents).start("T100")
     assert state.state == State.DONE
     assert agents.calls == ["Plan", "Plan", "WorkerResult", "Audit", "IntegrationReview"]
+
+
+@pytest.mark.parametrize(
+    "unsafe", ["none", "dirty", "output", "timeout", "tampered", "same_provider"]
+)
+def test_corrected_agy_routing_retries_clean_failed_gemini_run(
+    repository: Path, unsafe: str
+) -> None:
+    config = configuration(integrate=False)
+    config.roles["worker"].provider = "gemini"
+    pipeline = Pipeline(repository, config, RecoveryAgents("trust"))
+    old = pipeline.start("T100")
+    directory = pipeline.run_path("T100", old.run_id)
+    old.last_error = "Agent process failed (exit 1, timeout=False)"
+    for path in directory.glob("00-worker-*.log.json"):
+        value = json.loads(path.read_text())
+        value["execution"]["exit_code"] = 1
+        if unsafe == "output":
+            value["execution"]["stdout_bytes"] = 10
+        if unsafe == "timeout":
+            value["execution"]["timed_out"] = True
+        atomic_json(path, value)
+        old.artifact_digests[path.name] = digest(path.read_bytes())
+    pipeline.save(directory, old)
+    if unsafe == "dirty":
+        (Path(old.worktree_path) / "feature.txt").write_text("Preserve partial edits")
+    if unsafe == "tampered":
+        path = next(directory.glob("00-worker-*.log.json"))
+        path.write_text(path.read_text() + " ")
+    config.roles["worker"] = Role(
+        provider="agy" if unsafe != "same_provider" else "gemini",
+        executable="fake-codex",
+        allow_process=unsafe != "same_provider",
+    )
+    pipeline.provider = FakeAgents()
+    preserved = {p.name: p.read_bytes() for p in directory.iterdir() if p.is_file()}
+    if unsafe == "none":
+        new = pipeline.start("T100")
+        assert new.state == State.AUDIT_PASS
+        assert new.retry_of == old.run_id
+        assert new.config is not None and new.config.roles["worker"].provider == "agy"
+    else:
+        with pytest.raises(OrchestratorError):
+            pipeline.start("T100")
+        assert pipeline.provider.calls == []
+    assert preserved == {p.name: p.read_bytes() for p in directory.iterdir() if p.is_file()}
+
+
+@pytest.mark.parametrize("role_name", ["prompt_engineer", "auditor", "integrator"])
+@pytest.mark.parametrize("permission", ["worker_access", "allow_process"])
+def test_config_refuses_worker_permissions_for_other_roles(
+    repository: Path, role_name: str, permission: str
+) -> None:
+    config = configuration()
+    role = config.roles[role_name].model_dump()
+    role[permission] = "full-access" if permission == "worker_access" else True
+    config.roles[role_name] = Role.model_validate(role)
+    with pytest.raises(OrchestratorError, match="Worker"):
+        Pipeline(repository, config, FakeAgents())

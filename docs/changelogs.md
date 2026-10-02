@@ -4,6 +4,19 @@
 - **Kiểm tra:** Trên main,101 test orchestrator đạt109,07s; formatter/Ruff/Mypy đạt49file. T059/T021 vẫn đủ điều kiện phục hồi bằng kiểm tra chỉ đọc, mọi JSON cũ nguyên vẹn; không gọi provider/task thật. Bằng chứng bổ sung chỉ sửa card/changelog, code/tests giữ nguyên bản đã đạt full gate634test.
 - **Sử dụng:** `run T059 --no-integrate` tự tạo lần thử mới đủ bằng chứng; run ổn định được tiếp tục. Lỗi agent có thể sửa được thử lại tối đa ba lần; hết khả năng sửa trả FAILED, không dừng bằng BLOCKED mới hay giả DONE. Áp dụng documentation-and-adrs theo AGENT.md.
 
+## 02/10/2026 - T074 hoàn tất kiểm tra Worker agy và quyền thực thi (Asia/Bangkok)
+
+- **Gate cuối:** Sau SOURCE FREEZE, check:task exit0: 677 test Python (144 orchestrator), 38 test frontend, 40 test architecture. Coverage thay đổi100%, tổng92,32%; Gitleaks/Semgrep/OSV0findings. Ruff/format/Mypy49file và diff check đạt; npm ci không làm đổi manifest/lock.
+- **Kiểm chứng CLI/phục hồi:** agy1.2.14 stdin headless xác nhận qua /help không tiêu quota; JSON SUCCESS được xử lý đúng, lỗi/denied_actions/schema sai vẫn fail. T021/T059 đủ điều kiện retry sau đổi route, state cũ giữ nguyên; không gọi task/model thật. T074 DONE, checkpoint/task sản phẩm nguyên trạng.
+- **Phạm vi/Git:** Chỉ ba module orchestrator, hai test, config, guide và bookkeeping T074; giữ code/test/config hash cuối. Owner đã yêu cầu commit/merge main; kiểm tra staged scope/secrets trước ff-only dưới integration lock, không push. Documentation-and-adrs áp dụng cho guide/card/changelog; bằng chứng runtime ignored tại worktree T074.
+
+## 02/10/2026 - T074: Worker qua Antigravity CLI và quyền chạy rõ ràng (Asia/Bangkok)
+
+- **Nguyên nhân/quyết định:** Owner dùng `agy`, nhưng config cũ gọi Gemini CLI độc lập. Thêm provider agy, Worker mặc định gemini-3.8-flash-high đã được `agy models` xác nhận. Giữ Codex/Gemini, không fallback ngầm hoặc thay AI runtime sản phẩm.
+- **Quyền:** GPT Worker có worker_access full-access → Codex danger-full-access/approval never; agy Worker allow_process → session skip-permissions/accept-edits. Các vai trò chỉ đọc không được nâng quyền. Không chỉnh cấu hình toàn máy, credentials, scope hay scanner threshold.
+- **Khôi phục:** Chuyển route Gemini CLI exit1 sang agy cho phép run mới khi log failed/no-output còn hash, source/history/evidence cũ nguyên vẹn, chưa có implementation/integration. Lưu các run/worktree cũ; không giả định lỗi exit1 đã chứng minh thất bại trước dispatch.
+- **Bằng chứng ban đầu:** Baseline101 pass92.87s; RED32fail5.67s do schema chưa hỗ trợ agy/quyền; GREEN32pass9.74s trước điều chỉnh stdin thật. agy1.2.14 help/changelog và lệnh /help cục bộ xác nhận stdin headless; không chạy model trong chẩn đoán. Kiểm tra cuối đang thực hiện, không gọi gate chưa chạy là PASS. Documentation-and-adrs được áp dụng; source/Git policy tham chiếu Codex help tại máy theo yêu cầu không dùng web.
+
 ## 02/10/2026 - T073: Tự phục hồi agent, bỏ điểm chờ BLOCKED trong luồng mới (Asia/Bangkok)
 
 - **Nguyên nhân:** Gemini0.59.0 exit55 là FatalUntrustedWorkspaceError trước dispatch, worktree mới chưa trusted. Adapter kiểm tra/truyền --skip-trust cho phiên được giao; Worker dùng yolo theo yêu cầu chạy không duyệt tương tác, không đổi trust/credentials toàn máy.

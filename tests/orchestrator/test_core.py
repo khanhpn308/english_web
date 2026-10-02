@@ -288,7 +288,7 @@ if '--version' in args:
     print('fixture-cli 1.0')
 elif '--help' in args:
     print('--ask-for-approval --output-schema --output-last-message --sandbox --ephemeral '
-          '--prompt --output-format --approval-mode --skip-trust')
+          '--prompt --output-format --approval-mode --skip-trust danger-full-access')
 else:
     prompt = sys.stdin.read()
     if '--output-format' in args and '--skip-trust' not in args:
@@ -538,6 +538,295 @@ def test_gemini_missing_session_trust_capability_stops_before_dispatch(
             "OK",
             cwd=tmp_path,
             role=Role(provider="gemini", executable=str(fake_cli)),
+            timeout=5,
+            output=Fix,
+            artifacts=tmp_path,
+            name="unsupported",
+            readonly=False,
+        )
+    assert not list(tmp_path.glob("*.log.json"))
+
+
+@pytest.fixture
+def fake_agy(tmp_path: Path) -> Path:
+    binary = tmp_path / "fake-agy"
+    binary.write_text(f"""#!{sys.executable}
+import json, pathlib, sys, time
+args = sys.argv[1:]
+if '--version' in args:
+    print('1.2.14')
+elif '--help' in args:
+    print('--print --input-format --output-format --json-schema --mode --model --effort '
+          '--dangerously-skip-permissions --disable-slash-commands')
+else:
+    if '--print' in args or '--print=' in args:
+        raise SystemExit(2)
+    prompt = sys.stdin.read()
+    pathlib.Path('received.json').write_text(json.dumps({{'args': args, 'prompt': prompt}}))
+    if 'CRASH' in prompt:
+        raise SystemExit(1)
+    if 'TIMEOUT' in prompt:
+        time.sleep(10)
+    value = {{'fix_prompt': 'Synthetic fix'}}
+    if 'MALFORMED' in prompt:
+        print('invalid JSON')
+    elif 'SCHEMA_BAD' in prompt:
+        print(json.dumps({{'structured_output': {{'wrong': True}}}}))
+    elif 'ERROR' in prompt:
+        print(json.dumps({{'is_error': True, 'structured_output': value}}))
+    elif 'DENIED' in prompt:
+        print(json.dumps({{'status': 'success', 'denied_actions': ['synthetic'],
+                          'response': json.dumps(value)}}))
+    elif 'STATUS_ERROR' in prompt:
+        print(json.dumps({{'status': 'error', 'response': json.dumps(value)}}))
+    elif 'NATIVE' in prompt:
+        print(json.dumps({{'status': 'SUCCESS', 'response': json.dumps(value)}}))
+    elif 'WORKER' in prompt:
+        print(json.dumps({{'status': 'IMPLEMENTED', 'summary': 'Synthetic work',
+                          'changed_files': [], 'commands_run': [], 'known_issues': []}}))
+    elif 'DIRECT' in prompt:
+        print(json.dumps(value))
+    elif 'TEXT' in prompt:
+        print(json.dumps({{'type': 'result', 'result': json.dumps(value)}}))
+    else:
+        print(json.dumps({{'type': 'result', 'is_error': False,
+                          'structured_output': value, 'result': 'Summary'}}))
+""")
+    binary.chmod(0o700)
+    return binary
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "OK",
+        "DIRECT",
+        "TEXT",
+        "NATIVE",
+        "DENIED",
+        "STATUS_ERROR",
+        "MALFORMED",
+        "SCHEMA_BAD",
+        "ERROR",
+        "CRASH",
+        "TIMEOUT",
+    ],
+)
+def test_agy_json_protocol(fake_agy: Path, tmp_path: Path, prompt: str) -> None:
+    role = Role(
+        provider="agy",
+        executable=str(fake_agy),
+        model="listed-model",
+        reasoning="high",
+        allow_process=True,
+    )
+
+    def call() -> Fix:
+        return CliProvider().run(
+            prompt,
+            cwd=tmp_path,
+            role=role,
+            timeout=1,
+            output=Fix,
+            artifacts=tmp_path,
+            name="worker",
+            readonly=False,
+        )
+
+    if prompt in {"OK", "DIRECT", "TEXT", "NATIVE"}:
+        assert call().fix_prompt == "Synthetic fix"
+    else:
+        with pytest.raises(OrchestratorError):
+            call()
+    log = read_json(tmp_path / "worker.log.json")
+    assert isinstance(log, dict)
+    assert "Synthetic fix" not in json.dumps(log)
+    received = json.loads((tmp_path / "received.json").read_text())
+    assert received["prompt"] == prompt
+    args = received["args"]
+    assert "--print" not in args and "--print=" not in args
+    assert "--disable-slash-commands" in args
+    assert args[args.index("--mode") + 1] == "accept-edits"
+    assert "--dangerously-skip-permissions" in args
+    assert args[args.index("--model") + 1] == "listed-model"
+    assert args[args.index("--effort") + 1] == "high"
+    assert (
+        json.loads(Path(args[args.index("--json-schema") + 1]).read_text())
+        == Fix.model_json_schema()
+    )
+
+
+@pytest.mark.parametrize("readonly,allow", [(True, False), (True, True), (False, False)])
+def test_agy_plan_and_permissions(
+    fake_agy: Path, tmp_path: Path, readonly: bool, allow: bool
+) -> None:
+    CliProvider().run(
+        "OK",
+        cwd=tmp_path,
+        role=Role(provider="agy", executable=str(fake_agy), allow_process=allow),
+        timeout=5,
+        output=Fix,
+        artifacts=tmp_path,
+        name="plan",
+        readonly=readonly,
+    )
+    args = json.loads((tmp_path / "received.json").read_text())["args"]
+    assert args[args.index("--mode") + 1] == ("plan" if readonly else "accept-edits")
+    assert "--dangerously-skip-permissions" not in args
+
+
+@pytest.mark.parametrize(
+    "flag",
+    [
+        "--json-schema",
+        "--print",
+        "--mode",
+        "--dangerously-skip-permissions",
+        "--model",
+        "--effort",
+        "--disable-slash-commands",
+    ],
+)
+def test_agy_missing_capability_never_dispatches(fake_agy: Path, tmp_path: Path, flag: str) -> None:
+    fake_agy.write_text(fake_agy.read_text().replace(flag, "--unsupported"))
+    with pytest.raises(OrchestratorError, match="capability"):
+        CliProvider().run(
+            "OK",
+            cwd=tmp_path,
+            role=Role(
+                provider="agy",
+                executable=str(fake_agy),
+                model="listed-model",
+                reasoning="high",
+                allow_process=True,
+            ),
+            timeout=5,
+            output=Fix,
+            artifacts=tmp_path,
+            name="missing",
+            readonly=False,
+        )
+    assert not (tmp_path / "received.json").exists()
+
+
+@pytest.mark.parametrize("readonly", [False, True])
+def test_codex_worker_full_access_does_not_elevate_readonly(
+    fake_cli: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, readonly: bool
+) -> None:
+    from tools.orchestrator import runtime
+
+    commands: list[list[str]] = []
+    original = runtime.execute
+
+    def capture(
+        command: list[str], cwd: Path, *, timeout: int = 1800, stdin: str | None = None
+    ) -> runtime.ProcessResult:
+        commands.append(command)
+        return original(command, cwd, timeout=timeout, stdin=stdin)
+
+    monkeypatch.setattr(runtime, "execute", capture)
+    CliProvider().run(
+        "OK",
+        cwd=tmp_path,
+        role=Role(provider="codex", executable=str(fake_cli), worker_access="full-access"),
+        timeout=5,
+        output=Fix,
+        artifacts=tmp_path,
+        name="gpt",
+        readonly=readonly,
+    )
+    command = commands[-1]
+    assert command[command.index("--sandbox") + 1] == (
+        "read-only" if readonly else "danger-full-access"
+    )
+    assert command[command.index("-a") + 1] == "never"
+
+
+def test_agy_direct_worker_status_is_not_cli_envelope_error(fake_agy: Path, tmp_path: Path) -> None:
+    from tools.orchestrator.core import WorkerResult
+
+    result = CliProvider().run(
+        "WORKER",
+        cwd=tmp_path,
+        role=Role(provider="agy", executable=str(fake_agy)),
+        timeout=5,
+        output=WorkerResult,
+        artifacts=tmp_path,
+        name="direct-worker",
+        readonly=False,
+    )
+    assert result.status == "IMPLEMENTED"
+
+
+@pytest.mark.parametrize(
+    "provider,permission",
+    [
+        ("gemini", "worker_access"),
+        ("agy", "worker_access"),
+        ("codex", "allow_process"),
+        ("gemini", "allow_process"),
+    ],
+)
+def test_provider_rejects_unsupported_permission_before_dispatch(
+    fake_cli: Path, tmp_path: Path, provider: str, permission: str
+) -> None:
+    data = {
+        "provider": provider,
+        "executable": str(fake_cli),
+        permission: "full-access" if permission == "worker_access" else True,
+    }
+    with pytest.raises(OrchestratorError, match="supported only"):
+        CliProvider().run(
+            "OK",
+            cwd=tmp_path,
+            role=Role.model_validate(data),
+            timeout=5,
+            output=Fix,
+            artifacts=tmp_path,
+            name="unsupported",
+            readonly=False,
+        )
+    assert not list(tmp_path.glob("*.log.json"))
+
+
+def test_agy_rejects_unsupported_effort_before_dispatch(fake_agy: Path, tmp_path: Path) -> None:
+    with pytest.raises(OrchestratorError, match="xhigh is unsupported"):
+        CliProvider().run(
+            "OK",
+            cwd=tmp_path,
+            role=Role(provider="agy", executable=str(fake_agy), reasoning="xhigh"),
+            timeout=5,
+            output=Fix,
+            artifacts=tmp_path,
+            name="effort",
+            readonly=False,
+        )
+    assert not (tmp_path / "received.json").exists()
+
+
+def test_agy_unavailable(tmp_path: Path) -> None:
+    with pytest.raises(OrchestratorError, match="Executable unavailable"):
+        CliProvider().run(
+            "OK",
+            cwd=tmp_path,
+            role=Role(provider="agy", executable=str(tmp_path / "absent")),
+            timeout=5,
+            output=Fix,
+            artifacts=tmp_path,
+            name="unavailable",
+            readonly=False,
+        )
+
+
+def test_codex_missing_full_access_capability_stops_before_dispatch(
+    fake_cli: Path, tmp_path: Path
+) -> None:
+    fake_cli.write_text(fake_cli.read_text().replace("danger-full-access", "unsupported-access"))
+    with pytest.raises(OrchestratorError, match="required capability: danger-full-access"):
+        CliProvider().run(
+            "OK",
+            cwd=tmp_path,
+            role=Role(provider="codex", executable=str(fake_cli), worker_access="full-access"),
             timeout=5,
             output=Fix,
             artifacts=tmp_path,

@@ -70,14 +70,15 @@ tự động.
 ## Cài đặt và cấu hình
 
 Sử dụng môi trường Python của repository, gồm Python 3.12+ và các dependency phát
-triển hiện có, Git, cùng Codex CLI và Gemini CLI đã được cài đặt và xác thực riêng.
+triển hiện có, Git, cùng Codex CLI và Antigravity CLI (`agy`) đã được cài đặt và xác thực riêng.
+Adapter Gemini CLI độc lập vẫn có sẵn nếu bạn chọn provider `gemini`.
 Thông tin xác thực do các CLI đó quản lý; công cụ này không cài CLI hay đọc kho
 thông tin xác thực. Chuẩn bị các dependency npm của repository và công cụ quét bảo
 mật bên ngoài trước khi chạy thật. Các biến môi trường chỉ định scanner được ghi
 trong T063 vẫn được kế thừa bình thường. Các bài kiểm thử không gửi yêu cầu LLM thật.
 
 Các phiên bản đã kiểm tra tại máy: Codex **0.159.2** trước khi tạm dừng và **0.159.3**
-ở lần kiểm tra cuối; Gemini CLI **0.59.0**. Những cờ cần thiết vẫn được hỗ trợ.
+ở lần kiểm tra cuối; Gemini CLI **0.59.0**; Antigravity CLI **1.2.14**. Những cờ cần thiết vẫn được hỗ trợ.
 Đây là bằng chứng kiểm tra, không phải cam kết tương thích với các phiên bản khác.
 Mỗi lần gọi đều kiểm tra `--version`/`--help` của CLI đã cài và `exec --help` của
 Codex; nếu thiếu khả năng cần thiết, công cụ báo lỗi rõ ràng. Codex sử dụng
@@ -96,8 +97,70 @@ mức suy luận: hãy đặt `reasoning: null`.
 bổ sung dependency khi chạy. Cấu hình `provider`, `executable`, `model` và `reasoning`
 cho từng vai trò; `model: null` kế thừa cấu hình của CLI đã cài, không tự đặt tên
 model. Chọn rõ model có sẵn khi chạy thật để có thể tái hiện cấu hình. Mặc định,
-Worker dùng Gemini; lập kế hoạch, audit và tích hợp dùng Codex. Có thể thay provider
+Worker dùng `agy` với `gemini-3.8-flash-high`, có trong danh sách `agy models`;
+lập kế hoạch, audit và tích hợp dùng Codex. Gemini CLI (`gemini`) không tự sử dụng
+model/tài khoản đang chạy qua `agy`. Có thể thay provider
 qua giao thức có kiểu dữ liệu mà không phải viết lại máy trạng thái.
+
+### Quyền Worker GPT và Gemini qua agy
+
+Worker Antigravity mặc định trong `orchestrator.yaml`:
+
+```json
+"worker": {
+  "provider": "agy",
+  "executable": "agy",
+  "model": "gemini-3.8-flash-high",
+  "reasoning": "high",
+  "worker_access": "workspace-write",
+  "allow_process": true
+}
+```
+
+`allow_process: true` truyền `--dangerously-skip-permissions` cho Worker: tự duyệt
+các yêu cầu tool/process trong phiên, tương ứng nhu cầu Allow Processes khi chạy
+tự động. Cờ này duyệt cả các tool khác, không chỉ terminal. Công cụ không ghi
+`/config`, settings hay credentials toàn máy. `agy` chạy ở `accept-edits`; các
+vai trò chỉ đọc chạy `plan` và không nhận cờ bỏ duyệt. CLI vẫn tự quản lý đăng nhập
+và quyền sử dụng model; orchestrator không có fallback provider tự động.
+
+Adapter truyền prompt qua stdin pipe với `--input-format text --output-format json`,
+`--json-schema <file>`, `--mode` và `--disable-slash-commands`. Trong agy1.2.14,
+stdin pipe tự kích hoạt headless; không ghép `--print` không có giá trị trước cờ
+khác vì CLI sẽ lấy nhầm cờ làm prompt. Đã kiểm tra cách truyền stdin bằng `/help`,
+changelog xác nhận lệnh này không tạo agent turn/tiêu quota. Adapter đọc response
+JSON hoặc structured_output, từ chối error/denied_actions và kiểm tra schema.
+`--model` và `--effort` được kiểm tra qua help, reasoning hỗ trợ low/medium/high.
+Timeout Python tiếp tục giới hạn toàn bộ tiến trình và các tiến trình con.
+
+Để chuyển rõ sang Worker GPT/Codex với full access, thay riêng mục `worker`:
+
+```json
+"worker": {
+  "provider": "codex",
+  "executable": "codex",
+  "model": null,
+  "reasoning": "high",
+  "worker_access": "full-access",
+  "allow_process": false
+}
+```
+
+`model: null` dùng model Codex đã cấu hình; có thể nhập tên model thực tế của bạn.
+`worker_access: full-access` truyền `--sandbox danger-full-access`, vẫn dùng
+`-a never` để không chờ hỏi duyệt. Mặc định cũ workspace-write vẫn được hỗ trợ.
+Chỉ Worker được cấu hình quyền nâng cao; Prompt Engineer/Auditor/Integrator bị từ
+chối nếu cấu hình full-access hoặc allow_process. Những quyền này không giới hạn
+OS vào worktree: chỉ chạy agent cục bộ bạn tin cậy. Contract, kiểm tra scope,
+source/evidence, audit và khóa tích hợp vẫn được thực thi.
+
+Đổi provider/quyền áp dụng cho run mới. Resume một run đang tiến triển yêu cầu
+cấu hình khớp cấu hình đã lưu. Với lỗi route Gemini CLI exit1 cũ, `run`/`retry`
+có thể tạo run mới sau khi Worker đã được chuyển rõ sang agy và xác minh toàn bộ
+run sở hữu worktree đều failed, không có stdout, không timeout, log còn hash,
+source/history/artifacts nguyên vẹn và chưa triển khai/tích hợp. Đây là khởi tạo
+lại từ main, không tiếp tục Worker outcome chưa biết hoặc sửa JSON cũ. Crash cùng
+provider hoặc worktree có thay đổi vẫn cần kiểm tra và giữ nguyên công việc.
 
 Cấu hình còn quản lý `base_branch` (mặc định là main cục bộ), `max_fix_cycles` (0–10),
 `timeout_seconds`, các lệnh kiểm tra bắt buộc dưới dạng mảng đối số,
