@@ -12,7 +12,7 @@
 - [CONSTRAINTS.md](../CONSTRAINTS.md)
 - [AGENTS.md](../AGENTS.md)
 - [CONSTRAINTS.md](../CONSTRAINTS.md) LCP/CLS
-- [docs/ui-architecture.md](../docs/ui-architecture.md) responsive
+- [docs/ui-architecture.md](../docs/ui-architecture.md) responsive & Canonical design system (shadcn/ui)
 
 Đọc handoff của dependencies và source/tests hiện có trong phạm vi sửa. Các path source/config là vị trí dự kiến; repository hiện chỉ có tài liệu.
 
@@ -45,6 +45,7 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 ## Implementation notes
 
 - Run Lighthouse against temporary loopback preview started by T052, synthetic data, documented machine/Edge/Chromium/build/cache profile. npm benchmark:ui owns orchestration/threshold parsing. No preview deploy/cloud, no network provider. Do not report lab metrics as actual user sample.
+- Đo lường hiệu năng giao diện trên bản dựng sử dụng canonical shadcn/Tailwind design system (qua T038/T076); bảo đảm các bundle primitives không gây hồi quy LCP hay layout shift CLS.
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
 

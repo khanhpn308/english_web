@@ -11,14 +11,14 @@
 
 - [CONSTRAINTS.md](../CONSTRAINTS.md)
 - [AGENTS.md](../AGENTS.md)
-- [docs/ui-architecture.md](../docs/ui-architecture.md) J2/J7
+- [docs/ui-architecture.md](../docs/ui-architecture.md) J2/J7 & Canonical design system (shadcn/ui)
 - [docs/spec.md](../docs/spec.md) AC-02/03/05/32/33
 
 Đọc handoff của dependencies và source/tests hiện có trong phạm vi sửa. Các path source/config là vị trí dự kiến; repository hiện chỉ có tài liệu.
 
 ## Dependencies
 
-- [T004](t004-frontend-shell-routes.md)
+- [T076](t076-app-shell-shadcn-migration.md)
 - [T008](t008-lookup-api-vertical-slice.md)
 - [T017](t017-typed-api-client.md)
 - [T018](t018-consent-ui.md)
@@ -45,6 +45,7 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 ## Implementation notes
 
 - Tích hợp consent UI từ T018; lookup preview-only, save chưa triển khai phải rõ; audio T025. Fixture/mock dùng generated types. Count network calls, không chỉ snapshot UI. Đăng ký flow vào route thật, không chỉ render isolated component; build và harness dùng cùng router.
+- Thiết kế component theo design system: Sử dụng canonical primitives từ `frontend/src/components/ui/` (Button, Card, Input...) và semantic tokens từ T075/T076; không duplicate primitives.
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
 

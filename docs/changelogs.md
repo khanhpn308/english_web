@@ -1,3 +1,14 @@
+## 02/10/2026 - Remediation kiến trúc UI và kế hoạch task shadcn/ui (Asia/Bangkok)
+
+- **Mục tiêu & Bối cảnh:** Thiết lập shadcn/ui làm canonical UI component foundation cho toàn bộ feature UI tương lai theo chỉ định của chủ repository; bảo toàn 100% hành vi và bằng chứng của T004 (AppShell routing, landmarks, accessibility, ErrorBoundary, 404).
+- **Tạo task cards mới:**
+  - `tasks/t075-shadcn-ui-foundation.md`: Tích hợp shadcn/ui, Tailwind CSS v4, path alias `@/*`, `components.json`, semantic theme tokens, `cn()` utility và minimal primitives vào ứng dụng Vite hiện tại; không cài `add --all` hay registry bên thứ ba.
+  - `tasks/t076-app-shell-shadcn-migration.md`: Migrate AppShell sang shadcn/ui và semantic tokens; giữ nguyên toàn bộ hành vi routing/landmarks/a11y/keyboard/heading focus/ErrorBoundary và có bộ test chứng minh tương đương hành vi với T004.
+- **Cập nhật kiến trúc UI (`docs/ui-architecture.md`):** Thêm mục *Canonical design system (shadcn/ui)* với 12 quy tắc bắt buộc: primitives tại `frontend/src/components/ui/`, feature composition tại `frontend/src/features/...`, sử dụng semantic tokens, accessibility là trách nhiệm ứng dụng, cấm registry bên thứ ba khi chưa được duyệt, tra cứu official docs mới nhất.
+- **Cập nhật dependency graph downstream:** Cập nhật 14 task cards (`t018-consent-ui.md`, `t009-lookup-ui-vertical-slice.md`, `t010-error-handling-recovery.md`, `t025-save-ui-audio.md`, `t028-search-ui.md`, `t030-edit-ui.md`, `t033-review-ui.md`, `t036-quiz-ui.md`, `t038-dashboard-ui.md`, `t050-quiz-runner-ui.md`, `t051-quiz-result-feedback-ui.md`, `t060-status-ui.md`, `t043-accessibility-evidence.md`, `t064-ui-performance-harness.md`) theo mô hình `T004 -> T075 -> T076 -> feature UI tasks`.
+- **Trạng thái sẵn sàng:** T018 ở trạng thái `BLOCKED_BY_T075_T076`; task sẵn sàng tiếp theo trên nhánh UI là T075.
+- **Kế hoạch & Checkpoint:** Cập nhật `docs/task-plan.md` và `tasks/todo.md` với checkpoint `CP06A` (sau T075, T076), cập nhật Mermaid diagram, adjacency list và danh sách Gemini model allocation. Không thay đổi code implementation trong session planning này.
+
 ## 02/10/2026 - T078: Skill phù hợp trong prompt Worker/Fix (Asia/Bangkok)
 
 - Theo yêu cầu chủ repository và hướng dẫn addyosmani/agent-skills, `tools/orchestrator/skills.py` chọn workflow theo phạm vi và tính chất task; phát hiện pack native hoặc `skills_root`/`AGENT_SKILLS_ROOT`, không tự cài plugin.

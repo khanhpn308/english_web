@@ -55,6 +55,31 @@ If the backend cannot start, the launcher must show a native/static fallback sta
 
 Components receive typed props and callbacks; they do not call `fetch` directly. Container hooks call the API client and map DTOs to view models. Keep each component focused and prefer composition over configuration.
 
+### Canonical design system (shadcn/ui)
+
+`shadcn/ui is the canonical UI component foundation for the application.`
+
+1. Prefer existing shadcn/ui primitives before building custom interactive controls.
+2. Reusable primitives live under:
+   `frontend/src/components/ui/`
+3. Feature composition belongs in feature modules, e.g.:
+   `frontend/src/features/...`
+4. Feature modules must not duplicate design-system primitives.
+5. Use semantic design tokens for:
+   - colors
+   - backgrounds
+   - borders
+   - focus states
+   - radius
+   - spacing where applicable
+6. Do not hard-code arbitrary visual values when a canonical token exists.
+7. Prefer composition over modifying a shared primitive for one feature.
+8. Accessibility remains an application requirement; do not assume the component library alone satisfies it.
+9. Existing keyboard, focus, landmark, live-region, and WCAG requirements remain authoritative.
+10. Third-party shadcn registries require explicit owner authorization.
+11. When component API or installation behavior may have changed, agents must verify current official documentation rather than relying on memory.
+12. Business/API architecture remains independent from the chosen visual component system.
+
 ## 3. User flows
 
 ### J1 — Open and plan work

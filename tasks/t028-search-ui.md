@@ -11,13 +11,14 @@
 
 - [CONSTRAINTS.md](../CONSTRAINTS.md)
 - [AGENTS.md](../AGENTS.md)
-- [docs/ui-architecture.md](../docs/ui-architecture.md) J3
+- [docs/ui-architecture.md](../docs/ui-architecture.md) J3 & Canonical design system (shadcn/ui)
 - [docs/spec.md](../docs/spec.md) AC-07/32
 
 Đọc handoff của dependencies và source/tests hiện có trong phạm vi sửa. Các path source/config là vị trí dự kiến; repository hiện chỉ có tài liệu.
 
 ## Dependencies
 
+- [T076](t076-app-shell-shadcn-migration.md)
 - [T027](t027-search-api.md)
 - [T017](t017-typed-api-client.md)
 - [T010](t010-error-handling-recovery.md)
@@ -44,6 +45,7 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 ## Implementation notes
 
 - URL query/filter/cursor; abort obsolete read, stable list identity; explicit browse vs empty. Editing supplied T030, not fake-save. Đăng ký flow vào route thật, không chỉ render isolated component; build và harness dùng cùng router.
+- Thiết kế component theo design system: `SearchPage` và `WordDetail` sử dụng canonical primitives (`Input`, `Button`, `Card`, `Badge`...) từ `frontend/src/components/ui/` và semantic tokens từ T076; không duplicate primitives.
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
 

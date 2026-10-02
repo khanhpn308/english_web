@@ -2,7 +2,7 @@
 
 **Task ID:** `T018`  
 **Title:** Consent dialog và Status panel  
-**Status:** `TODO`  
+**Status:** `TODO` (Readiness: `BLOCKED_BY_T075_T076`)
 **Goal:** Consent dialog và Status panel. All NOT_GRANTED/GRANTED/REVOKED/STALE/loading/error states visible; structured disclosure fields rendered.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -11,19 +11,20 @@
 
 - [CONSTRAINTS.md](../CONSTRAINTS.md)
 - [AGENTS.md](../AGENTS.md)
-- [docs/ui-architecture.md](../docs/ui-architecture.md) J7/keyboard
+- [docs/ui-architecture.md](../docs/ui-architecture.md) J7/keyboard & Canonical design system (shadcn/ui)
 - [docs/api-contract.md](../docs/api-contract.md) CONSENT-07/10
+- [tasks/t076-app-shell-shadcn-migration.md](t076-app-shell-shadcn-migration.md)
 
 Đọc handoff của dependencies và source/tests hiện có trong phạm vi sửa. Các path source/config là vị trí dự kiến; repository hiện chỉ có tài liệu.
 
 ## Dependencies
 
-- [T004](t004-frontend-shell-routes.md)
+- [T076](t076-app-shell-shadcn-migration.md)
 - [T015](t015-consent-api.md)
 - [T017](t017-typed-api-client.md)
 - [T052](t052-browser-test-harness.md)
 
-Mọi dependency phải có evidence hoàn tất. Task ID không biểu thị thứ tự chạy; dùng [task-plan.md](../docs/task-plan.md).
+Mọi dependency phải có evidence hoàn tất. T018 bị chặn trực tiếp bởi nền tảng giao diện: `BLOCKED_BY_T075_T076`. Task ID không biểu thị thứ tự chạy; dùng [task-plan.md](../docs/task-plan.md).
 
 ## Files được phép sửa
 
@@ -44,6 +45,7 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 ## Implementation notes
 
 - No initial grant; focus disclosure heading, Escape decline, focus return; stale/missing policy; GET after receipt. Revoke unknown locally disables AI while reconciling. Đăng ký flow vào route thật, không chỉ render isolated component; build và harness dùng cùng router.
+- Thiết kế component theo design system: Sử dụng canonical primitives từ `frontend/src/components/ui/` (Dialog, Button, Card...) và semantic design tokens của T075/T076; không tự viết custom styling rời rạc ngoài hệ thống.
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
 

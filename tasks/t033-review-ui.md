@@ -11,15 +11,15 @@
 
 - [CONSTRAINTS.md](../CONSTRAINTS.md)
 - [AGENTS.md](../AGENTS.md)
-- [docs/ui-architecture.md](../docs/ui-architecture.md) J4
+- [docs/ui-architecture.md](../docs/ui-architecture.md) J4 & Canonical design system (shadcn/ui)
 - [docs/spec.md](../docs/spec.md) AC-12/13
 
 Đọc handoff của dependencies và source/tests hiện có trong phạm vi sửa. Các path source/config là vị trí dự kiến; repository hiện chỉ có tài liệu.
 
 ## Dependencies
 
+- [T076](t076-app-shell-shadcn-migration.md)
 - [T032](t032-review-api.md)
-- [T004](t004-frontend-shell-routes.md)
 - [T017](t017-typed-api-client.md)
 - [T052](t052-browser-test-harness.md)
 
@@ -44,6 +44,7 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 ## Implementation notes
 
 - Native buttons, no answer input; reveal then rate; server confirmation before advance; preserve current card on error. No quiz result coupling here. Đăng ký flow vào route thật, không chỉ render isolated component; build và harness dùng cùng router.
+- Thiết kế component theo design system: `ReviewPage` và `Flashcard` sử dụng canonical primitives (`Card`, `Button`, `Badge`...) từ `frontend/src/components/ui/` và semantic tokens từ T076; không duplicate primitives.
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
 

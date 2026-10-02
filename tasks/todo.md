@@ -2,7 +2,7 @@
 
 **Planning state:** T001/T002/T058/T003/T004/T005/T053/T063/T013/T006 đã có evidence hoàn tất; trạng thái các task còn lại theo checklist dưới đây.
 **Canonical plan:** [docs/task-plan.md](../docs/task-plan.md).  
-**Next ready work:** see dependency graph/current ready tasks in docs/task-plan.md (e.g. T018, T008, T021).
+**Next ready work:** see dependency graph/current ready tasks in docs/task-plan.md (e.g. T075, T008, T021; T018 is blocked by T075 and T076).
 **Handoff rule:** Chỉ check item khi thẻ tương ứng có acceptance/verification evidence và task status `DONE`. PENDING environment không được check thành PASS.
 
 ## Ordered task list
@@ -25,7 +25,9 @@
 - [x] [T015](t015-consent-api.md): Persist consent singleton và GET/PUT/DELETE
 - [x] [T007](t007-bridge-policy-consent-adapter.md): Antigravity transport adapter với fake proxy
 - [x] [T016](t016-dispatch-fence.md): Consent admission fence trước AI dispatch
-- [ ] [T018](t018-consent-ui.md): Consent dialog và Status panel
+- [ ] [T075](t075-shadcn-ui-foundation.md): shadcn/ui foundation & Tailwind integration
+- [ ] [T076](t076-app-shell-shadcn-migration.md): AppShell shadcn/ui & semantic design-system migration
+- [ ] [T018](t018-consent-ui.md): Consent dialog và Status panel (BLOCKED_BY_T075_T076)
 - [x] [T019](t019-vocabulary-schema.md): Schema vocabulary, source links và preview
 - [ ] [T008](t008-lookup-api-vertical-slice.md): POST lookup trả preview đã validate
 - [ ] [T009](t009-lookup-ui-vertical-slice.md): Lookup UI gọi API thật qua client
@@ -82,6 +84,7 @@
 - [x] CP04: T006, T014, T017 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [x] CP05: T066, T052, T062 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [x] CP06: T015, T007, T016 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
+- [ ] CP06A: T075, T076 — review criteria, design system tokens, AppShell equivalence, build/test trước task kế tiếp.
 - [ ] CP07: T018, T019, T008 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP08: T009, T010, T011 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 - [ ] CP09: T012, T020, T026 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
@@ -100,6 +103,8 @@
 - [ ] CP22: T044, T045, T057 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
 
 ## Execution state
+
+- Frontend architecture & task-plan remediation (02/10/2026): T075 (shadcn/ui foundation & Tailwind integration) và T076 (AppShell shadcn/ui migration) đã được bổ sung vào canonical plan trước T018. T004 giữ nguyên DONE (mọi invariants về routing, landmarks, accessibility, ErrorBoundary được bảo toàn). T018 ở trạng thái BLOCKED_BY_T075_T076. Toàn bộ 13 downstream UI task cards đã được cập nhật phụ thuộc vào T076 và tuân thủ canonical design system shadcn/ui. Ready work kế tiếp trên nhánh UI là T075.
 
 - T016 DONE, verified linear integration after T020/T026/T031 on frozen main `3b4faf52ba63aac30d6ea0443746eff846eb62da`: preserved source `56b8e83`, transplanted as `5eafd57`, and realigned admission to `0006_ai_admission` after `0005_review` without changing table/coordinator semantics. All 60 admission races/restart cases, preceding-task suites (24/25/60), 533 full Python tests, changed coverage 97.22%/total 92.69%, architecture, static, fast/task and zero-finding security gates pass. Generated contracts are unchanged; only review's historical migration test needed INTEGRATION_TEST_REMEDIATION beyond T016 scope. Main promotion must be ff-only after its unchanged-base check; CP06 stays unchecked and no push is authorized. Current integration evidence is in the T016 card; the source-only snapshot below remains historical.
 

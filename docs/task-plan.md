@@ -40,60 +40,62 @@ ID giữ ổn định qua lần chia nhỏ; thứ tự chạy nằm ở cột đ
 | 16 | [T015](../tasks/t015-consent-api.md) | Persist consent singleton và GET/PUT/DELETE | T014 | GPT-6.1 Sol |
 | 17 | [T007](../tasks/t007-bridge-policy-consent-adapter.md) | Antigravity transport adapter với fake proxy | T006, T013 | GPT-6.1 Sol |
 | 18 | [T016](../tasks/t016-dispatch-fence.md) | Consent admission fence trước AI dispatch | T015, T007 | GPT-6.1 Sol |
-| 19 | [T018](../tasks/t018-consent-ui.md) | Consent dialog và Status panel | T004, T015, T017, T052 | Gemini |
-| 20 | [T019](../tasks/t019-vocabulary-schema.md) | Schema vocabulary, source links và preview | T015 | GPT-6.1 Sol |
-| 21 | [T008](../tasks/t008-lookup-api-vertical-slice.md) | POST lookup trả preview đã validate | T007, T014, T016, T019, T017 | GPT-6.1 Sol |
-| 22 | [T009](../tasks/t009-lookup-ui-vertical-slice.md) | Lookup UI gọi API thật qua client | T004, T008, T017, T018, T052 | Gemini |
-| 23 | [T010](../tasks/t010-error-handling-recovery.md) | Typed UI recovery cho common error codes | T009, T052 | Gemini |
-| 24 | [T011](../tasks/t011-observability-instrumentation.md) | Local JSON logs, correlation và span boundary | T010 | GPT-6.1 Sol |
-| 25 | [T012](../tasks/t012-ci-pipeline.md) | CI lõi cho build và tests | T011, T053, T062, T063 | Gemini |
-| 26 | [T020](../tasks/t020-markdown-parser.md) | Lossless Markdown parser/serializer | T019, T013 | Gemini |
-| 27 | [T026](../tasks/t026-search-projection.md) | Vietnamese normalized n-gram projection | T019, T013 | GPT-6.1 Sol |
-| 28 | [T031](../tasks/t031-review-schema.md) | Review/card schema và deterministic SRS | T019, T005, T013 | GPT-6.1 Sol |
-| 29 | [T021](../tasks/t021-safe-source-files.md) | Allowlisted Windows source file adapter | T020 | GPT-6.1 Sol |
-| 30 | [T022](../tasks/t022-source-journal.md) | Durable source journal và crash reconciliation | T021, T014, T031 | GPT-6.1 Sol |
-| 31 | [T023](../tasks/t023-source-sync.md) | Startup/watcher sync và source API | T022, T026 | GPT-6.1 Sol |
-| 32 | [T024](../tasks/t024-save-api.md) | Explicit save preview vào Markdown và cards | T008, T023, T031 | GPT-6.1 Sol |
-| 33 | [T025](../tasks/t025-save-ui-audio.md) | Save lookup preview và local pronunciation | T009, T024, T052 | Gemini |
-| 34 | [T027](../tasks/t027-search-api.md) | Search/detail API có cursor và filters | T026, T006, T017 | GPT-6.1 Sol |
-| 35 | [T028](../tasks/t028-search-ui.md) | Search/detail read flow | T027, T017, T010, T052 | Gemini |
-| 36 | [T029](../tasks/t029-edit-api.md) | Revision-safe word-form edit API | T024, T027, T017 | GPT-6.1 Sol |
-| 37 | [T030](../tasks/t030-edit-ui.md) | Edit form và conflict dialog | T029, T028, T052 | Gemini |
-| 38 | [T032](../tasks/t032-review-api.md) | Review queue và review event API | T031, T023, T027, T006, T017 | GPT-6.1 Sol |
-| 39 | [T033](../tasks/t033-review-ui.md) | Flashcard review flow | T032, T004, T017, T052 | Gemini |
-| 40 | [T059](../tasks/t059-quiz-scoring.md) | Pure quiz scoring và weakest-rating oracle | T031, T013 | Gemini |
-| 41 | [T034](../tasks/t034-quiz-schema.md) | Quiz immutable snapshot schema | T031, T022, T013 | GPT-6.1 Sol |
-| 42 | [T035](../tasks/t035-quiz-api.md) | Quiz creation và snapshot retrieval API | T034, T016, T059, T023, T014, T017 | GPT-6.1 Sol |
-| 43 | [T036](../tasks/t036-quiz-ui.md) | Quiz builder UI dùng generation API | T035, T018, T010, T017, T052 | Gemini |
-| 44 | [T047](../tasks/t047-quiz-autosave-api.md) | Quiz answer draft API với revision | T035, T014, T017 | GPT-6.1 Sol |
-| 45 | [T050](../tasks/t050-quiz-runner-ui.md) | Quiz runner và revision-aware autosave UI | T047, T036, T017, T010, T052 | Gemini |
-| 46 | [T048](../tasks/t048-quiz-submit-api.md) | Quiz submission và atomic SRS handoff | T047, T032, T059, T017 | GPT-6.1 Sol |
-| 47 | [T049](../tasks/t049-writing-feedback-api.md) | Writing feedback API và history retry | T047, T016, T034, T014, T017 | GPT-6.1 Sol |
-| 48 | [T051](../tasks/t051-quiz-result-feedback-ui.md) | Submit/result và writing feedback UI | T050, T048, T049, T018, T052 | Gemini |
-| 49 | [T037](../tasks/t037-dashboard-formulas.md) | Dashboard summary API và streak formulas | T023, T032, T048, T011, T017 | GPT-6.1 Sol |
-| 50 | [T046](../tasks/t046-metrics-alerts-runbooks.md) | Local RED metrics và operational Status API | T011, T037, T023, T016, T017 | GPT-6.1 Sol |
-| 51 | [T060](../tasks/t060-status-ui.md) | Operational Status screen và consent integration | T046, T018, T010, T052 | Gemini |
-| 52 | [T038](../tasks/t038-dashboard-ui.md) | Learning Dashboard UI | T037, T004, T017, T010, T052 | Gemini |
-| 53 | [T061](../tasks/t061-alerts-runbooks.md) | Local symptom alerts và runbook links | T046, T060, T063 | GPT-6.1 Sol |
-| 54 | [T039](../tasks/t039-launcher.md) | Windows launcher single-instance/bootstrap | T006, T004, T023, T060 | GPT-6.1 Sol |
-| 55 | [T040](../tasks/t040-first-run-recovery.md) | Native first-run configuration và protected key store | T039, T007, T020, T005 | GPT-6.1 Sol |
-| 56 | [T054](../tasks/t054-restore-recovery-drill.md) | Staging restore và migration recovery drill | T040, T022, T048, T049 | GPT-6.1 Sol |
-| 57 | [T041](../tasks/t041-security-hardening.md) | Browser/API/filesystem hardening evidence | T040, T021, T025, T049, T052, T063 | GPT-6.1 Sol |
-| 58 | [T042](../tasks/t042-performance-fixture.md) | Deterministic100k search benchmark fixture | T026 | GPT-6.1 Sol |
-| 59 | [T065](../tasks/t065-search-performance-evidence.md) | Search browser timing trên100k fixture | T042, T028, T052 | GPT-6.1 Sol |
-| 60 | [T064](../tasks/t064-ui-performance-harness.md) | Local Lighthouse performance harness | T052, T038 | Gemini |
-| 61 | [T043](../tasks/t043-accessibility-evidence.md) | WCAG 2.2 AA browser/manual evidence | T025, T028, T030, T033, T036, T050, T051, T038, T060, T052, T064 | GPT-6.1 Sol |
-| 62 | [T055](../tasks/t055-ai-content-evidence.md) | Human-reviewed semantic fixture và optional AI smoke | T008, T035, T049, T040, T041 | GPT-6.1 Sol |
-| 63 | [T056](../tasks/t056-windows-package.md) | Reproducible Windows package và shortcut | T039, T040, T054, T004 | GPT-6.1 Sol |
-| 64 | [T044](../tasks/t044-release-contract-audit.md) | Generated contract and cross-doc audit | T013, T008, T024, T027, T029, T032, T035, T047, T048, T049, T037, T046, T061 | GPT-6.1 Sol |
-| 65 | [T045](../tasks/t045-git-release-hygiene.md) | Git hooks, branch and commit hygiene | T012, T063 | Gemini |
-| 66 | [T057](../tasks/t057-release-verification.md) | Windows/offline release evidence matrix | T041, T043, T044, T054, T056, T061, T055, T065 | GPT-6.1 Sol |
+| 19 | [T075](../tasks/t075-shadcn-ui-foundation.md) | shadcn/ui foundation & Tailwind integration | T004, T002 | Gemini |
+| 20 | [T076](../tasks/t076-app-shell-shadcn-migration.md) | AppShell shadcn/ui & semantic design-system migration | T004, T075 | Gemini |
+| 21 | [T018](../tasks/t018-consent-ui.md) | Consent dialog và Status panel | T076, T015, T017, T052 | Gemini |
+| 22 | [T019](../tasks/t019-vocabulary-schema.md) | Schema vocabulary, source links và preview | T015 | GPT-6.1 Sol |
+| 23 | [T008](../tasks/t008-lookup-api-vertical-slice.md) | POST lookup trả preview đã validate | T007, T014, T016, T019, T017 | GPT-6.1 Sol |
+| 24 | [T009](../tasks/t009-lookup-ui-vertical-slice.md) | Lookup UI gọi API thật qua client | T076, T008, T017, T018, T052 | Gemini |
+| 25 | [T010](../tasks/t010-error-handling-recovery.md) | Typed UI recovery cho common error codes | T009, T052 | Gemini |
+| 26 | [T011](../tasks/t011-observability-instrumentation.md) | Local JSON logs, correlation và span boundary | T010 | GPT-6.1 Sol |
+| 27 | [T012](../tasks/t012-ci-pipeline.md) | CI lõi cho build và tests | T011, T053, T062, T063 | Gemini |
+| 28 | [T020](../tasks/t020-markdown-parser.md) | Lossless Markdown parser/serializer | T019, T013 | Gemini |
+| 29 | [T026](../tasks/t026-search-projection.md) | Vietnamese normalized n-gram projection | T019, T013 | GPT-6.1 Sol |
+| 30 | [T031](../tasks/t031-review-schema.md) | Review/card schema và deterministic SRS | T019, T005, T013 | GPT-6.1 Sol |
+| 31 | [T021](../tasks/t021-safe-source-files.md) | Allowlisted Windows source file adapter | T020 | GPT-6.1 Sol |
+| 32 | [T022](../tasks/t022-source-journal.md) | Durable source journal và crash reconciliation | T021, T014, T031 | GPT-6.1 Sol |
+| 33 | [T023](../tasks/t023-source-sync.md) | Startup/watcher sync và source API | T022, T026 | GPT-6.1 Sol |
+| 34 | [T024](../tasks/t024-save-api.md) | Explicit save preview vào Markdown và cards | T008, T023, T031 | GPT-6.1 Sol |
+| 35 | [T025](../tasks/t025-save-ui-audio.md) | Save lookup preview và local pronunciation | T009, T024, T052 | Gemini |
+| 36 | [T027](../tasks/t027-search-api.md) | Search/detail API có cursor và filters | T026, T006, T017 | GPT-6.1 Sol |
+| 37 | [T028](../tasks/t028-search-ui.md) | Search/detail read flow | T076, T027, T017, T010, T052 | Gemini |
+| 38 | [T029](../tasks/t029-edit-api.md) | Revision-safe word-form edit API | T024, T027, T017 | GPT-6.1 Sol |
+| 39 | [T030](../tasks/t030-edit-ui.md) | Edit form và conflict dialog | T029, T028, T052 | Gemini |
+| 40 | [T032](../tasks/t032-review-api.md) | Review queue và review event API | T031, T023, T027, T006, T017 | GPT-6.1 Sol |
+| 41 | [T033](../tasks/t033-review-ui.md) | Flashcard review flow | T076, T032, T017, T052 | Gemini |
+| 42 | [T059](../tasks/t059-quiz-scoring.md) | Pure quiz scoring và weakest-rating oracle | T031, T013 | Gemini |
+| 43 | [T034](../tasks/t034-quiz-schema.md) | Quiz immutable snapshot schema | T031, T022, T013 | GPT-6.1 Sol |
+| 44 | [T035](../tasks/t035-quiz-api.md) | Quiz creation và snapshot retrieval API | T034, T016, T059, T023, T014, T017 | GPT-6.1 Sol |
+| 45 | [T036](../tasks/t036-quiz-ui.md) | Quiz builder UI dùng generation API | T035, T018, T010, T017, T052 | Gemini |
+| 46 | [T047](../tasks/t047-quiz-autosave-api.md) | Quiz answer draft API với revision | T035, T014, T017 | GPT-6.1 Sol |
+| 47 | [T050](../tasks/t050-quiz-runner-ui.md) | Quiz runner và revision-aware autosave UI | T047, T036, T017, T010, T052 | Gemini |
+| 48 | [T048](../tasks/t048-quiz-submit-api.md) | Quiz submission và atomic SRS handoff | T047, T032, T059, T017 | GPT-6.1 Sol |
+| 49 | [T049](../tasks/t049-writing-feedback-api.md) | Writing feedback API và history retry | T047, T016, T034, T014, T017 | GPT-6.1 Sol |
+| 50 | [T051](../tasks/t051-quiz-result-feedback-ui.md) | Submit/result và writing feedback UI | T050, T048, T049, T018, T052 | Gemini |
+| 51 | [T037](../tasks/t037-dashboard-formulas.md) | Dashboard summary API và streak formulas | T023, T032, T048, T011, T017 | GPT-6.1 Sol |
+| 52 | [T046](../tasks/t046-metrics-alerts-runbooks.md) | Local RED metrics và operational Status API | T011, T037, T023, T016, T017 | GPT-6.1 Sol |
+| 53 | [T060](../tasks/t060-status-ui.md) | Operational Status screen và consent integration | T046, T018, T010, T052 | Gemini |
+| 54 | [T038](../tasks/t038-dashboard-ui.md) | Learning Dashboard UI | T076, T037, T017, T010, T052 | Gemini |
+| 55 | [T061](../tasks/t061-alerts-runbooks.md) | Local symptom alerts và runbook links | T046, T060, T063 | GPT-6.1 Sol |
+| 56 | [T039](../tasks/t039-launcher.md) | Windows launcher single-instance/bootstrap | T006, T004, T023, T060 | GPT-6.1 Sol |
+| 57 | [T040](../tasks/t040-first-run-recovery.md) | Native first-run configuration và protected key store | T039, T007, T020, T005 | GPT-6.1 Sol |
+| 58 | [T054](../tasks/t054-restore-recovery-drill.md) | Staging restore và migration recovery drill | T040, T022, T048, T049 | GPT-6.1 Sol |
+| 59 | [T041](../tasks/t041-security-hardening.md) | Browser/API/filesystem hardening evidence | T040, T021, T025, T049, T052, T063 | GPT-6.1 Sol |
+| 60 | [T042](../tasks/t042-performance-fixture.md) | Deterministic100k search benchmark fixture | T026 | GPT-6.1 Sol |
+| 61 | [T065](../tasks/t065-search-performance-evidence.md) | Search browser timing trên100k fixture | T042, T028, T052 | GPT-6.1 Sol |
+| 62 | [T064](../tasks/t064-ui-performance-harness.md) | Local Lighthouse performance harness | T052, T038 | Gemini |
+| 63 | [T043](../tasks/t043-accessibility-evidence.md) | WCAG 2.2 AA browser/manual evidence | T025, T028, T030, T033, T036, T050, T051, T038, T060, T052, T064 | GPT-6.1 Sol |
+| 64 | [T055](../tasks/t055-ai-content-evidence.md) | Human-reviewed semantic fixture và optional AI smoke | T008, T035, T049, T040, T041 | GPT-6.1 Sol |
+| 65 | [T056](../tasks/t056-windows-package.md) | Reproducible Windows package và shortcut | T039, T040, T054, T004 | GPT-6.1 Sol |
+| 66 | [T044](../tasks/t044-release-contract-audit.md) | Generated contract and cross-doc audit | T013, T008, T024, T027, T029, T032, T035, T047, T048, T049, T037, T046, T061 | GPT-6.1 Sol |
+| 67 | [T045](../tasks/t045-git-release-hygiene.md) | Git hooks, branch and commit hygiene | T012, T063 | Gemini |
+| 68 | [T057](../tasks/t057-release-verification.md) | Windows/offline release evidence matrix | T041, T043, T044, T054, T056, T061, T055, T065 | GPT-6.1 Sol |
 
 ## Vertical slices và checkpoints chính
 
 1. **Toolchain/skeleton:** T001/T002/T058 → backend T003 → frontend shell T004 → storage migration zero T005. Install/build/test commands được xác minh tại task owner.
 2. **Quality và contract:** T053/T063/T013, rồi browser session/operation/DTO/harness T006/T014/T017/T066/T052/T062.
-3. **AI lookup API → UI:** consent/bridge/admission T015/T007/T016, panel T018, vocabulary schema T019, preview API T008, lookup UI T009, error recovery T010, logs T011 và early CI T012.
+3. **Design system và AI lookup API → UI:** shadcn foundation T075, AppShell migration T076; consent/bridge/admission T015/T007/T016, panel T018, vocabulary schema T019, preview API T008, lookup UI T009, error recovery T010, logs T011 và early CI T012.
 4. **Save/search/edit:** parser/projection/SRS foundation T020/T026/T031; safe paths/journal/sync T021/T022/T023; save API/UI T024/T025; search API/UI T027/T028; edit API/UI T029/T030.
 5. **Review và assessment:** queue/event T032 → flashcard UI T033. Scorer T059, quiz snapshot T034, generation T035 → builder T036, autosave T047 → runner T050, atomic submit T048, feedback T049 → result UI T051.
 6. **Dashboard/operations:** learning summary T037, metrics/status T046, Status UI T060, Dashboard UI T038, symptom alerts T061.
@@ -107,6 +109,7 @@ ID giữ ổn định qua lần chia nhỏ; thứ tự chạy nằm ở cột đ
 - **CP04** sau T006, T014, T017: kiểm tra acceptance/evidence của từng thẻ, applicable floor/lint/types/tests và integration/build đã tồn tại; ghi kết quả vào todo/handoff trước task kế tiếp.
 - **CP05** sau T066, T052, T062: kiểm tra acceptance/evidence của từng thẻ, applicable floor/lint/types/tests và integration/build đã tồn tại; ghi kết quả vào todo/handoff trước task kế tiếp.
 - **CP06** sau T015, T007, T016: kiểm tra acceptance/evidence của từng thẻ, applicable floor/lint/types/tests và integration/build đã tồn tại; ghi kết quả vào todo/handoff trước task kế tiếp.
+- **CP06A** sau T075, T076: kiểm tra shadcn/ui foundation và AppShell visual migration equivalence; applicable lint/types/tests/architecture/build đã tồn tại; ghi kết quả vào todo/handoff trước task kế tiếp.
 - **CP07** sau T018, T019, T008: kiểm tra acceptance/evidence của từng thẻ, applicable floor/lint/types/tests và integration/build đã tồn tại; ghi kết quả vào todo/handoff trước task kế tiếp.
 - **CP08** sau T009, T010, T011: kiểm tra acceptance/evidence của từng thẻ, applicable floor/lint/types/tests và integration/build đã tồn tại; ghi kết quả vào todo/handoff trước task kế tiếp.
 - **CP09** sau T012, T020, T026: kiểm tra acceptance/evidence của từng thẻ, applicable floor/lint/types/tests và integration/build đã tồn tại; ghi kết quả vào todo/handoff trước task kế tiếp.
@@ -161,6 +164,8 @@ flowchart TD
   A[T001 toolchain] --> B[T002 + T058 checks]
   B --> C[T003 backend]
   C --> D[T004 shell + T005 storage]
+  D --> FND[T075 shadcn foundation]
+  FND --> MIG[T076 AppShell migration]
   D --> E[T013 contract conformance]
   E --> F[T006 session + T014 operations]
   F --> BO[T066 trusted bootstrap → T052 harness]
@@ -168,20 +173,26 @@ flowchart TD
   G --> H[T016 dispatch gate]
   H --> I[T008 lookup API]
   I --> J[T009 lookup UI]
+  MIG --> J
+  MIG --> T018_UI[T018 consent UI]
   J --> K[T010 errors → T011 logs → T012 CI]
   F --> L[T019 vocabulary]
   L --> M[T020 parser / T026 projection / T031 SRS]
   M --> N[T021 paths → T022 journal → T023 sync]
   N --> O[T024 save / T027 search / T029 edit APIs]
   O --> P[T025 save / T028 search / T030 edit UIs]
+  MIG --> P
   N --> Q[T032 review → T033 UI]
+  MIG --> Q
   M --> R[T034 quiz snapshot + T059 scorer]
   R --> S[T035 create → T047 draft → T048 submit]
   H --> T[T049 feedback]
   S --> U[T036 builder / T050 runner / T051 results]
+  MIG --> U
   Q --> V[T037 dashboard / T046 status]
   U --> V
   V --> W[T038 dashboard / T060 status / T061 alerts]
+  MIG --> W
   W --> X[T039 launcher → T040 config → T054 restore]
   X --> Y[T056 package]
   Y --> Z[T057 release matrix]
@@ -196,6 +207,8 @@ T058 <- T001
 T003 <- T002, T058
 T004 <- T003
 T005 <- T003
+T075 <- T004, T002
+T076 <- T004, T075
 T053 <- T002, T058, T003, T004
 T063 <- T001, T053
 T013 <- T005
@@ -208,10 +221,10 @@ T062 <- T053, T003, T004, T017
 T015 <- T014
 T007 <- T006, T013
 T016 <- T015, T007
-T018 <- T004, T015, T017, T052
+T018 <- T076, T015, T017, T052
 T019 <- T015
 T008 <- T007, T014, T016, T019, T017
-T009 <- T004, T008, T017, T018, T052
+T009 <- T076, T008, T017, T018, T052
 T010 <- T009, T052
 T011 <- T010
 T012 <- T011, T053, T062, T063
@@ -224,11 +237,11 @@ T023 <- T022, T026
 T024 <- T008, T023, T031
 T025 <- T009, T024, T052
 T027 <- T026, T006, T017
-T028 <- T027, T017, T010, T052
+T028 <- T076, T027, T017, T010, T052
 T029 <- T024, T027, T017
 T030 <- T029, T028, T052
 T032 <- T031, T023, T027, T006, T017
-T033 <- T032, T004, T017, T052
+T033 <- T076, T032, T017, T052
 T059 <- T031, T013
 T034 <- T031, T022, T013
 T035 <- T034, T016, T059, T023, T014, T017
@@ -241,7 +254,7 @@ T051 <- T050, T048, T049, T018, T052
 T037 <- T023, T032, T048, T011, T017
 T046 <- T011, T037, T023, T016, T017
 T060 <- T046, T018, T010, T052
-T038 <- T037, T004, T017, T010, T052
+T038 <- T076, T037, T017, T010, T052
 T061 <- T046, T060, T063
 T039 <- T006, T004, T023, T060
 T040 <- T039, T007, T020, T005
@@ -326,6 +339,8 @@ xác nhận dependencies READY hoặc khả năng chạy Windows/provider eviden
 - [T002](../tasks/t002-quality-gates-test-runner-build.md): Frontend lint, typecheck và test runner.
 - [T003](../tasks/t003-backend-skeleton.md): FastAPI app factory và health.
 - [T004](../tasks/t004-frontend-shell-routes.md): React shell, route map và landmarks.
+- [T075](../tasks/t075-shadcn-ui-foundation.md): shadcn/ui foundation và Tailwind integration.
+- [T076](../tasks/t076-app-shell-shadcn-migration.md): AppShell shadcn/ui và semantic design-system migration.
 - [T009](../tasks/t009-lookup-ui-vertical-slice.md): Lookup UI gọi API thật qua client.
 - [T010](../tasks/t010-error-handling-recovery.md): Typed UI recovery cho common error codes.
 - [T012](../tasks/t012-ci-pipeline.md): CI lõi cho build và tests.

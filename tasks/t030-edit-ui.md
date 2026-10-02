@@ -11,7 +11,7 @@
 
 - [CONSTRAINTS.md](../CONSTRAINTS.md)
 - [AGENTS.md](../AGENTS.md)
-- [docs/ui-architecture.md](../docs/ui-architecture.md) detail/edit; §8–9
+- [docs/ui-architecture.md](../docs/ui-architecture.md) detail/edit; §8–9 & Canonical design system (shadcn/ui)
 - [docs/spec.md](../docs/spec.md) AC-08/28/31
 
 Đọc handoff của dependencies và source/tests hiện có trong phạm vi sửa. Các path source/config là vị trí dự kiến; repository hiện chỉ có tài liệu.
@@ -43,6 +43,7 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 ## Implementation notes
 
 - Keep local draft and show current revision on409; fresh explicit submit after reload. INVALID/MISSING read-only; no general file repair GUI.
+- Thiết kế component theo design system: `EditWordForm` và `RevisionConflictDialog` sử dụng canonical primitives (`Input`, `Textarea`, `Dialog`, `Button`...) từ `frontend/src/components/ui/` và semantic tokens kế thừa từ T076 (qua T028).
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
 
