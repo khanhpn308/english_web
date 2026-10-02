@@ -85,6 +85,23 @@ CONTRACT TEMPLATE JSON:
 """
 
 
+def task_context(card: TaskCard, state: RunState) -> str:
+    return (
+        json.dumps(card.model_dump(mode="json"))
+        + f"\nBASE_SHA: {state.base_sha}\nMAX_FIX_CYCLES: {state.max_fix_cycles}\n"
+    )
+
+
+def agent_prompt(role: str, context: str, output: type[BaseModel]) -> str:
+    return (
+        ROLE_RULES
+        + f"\nROLE: {role}\n"
+        + context
+        + "\nOUTPUT SCHEMA:\n"
+        + json.dumps(output.model_json_schema())
+    )
+
+
 class Pipeline:
     def __init__(
         self, repository: Path, config: Config, provider: AgentProvider | None = None
@@ -245,6 +262,50 @@ class Pipeline:
                 return False
         return True
 
+    def agy_help_failure(self, directory: Path, state: RunState) -> bool:
+        # T074 raised this specific error during help inspection, before execute.
+        # It produced no execution log, unlike a crashed or dispatched Worker.
+        if not (
+            state.blocked_from == State.WORKER_RUNNING
+            and state.current_agent == "worker"
+            and state.config is not None
+            and state.config.roles["worker"].provider == "agy"
+            and self.config.roles["worker"].provider == "agy"
+            and state.last_error == "agy lacks required capability: --print"
+            and state.fix_cycle == 0
+            and state.verified_digest
+            and {"task_card", "plan", "contract"}.issubset(state.artifacts)
+        ):
+            return False
+        attempts = list(directory.glob("00-worker-*"))
+        schemas = list(directory.glob("00-worker-*.schema.json"))
+        if len(schemas) != 1:
+            return False
+        schema = schemas[0]
+        prompt = schema.with_name(schema.name.removesuffix(".schema.json") + ".prompt.md")
+        handoff = directory / "worker_prompt.md"
+        if (
+            set(attempts) != {schema, prompt}
+            or any(p.is_symlink() or not p.is_file() for p in (schema, prompt, handoff))
+            or read_json(schema) != WorkerResult.model_json_schema()
+        ):
+            return False
+        self.check_artifacts(directory, state)
+        plan = stored_plan(read_json(directory / state.artifacts["plan"]))
+        card = TaskCard.model_validate(read_json(directory / state.artifacts["task_card"]))
+        contract = self.contract(directory, state)
+        expected = agent_prompt(
+            "worker",
+            task_context(card, state)
+            + json.dumps(contract.model_dump(mode="json"))
+            + plan.worker_prompt,
+            WorkerResult,
+        )
+        return (
+            handoff.read_text(encoding="utf-8") == plan.worker_prompt
+            and prompt.read_text(encoding="utf-8") == expected
+        )
+
     def retry_source(
         self, task: str, run_id: str | None, registered: dict[Path, str], resources: ExitStack
     ) -> RunState:
@@ -281,12 +342,14 @@ class Pipeline:
                     "Planning identified human gates;",
                 )
             )
-            trust_failure = self.trust_failure(directory, old)
+            undispatched = self.trust_failure(directory, old) or self.agy_help_failure(
+                directory, old
+            )
             if (
                 old.state not in {State.BLOCKED, State.FAILED}
-                or not (preworker or legacy_preworker or trust_failure)
-                or (old.current_agent not in {None, "prompt_engineer"} and not trust_failure)
-                or (old.contract_digest and not trust_failure)
+                or not (preworker or legacy_preworker or undispatched)
+                or (old.current_agent not in {None, "prompt_engineer"} and not undispatched)
+                or (old.contract_digest and not undispatched)
                 or old.implementation_sha
                 or old.integration_path
                 or old.integration_branch
@@ -301,7 +364,7 @@ class Pipeline:
                     "baseline",
                     "plan",
                     "retry_origin",
-                    *({"contract"} if trust_failure else set()),
+                    *({"contract"} if undispatched else set()),
                 }
             ):
                 raise OrchestratorError(
@@ -337,7 +400,7 @@ class Pipeline:
                 raise OrchestratorError("Retry refused: previous source evidence changed")
             if "plan" in old.artifacts:
                 stored_plan(read_json(directory / old.artifacts["plan"]))
-            if trust_failure:
+            if undispatched:
                 validate_contract(self.contract(directory, old), card, old)
         return selected
 
@@ -558,13 +621,7 @@ class Pipeline:
         git = Git(working)
         snapshot = git.snapshot(state.base_sha)
         name = f"{state.fix_cycle:02d}-{role_name}-{uuid4().hex[:8]}"
-        prompt = (
-            ROLE_RULES
-            + f"\nROLE: {role_name}\n"
-            + context
-            + "\nOUTPUT SCHEMA:\n"
-            + json.dumps(output.model_json_schema())
-        )
+        prompt = agent_prompt(role_name, context, output)
         (directory / f"{name}.prompt.md").write_text(prompt, encoding="utf-8")
         state.current_agent = role_name
         self.save(directory, state)
@@ -733,10 +790,7 @@ class Pipeline:
         self.save(directory, state)
 
     def drive(self, directory: Path, state: RunState, card: TaskCard) -> RunState:
-        context = (
-            json.dumps(card.model_dump(mode="json"))
-            + f"\nBASE_SHA: {state.base_sha}\nMAX_FIX_CYCLES: {state.max_fix_cycles}\n"
-        )
+        context = task_context(card, state)
         if state.state == State.READY:
             self.move(directory, state, State.PLANNING)
             planning_context = (

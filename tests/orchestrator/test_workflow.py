@@ -1196,3 +1196,116 @@ def test_config_refuses_worker_permissions_for_other_roles(
     config.roles[role_name] = Role.model_validate(role)
     with pytest.raises(OrchestratorError, match="Worker"):
         Pipeline(repository, config, FakeAgents())
+
+
+@pytest.mark.parametrize(
+    "unsafe",
+    [
+        "none",
+        "dirty",
+        "log",
+        "response",
+        "schema",
+        "prompt",
+        "error",
+        "contract",
+        "schema_missing",
+        "attempt_prompt_missing",
+        "attempt_prompt",
+        "schema_link",
+        "other_attempt",
+        "history",
+        "wrong_provider",
+        "fix_cycle",
+        "missing_verified",
+        "missing_task_card",
+    ],
+)
+def test_agy_legacy_help_failure_retry_preserves_evidence(repository: Path, unsafe: str) -> None:
+    class PreflightFailure(FakeAgents):
+        def run(
+            self,
+            prompt: str,
+            *,
+            cwd: Path,
+            role: Role,
+            timeout: int,
+            output: type[Output],
+            artifacts: Path,
+            name: str,
+            readonly: bool,
+        ) -> Output:
+            if output == WorkerResult:
+                atomic_json(artifacts / f"{name}.schema.json", output.model_json_schema())
+                raise OrchestratorError("agy lacks required capability: --print")
+            return super().run(
+                prompt,
+                cwd=cwd,
+                role=role,
+                timeout=timeout,
+                output=output,
+                artifacts=artifacts,
+                name=name,
+                readonly=readonly,
+            )
+
+    config = configuration(integrate=False)
+    config.roles["worker"].provider = "agy"
+    pipeline = Pipeline(repository, config, PreflightFailure())
+    old = pipeline.start("T100")
+    assert old.state == State.FAILED and old.blocked_from == State.WORKER_RUNNING
+    directory = pipeline.run_path("T100", old.run_id)
+    schema = next(directory.glob("00-worker-*.schema.json"))
+    stem = schema.name.removesuffix(".schema.json")
+    if unsafe == "dirty":
+        (Path(old.worktree_path) / "feature.txt").write_text("Preserve partial edits")
+    elif unsafe in {"log", "response"}:
+        atomic_json(directory / f"{stem}.{unsafe}.json", {"execution": "unknown"})
+    elif unsafe == "schema":
+        atomic_json(schema, {"unknown": "schema"})
+    elif unsafe == "prompt":
+        (directory / "worker_prompt.md").write_text("Changed handoff")
+    elif unsafe == "error":
+        old.last_error = "Agent process failed (exit 1, timeout=False)"
+        pipeline.save(directory, old)
+    elif unsafe == "contract":
+        p = directory / old.artifacts["contract"]
+        p.write_text(p.read_text() + " ")
+    elif unsafe == "schema_missing":
+        schema.unlink()
+    elif unsafe == "attempt_prompt_missing":
+        (directory / f"{stem}.prompt.md").unlink()
+    elif unsafe == "attempt_prompt":
+        (directory / f"{stem}.prompt.md").write_text("Changed invocation prompt")
+    elif unsafe == "schema_link":
+        external = directory / "external-schema.json"
+        external.write_bytes(schema.read_bytes())
+        schema.unlink()
+        schema.symlink_to(external)
+    elif unsafe == "other_attempt":
+        (directory / "00-worker-extra.prompt.md").write_text("Uncertain extra attempt")
+    elif unsafe == "history":
+        Git(Path(old.worktree_path)).run("commit", "--allow-empty", "-m", "Unknown Worker commit")
+    elif unsafe == "wrong_provider":
+        config.roles["worker"].provider = "gemini"
+    elif unsafe == "fix_cycle":
+        old.fix_cycle = 1
+        pipeline.save(directory, old)
+    elif unsafe == "missing_verified":
+        old.verified_digest = ""
+        pipeline.save(directory, old)
+    elif unsafe == "missing_task_card":
+        del old.artifacts["task_card"]
+        pipeline.save(directory, old)
+    retained = {p.name: p.read_bytes() for p in directory.iterdir() if p.is_file()}
+    pipeline.provider = FakeAgents()
+    if unsafe == "none":
+        new = pipeline.start("T100")
+        assert new.state == State.AUDIT_PASS and new.retry_of == old.run_id
+        assert new.worktree_path != old.worktree_path
+        assert pipeline.provider.calls == ["Plan", "WorkerResult", "Audit"]
+    else:
+        with pytest.raises(OrchestratorError):
+            pipeline.start("T100")
+        assert pipeline.provider.calls == []
+    assert retained == {p.name: p.read_bytes() for p in directory.iterdir() if p.is_file()}

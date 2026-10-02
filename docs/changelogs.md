@@ -1,3 +1,9 @@
+## 02/10/2026 - T075: Sửa kiểm tra capability agy trên stderr (Asia/Bangkok)
+
+- **Nguyên nhân:** agy1.2.14 in --help ra stderr, adapter chỉ đọc stdout nên báo thiếu --print trước Worker. Kiểm tra cả hai kênh, từ chối probe lỗi/timeout/quá giới hạn và bỏ yêu cầu --print không dùng trong lệnh stdin headless; các cờ thực sự dùng vẫn bắt buộc.
+- **Phục hồi:** Chỉ lỗi --print pre-dispatch đã xác định được tạo run mới khi source/history, task/plan/contract, prompt/schema còn nguyên và chưa có log/response Worker. Giữ bằng chứng cũ; từ chối source drift, tampering, schema/attempt thiếu, outcome không rõ hoặc provider khác.
+- **TDD/phạm vi:** Baseline144pass115.20s; RED6fail/7pass6.74s tái hiện lỗi help và thiếu recovery, thêm RED1fail2.65s phát hiện prompt invocation bị sửa. Chỉ runtime/workflow, hai test, guide và bookkeeping T075; không sửa ứng dụng/config/credentials/scanners hay chạy inference. Áp dụng documentation-and-adrs. SOURCE FREEZE: focused171pass130.47s; check:task exit0,704 Python/38 frontend/40 architecture tests, changed coverage97.22%, total92.36%, ba scanner0finding; Ruff/format/Mypy49file/diff check đạt. Native agy help được chấp nhận với inference giả lập; kiểm tra chỉ đọc xác nhận T021 đủ điều kiện retry, artifact cũ nguyên vẹn.
+
 ## 02/10/2026 - Tra cứu nhanh lệnh orchestrator (Asia/Bangkok)
 
 - **Tài liệu:** Thêm bảng trường hợp/lệnh ngay đầu `docs/orchestrator.md`: dry-run, chạy chưa tích hợp/toàn bộ, status theo run ID, resume, retry, cấu hình Worker GPT và chờ khóa tích hợp. Giải thích ngắn worktree, model mặc định agy, điều kiện retry và nạp cấu hình scanner để tra cứu khi chạy task.

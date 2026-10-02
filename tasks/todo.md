@@ -128,3 +128,5 @@ Infrastructure verification: [final evidence](../docs/reviews/orchestrator-verif
 - [x] [T073](t073-autonomous-agent-recovery.md): Autonomous development-agent recovery; session trust, bounded safe agent retries and FAILED terminal errors. Full check:task exit0: 634 Python tests (101 orchestrator), 40 architecture tests, changed coverage94.44%, zero scanner findings.
 
 - [x] [T074](t074-agy-worker-permissions.md): Antigravity CLI Worker, explicit GPT full access and agy process auto-approval; check:task exit0, 677 Python/144 orchestrator tests, 40 architecture tests, changed coverage100%, zero scanner findings.
+
+- [x] [T075](t075-agy-capability-probes.md): Accept valid CLI help on stderr, check only used agy stdin flags and safely retry the known undispatched --print capability failure while preserving old evidence; check:task exit0, 704 Python/171 orchestrator tests, 40 architecture tests, changed coverage97.22%, zero scanner findings.

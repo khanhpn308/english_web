@@ -20,6 +20,7 @@ Thay `T018` bằng task cần chạy; thay `RUN_ID` bằng `run_id` trong kết 
 | Tiếp tục một run đang ở điểm ổn định, chưa tích hợp | `python -m tools.orchestrator resume T018 --run-id RUN_ID --no-integrate` |
 | Run đã AUDIT_PASS: tiếp tục để commit, kiểm tra và tích hợp | `python -m tools.orchestrator resume T018 --run-id RUN_ID --integrate` |
 | Thử lại sau khi sửa nguyên nhân lỗi, nếu run đủ điều kiện retry | `python -m tools.orchestrator retry T018 --run-id RUN_ID --no-integrate` |
+| Lỗi cũ `agy lacks required capability: --print`: sau khi cập nhật bản sửa, tạo lần thử mới | `python -m tools.orchestrator run T021 --no-integrate` |
 | Chạy Worker GPT bằng tệp cấu hình riêng đã tạo | `python -m tools.orchestrator run T018 --config orchestrator.gpt.local.yaml --no-integrate` |
 | Khóa tích hợp đang bận: chạy lại sau khi task khác tích hợp xong | `python -m tools.orchestrator resume T018 --run-id RUN_ID --integrate` |
 
@@ -112,7 +113,10 @@ Các phiên bản đã kiểm tra tại máy: Codex **0.159.2** trước khi t�
 ở lần kiểm tra cuối; Gemini CLI **0.59.0**; Antigravity CLI **1.2.14**. Những cờ cần thiết vẫn được hỗ trợ.
 Đây là bằng chứng kiểm tra, không phải cam kết tương thích với các phiên bản khác.
 Mỗi lần gọi đều kiểm tra `--version`/`--help` của CLI đã cài và `exec --help` của
-Codex; nếu thiếu khả năng cần thiết, công cụ báo lỗi rõ ràng. Codex sử dụng
+Codex; đọc help từ cả stdout và stderr vì agy1.2.14 in help ra stderr dù exit0.
+Probe lỗi/timeout/quá giới hạn không được gọi agent. Chỉ kiểm tra cờ thực sự dùng;
+agy stdin headless không yêu cầu hoặc truyền `--print`. Nếu thiếu khả năng cần thiết,
+công cụ báo lỗi rõ ràng. Codex sử dụng
 `-a never exec --ephemeral --sandbox`, `--output-schema`, `--output-last-message`,
 cờ `--model` tùy chọn và cấu hình mức suy luận; prompt được truyền qua stdin.
 Gemini sử dụng `--prompt`, `--output-format json`, `--approval-mode plan` khi kiểm
@@ -192,6 +196,12 @@ run sở hữu worktree đều failed, không có stdout, không timeout, log c�
 source/history/artifacts nguyên vẹn và chưa triển khai/tích hợp. Đây là khởi tạo
 lại từ main, không tiếp tục Worker outcome chưa biết hoặc sửa JSON cũ. Crash cùng
 provider hoặc worktree có thay đổi vẫn cần kiểm tra và giữ nguyên công việc.
+
+Riêng lỗi cũ `agy lacks required capability: --print` do kiểm tra help sai kênh,
+`run`/`retry` được tạo lần thử mới khi worktree vẫn sạch tại base, task/plan/contract
+còn nguyên vẹn, prompt/schema khớp và chưa có log/response/result Worker. Giữ nguyên
+run cũ và chạy lại baseline/planning; không sửa state FAILED hoặc replay outcome
+không xác định. Lỗi thực thi khác không được coi là lỗi pre-dispatch này.
 
 Cấu hình còn quản lý `base_branch` (mặc định là main cục bộ), `max_fix_cycles` (0–10),
 `timeout_seconds`, các lệnh kiểm tra bắt buộc dưới dạng mảng đối số,

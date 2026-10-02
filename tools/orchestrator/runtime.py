@@ -295,6 +295,10 @@ class CliProvider:
         probes = [version, help_result]
         schema_path = artifacts / f"{name}.schema.json"
         atomic_json(schema_path, output.model_json_schema())
+        if any(p.exit_code or p.timed_out or p.oversized for p in probes):
+            raise OrchestratorError("Provider CLI capability probe failed")
+        # CLI help is informational output: agy writes it to stderr with exit 0.
+        help_text = help_result.stdout + "\n" + help_result.stderr
         if role.provider != "agy" and role.allow_process:
             raise OrchestratorError("allow_process is supported only by agy Worker")
         if role.provider != "codex" and role.worker_access == "full-access":
@@ -302,15 +306,18 @@ class CliProvider:
         if role.provider == "codex":
             details = execute([role.executable, "exec", "--help"], cwd, timeout=30)
             probes.append(details)
+            if details.exit_code or details.timed_out or details.oversized:
+                raise OrchestratorError("Provider CLI capability probe failed")
+            details_text = details.stdout + "\n" + details.stderr
             for flag in ["--output-schema", "--output-last-message", "--sandbox", "--ephemeral"]:
-                if flag not in details.stdout:
+                if flag not in details_text:
                     raise OrchestratorError(f"Codex lacks required capability: {flag}")
-            if "--ask-for-approval" not in help_result.stdout:
+            if "--ask-for-approval" not in help_text:
                 raise OrchestratorError("Codex lacks non-interactive approval policy")
             if (
                 not readonly
                 and role.worker_access == "full-access"
-                and "danger-full-access" not in details.stdout
+                and "danger-full-access" not in details_text
             ):
                 raise OrchestratorError("Codex lacks required capability: danger-full-access")
             response_path = artifacts / f"{name}.response.json"
@@ -340,7 +347,7 @@ class CliProvider:
             command.append("-")
         elif role.provider == "gemini":
             for flag in ["--prompt", "--output-format", "--approval-mode", "--skip-trust"]:
-                if flag not in help_result.stdout:
+                if flag not in help_text:
                     raise OrchestratorError(f"Gemini lacks required capability: {flag}")
             if role.reasoning:
                 raise OrchestratorError("Gemini CLI exposes no reasoning-effort flag; set null")
@@ -358,7 +365,6 @@ class CliProvider:
                 command.extend(["--model", role.model])
         else:
             flags = [
-                "--print",
                 "--input-format",
                 "--output-format",
                 "--json-schema",
@@ -376,7 +382,7 @@ class CliProvider:
             if not readonly and role.allow_process:
                 flags.append("--dangerously-skip-permissions")
             for flag in flags:
-                if flag not in help_result.stdout:
+                if flag not in help_text:
                     raise OrchestratorError(f"agy lacks required capability: {flag}")
             command = [
                 role.executable,
@@ -396,8 +402,6 @@ class CliProvider:
                 command.extend(["--model", role.model])
             if role.reasoning:
                 command.extend(["--effort", role.reasoning])
-        if any(p.exit_code or p.timed_out or p.oversized for p in probes):
-            raise OrchestratorError("Provider CLI capability probe failed")
         result = execute(command, cwd, timeout=timeout, stdin=prompt)
         atomic_json(
             artifacts / f"{name}.log.json",

@@ -656,6 +656,114 @@ def test_agy_json_protocol(fake_agy: Path, tmp_path: Path, prompt: str) -> None:
     )
 
 
+@pytest.mark.parametrize("stream", ["stdout", "stderr", "split"])
+def test_agy_help_streams_without_unused_print(fake_agy: Path, tmp_path: Path, stream: str) -> None:
+    source = fake_agy.read_text()
+    source = source.replace("print('--print --input-format", "print('--input-format")
+    if stream == "stderr":
+        source = source.replace(
+            "'--dangerously-skip-permissions --disable-slash-commands')",
+            "'--dangerously-skip-permissions --disable-slash-commands', file=sys.stderr)",
+        )
+    elif stream == "split":
+        source = source.replace(
+            "print('--input-format --output-format --json-schema --mode --model --effort '",
+            "print('--input-format --output-format --json-schema', file=sys.stderr)\n"
+            "    print('--mode --model --effort '",
+        )
+    fake_agy.write_text(source)
+    result = CliProvider().run(
+        "NATIVE",
+        cwd=tmp_path,
+        role=Role(
+            provider="agy",
+            executable=str(fake_agy),
+            model="listed-model",
+            reasoning="high",
+            allow_process=True,
+        ),
+        timeout=5,
+        output=Fix,
+        artifacts=tmp_path,
+        name="worker",
+        readonly=False,
+    )
+    assert result.fix_prompt == "Synthetic fix"
+    received = json.loads((tmp_path / "received.json").read_text())
+    assert received["prompt"] == "NATIVE"
+    assert "--print" not in received["args"]
+    assert "--print=" not in received["args"]
+
+
+@pytest.mark.parametrize("provider", ["codex", "gemini"])
+def test_other_provider_help_on_stderr(fake_cli: Path, tmp_path: Path, provider: str) -> None:
+    fake_cli.write_text(
+        fake_cli.read_text().replace(
+            "'--prompt --output-format --approval-mode --skip-trust danger-full-access')",
+            "'--prompt --output-format --approval-mode --skip-trust "
+            "danger-full-access', file=sys.stderr)",
+        )
+    )
+    result = CliProvider().run(
+        "OK",
+        cwd=tmp_path,
+        role=Role.model_validate({"provider": provider, "executable": str(fake_cli)}),
+        timeout=5,
+        output=Fix,
+        artifacts=tmp_path,
+        name="review",
+        readonly=True,
+    )
+    assert result.fix_prompt == "Fix synthetic issue"
+
+
+@pytest.mark.parametrize("failure", ["exit", "timeout", "oversized"])
+def test_agy_failed_help_probe_does_not_dispatch(
+    fake_agy: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    from dataclasses import replace
+
+    from tools.orchestrator import runtime
+
+    fake_agy.write_text(
+        fake_agy.read_text().replace(
+            "'--dangerously-skip-permissions --disable-slash-commands')",
+            "'--dangerously-skip-permissions --disable-slash-commands', file=sys.stderr)",
+        )
+    )
+    original = runtime.execute
+    commands: list[list[str]] = []
+
+    def probe(
+        command: list[str], cwd: Path, *, timeout: int = 1800, stdin: str | None = None
+    ) -> runtime.ProcessResult:
+        commands.append(command)
+        result = original(command, cwd, timeout=timeout, stdin=stdin)
+        if "--help" in command:
+            return replace(
+                result,
+                exit_code=1 if failure == "exit" else 0,
+                timed_out=failure == "timeout",
+                oversized=failure == "oversized",
+            )
+        return result
+
+    monkeypatch.setattr(runtime, "execute", probe)
+    with pytest.raises(OrchestratorError, match="Provider CLI capability probe failed"):
+        CliProvider().run(
+            "OK",
+            cwd=tmp_path,
+            role=Role(provider="agy", executable=str(fake_agy)),
+            timeout=5,
+            output=Fix,
+            artifacts=tmp_path,
+            name="failed-probe",
+            readonly=False,
+        )
+    assert commands == [[str(fake_agy), "--version"], [str(fake_agy), "--help"]]
+    assert not (tmp_path / "received.json").exists()
+
+
 @pytest.mark.parametrize("readonly,allow", [(True, False), (True, True), (False, False)])
 def test_agy_plan_and_permissions(
     fake_agy: Path, tmp_path: Path, readonly: bool, allow: bool
@@ -679,7 +787,8 @@ def test_agy_plan_and_permissions(
     "flag",
     [
         "--json-schema",
-        "--print",
+        "--input-format",
+        "--output-format",
         "--mode",
         "--dangerously-skip-permissions",
         "--model",
