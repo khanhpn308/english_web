@@ -1,3 +1,16 @@
+## 03/10/2026 - T027: Sửa F1–F6 sau independent audit (Asia/Bangkok)
+
+- T026: thêm iterator candidate đầy đủ, bounded memory trong `search_index.py`, dùng chung matching/scoring với legacy `search()`; thêm dependency regression tests theo scope owner cấp.
+- T027: bỏ candidate cap và full-population cache, chọn page bằng heap pageSize+1; fingerprint gồm source relationships và stored projection version. Khôi phục detail `partOfSpeech`, kiểm tra canonical cursor encoding, giới hạn content filters và ngày ASCII hợp lệ.
+- Owner xác nhận projection không tương thích ở trang đầu trả `503 CONFIGURATION_REQUIRED`; cursor cũ trả `409 CURSOR_EXPIRED`. OpenAPI/DTO được tạo bằng tooling T017; 49 API + 32 T026 + 11 session tests, 5 contract tests, scoped Ruff/format và Mypy đều đạt. Source/generated hashes giữ nguyên qua verification cuối; independent re-audit còn pending.
+- Không sửa repository/normalization/models/session/migrations/tooling; không commit, không tích hợp T008/main.
+
+## 02/10/2026 - T027: Search/detail API với cursor và filters (Asia/Bangkok)
+
+- Đã triển khai collection/detail read API trên production app factory, dùng T026 Vietnamese projection, allowlist filter/sort, source-validity filtering và cursor HMAC process-local.
+- Đã thêm hai common error mappings được owner cấp scope: `INVALID_QUERY` và `CURSOR_EXPIRED`.
+- Tập trung 5 test T027, contract generation hai lần deterministic và contract tests đều đạt; full backend suite còn các Windows-native fail-closed inherited tests trên Linux.
+
 ## 02/10/2026 - T021: Tích hợp adapter source Windows sau xác nhận native PASS (Asia/Bangkok)
 
 - T021 được đánh dấu DONE sau xác nhận của chủ repo rằng bộ kiểm thử Windows native trên NTFS đã PASS, gồm junction/reparse, hardlink, read-only, CRLF, ownership/DACL và privacy. Báo cáo gốc không có trong checkout Linux nên được ghi là owner-attested evidence.

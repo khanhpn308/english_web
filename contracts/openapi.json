@@ -291,6 +291,37 @@
         "title": "BridgeStatus",
         "type": "string"
       },
+      "CardView": {
+        "additionalProperties": false,
+        "properties": {
+          "dueAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dueat"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "dueAt"
+        ],
+        "title": "CardView",
+        "type": "object"
+      },
       "ConsentError": {
         "additionalProperties": false,
         "properties": {
@@ -432,6 +463,35 @@
         ],
         "type": "object"
       },
+      "ExampleView": {
+        "additionalProperties": false,
+        "properties": {
+          "english": {
+            "title": "English",
+            "type": "string"
+          },
+          "verificationStatus": {
+            "enum": [
+              "VERIFIED",
+              "UNVERIFIED",
+              "MISSING"
+            ],
+            "title": "Verificationstatus",
+            "type": "string"
+          },
+          "vietnamese": {
+            "title": "Vietnamese",
+            "type": "string"
+          }
+        },
+        "required": [
+          "english",
+          "vietnamese",
+          "verificationStatus"
+        ],
+        "title": "ExampleView",
+        "type": "object"
+      },
       "GrantAiConsent": {
         "additionalProperties": false,
         "properties": {
@@ -487,6 +547,35 @@
           "readiness"
         ],
         "title": "HealthSummary",
+        "type": "object"
+      },
+      "MeaningView": {
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "verificationStatus": {
+            "enum": [
+              "VERIFIED",
+              "UNVERIFIED",
+              "MISSING"
+            ],
+            "title": "Verificationstatus",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "language",
+          "verificationStatus"
+        ],
+        "title": "MeaningView",
         "type": "object"
       },
       "Operation": {
@@ -551,6 +640,96 @@
         "title": "Operation",
         "type": "object"
       },
+      "PaginationView": {
+        "additionalProperties": false,
+        "properties": {
+          "hasMore": {
+            "title": "Hasmore",
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          },
+          "pageSize": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Pagesize",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "nextCursor",
+          "pageSize",
+          "hasMore"
+        ],
+        "title": "PaginationView",
+        "type": "object"
+      },
+      "SortView": {
+        "additionalProperties": false,
+        "properties": {
+          "by": {
+            "enum": [
+              "relevance",
+              "updatedAt",
+              "lemma"
+            ],
+            "title": "By",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "ASC",
+              "DESC"
+            ],
+            "title": "Direction",
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "direction"
+        ],
+        "title": "SortView",
+        "type": "object"
+      },
+      "SourceReferenceView": {
+        "additionalProperties": false,
+        "properties": {
+          "noteDate": {
+            "title": "Notedate",
+            "type": "string"
+          },
+          "sourceId": {
+            "title": "Sourceid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "VALID",
+              "INVALID",
+              "MISSING"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceId",
+          "noteDate",
+          "status"
+        ],
+        "title": "SourceReferenceView",
+        "type": "object"
+      },
       "StorageStatus": {
         "description": "Storage availability status.",
         "enum": [
@@ -559,6 +738,204 @@
         ],
         "title": "StorageStatus",
         "type": "string"
+      },
+      "WordFormCollection": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/WordFormSummary"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationView"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/SortView"
+          }
+        },
+        "required": [
+          "data",
+          "pagination",
+          "sort"
+        ],
+        "title": "WordFormCollection",
+        "type": "object"
+      },
+      "WordFormDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "cambridgeUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cambridgeurl"
+          },
+          "card": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CardView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "examples": {
+            "items": {
+              "$ref": "#/components/schemas/ExampleView"
+            },
+            "title": "Examples",
+            "type": "array"
+          },
+          "familyId": {
+            "title": "Familyid",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "ipaUs": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipaus"
+          },
+          "lemma": {
+            "title": "Lemma",
+            "type": "string"
+          },
+          "meaningsEn": {
+            "items": {
+              "$ref": "#/components/schemas/MeaningView"
+            },
+            "title": "Meaningsen",
+            "type": "array"
+          },
+          "meaningsVi": {
+            "items": {
+              "$ref": "#/components/schemas/MeaningView"
+            },
+            "title": "Meaningsvi",
+            "type": "array"
+          },
+          "partOfSpeech": {
+            "title": "Partofspeech",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "sourceRefs": {
+            "items": {
+              "$ref": "#/components/schemas/SourceReferenceView"
+            },
+            "title": "Sourcerefs",
+            "type": "array"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "verificationSummary": {
+            "enum": [
+              "VERIFIED",
+              "UNVERIFIED",
+              "MISSING"
+            ],
+            "title": "Verificationsummary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "familyId",
+          "lemma",
+          "partOfSpeech",
+          "meaningsEn",
+          "meaningsVi",
+          "examples",
+          "ipaUs",
+          "cambridgeUrl",
+          "sourceRefs",
+          "card",
+          "revision",
+          "verificationSummary",
+          "updatedAt"
+        ],
+        "title": "WordFormDetail",
+        "type": "object"
+      },
+      "WordFormSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lemma": {
+            "title": "Lemma",
+            "type": "string"
+          },
+          "meaningViMatch": {
+            "title": "Meaningvimatch",
+            "type": "string"
+          },
+          "noteDates": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notedates",
+            "type": "array"
+          },
+          "partOfSpeech": {
+            "title": "Partofspeech",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "verificationSummary": {
+            "enum": [
+              "VERIFIED",
+              "UNVERIFIED",
+              "MISSING"
+            ],
+            "title": "Verificationsummary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "lemma",
+          "partOfSpeech",
+          "meaningViMatch",
+          "verificationSummary",
+          "noteDates",
+          "revision",
+          "updatedAt"
+        ],
+        "title": "WordFormSummary",
+        "type": "object"
       }
     }
   },
@@ -1218,6 +1595,439 @@
         "summary": "Get Operation",
         "tags": [
           "operations"
+        ]
+      }
+    },
+    "/api/v1/word-forms": {
+      "get": {
+        "operationId": "list_word_forms_api_v1_word_forms_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "meaningVi",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Meaningvi"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lemma",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lemma"
+            }
+          },
+          {
+            "in": "query",
+            "name": "partOfSpeech",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "NOUN",
+                    "VERB",
+                    "ADJECTIVE",
+                    "ADVERB",
+                    "PRONOUN",
+                    "PREPOSITION",
+                    "CONJUNCTION",
+                    "INTERJECTION",
+                    "DETERMINER"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Partofspeech"
+            }
+          },
+          {
+            "in": "query",
+            "name": "verificationStatus",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "VERIFIED",
+                    "UNVERIFIED",
+                    "MISSING"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Verificationstatus"
+            }
+          },
+          {
+            "in": "query",
+            "name": "noteDate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Notedate"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sourceStatus",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "VALID",
+                    "INVALID",
+                    "MISSING"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sourcestatus"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "required": false,
+            "schema": {
+              "default": "relevance",
+              "enum": [
+                "relevance",
+                "updatedAt",
+                "lemma"
+              ],
+              "title": "Sortby",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "required": false,
+            "schema": {
+              "default": "ASC",
+              "enum": [
+                "ASC",
+                "DESC",
+                "asc",
+                "desc"
+              ],
+              "title": "Sortorder",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WordFormCollection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          }
+        },
+        "summary": "List Word Forms",
+        "tags": [
+          "word-forms"
+        ]
+      }
+    },
+    "/api/v1/word-forms/{wordFormId}": {
+      "get": {
+        "operationId": "get_word_form_api_v1_word_forms__wordFormId__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "wordFormId",
+            "required": true,
+            "schema": {
+              "title": "Wordformid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WordFormDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          }
+        },
+        "summary": "Get Word Form",
+        "tags": [
+          "word-forms"
         ]
       }
     },

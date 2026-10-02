@@ -60,6 +60,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/word-forms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Word Forms */
+        get: operations["list_word_forms_api_v1_word_forms_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/word-forms/{wordFormId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Word Form */
+        get: operations["get_word_form_api_v1_word_forms__wordFormId__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/bootstrap/exchange": {
         parameters: {
             query?: never;
@@ -178,6 +212,15 @@ export interface components {
          * @enum {string}
          */
         BridgeStatus: "NOT_CHECKED" | "OK" | "NOT_READY";
+        /** CardView */
+        CardView: {
+            /** Dueat */
+            dueAt: string | null;
+            /** Id */
+            id: string;
+            /** State */
+            state: string;
+        };
         /** ConsentError */
         ConsentError: {
             /** Code */
@@ -218,6 +261,18 @@ export interface components {
                 requestId: string;
             };
         };
+        /** ExampleView */
+        ExampleView: {
+            /** English */
+            english: string;
+            /**
+             * Verificationstatus
+             * @enum {string}
+             */
+            verificationStatus: "VERIFIED" | "UNVERIFIED" | "MISSING";
+            /** Vietnamese */
+            vietnamese: string;
+        };
         /** GrantAiConsent */
         GrantAiConsent: {
             /** Policyversion */
@@ -242,6 +297,18 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** MeaningView */
+        MeaningView: {
+            /** Language */
+            language: string;
+            /** Text */
+            text: string;
+            /**
+             * Verificationstatus
+             * @enum {string}
+             */
+            verificationStatus: "VERIFIED" | "UNVERIFIED" | "MISSING";
+        };
         /** Operation */
         Operation: {
             /** Createdat */
@@ -262,12 +329,108 @@ export interface components {
             /** Updatedat */
             updatedAt: string;
         };
+        /** PaginationView */
+        PaginationView: {
+            /** Hasmore */
+            hasMore: boolean;
+            /** Nextcursor */
+            nextCursor: string | null;
+            /** Pagesize */
+            pageSize: number;
+        };
+        /** SortView */
+        SortView: {
+            /**
+             * By
+             * @enum {string}
+             */
+            by: "relevance" | "updatedAt" | "lemma";
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "ASC" | "DESC";
+        };
+        /** SourceReferenceView */
+        SourceReferenceView: {
+            /** Notedate */
+            noteDate: string;
+            /** Sourceid */
+            sourceId: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "VALID" | "INVALID" | "MISSING";
+        };
         /**
          * StorageStatus
          * @description Storage availability status.
          * @enum {string}
          */
         StorageStatus: "OK" | "NOT_READY";
+        /** WordFormCollection */
+        WordFormCollection: {
+            /** Data */
+            data: components["schemas"]["WordFormSummary"][];
+            pagination: components["schemas"]["PaginationView"];
+            sort: components["schemas"]["SortView"];
+        };
+        /** WordFormDetail */
+        WordFormDetail: {
+            /** Cambridgeurl */
+            cambridgeUrl: string | null;
+            card: components["schemas"]["CardView"] | null;
+            /** Examples */
+            examples: components["schemas"]["ExampleView"][];
+            /** Familyid */
+            familyId: string;
+            /** Id */
+            id: string;
+            /** Ipaus */
+            ipaUs: string | null;
+            /** Lemma */
+            lemma: string;
+            /** Meaningsen */
+            meaningsEn: components["schemas"]["MeaningView"][];
+            /** Meaningsvi */
+            meaningsVi: components["schemas"]["MeaningView"][];
+            /** Partofspeech */
+            partOfSpeech: string;
+            /** Revision */
+            revision: number;
+            /** Sourcerefs */
+            sourceRefs: components["schemas"]["SourceReferenceView"][];
+            /** Updatedat */
+            updatedAt: string;
+            /**
+             * Verificationsummary
+             * @enum {string}
+             */
+            verificationSummary: "VERIFIED" | "UNVERIFIED" | "MISSING";
+        };
+        /** WordFormSummary */
+        WordFormSummary: {
+            /** Id */
+            id: string;
+            /** Lemma */
+            lemma: string;
+            /** Meaningvimatch */
+            meaningViMatch: string;
+            /** Notedates */
+            noteDates: string[];
+            /** Partofspeech */
+            partOfSpeech: string;
+            /** Revision */
+            revision: number;
+            /** Updatedat */
+            updatedAt: string;
+            /**
+             * Verificationsummary
+             * @enum {string}
+             */
+            verificationSummary: "VERIFIED" | "UNVERIFIED" | "MISSING";
+        };
     };
     responses: never;
     parameters: never;
@@ -735,6 +898,239 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Operation"];
+                };
+            };
+            /** @description Error Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_word_forms_api_v1_word_forms_get: {
+        parameters: {
+            query?: {
+                meaningVi?: string | null;
+                lemma?: string | null;
+                partOfSpeech?: ("NOUN" | "VERB" | "ADJECTIVE" | "ADVERB" | "PRONOUN" | "PREPOSITION" | "CONJUNCTION" | "INTERJECTION" | "DETERMINER") | null;
+                verificationStatus?: ("VERIFIED" | "UNVERIFIED" | "MISSING") | null;
+                noteDate?: string | null;
+                sourceStatus?: ("VALID" | "INVALID" | "MISSING") | null;
+                pageSize?: number;
+                sortBy?: "relevance" | "updatedAt" | "lemma";
+                sortOrder?: "ASC" | "DESC" | "asc" | "desc";
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordFormCollection"];
+                };
+            };
+            /** @description Error Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_word_form_api_v1_word_forms__wordFormId__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wordFormId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordFormDetail"];
                 };
             };
             /** @description Error Response */
