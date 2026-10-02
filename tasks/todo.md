@@ -132,3 +132,5 @@ Infrastructure verification: [final evidence](../docs/reviews/orchestrator-verif
 - [x] [T075](t075-agy-capability-probes.md): Accept valid CLI help on stderr, check only used agy stdin flags and safely retry the known undispatched --print capability failure while preserving old evidence; check:task exit0, 704 Python/171 orchestrator tests, 40 architecture tests, changed coverage97.22%, zero scanner findings.
 
 - [x] [T076](t076-audit-report-retry.md): Actionable audit findings, criterion evidence and bounded semantic JSON correction before terminating a run; check:task exit0, 718 Python/185 orchestrator tests, 40 architecture tests, changed coverage96.30%, zero scanner findings. Historical T059 implementation/evidence remains unchanged.
+
+- [x] [T077](t077-optional-task-timeout.md): Opt-in development task deadlines; default null, manual positive seconds, preserved cancellation/output/fix limits and historical run evidence.

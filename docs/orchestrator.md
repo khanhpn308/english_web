@@ -27,6 +27,7 @@ Thay `T018` bằng task cần chạy; thay `RUN_ID` bằng `run_id` trong kết 
 - `--no-integrate` vẫn tạo worktree task riêng khi bắt đầu run mới; dry-run không tạo worktree hay gọi model.
 - Mặc định Worker dùng **agy / Gemini**. Task GPT cần cấu hình riêng chọn `codex`, model ID thực và reasoning theo Prompt Engineer; bảng task-plan chưa tự đổi model khi chạy.
 - `run` tự tiếp tục run ổn định hoặc tạo lần thử mới nếu bằng chứng cho phép. `retry` giữ lại run cũ; lỗi sau khi Worker đã sửa source cần kiểm tra worktree/log, không bảo đảm retry được.
+- Mặc định không giới hạn thời gian chạy agent, setup và kiểm tra: `"timeout_seconds": null` (hoặc bỏ trường này). Muốn giới hạn 90 phút cho mỗi lần gọi, đặt `"timeout_seconds": 5400` trong cấu hình.
 - Auditor trả JSON sai quy ước được yêu cầu sửa trong tối đa ba lượt của cùng lần gọi; không chạy lại Worker chỉ để sửa báo cáo.
 - Chạy thật cần checkout chính sạch. `--integrate` chỉ đưa vào main sau audit và kiểm tra đạt; công cụ không push.
 - Scanner đã cấu hình trong `~/.bashrc` được terminal Bash tương tác mới tự nạp. Sau khi vừa sửa `.bashrc`, chạy `source "$HOME/.bashrc"` một lần trong terminal hiện tại; nhập lệnh không kèm dấu backtick.
@@ -205,7 +206,7 @@ run cũ và chạy lại baseline/planning; không sửa state FAILED hoặc rep
 không xác định. Lỗi thực thi khác không được coi là lỗi pre-dispatch này.
 
 Cấu hình còn quản lý `base_branch` (mặc định là main cục bộ), `max_fix_cycles` (0–10),
-`timeout_seconds`, các lệnh kiểm tra bắt buộc dưới dạng mảng đối số,
+`timeout_seconds` (mặc định `null`), các lệnh kiểm tra bắt buộc dưới dạng mảng đối số,
 `setup_commands`, thư mục gốc của run/worktree và `integrate`. Bước chuẩn bị mặc định
 chạy `npm ci` riêng trong mỗi worktree task và bản tích hợp thử sau merge; công cụ
 Python/phát triển được kế thừa từ môi trường gọi lệnh. Bước chuẩn bị của Level 1 chỉ
@@ -235,6 +236,32 @@ python -m tools.orchestrator retry T059 --no-integrate
 # Chọn chính xác lần thất bại có worktree cần đối chiếu:
 python -m tools.orchestrator retry T059 --run-id <recorded-run-id> --no-integrate
 ```
+
+### Thời gian chạy: mặc định chờ đến khi hoàn thành
+
+Trong `orchestrator.yaml` (dùng cú pháp JSON), mặc định là:
+
+```json
+"timeout_seconds": null
+```
+
+Bỏ hẳn trường này cũng có cùng kết quả. Agent của cả bốn vai trò, bước `npm ci`
+và các lệnh verification không bị orchestrator dừng chỉ vì chạy lâu. Muốn tự đặt
+thời hạn, thay bằng số nguyên từ 1 đến 86400; ví dụ `"timeout_seconds": 5400` là
+90 phút cho **mỗi lần gọi/lệnh**, không phải tổng thời gian task. `0`, số âm,
+chuỗi hoặc boolean đều không hợp lệ; dùng `null` để tắt timeout.
+
+Không giới hạn thời gian đồng nghĩa tiến trình bị treo có thể chờ mãi; dùng Ctrl+C
+khi cần dừng. Giới hạn output, xử lý exit khác 0, số vòng Fix và khóa tài nguyên
+vẫn áp dụng. Các thao tác quản trị ngắn như Git (60 giây), kiểm tra CLI help/version
+(30 giây) và dọn cây tiến trình vẫn có giới hạn riêng. Deadline của AI trong ứng
+dụng không thay đổi. CLI/provider có thể tự kết thúc do lỗi hoặc giới hạn riêng;
+agy mặc định `--print-timeout` là 0 (không giới hạn).
+
+Run lưu một bản cấu hình tại thời điểm bắt đầu. Đổi tệp cấu hình chỉ áp dụng cho
+run mới; không thay timeout của run đang chạy, không mở lại run FAILED và không
+sửa bằng chứng cũ. Run cũ có timeout số nguyên vẫn đọc được và giữ thời hạn đó;
+resume tại điểm ổn định yêu cầu cấu hình khớp bản đã lưu.
 
 Dùng `--config <path>` để chọn tệp cấu hình khác. Status/resume chọn lần chạy mới
 nhất đã lưu, trừ khi có `--run-id`. Mã thoát 0 nghĩa là thao tác yêu cầu đã thành

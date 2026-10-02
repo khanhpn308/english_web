@@ -1,5 +1,6 @@
 import json
 import multiprocessing
+import subprocess
 import sys
 from contextlib import suppress
 from multiprocessing.connection import Connection as PipeConnection
@@ -9,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 from tools.orchestrator.core import (
     Audit,
+    Config,
     Contract,
     Criterion,
     Fix,
@@ -507,7 +509,7 @@ def test_gemini_worker_is_headless_with_session_trust(
     original = runtime.execute
 
     def capture(
-        command: list[str], cwd: Path, *, timeout: int = 1800, stdin: str | None = None
+        command: list[str], cwd: Path, *, timeout: int | None = None, stdin: str | None = None
     ) -> runtime.ProcessResult:
         commands.append(command)
         return original(command, cwd, timeout=timeout, stdin=stdin)
@@ -735,7 +737,7 @@ def test_agy_failed_help_probe_does_not_dispatch(
     commands: list[list[str]] = []
 
     def probe(
-        command: list[str], cwd: Path, *, timeout: int = 1800, stdin: str | None = None
+        command: list[str], cwd: Path, *, timeout: int | None = None, stdin: str | None = None
     ) -> runtime.ProcessResult:
         commands.append(command)
         result = original(command, cwd, timeout=timeout, stdin=stdin)
@@ -828,7 +830,7 @@ def test_codex_worker_full_access_does_not_elevate_readonly(
     original = runtime.execute
 
     def capture(
-        command: list[str], cwd: Path, *, timeout: int = 1800, stdin: str | None = None
+        command: list[str], cwd: Path, *, timeout: int | None = None, stdin: str | None = None
     ) -> runtime.ProcessResult:
         commands.append(command)
         return original(command, cwd, timeout=timeout, stdin=stdin)
@@ -961,3 +963,111 @@ def test_audit_schema_explains_actionable_findings_and_positive_evidence() -> No
         "scope_violations",
         "required_fixes",
     }
+
+
+@pytest.mark.parametrize("supplied", ["omitted", "null", "finite"])
+def test_task_timeout_configuration_is_opt_in(supplied: str) -> None:
+    data: dict[str, object] = {
+        "roles": {
+            name: {"provider": "codex", "executable": "fake-codex"}
+            for name in ("prompt_engineer", "worker", "auditor", "integrator")
+        },
+        "verification": [["python", "-m", "pytest"]],
+    }
+    if supplied != "omitted":
+        data["timeout_seconds"] = 5400 if supplied == "finite" else None
+    config = Config.model_validate(data)
+    expected = 5400 if supplied == "finite" else None
+    assert config.timeout_seconds == expected
+    restored = Config.model_validate_json(config.model_dump_json())
+    assert restored.timeout_seconds == expected
+
+
+@pytest.mark.parametrize("value", [0, -1, True, False, "5400", 1.5, 86401])
+def test_invalid_explicit_task_timeouts_are_rejected(value: object) -> None:
+    with pytest.raises(ValidationError):
+        Config.model_validate(
+            {
+                "roles": {},
+                "verification": [["python", "-m", "pytest"]],
+                "timeout_seconds": value,
+            }
+        )
+
+
+@pytest.mark.parametrize("explicit_null", [False, True])
+def test_unlimited_process_has_no_implicit_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, explicit_null: bool
+) -> None:
+    ticks = iter(range(0, 1000000, 100000))
+    monkeypatch.setattr("tools.orchestrator.runtime.monotonic", lambda: next(ticks))
+    command = [sys.executable, "-c", "import time; time.sleep(.15); print('finished')"]
+    result = (
+        execute(command, tmp_path, timeout=None) if explicit_null else execute(command, tmp_path)
+    )
+    assert result.exit_code == 0
+    assert result.stdout.strip() == "finished"
+    assert not result.timed_out
+
+
+def test_unlimited_process_still_enforces_output_limit(tmp_path: Path) -> None:
+    result = execute(
+        [
+            sys.executable,
+            "-c",
+            "import sys,time; sys.stdout.write('x'*5000000); sys.stdout.flush(); time.sleep(10)",
+        ],
+        tmp_path,
+        timeout=None,
+    )
+    assert result.oversized
+    assert result.exit_code != 0
+    assert not result.timed_out
+    assert len(result.stdout) <= 4 * 1024 * 1024
+
+
+def test_unlimited_process_interrupt_kills_and_reaps_child(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    communicate = subprocess.Popen.communicate
+    children: list[subprocess.Popen[bytes]] = []
+
+    def interrupt_once(
+        process: subprocess.Popen[bytes],
+        input: bytes | None = None,
+        timeout: float | None = None,
+    ) -> tuple[bytes | None, bytes | None]:
+        if not children:
+            children.append(process)
+            raise KeyboardInterrupt
+        return communicate(process, input=input, timeout=timeout)
+
+    monkeypatch.setattr(subprocess.Popen, "communicate", interrupt_once)
+    with pytest.raises(KeyboardInterrupt):
+        execute([sys.executable, "-c", "import time; time.sleep(20)"], tmp_path, timeout=None)
+    assert len(children) == 1
+    assert children[0].poll() is not None
+    assert children[0].returncode != 0
+
+
+@pytest.mark.parametrize("provider", ["codex", "gemini", "agy"])
+def test_provider_supports_unlimited_task_execution(
+    fake_cli: Path, fake_agy: Path, tmp_path: Path, provider: str
+) -> None:
+    role = Role.model_validate(
+        {
+            "provider": provider,
+            "executable": str(fake_agy if provider == "agy" else fake_cli),
+        }
+    )
+    result = CliProvider().run(
+        "OK",
+        cwd=tmp_path,
+        role=role,
+        timeout=None,
+        output=Fix,
+        artifacts=tmp_path,
+        name="unlimited",
+        readonly=True,
+    )
+    assert result.fix_prompt == ("Synthetic fix" if provider == "agy" else "Fix synthetic issue")

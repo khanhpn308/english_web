@@ -121,7 +121,7 @@ class Config(Model):
     paths: Paths = Field(default_factory=Paths)
     roles: dict[str, Role]
     max_fix_cycles: Count = 3
-    timeout_seconds: Annotated[StrictInt, Field(ge=1, le=86400)] = 1800
+    timeout_seconds: Annotated[StrictInt, Field(ge=1, le=86400)] | None = None
     verification: list[list[str]] = Field(min_length=1)
     setup_commands: list[list[str]] = Field(default_factory=list)
     integrate: StrictBool = False

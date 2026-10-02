@@ -1,4 +1,4 @@
-"""Bounded processes, local advisory locks, Git and replaceable CLI providers."""
+"""Processes with opt-in deadlines, local locks, Git and replaceable CLI providers."""
 
 import importlib
 import json
@@ -51,7 +51,7 @@ class ProcessResult:
 
 
 def execute(
-    command: list[str], cwd: Path, *, timeout: int = 1800, stdin: str | None = None
+    command: list[str], cwd: Path, *, timeout: int | None = None, stdin: str | None = None
 ) -> ProcessResult:
     start = now()
     timed_out = False
@@ -69,17 +69,17 @@ def execute(
             )
         except FileNotFoundError as error:
             raise OrchestratorError(f"Executable unavailable: {Path(command[0]).name}") from error
-        deadline = monotonic() + timeout
+        deadline = monotonic() + timeout if timeout is not None else None
         first = True
         try:
             while True:
-                remaining = deadline - monotonic()
-                if remaining <= 0:
+                remaining = deadline - monotonic() if deadline is not None else None
+                if timeout is not None and remaining is not None and remaining <= 0:
                     raise subprocess.TimeoutExpired(command, timeout)
                 try:
                     process.communicate(
                         stdin.encode() if first and stdin is not None else None,
-                        timeout=min(0.1, remaining),
+                        timeout=min(0.1, remaining) if remaining is not None else 0.1,
                     )
                     break
                 except subprocess.TimeoutExpired:
@@ -267,7 +267,7 @@ class AgentProvider(Protocol):
         *,
         cwd: Path,
         role: Role,
-        timeout: int,
+        timeout: int | None,
         output: type[Output],
         artifacts: Path,
         name: str,
@@ -284,7 +284,7 @@ class CliProvider:
         *,
         cwd: Path,
         role: Role,
-        timeout: int,
+        timeout: int | None,
         output: type[Output],
         artifacts: Path,
         name: str,

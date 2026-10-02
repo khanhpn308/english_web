@@ -1,5 +1,13 @@
 ## 02/10/2026 - T059: Audit lại và tích hợp phần scoring đã triển khai (Asia/Bangkok)
 
+## 02/10/2026 - T077: Timeout phát triển chỉ bật khi cấu hình (Asia/Bangkok)
+
+- Theo yêu cầu chủ repository, `orchestrator.yaml` và Config mặc định `timeout_seconds: null`; bỏ trường cũng không áp deadline cho agent, setup và verification. Số nguyên dương vẫn bật timeout thủ công.
+- `tools/orchestrator/core.py`, `runtime.py`: provider protocol chấp nhận timeout tùy chọn; subprocess vẫn polling output, xử lý Ctrl+C, thu hồi tiến trình và giữ exit code trung thực. Git/probe quản trị giữ thời hạn riêng; deadline AI sản phẩm, Fix budget và cơ chế phục hồi không đổi.
+- `tests/orchestrator/`: kiểm tra cấu hình/roundtrip, chờ không deadline, output limit/Ctrl+C, ba provider giả và pipeline PASS/Fix đến DONE; không gọi model thật. `docs/orchestrator.md` thêm cách tắt/bật timeout ngay đầu hướng dẫn và giải thích snapshot cấu hình/run FAILED.
+- Verification: check:task exit0, 786 Python/208 orchestrator/38 frontend/40 architecture tests; changed coverage100%, total92.80%, ba scanner không có finding. Ruff/format/Mypy đạt.
+- Triển khai trong worktree T077 riêng; giữ nguyên source/artifacts T021 đang dở và các run lịch sử. Bằng chứng verification được ghi trong thẻ T077.
+
 - **Bối cảnh:** Run 202610020538470149160000-77174ceb dừng vì JSON PASS chứa findings thông tin. Giữ nguyên run/source/artifact cũ; audit độc lập phần scoring đã có, không chạy lại Worker hoặc inference.
 - **Tích hợp:** Candidate dựa trên local main b47d599; scoring/test được sao chép nguyên byte. Todo/changelog cộng dồn với T076, không ghi đè trạng thái task khác hoặc đánh dấu checkpoint. Áp dụng documentation-and-adrs. Audit độc lập PASS cả ba tiêu chí; source/test không đổi. 105 focused tests, probe45tổ hợp/270hoán vị và checks tĩnh đạt; check:task exit0 trên snapshot đóng băng:763 Python/38 frontend/40 architecture, scoring line/branch100%, changed100%, total92.78%, ba scanner0finding. Chỉ cập nhật bookkeeping ghi bằng chứng sau gate; promotion dưới khóa tích hợp, main sạch/không đổi và ff-only; không push.
 

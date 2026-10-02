@@ -34,7 +34,7 @@
     }
   },
   "max_fix_cycles": 3,
-  "timeout_seconds": 1800,
+  "timeout_seconds": null,
   "verification": [
     [
       "npm",

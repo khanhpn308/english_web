@@ -25,7 +25,7 @@ from tools.orchestrator.core import (
     read_json,
     task_card,
 )
-from tools.orchestrator.runtime import Git, lock
+from tools.orchestrator.runtime import Git, ProcessResult, execute, lock
 from tools.orchestrator.workflow import Pipeline
 
 Output = TypeVar("Output", bound=BaseModel)
@@ -83,8 +83,9 @@ def configuration(*, integrate: bool = True, cycles: int = 3) -> Config:
 
 
 class FakeAgents:
-    def __init__(self, *, failures: int = 0, lie: bool = False) -> None:
+    def __init__(self, *, failures: int = 0, lie: bool = False, timeout: int | None = 30) -> None:
         self.calls: list[str] = []
+        self.timeout = timeout
         self.failures = failures
         self.lie = lie
         self.worker_calls = 0
@@ -95,14 +96,14 @@ class FakeAgents:
         *,
         cwd: Path,
         role: Role,
-        timeout: int,
+        timeout: int | None,
         output: type[Output],
         artifacts: Path,
         name: str,
         readonly: bool,
     ) -> Output:
         assert role.executable == "fake-codex"
-        assert timeout == 30
+        assert timeout == self.timeout
         assert artifacts.is_dir()
         assert name
         self.calls.append(output.__name__)
@@ -297,7 +298,7 @@ def test_hidden_staged_change_cannot_escape_scope(repository: Path) -> None:
             *,
             cwd: Path,
             role: Role,
-            timeout: int,
+            timeout: int | None,
             output: type[Output],
             artifacts: Path,
             name: str,
@@ -389,7 +390,7 @@ def test_contract_risk_and_stop_rules_cannot_be_downgraded(repository: Path) -> 
             *,
             cwd: Path,
             role: Role,
-            timeout: int,
+            timeout: int | None,
             output: type[Output],
             artifacts: Path,
             name: str,
@@ -424,7 +425,7 @@ def _concurrent_run(repo: str, task: str, barrier: Barrier, connection: PipeConn
             *,
             cwd: Path,
             role: Role,
-            timeout: int,
+            timeout: int | None,
             output: type[Output],
             artifacts: Path,
             name: str,
@@ -614,7 +615,7 @@ class PlanningProbe(FakeAgents):
         *,
         cwd: Path,
         role: Role,
-        timeout: int,
+        timeout: int | None,
         output: type[Output],
         artifacts: Path,
         name: str,
@@ -972,7 +973,7 @@ class RecoveryAgents(FakeAgents):
         *,
         cwd: Path,
         role: Role,
-        timeout: int,
+        timeout: int | None,
         output: type[Output],
         artifacts: Path,
         name: str,
@@ -1114,7 +1115,7 @@ def test_planning_drift_is_corrected_automatically(repository: Path) -> None:
             *,
             cwd: Path,
             role: Role,
-            timeout: int,
+            timeout: int | None,
             output: type[Output],
             artifacts: Path,
             name: str,
@@ -1229,7 +1230,7 @@ def test_agy_legacy_help_failure_retry_preserves_evidence(repository: Path, unsa
             *,
             cwd: Path,
             role: Role,
-            timeout: int,
+            timeout: int | None,
             output: type[Output],
             artifacts: Path,
             name: str,
@@ -1324,7 +1325,7 @@ class AuditCorrectionAgents(FakeAgents):
         *,
         cwd: Path,
         role: Role,
-        timeout: int,
+        timeout: int | None,
         output: type[Output],
         artifacts: Path,
         name: str,
@@ -1468,3 +1469,69 @@ def test_failed_execution_cannot_be_hidden_by_audit_json_correction(repository: 
     assert agents.calls.count("Audit") == 3
     assert "contradicts failed executable verification" in (state.last_error or "")
     assert "IntegrationReview" not in agents.calls
+
+
+@pytest.mark.parametrize("supplied", ["omitted", "null", "finite"])
+@pytest.mark.parametrize("failures", [0, 1])
+def test_opt_in_timeout_reaches_roles_checks_and_saved_state(
+    repository: Path, monkeypatch: pytest.MonkeyPatch, supplied: str, failures: int
+) -> None:
+    config_data = configuration().model_dump(mode="json")
+    config_data.pop("timeout_seconds")
+    if supplied != "omitted":
+        config_data["timeout_seconds"] = 5400 if supplied == "finite" else None
+    config = Config.model_validate(config_data)
+    expected = 5400 if supplied == "finite" else None
+    agents = FakeAgents(failures=failures, timeout=expected)
+    observed: list[int | None] = []
+    agent_timeouts: list[int | None] = []
+    original_run = agents.run
+
+    def run_agent(
+        prompt: str,
+        *,
+        cwd: Path,
+        role: Role,
+        timeout: int | None,
+        output: type[Output],
+        artifacts: Path,
+        name: str,
+        readonly: bool,
+    ) -> Output:
+        agent_timeouts.append(timeout)
+        assert timeout == expected
+        return original_run(
+            prompt,
+            cwd=cwd,
+            role=role,
+            timeout=timeout,
+            output=output,
+            artifacts=artifacts,
+            name=name,
+            readonly=readonly,
+        )
+
+    def run_check(
+        command: list[str],
+        cwd: Path,
+        *,
+        timeout: int | None = None,
+        stdin: str | None = None,
+    ) -> ProcessResult:
+        if command[0] == "python":
+            observed.append(timeout)
+            assert timeout == expected
+        return execute(command, cwd, timeout=timeout, stdin=stdin)
+
+    monkeypatch.setattr(agents, "run", run_agent)
+    monkeypatch.setattr("tools.orchestrator.workflow.execute", run_check)
+    pipeline = Pipeline(repository, config, agents)
+    state = pipeline.start("T100")
+    assert state.state == State.DONE
+    assert state.fix_cycle == failures
+    assert agent_timeouts == [expected] * (4 + 3 * failures)
+    assert observed and all(value == expected for value in observed)
+    loaded = pipeline.status("T100", state.run_id)
+    assert loaded.config is not None
+    assert loaded.config.timeout_seconds == expected
+    assert pipeline.resume("T100", state.run_id).state == State.DONE
