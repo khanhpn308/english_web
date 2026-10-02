@@ -25,7 +25,7 @@
 - [x] [T015](t015-consent-api.md): Persist consent singleton và GET/PUT/DELETE
 - [x] [T007](t007-bridge-policy-consent-adapter.md): Antigravity transport adapter với fake proxy
 - [x] [T016](t016-dispatch-fence.md): Consent admission fence trước AI dispatch
-- [ ] [T075](t075-shadcn-ui-foundation.md): shadcn/ui foundation & Tailwind integration
+- [x] [T075](t075-shadcn-ui-foundation.md): shadcn/ui foundation & Tailwind integration — DONE: Tailwind v4 (layer theme/utilities without Preflight) + Vite, components.json, @/* alias, cn(), Button/Card/Dialog primitives, 27 design-system tests pass; full check:task green (810 Python, 65 frontend, 40 architecture tests, coverage changed 100%, total 92.96%, zero security findings).
 - [ ] [T076](t076-app-shell-shadcn-migration.md): AppShell shadcn/ui & semantic design-system migration
 - [ ] [T018](t018-consent-ui.md): Consent dialog và Status panel (BLOCKED_BY_T075_T076)
 - [x] [T019](t019-vocabulary-schema.md): Schema vocabulary, source links và preview

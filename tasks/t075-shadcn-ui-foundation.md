@@ -1,8 +1,8 @@
 # T075: shadcn/ui foundation & Tailwind integration
 
-**Task ID:** `T075`  
-**Title:** shadcn/ui foundation & Tailwind integration  
-**Status:** `TODO`  
+**Task ID:** `T075`
+**Title:** shadcn/ui foundation & Tailwind integration
+**Status:** `DONE`
 **Goal:** Integrate shadcn/ui into the existing React/Vite application as the canonical frontend design-system foundation without recreating the project or breaking existing routes, build, or test infrastructure.  
 
 **Estimated scope:** Một phiên tập trung; tối đa 5 file cấu hình/source viết tay (`package.json`, `vite.config.ts`, `tsconfig.json`, `components.json`, `frontend/src/app/theme.css` hoặc `frontend/src/index.css`), cộng với utility `frontend/src/lib/utils.ts` và minimal primitive files được thêm có chủ đích vào `frontend/src/components/ui/`.  
@@ -34,7 +34,8 @@ Mọi dependency phải có evidence hoàn tất. T004 đã hoàn tất và đư
 - `frontend/src/lib/utils.ts`
 - `frontend/src/index.css` (hoặc `frontend/src/app/theme.css`)
 - `frontend/src/components/ui/*` (chỉ các canonical primitives tối thiểu cho roadmap trước mắt: ví dụ button, card, dialog)
-- `frontend/tests/design-system.test.ts` (test kiểm tra tokens, `cn()` utility và render primitive)
+- `frontend/tests/design-system.test.ts` (test kiểm tra tokens, `cn()` utility và render primitive; `.tsx` được dùng do chứa JSX render)
+- `frontend/src/main.tsx` (Owner-authorized extension: thêm duy nhất 1 dòng `import '@/index.css';` thay thế Vite transform workaround)
 - Generated: `package-lock.json`
 - Common bookkeeping: thẻ task này, [todo.md](todo.md), [changelog](../docs/changelogs.md).
 
@@ -76,13 +77,13 @@ Mọi dependency phải có evidence hoàn tất. T004 đã hoàn tất và đư
 
 ## Acceptance criteria
 
-- [ ] `components.json` được tạo hợp lệ, đúng cấu trúc và đúng path alias của repository (`@/*` -> `frontend/src/*`).
-- [ ] Tailwind CSS v4 và Vite plugin được tích hợp thành công vào Vite hiện tại, `npm run build` xuất ra bundle dist không lỗi.
-- [ ] TypeScript typecheck (`npm run typecheck`) và ESLint (`npm run lint`) đạt 0 errors trên toàn bộ source và primitives mới.
-- [ ] Hàm tiện ích `cn()` và các semantic tokens được thiết lập, có test kiểm chứng tại `frontend/tests/design-system.test.ts`.
-- [ ] Primitives cơ sở tối thiểu (button, card, dialog) được thêm vào `frontend/src/components/ui/` và render được trong môi trường test.
-- [ ] Dependency Cruiser (`npm run architecture:frontend`) xác nhận không có vi phạm ranh giới kiến trúc.
-- [ ] Không có thay đổi nào đối với code nghiệp vụ backend, public API contracts, hoặc behavior của AppShell hiện hữu.
+- [x] `components.json` được tạo hợp lệ, đúng cấu trúc và đúng path alias của repository (`@/*` -> `frontend/src/*`).
+- [x] Tailwind CSS v4 và Vite plugin được tích hợp thành công vào Vite hiện tại, `npm run build` xuất ra bundle dist không lỗi.
+- [x] TypeScript typecheck (`npm run typecheck`) và ESLint (`npm run lint`) đạt 0 errors trên toàn bộ source và primitives mới.
+- [x] Hàm tiện ích `cn()` và các semantic tokens được thiết lập, có test kiểm chứng tại `frontend/tests/design-system.test.tsx`.
+- [x] Primitives cơ sở tối thiểu (button, card, dialog) được thêm vào `frontend/src/components/ui/` và render được trong môi trường test.
+- [x] Dependency Cruiser (`npm run architecture:frontend`) xác nhận không có vi phạm ranh giới kiến trúc.
+- [x] Không có thay đổi nào đối với code nghiệp vụ backend, public API contracts, hoặc behavior của AppShell hiện hữu.
 
 ## Test cases
 
@@ -95,7 +96,7 @@ Mọi dependency phải có evidence hoàn tất. T004 đã hoàn tất và đư
 ```text
 npm run typecheck
 npm run lint
-npm run test:frontend -- frontend/tests/design-system.test.ts
+npm run test:frontend -- frontend/tests/design-system.test.tsx
 npm run architecture:frontend
 npm run build
 npm run check:fast
@@ -107,10 +108,21 @@ Sau khi các lệnh trên pass, chạy đầy đủ `npm run check:task` để b
 
 - `npm run typecheck`: exit code 0, 0 errors.
 - `npm run lint`: exit code 0, 0 errors.
-- `npm run test:frontend`: exit code 0, toàn bộ tests hiện có và design system tests pass.
-- `npm run architecture:frontend`: exit code 0, 0 dependency violations.
-- `npm run build`: exit code 0, Vite build tạo `frontend/dist/` thành công.
+- `npm run test:frontend`: exit code 0, toàn bộ tests hiện có và design system tests pass (65 tests: 38 pre-existing + 27 design system).
+- `npm run architecture:frontend`: exit code 0, 0 dependency violations (24 modules, 27 dependencies cruised).
+- `npm run build`: exit code 0, Vite build tạo `frontend/dist/` thành công (main, bootstrap, bundled theme CSS).
 - `npm run check:fast`: exit code 0.
+- `npm run check:task`: exit code 0 (810 python tests, 65 frontend tests, 40 architecture tests, coverage changed 100.00%, total 92.96%, 0 security findings).
+
+## Verification evidence
+
+- `npm run typecheck`: exit code 0.
+- `npm run lint`: exit code 0 (0 errors, 3 fast-refresh warnings inherited/standard).
+- `npm run test:frontend -- frontend/tests/design-system.test.tsx`: exit code 0, 27 tests passed (Button, Card, Dialog full a11y tree/states, real Playwright Chromium dialog interaction test with compiled CSS, light/dark rendered color contrast with canvas alpha-compositing oracle, independent cross-checks, T004 preflight regression assertions, isolated temp-dir Vite build test with guaranteed deterministic cleanup in os.tmpdir, bounded 30s timeout).
+- `npm run architecture:frontend`: exit code 0, 0 violations (24 modules, 27 dependencies cruised).
+- `npm run build`: exit code 0; `dist/index.html`, `dist/bootstrap.html`, `dist/assets/main-*.css` containing compiled Tailwind rules & `.text-destructive-foreground`.
+- `npm run check:fast`: exit code 0.
+- `npm run check:task`: exit code 0 (810 Python tests, 65 frontend tests, 40 architecture tests, coverage changed 100.00%, total 92.96%, 0 secrets/code/deps security findings).
 
 ## Risk
 
