@@ -1,5 +1,36 @@
 # Công cụ điều phối phát triển cục bộ Level 1
 
+## Tra cứu nhanh: trường hợp và lệnh chạy
+
+Chạy tại thư mục gốc repository, với môi trường và CLI đã cài/xác thực:
+
+```bash
+source .venv/bin/activate
+```
+
+Thay `T018` bằng task cần chạy; thay `RUN_ID` bằng `run_id` trong kết quả status.
+
+| Bạn muốn làm gì? | Lệnh |
+|---|---|
+| Xem cấu hình, worktree và luồng dự kiến; chưa chạy model | `python -m tools.orchestrator run T018 --dry-run` |
+| Chạy triển khai → audit → sửa lỗi; chưa commit/merge vào main | `python -m tools.orchestrator run T018 --no-integrate` |
+| Chạy toàn bộ, cho phép commit và tích hợp vào main sau khi đạt kiểm tra | `python -m tools.orchestrator run T018 --integrate` |
+| Xem trạng thái lần chạy mới nhất | `python -m tools.orchestrator status T018` |
+| Xem chính xác một lần chạy cũ | `python -m tools.orchestrator status T018 --run-id RUN_ID` |
+| Tiếp tục một run đang ở điểm ổn định, chưa tích hợp | `python -m tools.orchestrator resume T018 --run-id RUN_ID --no-integrate` |
+| Run đã AUDIT_PASS: tiếp tục để commit, kiểm tra và tích hợp | `python -m tools.orchestrator resume T018 --run-id RUN_ID --integrate` |
+| Thử lại sau khi sửa nguyên nhân lỗi, nếu run đủ điều kiện retry | `python -m tools.orchestrator retry T018 --run-id RUN_ID --no-integrate` |
+| Chạy Worker GPT bằng tệp cấu hình riêng đã tạo | `python -m tools.orchestrator run T018 --config orchestrator.gpt.local.yaml --no-integrate` |
+| Khóa tích hợp đang bận: chạy lại sau khi task khác tích hợp xong | `python -m tools.orchestrator resume T018 --run-id RUN_ID --integrate` |
+
+- `--no-integrate` vẫn tạo worktree task riêng khi bắt đầu run mới; dry-run không tạo worktree hay gọi model.
+- Mặc định Worker dùng **agy / Gemini**. Task GPT cần cấu hình riêng chọn `codex`, model ID thực và reasoning theo Prompt Engineer; bảng task-plan chưa tự đổi model khi chạy.
+- `run` tự tiếp tục run ổn định hoặc tạo lần thử mới nếu bằng chứng cho phép. `retry` giữ lại run cũ; lỗi sau khi Worker đã sửa source cần kiểm tra worktree/log, không bảo đảm retry được.
+- Chạy thật cần checkout chính sạch. `--integrate` chỉ đưa vào main sau audit và kiểm tra đạt; công cụ không push.
+- Scanner đã cấu hình trong `~/.bashrc` được terminal Bash tương tác mới tự nạp. Sau khi vừa sửa `.bashrc`, chạy `source "$HOME/.bashrc"` một lần trong terminal hiện tại; nhập lệnh không kèm dấu backtick.
+
+Chi tiết cấu hình, artifact và phục hồi nằm ở các phần bên dưới.
+
 Hạ tầng này thay thế việc chuyển giao thủ công giữa các agent bằng các tệp đã được
 kiểm tra tính hợp lệ. Nó hoạt động độc lập với ứng dụng FastAPI/React và không bổ sung
 cơ sở dữ liệu hay framework agent. Phần triển khai sử dụng bộ công cụ Python/Pydantic

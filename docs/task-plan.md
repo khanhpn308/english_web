@@ -2,7 +2,7 @@
 
 **Date:** 29/09/2026 (`Asia/Bangkok`)  
 **Planning prerequisite:** SPEC_STATUS, ARCHITECTURE_STATUS và REVIEW_STATUS đều `READY_FOR_PLANNING`.  
-**Implementation state:** Chưa có application source/manifest/lockfile/CI. Tất cả 66 task là `TODO`.  
+**Implementation state tại baseline planning 29/09/2026:** Chưa có application source/manifest/lockfile/CI; 66 task khi đó là `TODO`. Hiện trạng phải đối chiếu filesystem/Git và [tasks/todo.md](../tasks/todo.md); không dùng baseline này để suy ra readiness.
 **Canonical task list:** [tasks/todo.md](../tasks/todo.md). [tasks/plan.md](../tasks/plan.md) trỏ về file này.  
 **Rules:** [CONSTRAINTS.md](../CONSTRAINTS.md), [AGENTS.md](../AGENTS.md), [task template](../tasks/_template.md).
 
@@ -27,67 +27,67 @@ ID giữ ổn định qua lần chia nhỏ; thứ tự chạy nằm ở cột đ
 | 3 | [T058](../tasks/t058-python-quality-gates.md) | Python lint, types, pytest và coverage runner | T001 | Gemini |
 | 4 | [T003](../tasks/t003-backend-skeleton.md) | FastAPI app factory và health | T002, T058 | Gemini |
 | 5 | [T004](../tasks/t004-frontend-shell-routes.md) | React shell, route map và landmarks | T003 | Gemini |
-| 6 | [T005](../tasks/t005-database-schema-migrations.md) | SQLite connection và migration zero | T003 | GPT-6 Astra |
-| 7 | [T053](../tasks/t053-quality-security-gates.md) | Coverage và quality-floor guard | T002, T058, T003, T004 | GPT-6 Astra |
-| 8 | [T063](../tasks/t063-security-scan-tooling.md) | Secret và code/dependency security scan gates | T001, T053 | GPT-6 Astra |
-| 9 | [T013](../tasks/t013-contract-conformance.md) | Chuẩn hóa ví dụ và quyết định contract còn mơ hồ | T005 | GPT-6 Astra |
-| 10 | [T006](../tasks/t006-api-core-contract-foundation.md) | Bootstrap session và HTTP guards | T003, T013 | GPT-6 Astra |
-| 11 | [T014](../tasks/t014-operations-idempotency.md) | Durable operation ledger và idempotency | T005, T006 | GPT-6 Astra |
+| 6 | [T005](../tasks/t005-database-schema-migrations.md) | SQLite connection và migration zero | T003 | GPT-6.1 Sol |
+| 7 | [T053](../tasks/t053-quality-security-gates.md) | Coverage và quality-floor guard | T002, T058, T003, T004 | GPT-6.1 Sol |
+| 8 | [T063](../tasks/t063-security-scan-tooling.md) | Secret và code/dependency security scan gates | T001, T053 | GPT-6.1 Sol |
+| 9 | [T013](../tasks/t013-contract-conformance.md) | Chuẩn hóa ví dụ và quyết định contract còn mơ hồ | T005 | GPT-6.1 Sol |
+| 10 | [T006](../tasks/t006-api-core-contract-foundation.md) | Bootstrap session và HTTP guards | T003, T013 | GPT-6.1 Sol |
+| 11 | [T014](../tasks/t014-operations-idempotency.md) | Durable operation ledger và idempotency | T005, T006 | GPT-6.1 Sol |
 | 12 | [T017](../tasks/t017-typed-api-client.md) | Generated DTO và typed fetch client | T006, T014, T002 | Gemini |
-| 13 | [T066](../tasks/t066-browser-bootstrap.md) | Trusted browser bootstrap page | T004, T006 | GPT-6 Astra |
+| 13 | [T066](../tasks/t066-browser-bootstrap.md) | Trusted browser bootstrap page | T004, T006 | GPT-6.1 Sol |
 | 14 | [T052](../tasks/t052-browser-test-harness.md) | Browser harness với local fake API/bridge | T004, T006, T017, T066 | Gemini |
-| 15 | [T062](../tasks/t062-architecture-gates.md) | Architecture import boundary gates | T053, T003, T004, T017 | GPT-6 Astra |
-| 16 | [T015](../tasks/t015-consent-api.md) | Persist consent singleton và GET/PUT/DELETE | T014 | GPT-6 Astra |
-| 17 | [T007](../tasks/t007-bridge-policy-consent-adapter.md) | Antigravity transport adapter với fake proxy | T006, T013 | GPT-6 Astra |
-| 18 | [T016](../tasks/t016-dispatch-fence.md) | Consent admission fence trước AI dispatch | T015, T007 | GPT-6 Astra |
+| 15 | [T062](../tasks/t062-architecture-gates.md) | Architecture import boundary gates | T053, T003, T004, T017 | GPT-6.1 Sol |
+| 16 | [T015](../tasks/t015-consent-api.md) | Persist consent singleton và GET/PUT/DELETE | T014 | GPT-6.1 Sol |
+| 17 | [T007](../tasks/t007-bridge-policy-consent-adapter.md) | Antigravity transport adapter với fake proxy | T006, T013 | GPT-6.1 Sol |
+| 18 | [T016](../tasks/t016-dispatch-fence.md) | Consent admission fence trước AI dispatch | T015, T007 | GPT-6.1 Sol |
 | 19 | [T018](../tasks/t018-consent-ui.md) | Consent dialog và Status panel | T004, T015, T017, T052 | Gemini |
-| 20 | [T019](../tasks/t019-vocabulary-schema.md) | Schema vocabulary, source links và preview | T015 | GPT-6 Astra |
-| 21 | [T008](../tasks/t008-lookup-api-vertical-slice.md) | POST lookup trả preview đã validate | T007, T014, T016, T019, T017 | GPT-6 Astra |
+| 20 | [T019](../tasks/t019-vocabulary-schema.md) | Schema vocabulary, source links và preview | T015 | GPT-6.1 Sol |
+| 21 | [T008](../tasks/t008-lookup-api-vertical-slice.md) | POST lookup trả preview đã validate | T007, T014, T016, T019, T017 | GPT-6.1 Sol |
 | 22 | [T009](../tasks/t009-lookup-ui-vertical-slice.md) | Lookup UI gọi API thật qua client | T004, T008, T017, T018, T052 | Gemini |
 | 23 | [T010](../tasks/t010-error-handling-recovery.md) | Typed UI recovery cho common error codes | T009, T052 | Gemini |
-| 24 | [T011](../tasks/t011-observability-instrumentation.md) | Local JSON logs, correlation và span boundary | T010 | GPT-6 Astra |
+| 24 | [T011](../tasks/t011-observability-instrumentation.md) | Local JSON logs, correlation và span boundary | T010 | GPT-6.1 Sol |
 | 25 | [T012](../tasks/t012-ci-pipeline.md) | CI lõi cho build và tests | T011, T053, T062, T063 | Gemini |
 | 26 | [T020](../tasks/t020-markdown-parser.md) | Lossless Markdown parser/serializer | T019, T013 | Gemini |
-| 27 | [T026](../tasks/t026-search-projection.md) | Vietnamese normalized n-gram projection | T019, T013 | GPT-6 Astra |
-| 28 | [T031](../tasks/t031-review-schema.md) | Review/card schema và deterministic SRS | T019, T005, T013 | GPT-6 Astra |
-| 29 | [T021](../tasks/t021-safe-source-files.md) | Allowlisted Windows source file adapter | T020 | GPT-6 Astra |
-| 30 | [T022](../tasks/t022-source-journal.md) | Durable source journal và crash reconciliation | T021, T014, T031 | GPT-6 Astra |
-| 31 | [T023](../tasks/t023-source-sync.md) | Startup/watcher sync và source API | T022, T026 | GPT-6 Astra |
-| 32 | [T024](../tasks/t024-save-api.md) | Explicit save preview vào Markdown và cards | T008, T023, T031 | GPT-6 Astra |
+| 27 | [T026](../tasks/t026-search-projection.md) | Vietnamese normalized n-gram projection | T019, T013 | GPT-6.1 Sol |
+| 28 | [T031](../tasks/t031-review-schema.md) | Review/card schema và deterministic SRS | T019, T005, T013 | GPT-6.1 Sol |
+| 29 | [T021](../tasks/t021-safe-source-files.md) | Allowlisted Windows source file adapter | T020 | GPT-6.1 Sol |
+| 30 | [T022](../tasks/t022-source-journal.md) | Durable source journal và crash reconciliation | T021, T014, T031 | GPT-6.1 Sol |
+| 31 | [T023](../tasks/t023-source-sync.md) | Startup/watcher sync và source API | T022, T026 | GPT-6.1 Sol |
+| 32 | [T024](../tasks/t024-save-api.md) | Explicit save preview vào Markdown và cards | T008, T023, T031 | GPT-6.1 Sol |
 | 33 | [T025](../tasks/t025-save-ui-audio.md) | Save lookup preview và local pronunciation | T009, T024, T052 | Gemini |
-| 34 | [T027](../tasks/t027-search-api.md) | Search/detail API có cursor và filters | T026, T006, T017 | Gemini |
+| 34 | [T027](../tasks/t027-search-api.md) | Search/detail API có cursor và filters | T026, T006, T017 | GPT-6.1 Sol |
 | 35 | [T028](../tasks/t028-search-ui.md) | Search/detail read flow | T027, T017, T010, T052 | Gemini |
-| 36 | [T029](../tasks/t029-edit-api.md) | Revision-safe word-form edit API | T024, T027, T017 | GPT-6 Astra |
+| 36 | [T029](../tasks/t029-edit-api.md) | Revision-safe word-form edit API | T024, T027, T017 | GPT-6.1 Sol |
 | 37 | [T030](../tasks/t030-edit-ui.md) | Edit form và conflict dialog | T029, T028, T052 | Gemini |
-| 38 | [T032](../tasks/t032-review-api.md) | Review queue và review event API | T031, T023, T027, T006, T017 | GPT-6 Astra |
+| 38 | [T032](../tasks/t032-review-api.md) | Review queue và review event API | T031, T023, T027, T006, T017 | GPT-6.1 Sol |
 | 39 | [T033](../tasks/t033-review-ui.md) | Flashcard review flow | T032, T004, T017, T052 | Gemini |
-| 40 | [T059](../tasks/t059-quiz-scoring.md) | Pure quiz scoring và weakest-rating oracle | T031, T013 | GPT-6 Astra |
-| 41 | [T034](../tasks/t034-quiz-schema.md) | Quiz immutable snapshot schema | T031, T022, T013 | GPT-6 Astra |
-| 42 | [T035](../tasks/t035-quiz-api.md) | Quiz creation và snapshot retrieval API | T034, T016, T059, T023, T014, T017 | GPT-6 Astra |
+| 40 | [T059](../tasks/t059-quiz-scoring.md) | Pure quiz scoring và weakest-rating oracle | T031, T013 | Gemini |
+| 41 | [T034](../tasks/t034-quiz-schema.md) | Quiz immutable snapshot schema | T031, T022, T013 | GPT-6.1 Sol |
+| 42 | [T035](../tasks/t035-quiz-api.md) | Quiz creation và snapshot retrieval API | T034, T016, T059, T023, T014, T017 | GPT-6.1 Sol |
 | 43 | [T036](../tasks/t036-quiz-ui.md) | Quiz builder UI dùng generation API | T035, T018, T010, T017, T052 | Gemini |
-| 44 | [T047](../tasks/t047-quiz-autosave-api.md) | Quiz answer draft API với revision | T035, T014, T017 | GPT-6 Astra |
+| 44 | [T047](../tasks/t047-quiz-autosave-api.md) | Quiz answer draft API với revision | T035, T014, T017 | GPT-6.1 Sol |
 | 45 | [T050](../tasks/t050-quiz-runner-ui.md) | Quiz runner và revision-aware autosave UI | T047, T036, T017, T010, T052 | Gemini |
-| 46 | [T048](../tasks/t048-quiz-submit-api.md) | Quiz submission và atomic SRS handoff | T047, T032, T059, T017 | GPT-6 Astra |
-| 47 | [T049](../tasks/t049-writing-feedback-api.md) | Writing feedback API và history retry | T047, T016, T034, T014, T017 | GPT-6 Astra |
+| 46 | [T048](../tasks/t048-quiz-submit-api.md) | Quiz submission và atomic SRS handoff | T047, T032, T059, T017 | GPT-6.1 Sol |
+| 47 | [T049](../tasks/t049-writing-feedback-api.md) | Writing feedback API và history retry | T047, T016, T034, T014, T017 | GPT-6.1 Sol |
 | 48 | [T051](../tasks/t051-quiz-result-feedback-ui.md) | Submit/result và writing feedback UI | T050, T048, T049, T018, T052 | Gemini |
-| 49 | [T037](../tasks/t037-dashboard-formulas.md) | Dashboard summary API và streak formulas | T023, T032, T048, T011, T017 | GPT-6 Astra |
-| 50 | [T046](../tasks/t046-metrics-alerts-runbooks.md) | Local RED metrics và operational Status API | T011, T037, T023, T016, T017 | GPT-6 Astra |
+| 49 | [T037](../tasks/t037-dashboard-formulas.md) | Dashboard summary API và streak formulas | T023, T032, T048, T011, T017 | GPT-6.1 Sol |
+| 50 | [T046](../tasks/t046-metrics-alerts-runbooks.md) | Local RED metrics và operational Status API | T011, T037, T023, T016, T017 | GPT-6.1 Sol |
 | 51 | [T060](../tasks/t060-status-ui.md) | Operational Status screen và consent integration | T046, T018, T010, T052 | Gemini |
 | 52 | [T038](../tasks/t038-dashboard-ui.md) | Learning Dashboard UI | T037, T004, T017, T010, T052 | Gemini |
-| 53 | [T061](../tasks/t061-alerts-runbooks.md) | Local symptom alerts và runbook links | T046, T060, T063 | GPT-6 Astra |
-| 54 | [T039](../tasks/t039-launcher.md) | Windows launcher single-instance/bootstrap | T006, T004, T023, T060 | GPT-6 Astra |
-| 55 | [T040](../tasks/t040-first-run-recovery.md) | Native first-run configuration và protected key store | T039, T007, T020, T005 | GPT-6 Astra |
-| 56 | [T054](../tasks/t054-restore-recovery-drill.md) | Staging restore và migration recovery drill | T040, T022, T048, T049 | GPT-6 Astra |
-| 57 | [T041](../tasks/t041-security-hardening.md) | Browser/API/filesystem hardening evidence | T040, T021, T025, T049, T052, T063 | GPT-6 Astra |
-| 58 | [T042](../tasks/t042-performance-fixture.md) | Deterministic100k search benchmark fixture | T026 | GPT-6 Astra |
-| 59 | [T065](../tasks/t065-search-performance-evidence.md) | Search browser timing trên100k fixture | T042, T028, T052 | GPT-6 Astra |
+| 53 | [T061](../tasks/t061-alerts-runbooks.md) | Local symptom alerts và runbook links | T046, T060, T063 | GPT-6.1 Sol |
+| 54 | [T039](../tasks/t039-launcher.md) | Windows launcher single-instance/bootstrap | T006, T004, T023, T060 | GPT-6.1 Sol |
+| 55 | [T040](../tasks/t040-first-run-recovery.md) | Native first-run configuration và protected key store | T039, T007, T020, T005 | GPT-6.1 Sol |
+| 56 | [T054](../tasks/t054-restore-recovery-drill.md) | Staging restore và migration recovery drill | T040, T022, T048, T049 | GPT-6.1 Sol |
+| 57 | [T041](../tasks/t041-security-hardening.md) | Browser/API/filesystem hardening evidence | T040, T021, T025, T049, T052, T063 | GPT-6.1 Sol |
+| 58 | [T042](../tasks/t042-performance-fixture.md) | Deterministic100k search benchmark fixture | T026 | GPT-6.1 Sol |
+| 59 | [T065](../tasks/t065-search-performance-evidence.md) | Search browser timing trên100k fixture | T042, T028, T052 | GPT-6.1 Sol |
 | 60 | [T064](../tasks/t064-ui-performance-harness.md) | Local Lighthouse performance harness | T052, T038 | Gemini |
-| 61 | [T043](../tasks/t043-accessibility-evidence.md) | WCAG 2.2 AA browser/manual evidence | T025, T028, T030, T033, T036, T050, T051, T038, T060, T052, T064 | GPT-6 Astra |
-| 62 | [T055](../tasks/t055-ai-content-evidence.md) | Human-reviewed semantic fixture và optional AI smoke | T008, T035, T049, T040, T041 | GPT-6 Astra |
-| 63 | [T056](../tasks/t056-windows-package.md) | Reproducible Windows package và shortcut | T039, T040, T054, T004 | GPT-6 Astra |
-| 64 | [T044](../tasks/t044-release-contract-audit.md) | Generated contract and cross-doc audit | T013, T008, T024, T027, T029, T032, T035, T047, T048, T049, T037, T046, T061 | GPT-6 Astra |
+| 61 | [T043](../tasks/t043-accessibility-evidence.md) | WCAG 2.2 AA browser/manual evidence | T025, T028, T030, T033, T036, T050, T051, T038, T060, T052, T064 | GPT-6.1 Sol |
+| 62 | [T055](../tasks/t055-ai-content-evidence.md) | Human-reviewed semantic fixture và optional AI smoke | T008, T035, T049, T040, T041 | GPT-6.1 Sol |
+| 63 | [T056](../tasks/t056-windows-package.md) | Reproducible Windows package và shortcut | T039, T040, T054, T004 | GPT-6.1 Sol |
+| 64 | [T044](../tasks/t044-release-contract-audit.md) | Generated contract and cross-doc audit | T013, T008, T024, T027, T029, T032, T035, T047, T048, T049, T037, T046, T061 | GPT-6.1 Sol |
 | 65 | [T045](../tasks/t045-git-release-hygiene.md) | Git hooks, branch and commit hygiene | T012, T063 | Gemini |
-| 66 | [T057](../tasks/t057-release-verification.md) | Windows/offline release evidence matrix | T041, T043, T044, T054, T056, T061, T055, T065 | GPT-6 Astra |
+| 66 | [T057](../tasks/t057-release-verification.md) | Windows/offline release evidence matrix | T041, T043, T044, T054, T056, T061, T055, T065 | GPT-6.1 Sol |
 
 ## Vertical slices và checkpoints chính
 
@@ -280,7 +280,45 @@ CLI flags/version availability phải được owner kiểm tra bằng official 
 
 ## Model allocation
 
-Đây là phân công theo rủi ro/phạm vi task do người dùng yêu cầu, không khẳng định khả năng hay availability của từng model. Mỗi model phải đọc cùng rules/contracts và cung cấp cùng evidence; có thể chuyển model nhưng vẫn giữ gates.
+**Cập nhật chính sách model: 02/10/2026 (`Asia/Bangkok`).** Theo chỉ định của chủ repository,
+Worker cho các task phức tạp thuộc nhóm GPT bên dưới dùng **GPT-6.1 Sol**, qua provider
+`codex`. Các task phù hợp với Gemini dùng provider `agy` theo cấu hình run. Phân công
+này thay thế nhãn model đề xuất lịch sử trong bảng và `Suggested model` của task card;
+dependencies, file scope, acceptance criteria và evidence của card vẫn được giữ nguyên.
+Task đã DONE chỉ áp dụng phân công mới khi có remediation/review được giao; không chạy
+lại hoặc thay đổi trạng thái task/checkpoint vì cập nhật model.
+
+### Reasoning do Prompt Engineer chỉ định
+
+Prompt Engineer phải đọc task card, dependencies và source/tests tại base SHA của run,
+sau đó ghi rõ trong `worker_prompt`: **MODEL**, **REASONING**, **WHY**. Với nhóm GPT,
+MODEL là **GPT-6.1 Sol**; reasoning được chọn riêng cho từng lần thực hiện, không gán
+cố định theo task ID hay độ dài prompt:
+
+| Mức reasoning | Căn cứ để Prompt Engineer lựa chọn |
+|---|---|
+| `low` / `medium` | Remediation nhỏ, cơ học, oracle/phạm vi rõ; cần giải thích vì sao đủ cho phần việc được giao |
+| `high` | Backend/contract/architecture phức tạp, deterministic domain logic hoặc tích hợp nhiều invariant |
+| `xhigh` (Extra High) | Durable concurrency/CAS/fence, multi-process ordering, atomic cross-subsystem commit, crash recovery, migration/security boundary hoặc audit release có ambiguity cần phân xử sâu |
+
+Prompt Engineer giữ nguyên correctness/security gates khi chọn effort; không hạ effort
+chỉ để tăng throughput. Nếu assigned work thay đổi rủi ro, cập nhật lý do và prompt trước
+lần Worker tiếp theo. Chủ repository chỉ định model GPT-6.1 Sol; Prompt Engineer quyết
+định reasoning dựa trên bằng chứng, không tự đổi sang model GPT khác hoặc fallback Gemini.
+
+Nhãn **GPT-6.1 Sol** là lựa chọn model của kế hoạch; cấu hình `model` phải sử dụng ID thực
+được Codex CLI/tài khoản hỗ trợ. `model: null` kế thừa cấu hình CLI, không chứng minh run
+đã được pin vào model này. Mức reasoning trong cấu hình Worker cần khớp chỉ định của
+Prompt Engineer; metadata của run phải ghi lại lựa chọn để kiểm toán.
+
+**Giới hạn thực thi hiện tại:** Orchestrator Level 1 đọc `roles.worker` từ cấu hình
+run; chưa tự đọc bảng này để đổi provider/model/reasoning sau bước planning. Chính
+sách tài liệu này không tạo cơ chế auto-routing. Dùng cấu hình riêng qua `--config`
+cho task GPT; run đang tiến triển giữ cấu hình đã lưu. Worker Prompt và cấu hình
+thực thi cần được đối chiếu, không coi header của prompt là thay đổi quyền/model CLI.
+
+Mọi model đọc cùng rules/contracts và cung cấp cùng evidence. Việc chọn model không
+xác nhận dependencies READY hoặc khả năng chạy Windows/provider evidence.
 
 ### Task phù hợp với Gemini
 
@@ -295,7 +333,6 @@ CLI flags/version availability phải được owner kiểm tra bằng official 
 - [T018](../tasks/t018-consent-ui.md): Consent dialog và Status panel.
 - [T020](../tasks/t020-markdown-parser.md): Lossless Markdown parser/serializer.
 - [T025](../tasks/t025-save-ui-audio.md): Save lookup preview và local pronunciation.
-- [T027](../tasks/t027-search-api.md): Search/detail API có cursor và filters.
 - [T028](../tasks/t028-search-ui.md): Search/detail read flow.
 - [T030](../tasks/t030-edit-ui.md): Edit form và conflict dialog.
 - [T033](../tasks/t033-review-ui.md): Flashcard review flow.
@@ -306,12 +343,13 @@ CLI flags/version availability phải được owner kiểm tra bằng official 
 - [T051](../tasks/t051-quiz-result-feedback-ui.md): Submit/result và writing feedback UI.
 - [T052](../tasks/t052-browser-test-harness.md): Browser harness với local fake API/bridge.
 - [T058](../tasks/t058-python-quality-gates.md): Python lint, types, pytest và coverage runner.
+- [T059](../tasks/t059-quiz-scoring.md): Pure quiz scoring và weakest-rating oracle.
 - [T060](../tasks/t060-status-ui.md): Operational Status screen và consent integration.
 - [T064](../tasks/t064-ui-performance-harness.md): Local Lighthouse performance harness.
 
 Các task này có input/contract và test oracle rõ, thường là wiring/config/UI hoặc evidence harness. Task UI consent/autosave/result vẫn cần review tập trung boundary/privacy/concurrency trước merge.
 
-### Task cần GPT-6 Astra
+### Task cần GPT-6.1 Sol
 
 - [T005](../tasks/t005-database-schema-migrations.md): SQLite connection và migration zero.
 - [T006](../tasks/t006-api-core-contract-foundation.md): Bootstrap session và HTTP guards.
@@ -328,6 +366,7 @@ Các task này có input/contract và test oracle rõ, thường là wiring/conf
 - [T023](../tasks/t023-source-sync.md): Startup/watcher sync và source API.
 - [T024](../tasks/t024-save-api.md): Explicit save preview vào Markdown và cards.
 - [T026](../tasks/t026-search-projection.md): Vietnamese normalized n-gram projection.
+- [T027](../tasks/t027-search-api.md): Signed cursor gắn query/source revision, pagination ổn định và HTTP security guards.
 - [T029](../tasks/t029-edit-api.md): Revision-safe word-form edit API.
 - [T031](../tasks/t031-review-schema.md): Review/card schema và deterministic SRS.
 - [T032](../tasks/t032-review-api.md): Review queue và review event API.
@@ -349,12 +388,31 @@ Các task này có input/contract và test oracle rõ, thường là wiring/conf
 - [T055](../tasks/t055-ai-content-evidence.md): Human-reviewed semantic fixture và optional AI smoke.
 - [T056](../tasks/t056-windows-package.md): Reproducible Windows package và shortcut.
 - [T057](../tasks/t057-release-verification.md): Windows/offline release evidence matrix.
-- [T059](../tasks/t059-quiz-scoring.md): Pure quiz scoring và weakest-rating oracle.
 - [T061](../tasks/t061-alerts-runbooks.md): Local symptom alerts và runbook links.
 - [T062](../tasks/t062-architecture-gates.md): Architecture import boundary gates.
 - [T063](../tasks/t063-security-scan-tooling.md): Secret và code/dependency security scan gates.
 - [T065](../tasks/t065-search-performance-evidence.md): Search browser timing trên100k fixture.
 - [T066](../tasks/t066-browser-bootstrap.md): Trusted browser bootstrap page.
+
+### Những task phức tạp cần GPT-6.1 Sol — căn cứ phân công
+
+Các nhóm dưới đây phân loại cùng danh sách GPT ở trên, không bổ sung dependencies
+hoặc quyền sửa file. Reasoning của mọi nhóm do Prompt Engineer chỉ định theo quy tắc
+đã nêu; rủi ro cụ thể quyết định effort khi chuẩn bị prompt.
+
+| Nhóm task | Task IDs | Lý do cần GPT-6.1 Sol |
+|---|---|---|
+| Contract, consent, admission và security boundary | T006, T007, T008, T013, T015, T016, T021, T027, T040, T041, T049, T066 | HTTP/bootstrap guards, policy/consent, revoke ordering, Windows safe paths/DPAPI, signed cursor và lỗi AI không được làm sai quyền hoặc điểm |
+| Durable state, migrations và atomic operations | T005, T014, T019, T022, T023, T024, T029, T031, T032, T034, T035, T047, T048, T054 | SQLite lineage, idempotency, filesystem journal/recovery, watcher echo, revision conflict, immutable snapshots và atomic SRS/history handoff |
+| Backend domain và vận hành | T011, T026, T037, T039, T046, T061 | Privacy/redaction trước serialization, search normalization/index, midnight/streak formulas, Windows single-instance, bounded metrics và alert windows |
+| Tooling và kiểm chứng tích hợp/release | T042, T043, T044, T053, T055, T056, T057, T062, T063, T065 | Oracle/measurement đúng dữ liệu, cross-flow evidence, conformance, chống false-green, scanner severity, package/data preservation và tổng hợp release evidence |
+
+**T059 không cần mặc định GPT:** card chỉ cho phép pure scoring và test tương ứng,
+không persistence/migration/UI/provider dispatch. Gemini qua agy phù hợp khi oracle
+T013/T031 đã được xác minh; nếu phát hiện ambiguity có căn cứ, Prompt Engineer có
+thể đề xuất GPT-6.1 Sol và ghi rõ reasoning/lý do. Không sửa oracle hoặc mở scope để
+làm task có vẻ đơn giản hơn. Với T027, signed cursor và source-revision validation
+là lý do nâng phân công từ Gemini sang GPT-6.1 Sol.
 
 Ưu tiên review độc lập khi task chứa durable commit, race ordering, source recovery, consent/routing, migration, SRS mapping hoặc security. Kế hoạch không tự gọi model/agent khác hoặc bật recurring execution.
 

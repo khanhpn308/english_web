@@ -1,8 +1,19 @@
+## 02/10/2026 - Tra cứu nhanh lệnh orchestrator (Asia/Bangkok)
+
+- **Tài liệu:** Thêm bảng trường hợp/lệnh ngay đầu `docs/orchestrator.md`: dry-run, chạy chưa tích hợp/toàn bộ, status theo run ID, resume, retry, cấu hình Worker GPT và chờ khóa tích hợp. Giải thích ngắn worktree, model mặc định agy, điều kiện retry và nạp cấu hình scanner để tra cứu khi chạy task.
+- **Kiểm tra/phạm vi:** Đối chiếu CLI/parser và luồng hiện tại; áp dụng documentation-and-adrs. Chỉ sửa tài liệu/changelog, không sửa runtime, config, task status hay evidence cũ; kiểm tra lệnh bằng `--help`, diff và secret scan trước commit.
+
 ## 02/10/2026 - T073 đã tích hợp vào main và kiểm tra sau merge (Asia/Bangkok)
 
 - **Git:** Commit `da6349c9cc86870d4e2f83546362bafb15c909bb`, ff-only main sạch từ6bc055a dưới integration lock. Staged diff đúng tám file, Gitleaks trước commit0finding; không push hay sửa worktree/run cũ.
 - **Kiểm tra:** Trên main,101 test orchestrator đạt109,07s; formatter/Ruff/Mypy đạt49file. T059/T021 vẫn đủ điều kiện phục hồi bằng kiểm tra chỉ đọc, mọi JSON cũ nguyên vẹn; không gọi provider/task thật. Bằng chứng bổ sung chỉ sửa card/changelog, code/tests giữ nguyên bản đã đạt full gate634test.
 - **Sử dụng:** `run T059 --no-integrate` tự tạo lần thử mới đủ bằng chứng; run ổn định được tiếp tục. Lỗi agent có thể sửa được thử lại tối đa ba lần; hết khả năng sửa trả FAILED, không dừng bằng BLOCKED mới hay giả DONE. Áp dụng documentation-and-adrs theo AGENT.md.
+
+## 02/10/2026 - Phân công GPT-6.1 Sol cho task phức tạp (Asia/Bangkok)
+
+- **Tài liệu:** Cập nhật `docs/task-plan.md`: thay đề xuất GPT-6 Astra lịch sử bằng GPT-6.1 Sol, bổ sung bảng nhóm task/rủi ro và yêu cầu Prompt Engineer ghi MODEL/REASONING/WHY. Reasoning chọn theo từng run, không hardcode task ID; ghi rõ Codex model ID cần khớp lựa chọn và model null không pin model.
+- **Đối chiếu card:** T027 chuyển sang GPT do signed cursor/query/source-revision boundary; T059 chuyển sang Gemini/agy vì pure scorer không persistence/UI/AI. Giữ scope/dependencies/acceptance/task status/checkpoint và phân biệt baseline planning cũ với hiện trạng Git/filesystem.
+- **Giới hạn/phạm vi:** Chỉ sửa task-plan và changelog, áp dụng documentation-and-adrs. Không sửa runtime/config hay tuyên bố auto-routing đã có: Level 1 vẫn dùng roles.worker trong cấu hình run. Kiểm tra cấu trúc, bảng model/danh sách, task links và diff whitespace; không cần chạy lại application tests cho thay đổi tài liệu.
 
 ## 02/10/2026 - T074 hoàn tất kiểm tra Worker agy và quyền thực thi (Asia/Bangkok)
 
