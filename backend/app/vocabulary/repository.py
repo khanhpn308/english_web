@@ -640,8 +640,11 @@ class VocabularyRepository:
         operation_id: str | None = None,
         created_at: float | None = None,
         expires_at: float | None = None,
+        external_connection: Connection | None = None,
     ) -> LookupPreview:
-        """Store a lookup preview bound to an owner session."""
+        """Store a lookup preview bound to an owner session.
+        If external_connection is provided, uses it directly; otherwise opens a local transaction.
+        """
         now_ts = created_at if created_at is not None else datetime.now(UTC).timestamp()
         forms_data = [f.to_dict() for f in forms]
 
@@ -652,7 +655,7 @@ class VocabularyRepository:
         else:
             summary = "UNVERIFIED"
 
-        with self._writer() as conn:
+        def _do_insert(conn: Connection) -> None:
             conn.exec_driver_sql(
                 "INSERT INTO lookup_previews (lookup_id, operation_id, owner_session_id, term, "
                 "forms_payload, provider, model, prompt_version, verification_summary, status, "
@@ -672,6 +675,12 @@ class VocabularyRepository:
                     expires_at,
                 ),
             )
+
+        if external_connection is not None:
+            _do_insert(external_connection)
+        else:
+            with self._writer() as conn:
+                _do_insert(conn)
 
         return LookupPreview(
             lookup_id=lookup_id,

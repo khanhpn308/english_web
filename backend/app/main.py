@@ -4,16 +4,22 @@ import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from time import monotonic
 
+from backend.app.adapters.bridge import BridgeAdapter
+from backend.app.application.ai_admission import AiAdmissionCoordinator
 from backend.app.application.consent import ConsentService
 from backend.app.application.operations import OperationLedger
+from backend.app.enrichment.lookup import LookupService
 from backend.app.http.bootstrap import router as bootstrap_router
 from backend.app.http.errors import error_response
 from backend.app.http.health import router as health_router
+from backend.app.http.lookups import router as lookups_router
 from backend.app.http.operations import router as operations_router
 from backend.app.http.session import SessionGuard, SessionStore
 from backend.app.persistence.database import Database, StorageError
 from backend.app.platform.config import AppSettings
+from backend.app.vocabulary.repository import VocabularyRepository
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
@@ -22,6 +28,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 STATIC_ROOT = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 _SHELL_ROUTES = {"", "lookup", "search", "review", "quiz/new", "status"}
@@ -39,6 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.storage_error = None
     app.state.operation_ledger = None
     app.state.consent_service = None
+    app.state.lookup_service = None
     app.state.sessions.activate()
     try:
         if database is not None:
@@ -51,6 +59,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await run_in_threadpool(ledger.recover_pending)
                 app.state.operation_ledger = ledger
                 app.state.consent_service = ConsentService(ledger)
+                coordinator = AiAdmissionCoordinator(
+                    app.state.consent_service,
+                    BridgeAdapter(api_key=None),
+                    lambda: app.state.active_ai_policy,
+                )
+                app.state.lookup_service = LookupService(
+                    ledger,
+                    coordinator,
+                    VocabularyRepository(database.engine),
+                )
                 app.state.ready = True
             except StorageError as error:
                 app.state.storage_error = str(error)
@@ -63,9 +81,31 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.storage_info = None
         app.state.operation_ledger = None
         app.state.consent_service = None
+        app.state.lookup_service = None
         if database is not None:
             await run_in_threadpool(database.close)
         app.state.database = None
+
+
+class RequestBudgetMiddleware:
+    """Record request arrival time before SessionGuard body buffering or parsing (T008)."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            app = scope.get("app")
+            clock = None
+            if app is not None and hasattr(app, "state"):
+                if getattr(app.state, "lookup_service", None) is not None:
+                    clock = getattr(app.state.lookup_service, "clock", None)
+                if clock is None:
+                    clock = getattr(app.state, "clock", None)
+            if clock is None:
+                clock = monotonic
+            scope.setdefault("state", {})["request_start_time"] = clock()
+        await self.app(scope, receive, send)
 
 
 def create_app(settings: AppSettings | None = None) -> FastAPI:
@@ -85,12 +125,14 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.state.storage_error = None
     app.state.operation_ledger = None
     app.state.consent_service = None
+    app.state.lookup_service = None
     app.state.active_ai_policy = None
     app.state.sessions = SessionStore()
 
     # FastAPI middleware runs before route handlers, including the generated OpenAPI route.
     # Source: https://fastapi.tiangolo.com/tutorial/middleware/
     app.add_middleware(SessionGuard, settings=app_settings, sessions=app.state.sessions)
+    app.add_middleware(RequestBudgetMiddleware)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -114,6 +156,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(bootstrap_router)
     app.include_router(operations_router)
+    app.include_router(lookups_router)
 
     from backend.app.http.consent import router as consent_router
 

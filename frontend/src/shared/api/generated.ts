@@ -43,6 +43,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lookups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Lookup */
+        post: operations["post_lookup_api_v1_lookups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/{operationId}": {
         parameters: {
             query?: never;
@@ -209,6 +226,18 @@ export interface components {
             }[];
             /** @enum {string} */
             kind: "FIELD_ERRORS";
+        } | {
+            /** @enum {string} */
+            kind: "RETRY";
+            operationId?: string;
+            operationKind?: string;
+            retryAfterSeconds?: number;
+        } | {
+            /** @enum {string} */
+            consentState: "NOT_GRANTED" | "GRANTED" | "REVOKED" | "STALE";
+            currentPolicyVersion?: string | null;
+            /** @enum {string} */
+            kind: "AI_CONSENT";
         };
         ErrorResponse: {
             error: {
@@ -241,6 +270,104 @@ export interface components {
             storageStatus: components["schemas"]["StorageStatus"];
             /** Version */
             version: string;
+        };
+        /** LookupExample */
+        LookupExample: {
+            /** English */
+            english: string;
+            /**
+             * Verificationstatus
+             * @enum {string}
+             */
+            verificationStatus: "VERIFIED" | "UNVERIFIED" | "MISSING";
+            /** Vietnamese */
+            vietnamese: string;
+        };
+        /** LookupForm */
+        LookupForm: {
+            /**
+             * Cambridgestatus
+             * @enum {string}
+             */
+            cambridgeStatus: "VERIFIED" | "UNVERIFIED" | "MISSING";
+            /** Cambridgeurl */
+            cambridgeUrl: string | null;
+            /** Examples */
+            examples: components["schemas"]["LookupExample"][];
+            /** Formid */
+            formId: string;
+            /**
+             * Ipastatus
+             * @enum {string}
+             */
+            ipaStatus: "VERIFIED" | "UNVERIFIED" | "MISSING";
+            /** Ipaus */
+            ipaUs: string | null;
+            /** Lemma */
+            lemma: string;
+            /** Meaningsen */
+            meaningsEn: components["schemas"]["LookupMeaning"][];
+            /** Meaningsvi */
+            meaningsVi: components["schemas"]["LookupMeaning"][];
+            /** Partofspeech */
+            partOfSpeech: string;
+            /**
+             * Verificationsummary
+             * @enum {string}
+             */
+            verificationSummary: "VERIFIED" | "UNVERIFIED" | "MISSING";
+        };
+        /** LookupMeaning */
+        LookupMeaning: {
+            /**
+             * Language
+             * @enum {string}
+             */
+            language: "en" | "vi";
+            /** Text */
+            text: string;
+            /**
+             * Verificationstatus
+             * @enum {string}
+             */
+            verificationStatus: "VERIFIED" | "UNVERIFIED" | "MISSING";
+        };
+        /** LookupRequest */
+        LookupRequest: {
+            /** Term */
+            term: string;
+        };
+        /** LookupResult */
+        LookupResult: {
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Forms */
+            forms: components["schemas"]["LookupForm"][];
+            /** Lookupid */
+            lookupId: string;
+            /** Model */
+            model: string;
+            /** Operationid */
+            operationId: string;
+            /** Promptversion */
+            promptVersion: string;
+            /** Provider */
+            provider: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "PREVIEW" | "FAILED";
+            /** Term */
+            term: string;
+            /**
+             * Verificationsummary
+             * @enum {string}
+             */
+            verificationSummary: "VERIFIED" | "UNVERIFIED" | "MISSING";
         };
         /** Operation */
         Operation: {
@@ -681,6 +808,122 @@ export interface operations {
             };
             /** @description Error Response */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post_lookup_api_v1_lookups_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LookupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LookupResult"];
+                };
+            };
+            /** @description Error Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

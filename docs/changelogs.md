@@ -1,3 +1,49 @@
+## 03/10/2026 - T008: Hoàn thành Remediation Round 3 (Asia/Bangkok)
+
+- Khắc phục R3-B01 (Ledger-owned commit-boundary eligibility protocol): Kiểm tra điều kiện hoàn tất (eligibility) tại chính ranh giới DBAPI commit thông qua SQLAlchemy event listener `commit` trên connection giao dịch. Nếu deadline hết hạn hoặc coroutine bị hủy ngay trước commit, transaction bị hủy bỏ và rollback hoàn toàn: zero preview, zero SUCCEEDED receipt. Bổ sung kiểm thử tất định dừng chính xác tại ranh giới commit.
+- Khắc phục R3-B02 (End-to-end request deadline + cancellation lifecycle): Đặt `RequestBudgetMiddleware` chạy ngoài cùng trước khi `SessionGuard` đệm request body để ghi nhận `request_start_time` chuẩn xác. Bọc provider dispatch trong phạm vi hard timeout `asyncio.timeout(remaining)`. Bắt `(asyncio.CancelledError, GeneratorExit)` xuyên suốt các chặng để ghi nhận trạng thái bền vững `TIMEOUT` / 503 / `FAILED` (hoặc `UNKNOWN` nếu provider đã dispatch), tuyệt đối không để sót operation ở trạng thái `PENDING`.
+- Khắc phục R3-B03 (Admission payload race): Thực hiện `deepcopy` payload đầu vào ngay trước bất kỳ await hay preflight nào trong `AiAdmissionCoordinator.dispatch()`, đảm bảo caller không thể inject `route`, `provider`, `fallbackModel` qua race condition. Bổ sung kiểm thử đa luồng có rào chắn tất định.
+- Khắc phục R3-B04 (Strict Cambridge URL validation): Xây dựng bộ kiểm tra URL fail-closed loại bỏ triệt để encoding không hợp lệ, non-UTF-8 bytes (`%ff`), percent lồng nhau (`%25...`), encoded slash/backslash (`%2f`, `%5c`), traversal (`%2e%2e`), port, userinfo, controls (NUL, BEL, DEL), query và fragment. URL sai chuẩn trả về 502 `BRIDGE_INVALID_RESPONSE`, operation `FAILED`, zero preview.
+- Khắc phục R3-B05 (Term normalization & boundaries): Chuẩn hóa Unicode NFC, strip & collapse khoảng trắng, từ chối ký tự điều khiển (Cc, C0/C1) trước khi kiểm tra độ dài 1-80 ký tự. Từ được chuẩn hóa được dùng làm định danh yêu cầu và idempotency fingerprint.
+- Khắc phục R3-B06 (Consent error details contract): Cập nhật `scripts/export_contract.py` bổ sung discriminated variant `AI_CONSENT` vào `ErrorDetails` với `consentState` và `currentPolicyVersion`. Ánh xạ lỗi 403 `AI_CONSENT_REQUIRED` trả về chi tiết `AI_CONSENT` thay vì `RETRY`. Regenerate OpenAPI và TypeScript types đồng bộ.
+- Khắc phục R3-B07 (Scope authorization): Ghi nhận phân loại và cấp phép phạm vi sửa đổi bắt buộc đối với `backend/app/application/ai_admission.py`, `backend/app/vocabulary/repository.py`, `scripts/export_contract.py`, `scripts/tests/test_contract.py`.
+- Khắc phục R3-B08 (Deterministic concurrency): Loại bỏ hoàn toàn sleep và unbounded wait trong toàn bộ test concurrency. Sử dụng timeout có rào chắn và khối `finally` dọn dẹp tài nguyên tin cậy.
+- Kiểm tra toàn diện: 41 test trong `test_lookups.py` PASS 100%, 104 test phụ thuộc PASS, `npm run test:contract` PASS 7/7, `python -m mypy backend` PASS (51 files), `python -m ruff check .` và `ruff format --check .` PASS 100%, `npm run typecheck` PASS.
+
+## 03/10/2026 - T008: Hoàn thành Remediation Round 2 (Asia/Bangkok)
+
+- Khắc phục Blocker 01 (Privacy-safe failure diagnostics): Loại bỏ hoàn toàn in ấn ngoại lệ thô (`repr(e)`, `traceback.print_exc()`) trong `LookupService`. Bổ sung kiểm thử `test_privacy_safe_failure_diagnostics` xác thực các sentinel nhạy cảm (`BEARER_SECRET_SENTINEL`, `LEARNING_CONTENT_SENTINEL`, `PROVIDER_SECRET_SENTINEL`) không bị rò rỉ ra stdout, stderr, HTTP response, hoặc cơ sở dữ liệu.
+- Khắc phục Blocker 02 (End-to-end deadline & no late commit): Thiết lập deadline monotonic cố định từ lúc bắt đầu thao tác lookup. Kiểm tra tính hợp lệ của deadline xuyên suốt các chặng claim, admission, provider dispatch, parsing, validation, và tại chặng commit transaction bằng SQLAlchemy `before_cursor_execute` event listener ngay trước câu lệnh `UPDATE operations SET status='SUCCEEDED'`. Khi deadline hết hạn hoặc coroutine bị hủy (`task.cancel()`), toàn bộ transaction rollback hoàn toàn (0 preview, 0 SUCCEEDED receipt). Chuẩn hóa timeout map sang HTTP 503 `BRIDGE_UNAVAILABLE` với `error_category="TIMEOUT"` và `response_status=503` theo ADR-0005. Bổ sung 5 kiểm thử boundary/cancellation toàn diện.
+- Khắc phục Blocker 04 (Cambridge URL validation): Thắt chặt kiểm tra URL Cambridge với schema `https`, host `dictionary.cambridge.org`, không port, không userinfo, không ký tự điều khiển/DEL/backslash/path traversal (`..`, `%2e`, `%2f`, double-encoding). Các hostile URL trả về lỗi 502 `BRIDGE_INVALID_RESPONSE` (operation `FAILED`, 0 preview). URL hợp lệ giữ nguyên trạng thái `UNVERIFIED`; URL không cung cấp (`None`) được gán nhãn `MISSING`.
+- Khắc phục Blocker 05 (Contract ErrorDetails RETRY): Cập nhật `scripts/export_contract.py` bổ sung discriminated union variant `RETRY` vào `ErrorDetails`. Regenerate `contracts/openapi.json` và `frontend/src/shared/api/generated.ts` hoàn toàn tất định (deterministic SHA-256).
+- Khắc phục Blocker 06 (Ruff I001 & format): Chuẩn hóa thứ tự import theo đúng chuẩn `I001` và wrap các dòng dài trong toàn bộ codebase sửa đổi. `ruff check .` và `ruff format --check .` đều PASS 100%.
+- Khắc phục Blocker 07 (Deterministic concurrency test): Thay thế cơ chế delay bằng explicit `asyncio.Event` (`entered_dispatch`, `release_dispatch`) trong `FakeBridge` để giữ request A in-flight một cách tất định, không dựa vào `sleep()`.
+- Toàn bộ các cổng chất lượng (`check:fast`, `architecture:check`, `test:contract`, `typecheck`, `security:secrets`, `security:code`, `security:deps`, `coverage:check` changed 92.29% / total 92.92%) và 917 backend unit/integration tests đều PASS. Trạng thái task: `READY_FOR_T008_REAUDIT`.
+
+## 03/10/2026 - T008: Hoàn thành Remediation Round 1 (Asia/Bangkok)
+
+- Khắc phục Blocker 04: Thêm strict validation để lọc và từ chối các đường dẫn Cambridge Dictionary chứa path traversal (`..`, `%2e`) hoặc không khớp đúng prefix. Các hostile URL sẽ được map thành `None` thay vì lưu vào DB, đảm bảo an toàn.
+- Khắc phục test mock issue: Sửa đổi `FakeBridge` trong test suite để parse và wrap lỗi `JSONDecodeError` thành `BridgeInvalidResponseError`, giúp mock trả về mã lỗi 502 chính xác thay vì bubble error gây ra 503 không mong muốn.
+- Loại bỏ các type ignore/noqa không hợp lệ (Blocker 06) bằng cách cấu hình lại test mock object (`FakeBridge.delay`) thay vì ghi đè phương thức trực tiếp.
+- `npm run check:full` PASS hoàn toàn với độ phủ mã lệnh (coverage) đạt 100% changed (yêu cầu 80%) và 89.28% total (vượt baseline 86.70%).
+
+## 02/10/2026 - T008: Hoàn thiện Lookup API với Atomic Preview và Provider Validation (Asia/Bangkok)
+
+- Loại bỏ INSERT preview trùng lặp trong LookupService, sử dụng trực tiếp VocabularyRepository.create_preview() với scope external_connection được cấp quyền. Đảm bảo atomic commit của T019 preview và T016 operation receipt trong cùng một transaction.
+- Chuyển toàn bộ database/blocking operations khỏi async event loop bằng run_in_threadpool().
+- Bổ sung validation kiểm tra string rỗng/whitespace-only (min_length=1, không chỉ khoảng trắng) bằng Pydantic model cho các trường từ Provider.
+- Bổ sung test coverage cho: session_idempotency_key không leak vào payload; missing session trả 401; concurrent duplicate requests trả 409; test bridge error variants (502, 503); và test sentinel history đảm bảo zero effects lên các tables khác.
+- Aggregate coverage changed 98.43%, total 98.11%. Ruff format, Mypy, test contract, architecture/security gates PASS hoàn toàn.
+- Đã sẵn sàng cho T008 Audit theo đúng uỷ quyền và baseline.
+
+## 02/10/2026 - T008: Candidate lookup chưa hoàn tất — BLOCKED_FOR_SCOPE_EXTENSION (Asia/Bangkok)
+
+- Bổ sung `POST /api/v1/lookups` qua app factory production: chuẩn hóa/kiểm tra term và `Idempotency-Key`, claim `LOOKUP` durable operation, admission T016, prompt `lookup-v1`, strict provider validation, preview T019 gắn session và receipt atomically.
+- Replay cùng intent trả lại preview đã lưu không dispatch lần hai; changed-body, in-flight/unknown, consent/policy, malformed provider response và timeout dùng typed error envelope redacted. Lookup không ghi canonical word form, source Markdown, card hoặc SRS.
+- Regenerate OpenAPI/TypeScript DTO qua T017 generator; focused lookup 15 tests và dependency suites đạt. Native Windows tests vẫn pending fail-closed trên host Linux; không đánh dấu DONE hoặc READY_FOR_T008_AUDIT.
+- Final self-review phát hiện candidate đang lặp lại INSERT preview của T019 trong lookup service để giữ atomic receipt. `VocabularyRepository.create_preview()` tự mở transaction, chưa hỗ trợ transaction của ledger. Cần owner mở scope tối thiểu cho `backend/app/vocabulary/repository.py` trước khi sửa; file này chưa bị thay đổi. Approval hiện có chỉ bao gồm common error-message mappings trong `backend/app/http/errors.py`.
+- Còn phải hoàn thiện kiểm thử sentinel lịch sử/secret, lost-response/concurrent replay, session/policy/storage errors, provider hostile-content validation và chuyển SQLite blocking work khỏi async event loop. Candidate giữ nguyên để kiểm tra, chưa commit/push.
+
 ## 02/10/2026 - T021: Tích hợp adapter source Windows sau xác nhận native PASS (Asia/Bangkok)
 
 - T021 được đánh dấu DONE sau xác nhận của chủ repo rằng bộ kiểm thử Windows native trên NTFS đã PASS, gồm junction/reparse, hardlink, read-only, CRLF, ownership/DACL và privacy. Báo cáo gốc không có trong checkout Linux nên được ghi là owner-attested evidence.

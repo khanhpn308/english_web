@@ -392,6 +392,57 @@
               "fields"
             ],
             "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "RETRY"
+                ],
+                "type": "string"
+              },
+              "operationId": {
+                "type": "string"
+              },
+              "operationKind": {
+                "type": "string"
+              },
+              "retryAfterSeconds": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "consentState": {
+                "enum": [
+                  "NOT_GRANTED",
+                  "GRANTED",
+                  "REVOKED",
+                  "STALE"
+                ],
+                "type": "string"
+              },
+              "currentPolicyVersion": {
+                "nullable": true,
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "AI_CONSENT"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "consentState"
+            ],
+            "type": "object"
           }
         ],
         "discriminator": {
@@ -487,6 +538,256 @@
           "readiness"
         ],
         "title": "HealthSummary",
+        "type": "object"
+      },
+      "LookupExample": {
+        "additionalProperties": false,
+        "properties": {
+          "english": {
+            "title": "English",
+            "type": "string"
+          },
+          "verificationStatus": {
+            "enum": [
+              "VERIFIED",
+              "UNVERIFIED",
+              "MISSING"
+            ],
+            "title": "Verificationstatus",
+            "type": "string"
+          },
+          "vietnamese": {
+            "title": "Vietnamese",
+            "type": "string"
+          }
+        },
+        "required": [
+          "english",
+          "vietnamese",
+          "verificationStatus"
+        ],
+        "title": "LookupExample",
+        "type": "object"
+      },
+      "LookupForm": {
+        "additionalProperties": false,
+        "properties": {
+          "cambridgeStatus": {
+            "enum": [
+              "VERIFIED",
+              "UNVERIFIED",
+              "MISSING"
+            ],
+            "title": "Cambridgestatus",
+            "type": "string"
+          },
+          "cambridgeUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cambridgeurl"
+          },
+          "examples": {
+            "items": {
+              "$ref": "#/components/schemas/LookupExample"
+            },
+            "title": "Examples",
+            "type": "array"
+          },
+          "formId": {
+            "title": "Formid",
+            "type": "string"
+          },
+          "ipaStatus": {
+            "enum": [
+              "VERIFIED",
+              "UNVERIFIED",
+              "MISSING"
+            ],
+            "title": "Ipastatus",
+            "type": "string"
+          },
+          "ipaUs": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipaus"
+          },
+          "lemma": {
+            "title": "Lemma",
+            "type": "string"
+          },
+          "meaningsEn": {
+            "items": {
+              "$ref": "#/components/schemas/LookupMeaning"
+            },
+            "title": "Meaningsen",
+            "type": "array"
+          },
+          "meaningsVi": {
+            "items": {
+              "$ref": "#/components/schemas/LookupMeaning"
+            },
+            "title": "Meaningsvi",
+            "type": "array"
+          },
+          "partOfSpeech": {
+            "title": "Partofspeech",
+            "type": "string"
+          },
+          "verificationSummary": {
+            "enum": [
+              "VERIFIED",
+              "UNVERIFIED",
+              "MISSING"
+            ],
+            "title": "Verificationsummary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "formId",
+          "lemma",
+          "partOfSpeech",
+          "meaningsEn",
+          "meaningsVi",
+          "examples",
+          "ipaUs",
+          "cambridgeUrl",
+          "ipaStatus",
+          "cambridgeStatus",
+          "verificationSummary"
+        ],
+        "title": "LookupForm",
+        "type": "object"
+      },
+      "LookupMeaning": {
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "enum": [
+              "en",
+              "vi"
+            ],
+            "title": "Language",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "verificationStatus": {
+            "enum": [
+              "VERIFIED",
+              "UNVERIFIED",
+              "MISSING"
+            ],
+            "title": "Verificationstatus",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "language",
+          "verificationStatus"
+        ],
+        "title": "LookupMeaning",
+        "type": "object"
+      },
+      "LookupRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "term": {
+            "title": "Term",
+            "type": "string"
+          }
+        },
+        "required": [
+          "term"
+        ],
+        "title": "LookupRequest",
+        "type": "object"
+      },
+      "LookupResult": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "forms": {
+            "items": {
+              "$ref": "#/components/schemas/LookupForm"
+            },
+            "title": "Forms",
+            "type": "array"
+          },
+          "lookupId": {
+            "title": "Lookupid",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "operationId": {
+            "title": "Operationid",
+            "type": "string"
+          },
+          "promptVersion": {
+            "title": "Promptversion",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "PREVIEW",
+              "FAILED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "term": {
+            "title": "Term",
+            "type": "string"
+          },
+          "verificationSummary": {
+            "enum": [
+              "VERIFIED",
+              "UNVERIFIED",
+              "MISSING"
+            ],
+            "title": "Verificationsummary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lookupId",
+          "operationId",
+          "term",
+          "forms",
+          "provider",
+          "model",
+          "promptVersion",
+          "verificationSummary",
+          "status",
+          "createdAt"
+        ],
+        "title": "LookupResult",
         "type": "object"
       },
       "Operation": {
@@ -1086,6 +1387,151 @@
         "summary": "Get Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/v1/lookups": {
+      "post": {
+        "operationId": "post_lookup_api_v1_lookups_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[\\x20-\\x7e]+$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LookupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LookupResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          }
+        },
+        "summary": "Post Lookup",
+        "tags": [
+          "lookups"
         ]
       }
     },

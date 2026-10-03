@@ -1,10 +1,10 @@
 # T008: POST lookup trả preview đã validate
 
-**Task ID:** `T008`  
-**Title:** POST lookup trả preview đã validate  
-**Status:** `TODO`  
-**Goal:** POST lookup trả preview đã validate. Valid preview có meaning/example fields; missing IPA/link có nhãn, không hallucinated verified.  
-**Suggested model:** GPT-6 Astra  
+**Task ID:** `T008`
+**Title:** POST lookup trả preview đã validate
+**Status:** `READY_FOR_T008_RE_AUDIT`
+**Goal:** POST lookup trả preview đã validate. Valid preview có meaning/example fields; missing IPA/link có nhãn, không hallucinated verified.
+**Suggested model:** GPT-6 Astra
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
 
 ## Context cần đọc
@@ -34,6 +34,16 @@ Mọi dependency phải có evidence hoàn tất. Task ID không biểu thị th
 - `backend/tests/test_lookups.py`
 - `backend/app/main.py`
 
+### R3-B07 Scope Authorization Record
+
+| File | Owner Task | Classification | Rationale & Minimum Necessary Change |
+|---|---|---|---|
+| `backend/app/application/ai_admission.py` | T016 | `REQUIRED_SHARED_REMEDIATION` | Deepcopy caller payload immediately before validation/await in `dispatch()` to eliminate race where caller mutates dict and injects unapproved fields. |
+| `backend/app/vocabulary/repository.py` | T019 | `REQUIRED_SHARED_REMEDIATION` | Accept external `connection` parameter in `create_preview()` so preview + operation SUCCEEDED receipt commit atomically in the ledger transaction. |
+| `backend/app/http/errors.py` | T003/T014 | `REQUIRED_SHARED_REMEDIATION` | Pass structured `details` dictionary directly to `JSONResponse` error envelope. |
+| `scripts/export_contract.py` | T017 | `REQUIRED_SHARED_REMEDIATION` | Add `AI_CONSENT` schema variant to `ErrorDetails` discriminated union to conform to OpenAPI spec. |
+| `scripts/tests/test_contract.py` | T017 | `REQUIRED_SHARED_REMEDIATION` | Add contract test asserting `AI_CONSENT` variant in exported schema. |
+
 Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa generated file bằng tay. Common bookkeeping được phép: thẻ task này, [todo.md](todo.md), [changelog](../docs/changelogs.md), artifact verification đã loại dữ liệu nhạy cảm.
 
 ## Files không được sửa
@@ -50,9 +60,9 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 
 ## Acceptance criteria
 
-- [ ] Valid preview có meaning/example fields; missing IPA/link có nhãn, không hallucinated verified.
-- [ ] Consent denied zero preflight; malformed output/timeout không success hoặc queued retry.
-- [ ] Idempotent same intent một dispatch; no explicit save = zero card/source.
+- [x] Valid preview có meaning/example fields; missing IPA/link có nhãn, không hallucinated verified.
+- [x] Consent denied zero preflight; malformed output/timeout không success hoặc queued retry.
+- [x] Idempotent same intent một dispatch; no explicit save = zero card/source.
 
 ## Test cases
 

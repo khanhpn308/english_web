@@ -14,6 +14,16 @@ _MESSAGES = {
     "PAYLOAD_TOO_LARGE": "Request body too large",
     "NOT_FOUND": "Resource not found",
     "CONFIGURATION_REQUIRED": "Local application configuration is incomplete",
+    "AI_CONSENT_REQUIRED": "AI consent required",
+    "AI_POLICY_CHANGED": "AI policy changed",
+    "IDEMPOTENCY_KEY_REUSED": "Idempotency key reused",
+    "IDEMPOTENCY_IN_FLIGHT": "Operation already in flight",
+    "BRIDGE_UNAVAILABLE": "AI bridge unavailable",
+    "BRIDGE_INVALID_RESPONSE": "AI bridge returned an invalid response",
+    "BRIDGE_AUTH_ERROR": "AI bridge authentication failed",
+    "STORAGE_BUSY": "Storage unavailable",
+    "TIMEOUT": "Operation timed out",
+    "INTERNAL_ERROR": "Internal application error",
 }
 
 

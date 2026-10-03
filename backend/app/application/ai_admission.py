@@ -21,6 +21,7 @@ from backend.app.platform.bridge_port import BridgePort, BridgeProfile, BridgeUn
 from pydantic import ValidationError
 from sqlalchemy import Connection
 from sqlalchemy.exc import SQLAlchemyError
+from starlette.concurrency import run_in_threadpool
 
 
 @dataclass(frozen=True)
@@ -188,6 +189,9 @@ class AiAdmissionCoordinator:
     async def dispatch(
         self, *, operation_id: str, scope: str, payload: dict[str, Any], deadline: float
     ) -> dict[str, Any]:
+        # Snapshot immediately before any await or validation
+        # so caller mutation cannot inject fields
+        frozen_payload = deepcopy(payload)
         self._deadline(deadline)
         if scope not in SCOPES:
             raise OperationConflict(403, "AI_CONSENT_REQUIRED", operation_id)
@@ -195,35 +199,46 @@ class AiAdmissionCoordinator:
             field.lower().replace("_", "")
             in {"model", "modelid", "provider", "providerlabel", "route", "billingmode"}
             or "fallback" in field.lower()
-            for field in payload
+            for field in frozen_payload
         ):
             raise OperationConflict(422, "VALIDATION_ERROR", operation_id)
         if not self.consent.storage_reliable:
             raise OperationConflict(503, "STORAGE_BUSY", operation_id)
-        try:
-            with self.consent.operations.engine.connect() as connection:
-                self._pending(connection, operation_id, scope)
-            captured = self._capture(
-                self.consent.get_snapshot(self.policy_source), scope, operation_id
-            )
-        except (SQLAlchemyError, ValidationError, StorageError):
-            self.consent.storage_reliable = False
-            raise OperationConflict(503, "STORAGE_BUSY", operation_id) from None
-        # Copy before the await so caller mutation during preflight cannot substitute routing.
-        selected_payload = deepcopy(payload)
+
+        from typing import Any
+
+        def _pre_dispatch() -> Any:
+            try:
+                with self.consent.operations.engine.connect() as connection:
+                    self._pending(connection, operation_id, scope)
+                return self._capture(
+                    self.consent.get_snapshot(self.policy_source), scope, operation_id
+                )
+            except (SQLAlchemyError, ValidationError, StorageError):
+                self.consent.storage_reliable = False
+                raise OperationConflict(503, "STORAGE_BUSY", operation_id) from None
+
+        captured = await run_in_threadpool(_pre_dispatch)
+
+        selected_payload = deepcopy(frozen_payload)
         selected_payload["model"] = captured.rule.modelId
         self._deadline(deadline)
         profile = await self.bridge.preflight(deadline)
         self._deadline(deadline)
         self._profile(profile, captured, operation_id)
         self._deadline(deadline)
-        try:
-            if not self.consent.storage_reliable:
-                raise StorageError("UNAVAILABLE")
-            self._admit(operation_id, captured, deadline)
-        except (SQLAlchemyError, ValidationError, StorageError):
-            self.consent.storage_reliable = False
-            raise OperationConflict(503, "STORAGE_BUSY", operation_id) from None
+
+        def _do_admit() -> None:
+            try:
+                if not self.consent.storage_reliable:
+                    raise StorageError("UNAVAILABLE")
+                self._admit(operation_id, captured, deadline)
+            except (SQLAlchemyError, ValidationError, StorageError):
+                self.consent.storage_reliable = False
+                raise OperationConflict(503, "STORAGE_BUSY", operation_id) from None
+
+        await run_in_threadpool(_do_admit)
+
         self._deadline(deadline)
         # No await or network call occurs in the admission transaction above.
         result = await self.bridge.dispatch_chat(selected_payload, deadline)
