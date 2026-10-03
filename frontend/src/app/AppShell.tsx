@@ -1,5 +1,9 @@
 import React, { Component, useEffect, useState, type ErrorInfo, type ReactNode } from 'react';
 import './shell.css';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+
 
 export interface RouteMatch {
   routeId: string;
@@ -132,22 +136,24 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   override render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <section className="error-boundary-panel" role="alert" aria-live="assertive">
-          <h2>Đã xảy ra lỗi không mong muốn</h2>
-          <p className="error-message">{this.state.errorMessage}</p>
-          <div className="error-actions">
-            <button
-              type="button"
-              className="button button--primary"
-              onClick={this.handleRetry}
-            >
+        <Card className="border-destructive/50 bg-destructive/10" role="alert" aria-live="assertive">
+          <CardHeader>
+            <CardTitle className="text-destructive">
+              <h2 className="text-xl font-semibold m-0 leading-none">Đã xảy ra lỗi không mong muốn</h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="font-mono bg-background/50 p-3 rounded-md text-destructive">{this.state.errorMessage}</p>
+          </CardContent>
+          <CardFooter className="flex flex-wrap gap-4">
+            <Button onClick={this.handleRetry} variant="default" className="whitespace-normal h-auto py-2">
               Thử lại màn hình này
-            </button>
-            <a href="/status" className="button button--secondary">
-              Kiểm tra trạng thái hệ thống
-            </a>
-          </div>
-        </section>
+            </Button>
+            <Button asChild variant="outline" className="whitespace-normal h-auto py-2">
+              <a href="/status">Kiểm tra trạng thái hệ thống</a>
+            </Button>
+          </CardFooter>
+        </Card>
       );
     }
 
@@ -248,9 +254,9 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
   const matchedRoute = matchRoute(activePath);
 
   return (
-    <div className="app-container">
+    <div className="flex flex-col min-h-screen bg-background text-foreground">
       {/* Accessible skip link */}
-      <a href="#main-content" className="skip-link">
+      <a href="#main-content" className="skip-link absolute -top-[100px] left-4 z-[9999] bg-foreground text-background px-6 py-3 font-semibold rounded-md shadow-md transition-[top] duration-150 ease-out focus:top-4 focus:outline focus:outline-2 focus:outline-ring focus:outline-offset-2 no-underline">
         Chuyển đến nội dung chính
       </a>
 
@@ -259,22 +265,25 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
         {matchedRoute ? `Đang hiển thị màn hình ${matchedRoute.title}` : 'Không tìm thấy trang'}
       </div>
 
-      <header className="app-header" role="banner">
-        <div className="app-header__brand">
-          <a href="/" className="app-brand-link" onClick={(e) => handleLinkClick(e, '/')}>
-            <span className="app-brand-title">Học Từ Vựng Học Thuật</span>
+      <header className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between px-6 py-4 bg-background border-b border-border gap-4" role="banner">
+        <div className="flex items-center">
+          <a href="/" className="text-foreground font-bold text-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 rounded-sm no-underline" onClick={(e) => handleLinkClick(e, '/')}>
+            <span>Học Từ Vựng Học Thuật</span>
           </a>
         </div>
 
-        <nav className="primary-nav" aria-label="Điều hướng chính" role="navigation">
-          <ul className="primary-nav__list">
+        <nav className="flex items-center w-full sm:w-auto" aria-label="Điều hướng chính" role="navigation">
+          <ul className="flex flex-wrap gap-2 w-full sm:w-auto m-0 p-0 list-none">
             {PRIMARY_NAV_ITEMS.map((item) => {
               const active = isNavActive(item, activePath);
               return (
-                <li key={item.id} className="primary-nav__item">
+                <li key={item.id} className="flex-1 sm:flex-none text-center sm:text-left">
                   <a
                     href={item.href}
-                    className={`nav-link ${active ? 'nav-link--active' : ''}`}
+                    className={cn(
+                      "inline-block px-3 py-2 text-muted-foreground font-medium rounded-md border-b-2 border-transparent transition-colors hover:text-foreground hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 no-underline w-full sm:w-auto",
+                      active && "text-primary font-bold border-primary bg-muted"
+                    )}
                     aria-current={active ? 'page' : undefined}
                     onClick={(e) => handleLinkClick(e, item.href)}
                   >
@@ -286,10 +295,10 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
           </ul>
         </nav>
 
-        <div className="app-header__actions">
+        <div className="flex items-center">
           <a
             href="/status#ai-consent"
-            className="ai-consent-quick-link"
+            className="text-sm text-muted-foreground underline p-2 rounded-sm hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
             title="Xem và quản lý quyền chia sẻ dữ liệu với AI bridge"
             onClick={(e) => handleLinkClick(e, '/status')}
           >
@@ -298,46 +307,46 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
         </div>
       </header>
 
-      <main id="main-content" className="app-main" tabIndex={-1} role="main">
+      <main id="main-content" className="flex-1 w-full max-w-[1200px] mx-auto p-4 sm:p-6 outline-none" tabIndex={-1} role="main">
         <ErrorBoundary>
           {matchedRoute ? (
-            <article className="screen-view">
-              <h1 className="screen-view__title" tabIndex={-1}>
+            <article className="flex flex-col gap-6">
+              <h1 className="screen-view__title m-0 text-3xl font-bold text-foreground outline-none" tabIndex={-1}>
                 {matchedRoute.title}
               </h1>
-              <div className="feature-unavailable-card" role="region" aria-label="Thông báo trạng thái tính năng">
-                <p className="feature-unavailable-message">
-                  Tính năng đang được xây dựng (chưa khả dụng) trong giai đoạn khởi tạo shell.
-                </p>
-                {Object.keys(matchedRoute.params).length > 0 && (
-                  <dl className="route-params-list">
-                    {Object.entries(matchedRoute.params).map(([key, value]) => (
-                      <div key={key} className="route-param-item">
-                        <dt>{key}:</dt>
-                        <dd>{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-                <p className="feature-unavailable-note">
-                  Dữ liệu bài học và tính năng tương tác thực tế sẽ được nạp sau khi tích hợp API backend.
-                </p>
-              </div>
+              <Card role="region" aria-label="Thông báo trạng thái tính năng">
+                <CardHeader>
+                  <CardTitle className="text-primary text-lg">Tính năng đang được xây dựng (chưa khả dụng) trong giai đoạn khởi tạo shell.</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {Object.keys(matchedRoute.params).length > 0 && (
+                    <dl className="bg-muted p-4 rounded-md my-4 space-y-2">
+                      {Object.entries(matchedRoute.params).map(([key, value]) => (
+                        <div key={key} className="flex gap-2">
+                          <dt className="font-semibold text-muted-foreground">{key}:</dt>
+                          <dd className="m-0 font-mono">{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                  <p className="feature-unavailable-note mb-0 text-sm text-muted-foreground">
+                    Dữ liệu bài học và tính năng tương tác thực tế sẽ được nạp sau khi tích hợp API backend.
+                  </p>
+                </CardContent>
+              </Card>
             </article>
           ) : (
-            <article className="screen-view not-found-view">
-              <h1 className="screen-view__title" tabIndex={-1}>
+            <article className="flex flex-col gap-6 text-center py-8">
+              <h1 className="screen-view__title m-0 text-3xl font-bold text-foreground outline-none" tabIndex={-1}>
                 Không tìm thấy trang
               </h1>
-              <p>Địa chỉ bạn yêu cầu không tồn tại hoặc đã được thay đổi.</p>
-              <div className="not-found-actions">
-                <a
-                  href="/"
-                  className="button button--primary"
-                  onClick={(e) => handleLinkClick(e, '/')}
-                >
-                  Quay lại trang chủ
-                </a>
+              <p className="text-muted-foreground">Địa chỉ bạn yêu cầu không tồn tại hoặc đã được thay đổi.</p>
+              <div className="mt-6">
+                <Button asChild className="whitespace-normal h-auto py-2">
+                  <a href="/" onClick={(e) => handleLinkClick(e, '/')}>
+                    Quay lại trang chủ
+                  </a>
+                </Button>
               </div>
             </article>
           )}
