@@ -26,7 +26,7 @@
 - [x] [T007](t007-bridge-policy-consent-adapter.md): Antigravity transport adapter với fake proxy
 - [x] [T016](t016-dispatch-fence.md): Consent admission fence trước AI dispatch
 - [x] [T075](t075-shadcn-ui-foundation.md): shadcn/ui foundation & Tailwind integration — DONE: Tailwind v4 (layer theme/utilities without Preflight) + Vite, components.json, @/* alias, cn(), Button/Card/Dialog primitives, 27 design-system tests pass; full check:task green (810 Python, 65 frontend, 40 architecture tests, coverage changed 100%, total 92.96%, zero security findings).
-- [ ] [T076](t076-app-shell-shadcn-migration.md): AppShell shadcn/ui & semantic design-system migration
+- [x] [T076](t076-app-shell-shadcn-migration.md): AppShell shadcn/ui & semantic design-system migration — DONE: AppShell migrated to canonical shadcn Button/Card and Tailwind v4 semantic tokens; 9 routes, landmarks, ErrorBoundary, 404 preserved; 27 unit tests (including jsdom mounted interaction coverage for brand and 404 recovery navigation handlers; changed-code coverage 100%), 48 focused E2E tests across 4 viewports (mounted ErrorBoundary fixture recovery, brand/404 navigation with h1 focus, 200% effective layout reflow at 640px, CDP visual scaling), 8 axe-core a11y tests pass; 11 Windows-native tests fail-closed on Linux (inherited baseline); zero security findings.
 - [ ] [T018](t018-consent-ui.md): Consent dialog và Status panel (BLOCKED_BY_T075_T076)
 - [x] [T019](t019-vocabulary-schema.md): Schema vocabulary, source links và preview
 - [ ] [T008](t008-lookup-api-vertical-slice.md): POST lookup trả preview đã validate

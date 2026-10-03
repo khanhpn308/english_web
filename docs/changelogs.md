@@ -1,3 +1,38 @@
+## 03/10/2026 - T076: Di chuyển AppShell sang canonical shadcn/ui và Tailwind design system (Asia/Bangkok)
+
+- **Mục tiêu & Bối cảnh:** Hoàn thành di chuyển `AppShell` sang nền tảng shadcn/ui và Tailwind CSS v4 semantic tokens theo kiến trúc thiết kế chuẩn của repository; bảo toàn 100% hợp đồng hành vi, accessibility, và khả năng phục hồi của T004.
+- **Thực thi giao diện & CSS (`frontend/src/app/AppShell.tsx`, `frontend/src/app/shell.css`):**
+  - Bảo toàn 9 routes v1, regular expression pattern matching, trích xuất dynamic route parameters.
+  - Tái lập và duy trì các CSS document reset nền tảng (`box-sizing: border-box`, `body { margin: 0; padding: 0; ... }`) cùng typography baseline trong `shell.css` do Tailwind v4 không nạp Preflight theo thiết kế của T075.
+  - Sử dụng canonical primitives `Button` và `Card` (`CardHeader`, `CardTitle`, `CardContent`, `CardFooter`; không dùng `CardDescription` do AppShell không dùng tới) từ `@/components/ui`.
+  - Bảo toàn ngữ nghĩa tiêu đề cấp 2 trong `ErrorBoundary` bằng cách lồng thẻ `<h2 className="...">` chuẩn semantic bên trong `<CardTitle>`, bảo đảm không làm mất `heading` role trong accessibility tree khi `CardTitle` render thẻ `div`.
+  - Thêm cấu hình style responsive `whitespace-normal h-auto py-2` cho `Button` để ngăn chặn tràn ngang (horizontal overflow) trên màn hình hẹp 320px khi nút chứa văn bản tiếng Việt dài.
+  - Duy trì liên kết nhanh `/status#ai-consent` trong header: bảo toàn thuộc tính markup `href="/status#ai-consent"` trong khi cơ chế điều hướng client-side chuyển tới màn hình `/status`.
+  - Duy trì các class tương thích (`screen-view__title`, `feature-unavailable-note`) để tránh dead CSS và bảo toàn các bài test hồi quy.
+- **Kiểm thử đơn vị và E2E đa viewport (`frontend/src/app/AppShell.test.tsx`, `frontend/tests/e2e/shell.spec.ts`):**
+  - Giữ vững 25 unit tests ban đầu trong `AppShell.test.tsx` và bổ sung 2 tests tương tác client-side mounted React DOM trong môi trường Vitest/jsdom per-file, mang lại jsdom-based mounted Vitest interaction coverage cho 2 navigation handlers (brand navigation tại line 270 và 404 recovery action tại line 346) thông qua sự kiện DOM thực tế và assertion landing focus `h1`, hoàn toàn không dùng synthetic handler invocation hay React-element traversal.
+  - Mở rộng bộ test Playwright E2E `frontend/tests/e2e/shell.spec.ts` gồm 48 tests trên Chromium thực tế (12 tests x 4 viewports chuẩn: 320px mobile, 768px tablet, 1024px desktop, 1440px wide): kiểm thử mounted ErrorBoundary fixture phục hồi thực sự khi người dùng click, kích hoạt brand link và 404 recovery điều hướng về trang chủ và focus `h1`, kiểm thử reflow ở độ phân giải tương đương 200% zoom (viewport 640px) không tràn ngang và các controls khả dụng, cùng kiểm tra chẩn đoán độ phóng đại visual viewport bằng CDP `Emulation.setPageScaleFactor` (2.0) với thuật ngữ chính xác.
+- **Kết quả xác minh độc lập:**
+  - `npm run test:frontend`: 75/75 tests PASS (gồm 27/27 AppShell tests, 27/27 design system tests).
+  - `npm run test:e2e -- frontend/tests/e2e/shell.spec.ts --workers=1`: 48/48 tests PASS (4 viewports x 12 tests).
+  - `npm run test:a11y -- --workers=1`: 8/8 tests PASS (0 critical/serious axe-core violations).
+  - `npm run typecheck`: exit 0.
+  - `npm run lint`: exit 0 (0 errors, 3 fast-refresh warnings).
+  - `npm run architecture:frontend`: exit 0 (24 modules, 31 dependencies).
+  - `npm run architecture:check`: exit 0 (7 contracts kept, 40 tests passed).
+  - `npm run build`: exit 0.
+  - `QUALITY_BASE_REF="035430d668f1f754afd38e3cca9d630eb90a69a7" npm run coverage:check`: exit 0 (changed 100.00% >= 80.00%, total 93.40%).
+  - `npm run security:secrets`: exit 0 (0 finding).
+  - `npm run security:code`: exit 0 (0 finding).
+  - `npm run security:deps`: exit 0 (0 finding).
+  - `npm run check:fast`: exit 0.
+- **Phạm vi bảo toàn & Trạng thái:**
+  - Narrow scope extension: Thêm devDependency `jsdom` (test-only) phục vụ chạy môi trường DOM per-file trong `AppShell.test.tsx` cho cổng LCOV của repository; Playwright tiếp tục là oracle E2E trên trình duyệt thật Chromium (không đồng nhất jsdom với Chromium).
+  - Mã nguồn production (`AppShell.tsx`, `shell.css`) hoàn toàn không bị thay đổi (byte-identical) trong đợt coverage remediation này.
+  - Ghi nhận 11 test Windows-native trong `backend/tests/windows/test_source_paths.py` thất bại có chủ đích fail-closed trên môi trường Linux là `INHERITED_BASELINE_FAILURE` từ T021.
+  - Giữ nguyên trạng thái CP06A là `[ ]` (chưa tích hợp).
+  - Không commit, không push, không merge theo đúng chỉ thị phân quyền.
+
 ## 03/10/2026 - T022: Integrate independently audited durable source journal into current main (Asia/Bangkok)
 
 - Integrated the owner-reported `AUDIT_PASS` candidate `da270b3337c192636f07fa0f917831c2ed7ab966` with current local main `035430d668f1f754afd38e3cca9d630eb90a69a7`, preserving all 13 audited Python files and current-main T042/T075 behavior. Only changelog history conflicted; retained both histories and removed conflict markers previously committed on main.

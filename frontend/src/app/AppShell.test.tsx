@@ -1,6 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import React from 'react';
+// @vitest-environment jsdom
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import React, { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
+
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 import {
   AppShell,
   ErrorBoundary,
@@ -122,10 +126,190 @@ describe('ErrorBoundary & Edge Cases', () => {
     expect(html).toContain('Thử lại màn hình này');
   });
 
+  it('preserves h2 heading semantics within CardTitle in ErrorBoundary fallback', () => {
+    const boundary = new ErrorBoundary({ children: <div>child</div> });
+    boundary.state = {
+      hasError: true,
+      errorMessage: 'Lỗi kiểm thử heading semantics',
+    };
+    const html = renderToStaticMarkup(boundary.render() as React.ReactElement);
+    expect(html).toMatch(/<h2[^>]*>Đã xảy ra lỗi không mong muốn<\/h2>/);
+  });
+
+
+  it('logs diagnostic correlation context via componentDidCatch without throwing', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const boundary = new ErrorBoundary({ children: <div>child</div> });
+    boundary.componentDidCatch(new Error('Thử nghiệm chẩn đoán lỗi'), {
+      componentStack: '\n    in BuggyComponent\n    in ErrorBoundary',
+    });
+    expect(errorSpy).toHaveBeenCalledWith('[ErrorBoundary caught error]', {
+      name: 'Error',
+      componentStack: '\n    in BuggyComponent\n    in ErrorBoundary',
+    });
+    errorSpy.mockRestore();
+  });
+
   it('renders long Vietnamese labels properly without breaking markup', () => {
     const longTextRoute = '/status';
     const html = renderToStaticMarkup(<AppShell currentPath={longTextRoute} />);
     expect(html).toContain('Trạng thái hệ thống &amp; Quyền AI');
     expect(html).toContain('Chuyển đến nội dung chính');
+  });
+});
+
+describe('AppShell - Client-Side Navigation & Routing Invariants', () => {
+  it('defaults to dashboard route when currentPath is omitted', () => {
+    const html = renderToStaticMarkup(<AppShell />);
+    expect(html).toContain('Tổng quan');
+    expect(html).toMatch(/href="\/"[^>]*aria-current="page"/);
+  });
+});
+
+
+describe('T076 Design System Integration', () => {
+  it('uses T075 semantic tailwind tokens for layout', () => {
+    const html = renderToStaticMarkup(<AppShell currentPath="/" />);
+    expect(html).toContain('bg-background');
+    expect(html).toContain('text-foreground');
+    expect(html).toContain('bg-muted');
+    expect(html).toContain('border-border');
+  });
+
+  it('preserves screen-view__title and feature-unavailable-note classes in rendered markup', () => {
+    const html = renderToStaticMarkup(<AppShell currentPath="/" />);
+    expect(html).toContain('screen-view__title');
+    expect(html).toContain('feature-unavailable-note');
+  });
+
+  it('uses canonical Card primitive for placeholders with structured content and route params', () => {
+    const html = renderToStaticMarkup(<AppShell currentPath="/word-forms/test-item-42" />);
+    // Card primitive classes
+    expect(html).toContain('bg-card');
+    expect(html).toContain('text-card-foreground');
+    expect(html).toContain('role="region"');
+    expect(html).toContain('aria-label="Thông báo trạng thái tính năng"');
+    // Content structure
+    expect(html).toContain('Tính năng đang được xây dựng (chưa khả dụng)');
+    expect(html).toContain('wordFormId');
+    expect(html).toContain('test-item-42');
+  });
+
+  it('uses canonical Card and Button primitives for ErrorBoundary recovery actions', () => {
+    const boundary = new ErrorBoundary({ children: <div>child</div> });
+    boundary.state = {
+      hasError: true,
+      errorMessage: 'Lỗi kiểm thử ErrorBoundary primitives',
+    };
+    const html = renderToStaticMarkup(boundary.render() as React.ReactElement);
+
+    // Card primitive with alert role
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('aria-live="assertive"');
+    expect(html).toContain('border-destructive');
+
+    // Button primitives for retry and status navigation
+    expect(html).toContain('Thử lại màn hình này');
+    expect(html).toContain('Kiểm tra trạng thái hệ thống');
+    expect(html).toMatch(/<button[^>]*>Thử lại màn hình này<\/button>/);
+    expect(html).toMatch(/<a[^>]*href="\/status"[^>]*>Kiểm tra trạng thái hệ thống<\/a>/);
+  });
+
+  it('uses canonical Button primitive for 404 navigation action', () => {
+    const html = renderToStaticMarkup(<AppShell currentPath="/unknown-route-probe" />);
+    expect(html).toContain('Không tìm thấy trang');
+    expect(html).toMatch(/<a[^>]*href="\/"[^>]*>Quay lại trang chủ<\/a>/);
+  });
+});
+
+describe('AppShell - Mounted Client-Side Interactions (T076 Coverage Extension)', () => {
+  let container: HTMLDivElement | null = null;
+  let root: Root | null = null;
+  let originalRaf: typeof window.requestAnimationFrame | undefined;
+  let originalCancelRaf: typeof window.cancelAnimationFrame | undefined;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    originalRaf = window.requestAnimationFrame;
+    originalCancelRaf = window.cancelAnimationFrame;
+    window.requestAnimationFrame = (callback: FrameRequestCallback): number => {
+      return window.setTimeout(() => callback(performance.now()), 0);
+    };
+    window.cancelAnimationFrame = (id: number): void => {
+      window.clearTimeout(id);
+    };
+  });
+
+  afterEach(async () => {
+    const currentRoot = root;
+    if (currentRoot) {
+      await act(async () => {
+        currentRoot.unmount();
+      });
+      root = null;
+    }
+    if (container && container.parentNode) {
+      container.parentNode.removeChild(container);
+      container = null;
+    }
+    window.requestAnimationFrame = originalRaf!;
+    window.cancelAnimationFrame = originalCancelRaf!;
+    window.history.pushState(null, '', '/');
+  });
+
+  it('navigates from /lookup to / via real brand anchor DOM interaction and focuses heading (AppShell:270)', async () => {
+    window.history.pushState(null, '', '/lookup');
+
+    await act(async () => {
+      root!.render(<AppShell />);
+    });
+
+    expect(window.location.pathname).toBe('/lookup');
+    expect(container!.textContent).toContain('Tra cứu từ vựng');
+
+    const brandAnchor = container!.querySelector<HTMLAnchorElement>('header a[href="/"]');
+    expect(brandAnchor).not.toBeNull();
+
+    await act(async () => {
+      brandAnchor!.click();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(window.location.pathname).toBe('/');
+    expect(container!.textContent).toContain('Tổng quan');
+
+    const destinationHeading = container!.querySelector<HTMLHeadingElement>('#main-content h1');
+    expect(destinationHeading).not.toBeNull();
+    expect(document.activeElement).toBe(destinationHeading);
+  });
+
+  it('navigates from invalid path to / via real 404 recovery action DOM interaction and focuses heading (AppShell:346)', async () => {
+    window.history.pushState(null, '', '/unknown-broken-path-probe');
+
+    await act(async () => {
+      root!.render(<AppShell />);
+    });
+
+    expect(window.location.pathname).toBe('/unknown-broken-path-probe');
+    expect(container!.textContent).toContain('Không tìm thấy trang');
+
+    const recoveryAnchor = container!.querySelector<HTMLAnchorElement>('main a[href="/"]');
+    expect(recoveryAnchor).not.toBeNull();
+    expect(recoveryAnchor!.textContent).toContain('Quay lại trang chủ');
+
+    await act(async () => {
+      recoveryAnchor!.click();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(window.location.pathname).toBe('/');
+    expect(container!.textContent).toContain('Tổng quan');
+
+    const destinationHeading = container!.querySelector<HTMLHeadingElement>('#main-content h1');
+    expect(destinationHeading).not.toBeNull();
+    expect(document.activeElement).toBe(destinationHeading);
   });
 });
