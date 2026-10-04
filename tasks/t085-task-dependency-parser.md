@@ -2,7 +2,7 @@
 
 **Task ID:** `T085`
 **Title:** Normalize authoritative task dependency parsing across orchestrator layers
-**Status:** `TODO`
+**Status:** `DONE`
 **Goal:** Make executable task-card parsing and Level 2 DAG discovery interpret task dependencies with the same standalone task-ID semantics, eliminating false dependency edges created by task-like substrings embedded inside prose while preserving fail-closed dependency validation.
 **Level:** High
 
@@ -136,27 +136,27 @@ T085 is parser normalization only.
 
 ## Acceptance criteria
 
-- [ ] Dependency IDs are recognized only as standalone canonical task-ID tokens.
-- [ ] Embedded token `BLOCKED_BY_T080_T081` creates no dependency edge.
-- [ ] `XT080`, `T080X`, `PREFIX_T080`, and `T080_SUFFIX` create no dependency edge.
-- [ ] Markdown links such as `[T079](...)` continue to produce dependency `T079`.
-- [ ] Plain standalone IDs such as `T079` and `T083` continue to work.
-- [ ] Executable `task_card()` and scheduler metadata parsing share equivalent dependency semantics.
-- [ ] A synthetic T018-style card containing legitimate dependencies plus `BLOCKED_BY_T080_T081` does not invent dependency `T080`.
-- [ ] No task-ID-specific exception is added.
-- [ ] Missing dependency validation remains fail-closed.
-- [ ] Self-dependency validation remains fail-closed.
-- [ ] DAG cycle validation remains fail-closed.
-- [ ] Scheduler dispatch/integration behavior is unchanged.
-- [ ] Product source is unchanged.
-- [ ] Existing T084 candidate worktree is untouched.
-- [ ] Legacy T008/T018/T027/T034 worktrees are untouched.
-- [ ] Focused orchestrator regression tests pass.
-- [ ] Full orchestrator test suite passes.
-- [ ] Ruff passes.
-- [ ] Ruff format check passes.
-- [ ] Mypy passes.
-- [ ] `git diff --check` passes.
+- [x] Dependency IDs are recognized only as standalone canonical task-ID tokens.
+- [x] Embedded token `BLOCKED_BY_T080_T081` creates no dependency edge.
+- [x] `XT080`, `T080X`, `PREFIX_T080`, and `T080_SUFFIX` create no dependency edge.
+- [x] Markdown links such as `[T079](...)` continue to produce dependency `T079`.
+- [x] Plain standalone IDs such as `T079` and `T083` continue to work.
+- [x] Executable `task_card()` and scheduler metadata parsing share equivalent dependency semantics.
+- [x] A synthetic T018-style card containing legitimate dependencies plus `BLOCKED_BY_T080_T081` does not invent dependency `T080`.
+- [x] No task-ID-specific exception is added.
+- [x] Missing dependency validation remains fail-closed.
+- [x] Self-dependency validation remains fail-closed.
+- [x] DAG cycle validation remains fail-closed.
+- [x] Scheduler dispatch/integration behavior is unchanged.
+- [x] Product source is unchanged.
+- [x] Existing T084 candidate worktree is untouched.
+- [x] Legacy T008/T018/T027/T034 worktrees are untouched.
+- [x] Focused orchestrator regression tests pass.
+- [x] Full orchestrator test suite passes.
+- [x] Ruff passes.
+- [x] Ruff format check passes.
+- [x] Mypy passes.
+- [x] `git diff --check` passes.
 
 ## Verification commands
 

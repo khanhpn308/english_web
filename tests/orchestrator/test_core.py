@@ -479,6 +479,124 @@ python -m pytest
         task_card(tmp_path, "T100")
 
 
+def test_dependency_ids_canonical_and_embedded_tokens() -> None:
+    from tools.orchestrator.core import dependency_ids
+
+    # 1. plain standalone
+    assert dependency_ids("## Dependencies\nT079\n") == ["T079"]
+    assert dependency_ids("## Dependencies\n- T079\n") == ["T079"]
+
+    # 2. Markdown link
+    assert dependency_ids("## Dependencies\n- [T079](t079-level2-dag-scheduler.md)\n") == ["T079"]
+
+    # 3. multiple standalone
+    assert dependency_ids("## Dependencies\nDepends on T079 and T083\n") == ["T079", "T083"]
+    assert dependency_ids("## Dependencies\n- T079\n- T083\n") == ["T079", "T083"]
+
+    # 4. embedded
+    assert dependency_ids("## Dependencies\nBLOCKED_BY_T080_T081\n") == []
+
+    # 5. embedded prefix
+    assert dependency_ids("## Dependencies\nPREFIX_T080\n") == []
+
+    # 6. embedded suffix
+    assert dependency_ids("## Dependencies\nT080_SUFFIX\n") == []
+
+    # 7. adjacent letters
+    assert dependency_ids("## Dependencies\nXT080\n") == []
+    assert dependency_ids("## Dependencies\nT080X\n") == []
+
+    # Invalid dependency token format (fail-closed)
+    with pytest.raises(OrchestratorError, match="Invalid dependency ID: T0800"):
+        dependency_ids("## Dependencies\n- T0800\n")
+    with pytest.raises(OrchestratorError, match="Invalid dependency ID: T8"):
+        dependency_ids("## Dependencies\n- T8\n")
+
+
+def test_dependency_ids_t018_synthetic_diagnostic_fixture() -> None:
+    from tools.orchestrator.core import dependency_ids
+
+    diagnostic_text = """# T018: Synthetic Consent
+**Task ID:** `T018`
+**Title:** Synthetic Consent
+**Status:** `TODO`
+## Dependencies
+
+- [T081](t081-app-shell-shadcn-migration.md)
+- [T015](t015-consent-api.md)
+- [T017](t017-typed-api-client.md)
+- [T052](t052-browser-test-harness.md)
+
+This prose token is not a dependency:
+BLOCKED_BY_T080_T081
+## Files được phép sửa
+- `frontend/src/features/consent/AiConsentGate.tsx`
+## Acceptance criteria
+- [ ] Criteria
+## Verification commands
+```text
+git diff --check
+```
+"""
+    dependencies = dependency_ids(diagnostic_text)
+    assert dependencies == ["T015", "T017", "T052", "T081"]
+    assert "T080" not in dependencies
+
+
+def test_task_card_ignores_embedded_prose_dependencies(tmp_path: Path) -> None:
+    from tools.orchestrator.core import task_card
+
+    tasks_dir = tmp_path / "tasks"
+    tasks_dir.mkdir()
+
+    (tasks_dir / "t018-consent.md").write_text("""# T018
+**Task ID:** `T018`
+**Title:** Consent
+**Status:** `TODO`
+**Goal:** Consent dialog
+## Dependencies
+- [T081](t081-app-shell-shadcn-migration.md)
+- [T015](t015-consent-api.md)
+- [T017](t017-typed-api-client.md)
+- [T052](t052-browser-test-harness.md)
+
+BLOCKED_BY_T080_T081
+## Files được phép sửa
+- `child.py`
+## Acceptance criteria
+- [ ] Criteria
+## Verification commands
+```text
+python -m pytest
+```
+""")
+
+    for dep_id, name in [
+        ("T081", "shell"),
+        ("T015", "api"),
+        ("T017", "client"),
+        ("T052", "harness"),
+    ]:
+        impl = tmp_path / f"{name}.py"
+        impl.write_text("ok")
+        (tasks_dir / f"{dep_id.lower()}-{name}.md").write_text(f"""# {dep_id}
+**Task ID:** `{dep_id}`
+**Status:** `DONE`
+## Files được phép sửa
+- `{name}.py`
+## Acceptance criteria
+- [x] Done behavior
+## Verification commands
+```text
+python -m pytest
+```
+""")
+
+    card = task_card(tmp_path, "T018")
+    assert card.dependencies == ["T015", "T017", "T052", "T081"]
+    assert "T080" not in card.dependencies
+
+
 def test_schema_version_is_strict() -> None:
     data = contract().model_dump()
     data["schema_version"] = True

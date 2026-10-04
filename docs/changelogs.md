@@ -1,3 +1,24 @@
+## 05/10/2026 - T085: Normalize authoritative task dependency parsing across orchestrator layers (Asia/Bangkok)
+
+- Established unified standalone task-ID parsing semantics across executable task card parsing (`tools/orchestrator/core.py`) and Level 2 DAG discovery (`tools/orchestrator/scheduler.py`):
+  - `tools/orchestrator/core.py`: Introduced deterministic `dependency_ids(text: str) -> list[str]` helper to extract dependencies from the `## Dependencies` section using word-boundary canonical task ID matching (`\bT[0-9]+\b` matching `TASK_PATTERN`). Replaced substring `re.findall(TASK_PATTERN, section(text, "Dependencies"))` in `task_card()`.
+  - `tools/orchestrator/scheduler.py`: Replaced local extraction in `metadata()` with `dependency_ids(text)`, ensuring exact semantic alignment between scheduler admission and execution preflight.
+  - Eliminated false dependency edges created by task-like substrings embedded inside prose or status strings such as `BLOCKED_BY_T080_T081`, `PREFIX_T080`, `T080_SUFFIX`, `XT080`, and `T080X`.
+  - Maintained strict fail-closed enforcement for missing dependency cards, status completion, self-dependencies, DAG cycles, and malformed dependency IDs (e.g. `T0800`, `T8`).
+- Added regression and diagnostic test coverage:
+  - `tests/orchestrator/test_core.py`: Added `test_dependency_ids_canonical_and_embedded_tokens`, `test_dependency_ids_t018_synthetic_diagnostic_fixture`, and `test_task_card_ignores_embedded_prose_dependencies` proving that embedded prose tokens like `BLOCKED_BY_T080_T081` do not trigger false dependency extraction and do not cause `task_card()` to attempt loading missing dependency cards (e.g. `T080`).
+  - `tests/orchestrator/test_scheduler.py`: Added `test_scheduler_metadata_aligns_with_core_dependency_ids` proving that scheduler `metadata()` and core `dependency_ids()` yield identical dependency sets (`['T015', 'T017', 'T052', 'T081']`) and exclude `'T080'`.
+- Documentation & Bookkeeping:
+  - `docs/orchestrator.md`: Documented standalone token dependency parsing, elimination of false prose edges, shared helper alignment, and fail-closed validation.
+  - `tasks/t085-task-dependency-parser.md`: Marked status `DONE` and checked all 20 acceptance criteria.
+  - `tasks/todo.md`: Added T085 entry under local agent infrastructure.
+- Verification & Scope Safety:
+  - Focused test suite: 149 passed.
+  - Full orchestrator test suite: 283 passed.
+  - Linters: Ruff check passed, Ruff format check passed (10 files formatted), Mypy passed (6 source files, zero errors).
+  - Whitespace: `git diff --check` passed cleanly.
+  - Product source, contracts, migrations, task cards `t018`/`t080`/`t081`/`t084`, and external worktrees (`/home/khanh/projects/vocabularies-t084`, legacy worktrees) are 100% untouched. Status: `REMEDIATION_READY`. Uncommitted candidate prepared for independent audit.
+
 ## 04/10/2026 - T083: Repository DAG dependency metadata remediation (Asia/Bangkok)
 
 - Remediated repository task dependency metadata by removing invalid self-dependency edges in task cards without altering scheduler validation logic or product behavior:

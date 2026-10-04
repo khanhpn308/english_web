@@ -416,6 +416,14 @@ def owned_paths(text: str) -> list[str]:
     return paths
 
 
+def dependency_ids(text: str) -> list[str]:
+    dependencies = sorted(set(re.findall(r"\bT[0-9]+\b", section(text, "Dependencies"))))
+    for dep in dependencies:
+        if not re.fullmatch(TASK_PATTERN, dep):
+            raise OrchestratorError(f"Invalid dependency ID: {dep}")
+    return dependencies
+
+
 def task_card(repository: Path, task_id: str) -> TaskCard:
     if not re.fullmatch(TASK_PATTERN, task_id):
         raise OrchestratorError("Invalid task ID")
@@ -430,7 +438,7 @@ def task_card(repository: Path, task_id: str) -> TaskCard:
             raise OrchestratorError(f"Missing task field: {name}")
         return match.group(1).strip()
 
-    dependencies = sorted(set(re.findall(TASK_PATTERN, section(text, "Dependencies"))))
+    dependencies = dependency_ids(text)
     paths = owned_paths(text)
     # The lexical floor flags the bookkeeping filename as an unfinished-code token.
     task_list = "tasks/to" + "do.md"

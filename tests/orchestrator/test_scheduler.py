@@ -632,3 +632,35 @@ def test_existing_cli_still_requires_task(monkeypatch: pytest.MonkeyPatch, comma
     with pytest.raises(SystemExit) as error:
         main()
     assert error.value.code == 2
+
+
+def test_scheduler_metadata_aligns_with_core_dependency_ids() -> None:
+    from tools.orchestrator.core import dependency_ids
+
+    fixture_text = """# T018: Synthetic Consent
+**Task ID:** `T018`
+**Title:** Synthetic Consent
+**Status:** `TODO`
+## Dependencies
+
+- [T081](t081-app-shell-shadcn-migration.md)
+- [T015](t015-consent-api.md)
+- [T017](t017-typed-api-client.md)
+- [T052](t052-browser-test-harness.md)
+
+This prose token is not a dependency:
+BLOCKED_BY_T080_T081
+## Files được phép sửa
+- `child.py`
+## Acceptance criteria
+- [ ] Criteria
+## Verification commands
+```text
+python -m pytest
+```
+"""
+    meta = scheduler.metadata("tasks/t018-consent.md", fixture_text)
+    core_deps = dependency_ids(fixture_text)
+    assert meta.dependencies == core_deps == ["T015", "T017", "T052", "T081"]
+    assert "T080" not in meta.dependencies
+    assert "T080" not in core_deps

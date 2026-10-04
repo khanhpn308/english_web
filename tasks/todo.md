@@ -150,3 +150,4 @@ Infrastructure verification: [final evidence](../docs/reviews/orchestrator-verif
 - [x] [T082](t082-task-id-remediation.md): Canonical-ID remediation integrated on main: orchestrator T075/T076 preserved, UI cards renumbered T080/T081, live UI links/dependencies remapped, 82 unique IDs confirmed.
 
 - [ ] [T083](t083-dag-metadata-remediation.md): Repository DAG dependency metadata remediation ready for review: removed T018 and T081 Dependencies prose self-references; candidate DAG resolves with zero self-dependencies (83 cards, 40 DONE, 6 READY, 37 BLOCKED). Canonical main dry-run pending integration.
+- [ ] [T085](t085-task-dependency-parser.md): Normalize authoritative task dependency parsing across orchestrator layers ready for review: shared `dependency_ids` helper eliminates false dependency edges from embedded prose tokens such as `BLOCKED_BY_T080_T081` while preserving fail-closed validation. All 283 orchestrator tests pass.

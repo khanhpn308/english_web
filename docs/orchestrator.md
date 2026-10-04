@@ -117,10 +117,7 @@ Discovery đọc task cards `tasks/t[0-9]*.md` từ một SHA bất biến của
 canonical (`base_branch`, mặc định `main`). `tasks/todo.md` và template không phải
 nodes. Như `Pipeline.load`, scheduler xác định checkout chính qua Git common-dir,
 nên task card chưa commit trên worktree gọi lệnh không trở thành bằng chứng DONE.
-Mỗi node chứa ID, đường dẫn, title, status và dependencies. Discovery không gọi
-`task_card()` vì hàm đó cố ý từ chối dependencies chưa DONE. Ngay trước dispatch,
-`task_card()` kiểm tra có thẩm quyền; `Pipeline.start()` tiếp tục kiểm tra bản chụp
-trong worktree, implementation evidence, verification và contract như trước.
+Mỗi node chứa ID, đường dẫn, title, status và dependencies. Định danh dependency chỉ được trích xuất từ các standalone canonical task-ID token trong phần Dependencies (thông qua helper dùng chung `dependency_ids`); các định danh lồng trong prose hoặc trạng thái như `BLOCKED_BY_T080_T081` không tạo cạnh phụ thuộc trong DAG. Cả tầng phân giải metadata scheduler lẫn parser thực thi `task_card()` đều tuân thủ cùng một quy tắc ngữ nghĩa này. Sau khi trích xuất, việc kiểm tra phụ thuộc tiếp tục duy trì cơ chế fail-closed nghiêm ngặt (từ chối missing dependency, self-dependency hoặc cycle). Discovery không gọi `task_card()` vì hàm đó cố ý từ chối dependencies chưa DONE. Ngay trước dispatch, `task_card()` kiểm tra có thẩm quyền; `Pipeline.start()` tiếp tục kiểm tra bản chụp trong worktree, implementation evidence, verification và contract như trước.
 
 | Trạng thái DAG | Quy tắc |
 |---|---|

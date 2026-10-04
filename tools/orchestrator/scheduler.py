@@ -14,7 +14,7 @@ from tools.orchestrator.core import (
     OrchestratorError,
     State,
     TaskId,
-    section,
+    dependency_ids,
     task_card,
 )
 from tools.orchestrator.runtime import Git, LockBusy, lock
@@ -68,9 +68,7 @@ def metadata(path: str, text: str) -> Metadata:
         or ("**Task ID:**" in text and identifier is None)
     ):
         raise OrchestratorError(f"Invalid task metadata: {path}")
-    dependencies = sorted(set(re.findall(r"\bT[0-9]+\b", section(text, "Dependencies"))))
-    if any(not re.fullmatch(TASK_PATTERN, dep) for dep in dependencies):
-        raise OrchestratorError(f"Invalid dependency ID: {heading[1]}")
+    dependencies = dependency_ids(text)
     return Metadata(
         task_id=heading[1],
         path=path,
