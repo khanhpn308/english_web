@@ -1,6 +1,6 @@
 # T083: Repository DAG dependency metadata remediation
 
-**Status:** `TODO`
+**Status:** `DONE`
 **Title:** Remove invalid self-dependencies from canonical repository task metadata
 **Goal:** Make repository task dependency metadata structurally valid for the Level 2 DAG scheduler without weakening DAG validation or changing product behavior.
 **Level:** High
