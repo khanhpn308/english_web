@@ -75,3 +75,6 @@ Thumbs.db
 .agent-runs/
 test-results/
 playwright-report/
+
+# Agent orchestration runtime
+.agent/runs/
