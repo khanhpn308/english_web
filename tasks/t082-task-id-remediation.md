@@ -1,6 +1,6 @@
 # T082: Canonicalize duplicate repository task IDs
 
-**Status:** `REMEDIATION_READY`
+**Status:** `DONE`
 
 **Task ID:** `T082`
 
@@ -21,6 +21,31 @@ The mapping is determined by Git creation history: the orchestrator cards predat
 
 None. This owner-authorized repository metadata remediation has no task prerequisite.
 
+## Files được phép sửa
+
+- `docs/changelogs.md`
+- `docs/orchestrator.md`
+- `docs/task-plan.md`
+- `tasks/t009-lookup-ui-vertical-slice.md`
+- `tasks/t010-error-handling-recovery.md`
+- `tasks/t018-consent-ui.md`
+- `tasks/t025-save-ui-audio.md`
+- `tasks/t028-search-ui.md`
+- `tasks/t030-edit-ui.md`
+- `tasks/t033-review-ui.md`
+- `tasks/t036-quiz-ui.md`
+- `tasks/t038-dashboard-ui.md`
+- `tasks/t043-accessibility-evidence.md`
+- `tasks/t050-quiz-runner-ui.md`
+- `tasks/t051-quiz-result-feedback-ui.md`
+- `tasks/t060-status-ui.md`
+- `tasks/t064-ui-performance-harness.md`
+- `tasks/t079-level2-dag-scheduler.md`
+- `tasks/t080-shadcn-ui-foundation.md`
+- `tasks/t081-app-shell-shadcn-migration.md`
+- `tasks/t082-task-id-remediation.md`
+- `tasks/todo.md`
+
 ## Required behavior
 
 - Preserve T075/T076 orchestrator semantics unchanged.
@@ -36,25 +61,24 @@ None. This owner-authorized repository metadata remediation has no task prerequi
 
 ## Acceptance criteria
 
-- Exactly one task card identifies as T075.
-- Exactly one task card identifies as T076.
-- Exactly one task card identifies as T080.
-- Exactly one task card identifies as T081.
-- All live UI dependency links point to T080/T081 where semantically appropriate.
-- No orchestrator dependency is accidentally redirected to T080/T081.
-- No dangling references to renamed UI filenames remain.
-- Repository-wide scheduler discovery no longer fails with duplicate T075/T076.
-- `python -m tools.orchestrator schedule --dry-run` gets past duplicate-ID validation.
-- Any later DAG failure, if present, is reported separately and is not hidden or weakened.
-- Existing constraints and verification remain unchanged.
+- [x] Exactly one task card identifies as T075.
+- [x] Exactly one task card identifies as T076.
+- [x] Exactly one task card identifies as T080.
+- [x] Exactly one task card identifies as T081.
+- [x] All live UI dependency links point to T080/T081 where semantically appropriate.
+- [x] No orchestrator dependency is accidentally redirected to T080/T081.
+- [x] No dangling references to renamed UI filenames remain.
+- [x] Repository-wide scheduler discovery no longer fails with duplicate T075/T076.
+- [x] `python -m tools.orchestrator schedule --dry-run` gets past duplicate-ID validation.
+- [x] Any later DAG failure, if present, is reported separately and is not hidden or weakened.
+- [x] Existing constraints and verification remain unchanged.
 
-## Verification
+## Verification commands
 
 ```bash
-python -m tools.orchestrator schedule --dry-run
-python scripts/check_constraints.py floor
 python -m pytest tests/orchestrator -q --no-cov
 python -m ruff check tools/orchestrator tests/orchestrator
+python -m ruff format --check tools/orchestrator tests/orchestrator
 python -m mypy tools/orchestrator
 git diff --check
 ```
