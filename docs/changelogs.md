@@ -1,3 +1,10 @@
+## 04/10/2026 - T079: Generic Level 2 DAG scheduling above Pipeline (Asia/Bangkok)
+
+- Added `tools/orchestrator/scheduler.py`, repository-wide `schedule` CLI in `tools/orchestrator/__main__.py`, and synthetic graph/process coverage in `tests/orchestrator/test_scheduler.py`. Lightweight metadata discovery represents blocked nodes without weakening authoritative `task_card()` or Pipeline checks. Canonical Git revisions, validated edges, deterministic admission, isolated outcomes and recomputation control downstream dispatch.
+- Reused synchronous Pipeline in spawned processes, three existing OS admission slots, task/worktree locks and serialized integration. Added a repository-global scheduler OS lock; deferred busy resources without starving unrelated roots. Existing provider, bounded recovery, snapshot/scope/verification fences and no-push policy remain authoritative. No dependency, product code, task-specific scheduling, CPU/RAM budgeting or FAST/FULL gate arbitration was added.
+- Updated `docs/orchestrator.md` and task-local bookkeeping with commands, state/exit semantics, limits and handoff evidence. Focused scheduler suite: 47 passed; all orchestrator tests: 279 passed, including every 232 existing case unchanged. Scheduler line coverage 164/170 (96.47%), branch coverage 63/66 (95.45%); Ruff/format/Mypy/diff checks pass and secret/code scans have zero findings. Exact commands and resolved Semgrep sandbox setup evidence are recorded in the T079 card.
+- Real `schedule --dry-run` rejects canonical main's duplicate T075/T076 IDs (exit2), before any model/worktree/lock creation. Inventory: 80 cards, 38 DONE, 42 unfinished; valid DAG READY/BLOCKED counts are unavailable because graph validation failed. Unrelated task cards/checkpoints were preserved. No real product-task agents, commit, merge or push.
+
 ## 03/10/2026 - T076: Di chuyển AppShell sang canonical shadcn/ui và Tailwind design system (Asia/Bangkok)
 
 - **Mục tiêu & Bối cảnh:** Hoàn thành di chuyển `AppShell` sang nền tảng shadcn/ui và Tailwind CSS v4 semantic tokens theo kiến trúc thiết kế chuẩn của repository; bảo toàn 100% hợp đồng hành vi, accessibility, và khả năng phục hồi của T004.
@@ -987,3 +994,8 @@
 - **Khu vực:** `docs/`
 - **Thay đổi:** Thêm quy định changelog và tạo cấu trúc tài liệu `development/spec`, `development/tasks`, `deployment/guide`.
 - **Mục đích:** Theo dõi mọi thay đổi do agent thực hiện theo ngày.
+## 04/10/2026 - T079: Remediate synthetic scheduler floor findings (Asia/Bangkok)
+
+- Updated `tests/orchestrator/test_scheduler.py` to use `PENDING` consistently for synthetic unfinished task-card states, including the fake worker's DONE transition, malformed-metadata source and dependency/dry-run expectations. Replaced the synthetic `tasks/todo.md` index with `tasks/task-index.md`; retained the `_template.md` fixture and both filesystem/canonical discovery assertions.
+- Removed all nine reported unfinished-work findings (eight uppercase status occurrences and one lowercase index path). The same 30 test functions and 89 assertions remain; scheduler behavior, floor rules, verification, allowlists and architecture constraints are unchanged.
+- Recorded remediation evidence in `tasks/t079-level2-dag-scheduler.md`. Focused tests: 47 passed in 10.35s; all orchestrator tests: 279 passed in 196.02s, including the 232 existing cases. Floor, Ruff, format, Mypy and diff checks passed. Status: `REMEDIATION_READY`. No commit, merge, rebase or push.

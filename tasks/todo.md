@@ -144,3 +144,5 @@ Infrastructure verification: [final evidence](../docs/reviews/orchestrator-verif
 - [x] [T077](t077-optional-task-timeout.md): Opt-in development task deadlines; default null, manual positive seconds, preserved cancellation/output/fix limits and historical run evidence.
 
 - [x] [T078](t078-task-skill-prompts.md): Task-relevant installed skill references, pinned run policy and required Worker/Fix handoff blocks; no scope/Git expansion or historical prompt rewrite.
+
+- [x] [T079](t079-level2-dag-scheduler.md): Generic canonical-repository DAG scheduling above Pipeline; 47 synthetic scheduler/279 total orchestrator tests pass, OS admission/integration semantics preserved. Real dry-run fails closed on duplicate T075/T076 IDs; unrelated cards/checkpoints untouched. Implementation complete, uncommitted/unmerged; resource-aware scheduling deferred.

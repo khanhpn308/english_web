@@ -1,4 +1,4 @@
-# Công cụ điều phối phát triển cục bộ Level 1
+# Công cụ điều phối phát triển cục bộ Level 1 và Level 2
 
 ## Tra cứu nhanh: trường hợp và lệnh chạy
 
@@ -12,6 +12,9 @@ Thay `T018` bằng task cần chạy; thay `RUN_ID` bằng `run_id` trong kết 
 
 | Bạn muốn làm gì? | Lệnh |
 |---|---|
+| Xem DAG toàn repository, không gọi model hay tạo worktree | `python -m tools.orchestrator schedule --dry-run` |
+| Chạy mọi task READY theo DAG, dừng mỗi Pipeline ở audit | `python -m tools.orchestrator schedule --no-integrate` |
+| Chạy theo DAG và cho phép tích hợp cục bộ qua Pipeline | `python -m tools.orchestrator schedule --integrate` |
 | Xem cấu hình, worktree và luồng dự kiến; chưa chạy model | `python -m tools.orchestrator run T018 --dry-run` |
 | Chạy triển khai → audit → sửa lỗi; chưa commit/merge vào main | `python -m tools.orchestrator run T018 --no-integrate` |
 | Chạy toàn bộ, cho phép commit và tích hợp vào main sau khi đạt kiểm tra | `python -m tools.orchestrator run T018 --integrate` |
@@ -66,7 +69,8 @@ Python ràng buộc định danh task, các task phụ thuộc, SHA gốc, phạ
 tiêu chí, lệnh kiểm tra, mức rủi ro và điều kiện dừng theo thẻ task ban đầu. Thẻ của
 các task phụ thuộc phải có trạng thái DONE, hoàn thành các tiêu chí và có mã nguồn
 thuộc phạm vi sở hữu; các lệnh kiểm tra của chúng được chạy lại trên bản gốc đã cố
-định. Đây là kiểm tra các phụ thuộc trực tiếp, không phải bộ lập lịch DAG. Cú pháp
+định. Đây là kiểm tra các phụ thuộc trực tiếp của Pipeline; Level 2 ở bên dưới
+chỉ dùng metadata để lập lịch trước bước kiểm tra có thẩm quyền này. Cú pháp
 lệnh không được hỗ trợ hoặc danh sách tệp được phép sửa dùng thư mục/glob sẽ khiến
 quá trình bị chặn, thay vì tự suy diễn phạm vi. Agent lập kế hoạch và kiểm tra đọc
 các tài liệu được tham chiếu cùng mã nguồn trong worktree của mình.
@@ -101,6 +105,64 @@ source bao gồm HEAD, diff đã stage, nội dung và chế độ của tệp. 
 đã stage. Các tệp sinh tự động phải được tạo bằng generator thuộc task; hạ tầng này
 không thay đổi API công khai của ứng dụng, migration cơ sở dữ liệu hay client sinh
 tự động.
+
+## Level 2: lập lịch DAG toàn repository (T079)
+
+`scheduler.py` là lớp mỏng phía trên `Pipeline`, dùng thư viện chuẩn và các model
+Pydantic sẵn có. `schedule` không nhận Txxx hoặc `--run-id`; các lệnh `run`,
+`resume`, `retry`, `status` vẫn dùng như trước. Cấu hình và cờ tích hợp vẫn giống
+Level 1, mặc định không tích hợp. Không chọn model theo task ID.
+
+Discovery đọc task cards `tasks/t[0-9]*.md` từ một SHA bất biến của nhánh đích
+canonical (`base_branch`, mặc định `main`). `tasks/todo.md` và template không phải
+nodes. Như `Pipeline.load`, scheduler xác định checkout chính qua Git common-dir,
+nên task card chưa commit trên worktree gọi lệnh không trở thành bằng chứng DONE.
+Mỗi node chứa ID, đường dẫn, title, status và dependencies. Discovery không gọi
+`task_card()` vì hàm đó cố ý từ chối dependencies chưa DONE. Ngay trước dispatch,
+`task_card()` kiểm tra có thẩm quyền; `Pipeline.start()` tiếp tục kiểm tra bản chụp
+trong worktree, implementation evidence, verification và contract như trước.
+
+| Trạng thái DAG | Quy tắc |
+|---|---|
+| DONE | Card ở canonical revision có status DONE; không dispatch |
+| READY | Card chưa DONE, không có trạng thái BLOCKED/FAILED và mọi dependency DONE |
+| BLOCKED | Dependency chưa DONE, card có trạng thái BLOCKED/FAILED, hoặc lần chạy đã dừng mà card canonical chưa DONE |
+
+ID trùng, dependency thiếu, self-dependency hoặc cycle ở bất kỳ node nào (kể cả
+DONE) từ chối toàn bộ graph trước khi tạo lock/worktree/process chạy task. Các task
+có cùng mức ưu tiên dispatch theo ID tăng dần. JSON report chứa revision, toàn bộ
+nodes/edges, topological order, `done`, `ready`, `blocked` cùng lý do dependencies;
+sau chạy thật thêm `outcomes` gồm state/run ID/lỗi an toàn. Graph hợp lệ ở dry-run
+trả exit0 dù có nodes BLOCKED. Graph không hợp lệ trả exit2 với lỗi; không xuất
+READY/BLOCKED counts như thể đã phân giải một DAG hợp lệ. Chạy thật trả exit2 nếu
+còn nodes BLOCKED, exit0 nếu canonical cards đều DONE.
+
+Scheduler giữ OS lock repository-global `scheduler.lock` để từ chối hai scheduler
+sống đồng thời. Pool tối đa ba process dùng spawn; mỗi process gọi Pipeline đồng
+bộ, giữ nguyên ba admission slots và khóa task/run/worktree/integration hiện có.
+Không dùng threads cho Pipeline vì runtime kế thừa khóa theo process. Future đang
+sống và outcomes tránh dispatch lặp trong cùng lần schedule; OS task lock vẫn có
+thẩm quyền khi chạy cùng lệnh Level 1 bên ngoài. Contention ở admission/task lock
+được hoãn rồi đọc lại canonical graph; task READY khác được phép đi trước node
+đang bận. Scheduler có thể chờ slot bên ngoài; Ctrl+C vẫn dùng cơ chế ngắt của CLI.
+
+Sau mỗi completion, scheduler đọc lại canonical SHA và recompute DAG trước khi
+dispatch thêm. Metadata được cache chỉ khi SHA không đổi; outcomes vẫn được phân
+giải lại. Khi đã hoãn contention, scheduler thăm dò lại cả khi một task khác còn
+sống để dùng admission slots vừa được nhả. FAILED/BLOCKED chỉ chặn downstream;
+nhánh độc lập tiếp tục. Kết quả
+DONE của run hoặc card DONE trong worktree riêng không đủ unlock dependencies.
+Không tự gọi thêm recovery cho task đã kết thúc trong lần schedule này; bounded
+recovery/Fix và state machine đều thuộc Pipeline. AUDIT_PASS khi tắt tích hợp hoặc
+khi integration lock bận được giữ lại; dùng `resume TASK --run-id RUN_ID --integrate`
+theo quy tắc Level 1 rồi chạy schedule lại. Scheduler không tự giải quyết overlapping
+bookkeeping, merge conflicts hay baseline failures. Khóa tích hợp và snapshot/scope
+fences hiện có quyết định promotion; không có push.
+
+T079 không có CPU/RAM budgeting, FAST/FULL gate arbitration, dashboard hoặc daemon.
+Resource-aware scheduling thuộc task hạ tầng tiếp theo. Canonical main ngày
+04/10/2026 có hai card cho mỗi ID T075/T076; dry-run từ chối `Duplicate task IDs:
+T075, T076`. Sửa định danh task cần phạm vi riêng; T079 giữ nguyên các card đó.
 
 ## Cài đặt và cấu hình
 
@@ -545,9 +607,8 @@ tiến trình; không gọi dịch vụ trả phí. Xác thực provider thật 
 vẫn cần được kiểm chứng khi vận hành, không phải bằng chứng từ các bài kiểm thử.
 Runtime của ứng dụng không phụ thuộc vào package điều phối hay các CLI.
 
-Level 1 chạy trên máy cục bộ, đồng bộ trong từng task, dùng JSON để lưu trạng thái,
-giới hạn ba tiến trình phối hợp và tích hợp tuần tự theo cách thận trọng. Không có
-cơ sở dữ liệu, dashboard, khóa phân tán, bộ lập lịch, worker pool, tự lập lịch DAG
-hay resume chạy nền. Giao diện state/provider/Git cho phép bổ sung bộ lập lịch
-Level 2 và cơ chế cô lập mạnh hơn mà không thay contract của các vai trò. Những
-tính năng này được chủ ý để lại cho giai đoạn sau.
+Level 1 chạy đồng bộ trong từng task, dùng JSON để lưu trạng thái, ba admission
+slots và tích hợp tuần tự. T079 bổ sung pool process và lập lịch DAG phía trên
+Pipeline, giữ nguyên contract của các vai trò. Không có cơ sở dữ liệu scheduler,
+dashboard, khóa phân tán hay resume chạy nền. Resource-aware scheduling và cơ chế
+cô lập mạnh hơn thuộc giai đoạn hạ tầng sau.

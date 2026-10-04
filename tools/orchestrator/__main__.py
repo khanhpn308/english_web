@@ -1,17 +1,18 @@
-"""python -m tools.orchestrator: one task run per process, at most three processes."""
+"""python -m tools.orchestrator: single-task pipelines or repository DAG scheduling."""
 
 import argparse
 import json
 from pathlib import Path
 
 from tools.orchestrator.core import OrchestratorError, State
+from tools.orchestrator.scheduler import Scheduler
 from tools.orchestrator.workflow import Pipeline
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["run", "status", "resume", "retry"])
-    parser.add_argument("task")
+    parser.add_argument("command", choices=["run", "status", "resume", "retry", "schedule"])
+    parser.add_argument("task", nargs="?")
     parser.add_argument("--config", type=Path)
     parser.add_argument("--run-id")
     parser.add_argument("--dry-run", action="store_true")
@@ -19,12 +20,20 @@ def main() -> int:
     integration.add_argument("--integrate", action="store_true")
     integration.add_argument("--no-integrate", action="store_true")
     args = parser.parse_args()
+    if args.command != "schedule" and args.task is None:
+        parser.error("task is required for run/status/resume/retry")
     try:
         pipeline = Pipeline.load(Path.cwd(), args.config)
         if args.integrate:
             pipeline.config.integrate = True
         if args.no_integrate:
             pipeline.config.integrate = False
+        if args.command == "schedule":
+            if args.task is not None or args.run_id is not None:
+                raise OrchestratorError("Schedule accepts neither a task nor --run-id")
+            report = Scheduler(pipeline).run(dry_run=args.dry_run)
+            print(json.dumps(report.model_dump(mode="json"), indent=2))
+            return 2 if not args.dry_run and report.graph.blocked else 0
         if args.dry_run and args.command != "run":
             raise OrchestratorError("Dry run is supported only for run")
         if args.command == "run":
