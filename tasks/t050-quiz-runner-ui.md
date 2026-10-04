@@ -45,7 +45,7 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 ## Implementation notes
 
 - Only runner input/draft/restore. State draft/save pending/confirmed/error; don't mark saved before durable receipt. Reverse response order/revision conflict cannot overwrite newer input. No service worker/browser canonical DB; source snapshot read-only. Đăng ký flow vào route thật, không chỉ render isolated component; build và harness dùng cùng router.
-- Thiết kế component theo design system: `QuizRunner` và `QuestionRenderer` sử dụng canonical primitives (`Card`, `Button`, `Input`, `RadioGroup`...) từ `frontend/src/components/ui/` và semantic tokens kế thừa từ T076 (qua T036/T018).
+- Thiết kế component theo design system: `QuizRunner` và `QuestionRenderer` sử dụng canonical primitives (`Card`, `Button`, `Input`, `RadioGroup`...) từ `frontend/src/components/ui/` và semantic tokens kế thừa từ T081 (qua T036/T018).
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
 

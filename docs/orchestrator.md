@@ -160,9 +160,20 @@ bookkeeping, merge conflicts hay baseline failures. Khóa tích hợp và snapsh
 fences hiện có quyết định promotion; không có push.
 
 T079 không có CPU/RAM budgeting, FAST/FULL gate arbitration, dashboard hoặc daemon.
-Resource-aware scheduling thuộc task hạ tầng tiếp theo. Canonical main ngày
+Resource-aware scheduling thuộc task hạ tầng tiếp theo. Bằng chứng T079 lịch sử: canonical main ngày
 04/10/2026 có hai card cho mỗi ID T075/T076; dry-run từ chối `Duplicate task IDs:
 T075, T076`. Sửa định danh task cần phạm vi riêng; T079 giữ nguyên các card đó.
+
+T082 đã sửa định danh trong worktree remediation: T075/T076 vẫn là các task
+orchestrator; foundation shadcn/ui là T080 và AppShell migration là T081, phụ thuộc
+T080. Discovery bằng scheduler hiện có đọc filesystem thấy 82 card/82 ID duy nhất;
+graph validation tiếp theo từ chối `Self dependency: T018`, do prose trong phần
+Dependencies chứa chính ID của card. T081 cũng giữ prose tự tham chiếu đã có từ
+card UI cũ. Không sửa validator hay các lỗi DAG riêng này trong T082.
+Lệnh `schedule --dry-run` đọc Git revision trên canonical main, không đọc các sửa
+đổi chưa commit trong worktree. Vì T082 chưa commit/tích hợp, lệnh vẫn trả exit2
+với duplicate-ID blocker trên main; không có dispatch. Không coi đây là bằng chứng
+canonical main đã được sửa. Kết quả cũ ở trên và trong T079 được giữ để kiểm toán.
 
 ## Cài đặt và cấu hình
 

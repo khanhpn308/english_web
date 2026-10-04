@@ -1,9 +1,9 @@
-# T076: AppShell shadcn/ui & semantic design-system migration
+# T081: AppShell shadcn/ui & semantic design-system migration
 
-**Task ID:** `T076`  
+**Task ID:** `T081`
 **Title:** AppShell shadcn/ui & semantic design-system migration  
 **Status:** `DONE`
-**Goal:** Migrate the visual and component styling of the existing AppShell to the canonical shadcn/Tailwind design system established in T075, while preserving 100% of T004 routing, landmark, accessibility, and navigation behaviors.  
+**Goal:** Migrate the visual and component styling of the existing AppShell to the canonical shadcn/Tailwind design system established in T080, while preserving 100% of T004 routing, landmark, accessibility, and navigation behaviors.
 
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay (`frontend/src/app/AppShell.tsx`, `frontend/src/app/shell.css`, `frontend/src/app/AppShell.test.tsx`, `frontend/tests/e2e/shell.spec.ts`, và common bookkeeping).  
 **Suggested model:** Gemini  
@@ -14,15 +14,15 @@
 - [AGENTS.md](../AGENTS.md)
 - [docs/ui-architecture.md](../docs/ui-architecture.md) §1–2, §6–7 & Canonical design system
 - [tasks/t004-frontend-shell-routes.md](t004-frontend-shell-routes.md)
-- [tasks/t075-shadcn-ui-foundation.md](t075-shadcn-ui-foundation.md)
+- [tasks/t080-shadcn-ui-foundation.md](t080-shadcn-ui-foundation.md)
 - Source & tests hiện tại: `frontend/src/app/AppShell.tsx`, `frontend/src/app/shell.css`, `frontend/src/app/AppShell.test.tsx`
 
 ## Dependencies
 
 - [T004](t004-frontend-shell-routes.md)
-- [T075](t075-shadcn-ui-foundation.md)
+- [T080](t080-shadcn-ui-foundation.md)
 
-Cả hai dependencies phải có evidence hoàn tất trước khi triển khai T076.
+Cả hai dependencies phải có evidence hoàn tất trước khi triển khai T081.
 
 ## Files được phép sửa
 
@@ -37,7 +37,7 @@ Cả hai dependencies phải có evidence hoàn tất trước khi triển khai 
 
 - `frontend/src/shared/api/*` (API client/DTO)
 - Feature UI code: `frontend/src/features/*` (không triển khai feature code hay business logic của Consent, Lookup, Search, Review, Quiz, Dashboard, Status)
-- Primitives cơ sở: `frontend/src/components/ui/*` (trừ khi cần tinh chỉnh nhỏ đã được xác thực trong T075)
+- Primitives cơ sở: `frontend/src/components/ui/*` (trừ khi cần tinh chỉnh nhỏ đã được xác thực trong T080)
 - Backend code: `backend/*`
 - Contracts: `contracts/*`
 - Router & state libraries (không thêm external router như react-router hay external state store như Redux/Zustand)
@@ -59,7 +59,7 @@ Cả hai dependencies phải có evidence hoàn tất trước khi triển khai 
    - Liên kết nhanh `/status#ai-consent` trong header: bảo toàn thuộc tính markup `href="/status#ai-consent"` trong khi cơ chế điều hướng client-side chuyển tới màn hình `/status`.
 2. **Những thay đổi đã thực hiện:**
    - Thay thế các visual primitives cũ (nút bấm, card) bằng canonical primitives từ `frontend/src/components/ui/` (`Button`, `Card` từ shadcn gồm `CardHeader`, `CardTitle`, `CardContent`, `CardFooter`; không sử dụng `CardDescription` do AppShell không dùng tới).
-   - Chuyển đổi các custom CSS tokens trong `shell.css` sang semantic Tailwind classes và design-system tokens đã thiết lập ở T075.
+   - Chuyển đổi các custom CSS tokens trong `shell.css` sang semantic Tailwind classes và design-system tokens đã thiết lập ở T080.
    - Khôi phục reset document cơ bản (`box-sizing: border-box`, `body { margin: 0; padding: 0; ... }`) trong `shell.css`.
    - Bổ sung `frontend/tests/e2e/shell.spec.ts` kiểm thử toàn diện E2E trên 4 viewports (320, 768, 1024, 1440): kiểm thử mounted ErrorBoundary fixture phục hồi thực sự khi người dùng click, kích hoạt brand link về trang chủ và focus h1, kích hoạt nút quay lại trang chủ ở 404 và focus h1.
    - Kiểm thử reflow ở độ phân giải tương đương 200% zoom (viewport 640px) xác nhận văn bản và nút tiếng Việt co giãn không tràn ngang, các controls điều hướng và phục hồi khả dụng và có thể nhận focus bàn phím; giữ nguyên kiểm thử 320px; kiểm tra chẩn đoán độ phóng đại visual viewport bằng CDP `Emulation.setPageScaleFactor` (2.0) với thuật ngữ chính xác.
@@ -131,4 +131,4 @@ git diff --check                                           # Exit 0
 
 ## Commit message đề xuất
 
-`refactor(T076): migrate app shell visual styling to shadcn design system`
+`refactor(T081): migrate app shell visual styling to shadcn design system`

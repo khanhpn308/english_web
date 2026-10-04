@@ -150,3 +150,19 @@ constraints, product files and unrelated cards remain untouched by this round.
 Status: `REMEDIATION_READY`. FULL itself was not rerun; these are the requested
 floor-remediation checks.
 No commit, merge, rebase or push.
+
+## Current-state follow-up — T082, 04/10/2026
+
+The duplicate-ID remediation is ready in the separate T082 worktree: T075/T076
+retain orchestrator ownership; the UI foundation/migration cards now use T080/T081.
+The unchanged scheduler's filesystem discovery finds 82 cards with 82 unique IDs.
+Its next graph-validation failure is `Self dependency: T018`, from prose in that
+card's Dependencies section. The renamed T081 card also retains its pre-existing
+self-reference in Dependencies prose; neither defect is repaired by T082.
+
+The actual `python -m tools.orchestrator schedule --dry-run` still returns exit2,
+`ERROR OrchestratorError: Duplicate task IDs: T075, T076`, because it reads the
+unchanged committed canonical main, not this uncommitted worktree. No dispatch,
+commit or integration occurred. The earlier command results, pinned-revision
+inventory and handoff above remain historical evidence. See
+[T082](t082-task-id-remediation.md) for the current remediation verification.

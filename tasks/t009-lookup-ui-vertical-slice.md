@@ -18,7 +18,7 @@
 
 ## Dependencies
 
-- [T076](t076-app-shell-shadcn-migration.md)
+- [T081](t081-app-shell-shadcn-migration.md)
 - [T008](t008-lookup-api-vertical-slice.md)
 - [T017](t017-typed-api-client.md)
 - [T018](t018-consent-ui.md)
@@ -45,7 +45,7 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 ## Implementation notes
 
 - Tích hợp consent UI từ T018; lookup preview-only, save chưa triển khai phải rõ; audio T025. Fixture/mock dùng generated types. Count network calls, không chỉ snapshot UI. Đăng ký flow vào route thật, không chỉ render isolated component; build và harness dùng cùng router.
-- Thiết kế component theo design system: Sử dụng canonical primitives từ `frontend/src/components/ui/` (Button, Card, Input...) và semantic tokens từ T075/T076; không duplicate primitives.
+- Thiết kế component theo design system: Sử dụng canonical primitives từ `frontend/src/components/ui/` (Button, Card, Input...) và semantic tokens từ T080/T081; không duplicate primitives.
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
 

@@ -41,7 +41,7 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 ## Implementation notes
 
 - Backend envelope T006; task chỉ UI mapping và unknown-operation reconciliation. Retry mutation qua same intent/operation theo contract; không arbitrary auto-resubmit.
-- UI recovery components (`RecoveryPanel`) kế thừa nền tảng design system từ T076 (qua T009), sử dụng canonical primitives và semantic error tokens đã chuẩn hóa.
+- UI recovery components (`RecoveryPanel`) kế thừa nền tảng design system từ T081 (qua T009), sử dụng canonical primitives và semantic error tokens đã chuẩn hóa.
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
 

@@ -1,6 +1,6 @@
-# T075: shadcn/ui foundation & Tailwind integration
+# T080: shadcn/ui foundation & Tailwind integration
 
-**Task ID:** `T075`
+**Task ID:** `T080`
 **Title:** shadcn/ui foundation & Tailwind integration
 **Status:** `DONE`
 **Goal:** Integrate shadcn/ui into the existing React/Vite application as the canonical frontend design-system foundation without recreating the project or breaking existing routes, build, or test infrastructure.  
@@ -41,8 +41,8 @@ Mọi dependency phải có evidence hoàn tất. T004 đã hoàn tất và đư
 
 ## Files không được sửa
 
-- `frontend/src/app/AppShell.tsx` (AppShell migration thuộc về T076)
-- `frontend/src/app/shell.css` (AppShell styling thuộc về T076)
+- `frontend/src/app/AppShell.tsx` (AppShell migration thuộc về T081)
+- `frontend/src/app/shell.css` (AppShell styling thuộc về T081)
 - Feature UI code: `frontend/src/features/*` (không triển khai Consent, Lookup, Search, Review, Quiz, Dashboard, Status)
 - Backend code: `backend/*`
 - Contracts: `contracts/*`
@@ -140,4 +140,4 @@ Sau khi các lệnh trên pass, chạy đầy đủ `npm run check:task` để b
 
 ## Commit message đề xuất
 
-`feat(T075): integrate shadcn/ui foundation and tailwind css v4`
+`feat(T080): integrate shadcn/ui foundation and tailwind css v4`

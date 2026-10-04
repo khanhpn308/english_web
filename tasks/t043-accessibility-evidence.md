@@ -50,7 +50,7 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 ## Implementation notes
 
 - Run Chromium/Edge 320/768/1024/1440, 200% zoom, keyboard J1–J7, axe supplementary, manual focus/contrast/screen-reader smoke. Do not claim full SR support. Only positively local en-US voices selected; no default remote voice. Voice unavailable disables playback; Windows offline proof in T057.
-- Bằng chứng accessibility: Đánh giá WCAG 2.2 AA bao quát toàn bộ các canonical primitives từ shadcn/ui và AppShell đã migrate trong T076, bảo đảm thư viện thành phần không có automated axe violations và đáp ứng yêu cầu bàn phím/focus.
+- Bằng chứng accessibility: Đánh giá WCAG 2.2 AA bao quát toàn bộ các canonical primitives từ shadcn/ui và AppShell đã migrate trong T081, bảo đảm thư viện thành phần không có automated axe violations và đáp ứng yêu cầu bàn phím/focus.
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
 

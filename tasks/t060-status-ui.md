@@ -44,7 +44,7 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 ## Implementation notes
 
 - Polling30s while visible, no key/account/path details. Reuse consent panel no new settings secrets form. Link runbooks/status banners; dashboard learning distinct. Source diagnostics safe bounded metadata, errors/revoke independent bridge. Đăng ký flow vào route thật, không chỉ render isolated component; build và harness dùng cùng router.
-- Thiết kế component theo design system: `StatusPage` sử dụng canonical primitives (`Card`, `Table`, `Badge`, `Button`...) từ `frontend/src/components/ui/` và semantic tokens kế thừa từ T076 (qua T018).
+- Thiết kế component theo design system: `StatusPage` sử dụng canonical primitives (`Card`, `Table`, `Badge`, `Button`...) từ `frontend/src/components/ui/` và semantic tokens kế thừa từ T081 (qua T018).
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
 

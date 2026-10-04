@@ -18,7 +18,7 @@
 
 ## Dependencies
 
-- [T076](t076-app-shell-shadcn-migration.md)
+- [T081](t081-app-shell-shadcn-migration.md)
 - [T037](t037-dashboard-formulas.md)
 - [T017](t017-typed-api-client.md)
 - [T010](t010-error-handling-recovery.md)
@@ -44,7 +44,7 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 ## Implementation notes
 
 - Chỉ learning dashboard; status panel T060. Panel loading/empty/errors, three groups separate; due/streak invalidation sau review/quiz/sync. SYNCING không false empty/current. Đăng ký flow vào route thật, không chỉ render isolated component; build và harness dùng cùng router.
-- Thiết kế component theo design system: `DashboardPage` và các cards/panels sử dụng canonical primitives (`Card`, `Button`, `Badge`...) từ `frontend/src/components/ui/` và semantic tokens từ T076; không duplicate primitives.
+- Thiết kế component theo design system: `DashboardPage` và các cards/panels sử dụng canonical primitives (`Card`, `Button`, `Badge`...) từ `frontend/src/components/ui/` và semantic tokens từ T081; không duplicate primitives.
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
 

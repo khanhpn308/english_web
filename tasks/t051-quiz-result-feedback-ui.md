@@ -45,7 +45,7 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 ## Implementation notes
 
 - Terminal result route supports refresh; required writer self-score per oracle. Objective explanation separate from immutable question before submit. Feedback optional user action/current consent; preserve all local results when cloud fails. Fresh-key terminal failed feedback retry, same answerRevision. Đăng ký flow vào route thật, không chỉ render isolated component; build và harness dùng cùng router.
-- Thiết kế component theo design system: `QuizResult` và `FeedbackPanel` sử dụng canonical primitives (`Card`, `Button`, `Badge`...) từ `frontend/src/components/ui/` và semantic tokens kế thừa từ T076 (qua T018/T050).
+- Thiết kế component theo design system: `QuizResult` và `FeedbackPanel` sử dụng canonical primitives (`Card`, `Button`, `Badge`...) từ `frontend/src/components/ui/` và semantic tokens kế thừa từ T081 (qua T018/T050).
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
 

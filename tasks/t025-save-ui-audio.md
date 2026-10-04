@@ -43,7 +43,7 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 ## Implementation notes
 
 - All forms, explicit date; show operation/sync confirmed status. Audio choose ONLY voice.localService=true and en-US; no generic remote/default voice fallback. Client signal not proof, offline/native voice verification T044.
-- Thiết kế component theo design system: `SavePreview` và `AudioButton` sử dụng canonical primitives (`Button`, `Card`, `Badge`...) từ `frontend/src/components/ui/` và semantic tokens kế thừa từ T076 (qua T009).
+- Thiết kế component theo design system: `SavePreview` và `AudioButton` sử dụng canonical primitives (`Button`, `Card`, `Badge`...) từ `frontend/src/components/ui/` và semantic tokens kế thừa từ T081 (qua T009).
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
 
