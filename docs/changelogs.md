@@ -1,3 +1,13 @@
+## 04/10/2026 - T083: Repository DAG dependency metadata remediation (Asia/Bangkok)
+
+- Remediated repository task dependency metadata by removing invalid self-dependency edges in task cards without altering scheduler validation logic or product behavior:
+  - `tasks/t018-consent-ui.md`: removed self-reference `T018` in Dependencies prose ("T018 bị chặn trực tiếp..." -> "Task này bị chặn trực tiếp..."), preserving legitimate dependencies `['T015', 'T017', 'T052', 'T081']`.
+  - `tasks/t081-app-shell-shadcn-migration.md`: removed inherited self-reference `T081` in Dependencies prose ("...trước khi triển khai T081." -> "...trước khi triển khai task này."), preserving legitimate dependencies `['T004', 'T080']`.
+  - `tasks/t083-dag-metadata-remediation.md`: formatted status as `TODO` with backticks to conform to metadata discovery.
+- Candidate-aware DAG validation: filesystem discovery finds 83 regular cards with 83 globally unique task IDs; zero self-dependencies (down from 2 to 0); zero missing dependency targets; topological sort succeeds across all 83 nodes (40 DONE, 6 READY: `T008`, `T018`, `T023`, `T027`, `T034`, `T083`, 37 BLOCKED).
+- Preserved scheduler implementation (`tools/orchestrator/*`), tests (`tests/*`), and all product source/contracts/migrations byte-identical. All 279 orchestrator tests passed in 167.19s; floor, Ruff, Mypy and whitespace checks passed.
+- Canonical-main dry-run (`python -m tools.orchestrator schedule --dry-run`) exits 2 with `ERROR OrchestratorError: Self dependency: T018` because it reads unintegrated canonical main. Candidate status: `REMEDIATION_READY`. Next inherited DAG blocker: zero blockers in the candidate DAG; independent audit and authorized integration into canonical main remain pending.
+
 ## 04/10/2026 - T082: Canonicalize duplicate repository task IDs (Asia/Bangkok)
 
 - Preserved the older orchestrator cards as T075 (agy capability probes) and T076 (audit report retry). Used `git mv` to assign the later shadcn/ui foundation and AppShell migration cards to `tasks/t080-shadcn-ui-foundation.md` / T080 and `tasks/t081-app-shell-shadcn-migration.md` / T081; T081 now depends on T080.

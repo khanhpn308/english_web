@@ -24,7 +24,7 @@
 - [T017](t017-typed-api-client.md)
 - [T052](t052-browser-test-harness.md)
 
-Mọi dependency phải có evidence hoàn tất. T018 bị chặn trực tiếp bởi nền tảng giao diện: `BLOCKED_BY_T080_T081`. Task ID không biểu thị thứ tự chạy; dùng [task-plan.md](../docs/task-plan.md).
+Mọi dependency phải có evidence hoàn tất. Task này bị chặn trực tiếp bởi nền tảng giao diện: `BLOCKED_BY_T080_T081`. Task ID không biểu thị thứ tự chạy; dùng [task-plan.md](../docs/task-plan.md).
 
 ## Files được phép sửa
 

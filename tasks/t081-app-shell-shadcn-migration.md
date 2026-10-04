@@ -22,7 +22,7 @@
 - [T004](t004-frontend-shell-routes.md)
 - [T080](t080-shadcn-ui-foundation.md)
 
-Cả hai dependencies phải có evidence hoàn tất trước khi triển khai T081.
+Cả hai dependencies phải có evidence hoàn tất trước khi triển khai task này.
 
 ## Files được phép sửa
 

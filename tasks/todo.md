@@ -2,7 +2,7 @@
 
 **Planning state:** T001/T002/T058/T003/T004/T005/T053/T063/T013/T006 đã có evidence hoàn tất; trạng thái các task còn lại theo checklist dưới đây.
 **Canonical plan:** [docs/task-plan.md](../docs/task-plan.md).  
-**Next ready work:** see dependency graph/current task evidence in docs/task-plan.md; canonical UI prerequisites are T080 and T081. Repository scheduling requires a valid graph before readiness can be reported.
+**Next ready work:** candidate DAG resolves 6 READY tasks (T008, T018, T023, T027, T034, T083); canonical main dry-run requires integration of T083 metadata.
 **Handoff rule:** Chỉ check item khi thẻ tương ứng có acceptance/verification evidence và task status `DONE`. PENDING environment không được check thành PASS.
 
 ## Ordered task list
@@ -147,4 +147,6 @@ Infrastructure verification: [final evidence](../docs/reviews/orchestrator-verif
 
 - [x] [T079](t079-level2-dag-scheduler.md): Generic canonical-repository DAG scheduling above Pipeline; 47 synthetic scheduler/279 total orchestrator tests pass, OS admission/integration semantics preserved. Historical dry-run rejected duplicate T075/T076 IDs. T082 resolves duplicates in the remediation worktree; unchanged scheduler validation next reports `Self dependency: T018`. Canonical main remains unchanged, so its CLI dry-run still rejects duplicates. Resource-aware scheduling deferred.
 
-- [ ] [T082](t082-task-id-remediation.md): Canonical-ID remediation ready for review: orchestrator T075/T076 preserved, UI cards renumbered T080/T081, live UI links/dependencies remapped. Canonical-main verification remains pending integration; separate DAG self-dependency defects remain. No product code, validator or tests changed.
+- [x] [T082](t082-task-id-remediation.md): Canonical-ID remediation integrated on main: orchestrator T075/T076 preserved, UI cards renumbered T080/T081, live UI links/dependencies remapped, 82 unique IDs confirmed.
+
+- [ ] [T083](t083-dag-metadata-remediation.md): Repository DAG dependency metadata remediation ready for review: removed T018 and T081 Dependencies prose self-references; candidate DAG resolves with zero self-dependencies (83 cards, 40 DONE, 6 READY, 37 BLOCKED). Canonical main dry-run pending integration.
