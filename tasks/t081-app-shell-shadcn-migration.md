@@ -30,8 +30,11 @@ Cả hai dependencies phải có evidence hoàn tất trước khi triển khai 
 - `frontend/src/app/shell.css`
 - `frontend/src/app/AppShell.test.tsx`
 - `frontend/tests/e2e/shell.spec.ts`
-- Scope extension ủy quyền riêng cho coverage gate: `package.json`, `package-lock.json` (thêm test-only devDependency `jsdom`).
-- Common bookkeeping: thẻ task này, [todo.md](todo.md), [changelog](../docs/changelogs.md).
+- `package.json`
+- `package-lock.json`
+
+Scope extension ủy quyền riêng cho coverage gate: `package.json`, `package-lock.json` (thêm test-only devDependency `jsdom`).
+Common bookkeeping: thẻ task này, [todo.md](todo.md), [changelog](../docs/changelogs.md).
 
 ## Files không được sửa
 
@@ -88,7 +91,24 @@ Cả hai dependencies phải có evidence hoàn tất trước khi triển khai 
 3. **Accessibility verification:** Kiểm tra skip link, live region thông báo chuyển trang, focus indicator trên các controls chuyển trang, và scan `@a11y` qua axe-core (`test:a11y`: 8/8 PASS, zero critical/serious violations).
 4. **E2E & Responsive Reflow:** `frontend/tests/e2e/shell.spec.ts` kiểm thử 48 test cases qua 4 viewports (320, 768, 1024, 1440), kiểm thử mounted ErrorBoundary fixture phục hồi thực tế, và 200% effective layout equivalent reflow ở 640px (48/48 PASS). Playwright vẫn là oracle E2E trên trình duyệt thật Chromium; Vitest/jsdom tồn tại để cung cấp instrumented component coverage cho cổng LCOV của repository.
 
-## Verification commands & Snapshot results
+## Verification commands
+
+Dependency revalidation tập trung vào AppShell behavior, TypeScript correctness,
+frontend architecture boundary và diff integrity. Coverage/security đã thuộc
+repository baseline; E2E/A11y và các kết quả dưới đây là acceptance evidence lịch
+sử, không tự được đưa vào mọi dependent-task verification.
+
+```text
+npm run test:frontend -- frontend/src/app/AppShell.test.tsx
+npm run typecheck
+npm run architecture:frontend
+git diff --check
+```
+
+## Snapshot results
+
+Historical T081 verification evidence; việc tách metadata không có nghĩa các lệnh
+trong snapshot đã được chạy lại.
 
 ```text
 npm run test:frontend -- frontend/src/app/AppShell.test.tsx  # Exit 0, 27 passed

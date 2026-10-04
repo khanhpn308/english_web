@@ -363,10 +363,38 @@ trường khiến quá trình dừng với bằng chứng rõ ràng; không gọ
 Thư mục run phải nằm trong repository và được Git bỏ qua; worktree phải nằm bên
 ngoài repository. Đường dẫn tương đối được tính từ checkout chính, không phải
 worktree của nơi gọi lệnh. Thư mục worktree mặc định là `../english_web-worktrees`;
-không có đường dẫn riêng của máy được ghi cứng. Gate mặc định gồm `check:task`,
-Ruff và Mypy. Lỗi có sẵn trên baseline sẽ chặn lần chạy thật cho đến khi được sửa
-trong phạm vi đã cho phép; lỗi đó không bao giờ được gọi là PASS. Tích hợp mặc định
-tắt, vì việc cài hạ tầng không đồng nghĩa với cho phép các lần merge sau này.
+không có đường dẫn riêng của máy được ghi cứng. Gate mặc định gồm
+`npm run check:task:portable`, Ruff và Mypy.
+
+Portable baseline giữ fast checks, frontend coverage, Python suite, changed/total
+coverage, security (secrets/code/dependencies) và architecture gate. Script
+`npm run check:task:portable` ủy quyền cho mode `portable-task` trong
+`.agent/scripts/run-gates.sh`. Runner thực thi theo đồ thị phụ thuộc hai pha:
+Phase A chạy song song 7 gate độc lập (`check:fast:active`, `test:frontend:coverage`,
+`test:python:portable`, `security:secrets`, `security:code`, `security:deps`,
+`architecture:check`), sau đó đồng bộ chờ tất cả tiến trình con hoàn tất và thu
+dọn exit status. Phase B chỉ chạy `coverage:check` sau khi cả hai producer
+(frontend và Python coverage) cùng toàn bộ Phase A thành công. Nếu bất kỳ gate nào
+trong Phase A thất bại, runner dừng fail-closed, hiển thị log và không thực thi Phase B.
+Lệnh Python `python -m pytest --ignore=backend/tests/windows -n 10` chỉ loại thư mục
+native-Windows với 10 worker xdist đã được repository phê duyệt. Không đổi
+cấu hình pytest toàn cục hay threshold.
+
+`check:task`, `check:task:active` và `check:full` giữ nguyên Python suite đầy đủ,
+gồm native-Windows tests fail-closed trên Linux/WSL. Portable baseline chỉ phục vụ
+admission và verification portable; task yêu cầu Windows vẫn cần genuine
+native-Windows acceptance evidence. Lỗi có sẵn trên baseline sẽ chặn lần chạy thật
+cho đến khi được sửa trong phạm vi đã cho phép; lỗi đó không bao giờ được gọi là
+PASS. Tích hợp mặc định tắt, vì việc cài hạ tầng không đồng nghĩa với cho phép các
+lần merge sau này.
+
+T081 tách `Verification commands` khỏi `Snapshot results` lịch sử. Revalidation
+của dependency này chỉ thêm bốn lệnh: AppShell focused tests, TypeScript,
+frontend architecture và diff integrity. Snapshot giữ nguyên kết quả lịch sử,
+kể cả coverage với `QUALITY_BASE_REF`, E2E/A11y và native-Windows inherited
+failure; không đưa toàn bộ snapshot vào `card.dependency_verification`.
+Pipeline vẫn chạy dependency checks cộng với baseline cấu hình, nên coverage và
+security được kiểm tra ở repository baseline mà không cần lặp lại trong T081.
 
 ## Cách sử dụng
 

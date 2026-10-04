@@ -39,7 +39,7 @@
     [
       "npm",
       "run",
-      "check:task"
+      "check:task:portable"
     ],
     [
       "python",

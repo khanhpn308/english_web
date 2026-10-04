@@ -162,8 +162,37 @@ case "$MODE" in
             build
         ;;
 
+    portable-task)
+        echo "=== PHASE A: independent concurrent gates ==="
+
+        start_gate check-fast-active npm run check:fast:active
+        start_gate frontend-coverage npm run test:frontend:coverage
+        start_gate portable-pytest npm run test:python:portable
+        start_gate security-secrets npm run security:secrets
+        start_gate security-code npm run security:code
+        start_gate security-deps npm run security:deps
+        start_gate architecture npm run architecture:check
+
+        wait_phase \
+            check-fast-active \
+            frontend-coverage \
+            portable-pytest \
+            security-secrets \
+            security-code \
+            security-deps \
+            architecture
+
+        echo
+        echo "=== PHASE B: dependent coverage check ==="
+
+        start_gate coverage-check npm run coverage:check
+
+        wait_phase \
+            coverage-check
+        ;;
+
     *)
-        echo "Usage: $0 {fast|full}"
+        echo "Usage: $0 {fast|full|portable-task}"
         exit 2
         ;;
 esac

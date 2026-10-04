@@ -1,5 +1,8 @@
 import json
 import multiprocessing
+import os
+import re
+import shlex
 import subprocess
 import sys
 from contextlib import suppress
@@ -1189,3 +1192,309 @@ def test_provider_supports_unlimited_task_execution(
         readonly=True,
     )
     assert result.fix_prompt == ("Synthetic fix" if provider == "agy" else "Fix synthetic issue")
+
+
+def test_t081_allowlist_is_exact_and_parseable() -> None:
+    from tools.orchestrator.core import owned_paths, section
+
+    root = Path(__file__).resolve().parents[2]
+    text = (root / "tasks/t081-app-shell-shadcn-migration.md").read_text(encoding="utf-8")
+    expected = [
+        "frontend/src/app/AppShell.tsx",
+        "frontend/src/app/shell.css",
+        "frontend/src/app/AppShell.test.tsx",
+        "frontend/tests/e2e/shell.spec.ts",
+        "package.json",
+        "package-lock.json",
+    ]
+    bullets = [
+        line for line in section(text, "Files được phép sửa").splitlines() if line.startswith("- ")
+    ]
+    assert bullets == [f"- `{path}`" for path in expected]
+    assert owned_paths(text) == expected
+
+
+def test_default_orchestrator_config_uses_portable_baseline() -> None:
+    root = Path(__file__).resolve().parents[2]
+    config = Config.model_validate_json((root / "orchestrator.yaml").read_text(encoding="utf-8"))
+    config.validate_roles()
+    assert config.verification == [
+        ["npm", "run", "check:task:portable"],
+        ["python", "-m", "ruff", "check", "."],
+        ["python", "-m", "mypy", "backend", "tools/orchestrator"],
+    ]
+
+
+def test_t081_executable_verification_is_concise_and_snapshot_separate() -> None:
+    from tools.orchestrator.core import check_commands, section, validate_command
+
+    root = Path(__file__).resolve().parents[2]
+    text = (root / "tasks/t081-app-shell-shadcn-migration.md").read_text(encoding="utf-8")
+    commands = check_commands(text)
+    assert commands == [
+        ["npm", "run", "test:frontend", "--", "frontend/src/app/AppShell.test.tsx"],
+        ["npm", "run", "typecheck"],
+        ["npm", "run", "architecture:frontend"],
+        ["git", "diff", "--check"],
+    ]
+    for command in commands:
+        validate_command(command)
+        assert all(not any(token in arg for token in ("=", "#", "|", "&&", ">")) for arg in command)
+    snapshot = section(text, "Snapshot results")
+    assert (
+        'QUALITY_BASE_REF="035430d668f1f754afd38e3cca9d630eb90a69a7" npm run coverage:check'
+        " # Exit 0, changed 100.00%, total 93.40%"
+    ) in snapshot
+    assert "# Exit 0, 48 passed (4 viewports x 12 tests)" in snapshot
+    assert "# Exit 0, 8 passed" in snapshot
+
+
+def test_real_t018_preflight_with_normalized_t081() -> None:
+    from tools.orchestrator.core import dependency_ids, task_card
+    from tools.orchestrator.scheduler import metadata
+
+    root = Path(__file__).resolve().parents[2]
+    path = "tasks/t018-consent-ui.md"
+    text = (root / path).read_text(encoding="utf-8")
+    card = task_card(root, "T018")
+    assert card.task_id == "T018"
+    assert card.dependencies == dependency_ids(text) == metadata(path, text).dependencies
+    assert card.dependencies == ["T015", "T017", "T052", "T081"]
+    assert "T080" not in card.dependencies
+    assert len(card.dependency_verification) == 11
+    t081_commands = [
+        ["npm", "run", "test:frontend", "--", "frontend/src/app/AppShell.test.tsx"],
+        ["npm", "run", "typecheck"],
+        ["npm", "run", "architecture:frontend"],
+        ["git", "diff", "--check"],
+    ]
+    for cmd in t081_commands:
+        assert cmd in card.dependency_verification
+
+
+def test_portable_python_uses_approved_parallelism_and_only_windows_exclusion() -> None:
+    root = Path(__file__).resolve().parents[2]
+    scripts = json.loads((root / "package.json").read_text(encoding="utf-8"))["scripts"]
+    command = shlex.split(scripts["test:python:portable"])
+    assert command == ["python", "-m", "pytest", "--ignore=backend/tests/windows", "-n", "10"]
+    runner = (root / ".agent/scripts/run-gates.sh").read_text(encoding="utf-8")
+    assert re.findall(r"^[ \t]*-n (\d+)[ \t]*(?:\\)?$", runner, re.M) == [
+        command[-1],
+        command[-1],
+    ]
+
+
+def _setup_gate_runner_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-b", "main"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "fixture@example.invalid"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Fixture"], cwd=repo, check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "commit", "--allow-empty", "-m", "init"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+
+    fake_npm = bin_dir / "npm"
+    fake_npm.write_text(
+        f"""#!{sys.executable}
+import json, os, pathlib, sys, time
+
+args = sys.argv[1:]
+if not args or args[0] != "run":
+    sys.exit(0)
+
+gate = args[1]
+state = pathlib.Path(os.environ["FAKE_NPM_STATE"])
+with (state / "invocations.txt").open("a", encoding="utf-8") as f:
+    f.write(f"{{gate}}\\n")
+
+fail_gate = os.environ.get("FAIL_GATE")
+if fail_gate == gate:
+    (state / f"failed_{{gate.replace(':', '_')}}").touch()
+    sys.exit(42)
+
+start_time = time.monotonic()
+if gate == "test:frontend:coverage":
+    time.sleep(0.05)
+    (state / "frontend_done").touch()
+elif gate == "test:python:portable":
+    time.sleep(0.05)
+    (state / "python_done").touch()
+elif gate == "coverage:check":
+    frontend_done = (state / "frontend_done").exists()
+    python_done = (state / "python_done").exists()
+    if not (frontend_done and python_done):
+        (state / "coverage_raced").touch()
+        sys.exit(99)
+    (state / "coverage_check_done").touch()
+
+end_time = time.monotonic()
+record = {{"gate": gate, "start": start_time, "end": end_time}}
+(state / f"{{gate.replace(':', '_')}}.json").write_text(json.dumps(record), encoding="utf-8")
+sys.exit(0)
+"""
+    )
+    fake_npm.chmod(0o755)
+    return repo, bin_dir, state_dir
+
+
+def test_portable_task_baseline_retains_all_semantic_gates() -> None:
+    root = Path(__file__).resolve().parents[2]
+    scripts = json.loads((root / "package.json").read_text(encoding="utf-8"))["scripts"]
+    assert scripts["check:task:portable"] == "bash .agent/scripts/run-gates.sh portable-task"
+
+    runner_text = (root / ".agent/scripts/run-gates.sh").read_text(encoding="utf-8")
+    assert "portable-task)" in runner_text
+
+    expected_gates = (
+        "check:fast:active",
+        "test:frontend:coverage",
+        "test:python:portable",
+        "security:secrets",
+        "security:code",
+        "security:deps",
+        "architecture:check",
+        "coverage:check",
+    )
+    for gate in expected_gates:
+        assert f"npm run {gate}" in runner_text, f"Missing gate {gate} in run-gates.sh"
+
+
+def test_portable_task_runner_success_and_coverage_synchronization(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[2]
+    runner_script = root / ".agent/scripts/run-gates.sh"
+    repo, bin_dir, state_dir = _setup_gate_runner_fixture(tmp_path)
+
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
+    env["FAKE_NPM_STATE"] = str(state_dir)
+    env.pop("FAIL_GATE", None)
+
+    res = subprocess.run(
+        ["bash", str(runner_script), "portable-task"],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert res.returncode == 0, f"Runner failed:\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}"
+    assert "RESULT: PASS" in res.stdout
+    for gate_name in (
+        "check-fast-active",
+        "frontend-coverage",
+        "portable-pytest",
+        "security-secrets",
+        "security-code",
+        "security-deps",
+        "architecture",
+        "coverage-check",
+    ):
+        assert re.search(rf"{gate_name}\s+PASS", res.stdout), f"Missing {gate_name} PASS in summary"
+
+    # Verify coverage synchronization
+    assert (state_dir / "frontend_done").exists()
+    assert (state_dir / "python_done").exists()
+    assert (state_dir / "coverage_check_done").exists()
+    assert not (state_dir / "coverage_raced").exists()
+
+    frontend_record = json.loads(
+        (state_dir / "test_frontend_coverage.json").read_text(encoding="utf-8")
+    )
+    python_record = json.loads(
+        (state_dir / "test_python_portable.json").read_text(encoding="utf-8")
+    )
+    cov_record = json.loads((state_dir / "coverage_check.json").read_text(encoding="utf-8"))
+
+    assert cov_record["start"] >= frontend_record["end"]
+    assert cov_record["start"] >= python_record["end"]
+
+    # Verify exact set of invoked gates
+    invocations = (state_dir / "invocations.txt").read_text(encoding="utf-8").splitlines()
+    assert set(invocations) == {
+        "check:fast:active",
+        "test:frontend:coverage",
+        "test:python:portable",
+        "security:secrets",
+        "security:code",
+        "security:deps",
+        "architecture:check",
+        "coverage:check",
+    }
+    assert invocations[-1] == "coverage:check"
+
+
+@pytest.mark.parametrize("failing_gate", ["security:code", "test:python:portable"])
+def test_portable_task_runner_failure_propagation(tmp_path: Path, failing_gate: str) -> None:
+    root = Path(__file__).resolve().parents[2]
+    runner_script = root / ".agent/scripts/run-gates.sh"
+    repo, bin_dir, state_dir = _setup_gate_runner_fixture(tmp_path)
+
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
+    env["FAKE_NPM_STATE"] = str(state_dir)
+    env["FAIL_GATE"] = failing_gate
+
+    res = subprocess.run(
+        ["bash", str(runner_script), "portable-task"],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert res.returncode == 1
+    assert "Phase failed; stopping later phases." in res.stdout
+    assert "RESULT: PASS" not in res.stdout
+
+    # Prove failure was recorded
+    failed_marker = state_dir / f"failed_{failing_gate.replace(':', '_')}"
+    assert failed_marker.exists()
+
+    # Prove dependent coverage:check was NOT executed
+    assert not (state_dir / "coverage_check_done").exists()
+    invocations = (state_dir / "invocations.txt").read_text(encoding="utf-8").splitlines()
+    assert "coverage:check" not in invocations
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("check:task", "npm run check:task:active && npm run architecture:check"),
+        (
+            "check:task:active",
+            "npm run check:fast:active && npm run test:frontend:coverage && python -m pytest"
+            " && npm run coverage:check && npm run security:secrets"
+            " && npm run security:code && npm run security:deps",
+        ),
+        ("check:full", "npm run check:task:active && npm run architecture:check"),
+    ],
+)
+def test_authoritative_full_gates_remain_unchanged(name: str, expected: str) -> None:
+    root = Path(__file__).resolve().parents[2]
+    scripts = json.loads((root / "package.json").read_text(encoding="utf-8"))["scripts"]
+    assert scripts[name] == expected
+
+
+def test_no_task_id_specific_scheduler_or_runtime_exceptions() -> None:
+    root = Path(__file__).resolve().parents[2] / "tools/orchestrator"
+    for path in root.glob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        for task_id in ("T008", "T018", "T021", "T023", "T027", "T034"):
+            assert task_id not in text, f"Hardcoded task ID {task_id} in {path.name}"
