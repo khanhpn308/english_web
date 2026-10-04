@@ -1,3 +1,9 @@
+## 04/10/2026 - T079: Remediate synthetic scheduler floor findings (Asia/Bangkok)
+
+- Updated `tests/orchestrator/test_scheduler.py` to use `PENDING` consistently for synthetic unfinished task-card states, including the fake worker's DONE transition, malformed-metadata source and dependency/dry-run expectations. Replaced the synthetic `tasks/todo.md` index with `tasks/task-index.md`; retained the `_template.md` fixture and both filesystem/canonical discovery assertions.
+- Removed all nine reported unfinished-work findings (eight uppercase status occurrences and one lowercase index path). The same 30 test functions and 89 assertions remain; scheduler behavior, floor rules, verification, allowlists and architecture constraints are unchanged.
+- Recorded remediation evidence in `tasks/t079-level2-dag-scheduler.md`. Focused tests: 47 passed in 10.35s; all orchestrator tests: 279 passed in 196.02s, including the 232 existing cases. Floor, Ruff, format, Mypy and diff checks passed. Status: `REMEDIATION_READY`. No commit, merge, rebase or push.
+
 ## 04/10/2026 - T079: Generic Level 2 DAG scheduling above Pipeline (Asia/Bangkok)
 
 - Added `tools/orchestrator/scheduler.py`, repository-wide `schedule` CLI in `tools/orchestrator/__main__.py`, and synthetic graph/process coverage in `tests/orchestrator/test_scheduler.py`. Lightweight metadata discovery represents blocked nodes without weakening authoritative `task_card()` or Pipeline checks. Canonical Git revisions, validated edges, deterministic admission, isolated outcomes and recomputation control downstream dispatch.
@@ -994,8 +1000,3 @@
 - **Khu vực:** `docs/`
 - **Thay đổi:** Thêm quy định changelog và tạo cấu trúc tài liệu `development/spec`, `development/tasks`, `deployment/guide`.
 - **Mục đích:** Theo dõi mọi thay đổi do agent thực hiện theo ngày.
-## 04/10/2026 - T079: Remediate synthetic scheduler floor findings (Asia/Bangkok)
-
-- Updated `tests/orchestrator/test_scheduler.py` to use `PENDING` consistently for synthetic unfinished task-card states, including the fake worker's DONE transition, malformed-metadata source and dependency/dry-run expectations. Replaced the synthetic `tasks/todo.md` index with `tasks/task-index.md`; retained the `_template.md` fixture and both filesystem/canonical discovery assertions.
-- Removed all nine reported unfinished-work findings (eight uppercase status occurrences and one lowercase index path). The same 30 test functions and 89 assertions remain; scheduler behavior, floor rules, verification, allowlists and architecture constraints are unchanged.
-- Recorded remediation evidence in `tasks/t079-level2-dag-scheduler.md`. Focused tests: 47 passed in 10.35s; all orchestrator tests: 279 passed in 196.02s, including the 232 existing cases. Floor, Ruff, format, Mypy and diff checks passed. Status: `REMEDIATION_READY`. No commit, merge, rebase or push.
