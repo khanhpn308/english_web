@@ -166,7 +166,15 @@ class SessionGuard:
             buffered: list[Message] = []
             size = 0
             while True:
-                message = await receive()
+                try:
+                    message = await receive()
+                except TimeoutError:
+                    if path != "/api/v1/lookups" or method != "POST":
+                        raise
+                    # Lookup's request budget wraps receive; preserve the same
+                    # HTTP security headers when an unfinished body times out.
+                    await deny(503, "BRIDGE_UNAVAILABLE")
+                    return
                 if message["type"] == "http.disconnect":
                     return
                 size += len(message.get("body", b""))

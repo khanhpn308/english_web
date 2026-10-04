@@ -29,7 +29,7 @@
 - [ ] [T076](t076-app-shell-shadcn-migration.md): AppShell shadcn/ui & semantic design-system migration
 - [ ] [T018](t018-consent-ui.md): Consent dialog và Status panel (BLOCKED_BY_T075_T076)
 - [x] [T019](t019-vocabulary-schema.md): Schema vocabulary, source links và preview
-- [ ] [T008](t008-lookup-api-vertical-slice.md): POST lookup trả preview đã validate (READY_FOR_T008_RE_AUDIT)
+- [ ] [T008](t008-lookup-api-vertical-slice.md): POST lookup trả preview đã validate (IMPLEMENTATION_COMPLETE_ENVIRONMENT_VERIFICATION_PENDING; Round-4 authorization: tasks/t008-r4-shared-remediation.md)
 - [ ] [T009](t009-lookup-ui-vertical-slice.md): Lookup UI gọi API thật qua client
 - [ ] [T010](t010-error-handling-recovery.md): Typed UI recovery cho common error codes
 - [ ] [T011](t011-observability-instrumentation.md): Local JSON logs, correlation và span boundary

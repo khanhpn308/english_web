@@ -428,8 +428,14 @@
                 "type": "string"
               },
               "currentPolicyVersion": {
-                "nullable": true,
-                "type": "string"
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "kind": {
                 "enum": [
@@ -440,7 +446,8 @@
             },
             "required": [
               "kind",
-              "consentState"
+              "consentState",
+              "currentPolicyVersion"
             ],
             "type": "object"
           }

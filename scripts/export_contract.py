@@ -71,11 +71,10 @@ def build_contract() -> dict:
                         "enum": ["NOT_GRANTED", "GRANTED", "REVOKED", "STALE"],
                     },
                     "currentPolicyVersion": {
-                        "type": "string",
-                        "nullable": True,
+                        "anyOf": [{"type": "string"}, {"type": "null"}],
                     },
                 },
-                "required": ["kind", "consentState"],
+                "required": ["kind", "consentState", "currentPolicyVersion"],
             },
         ],
     }

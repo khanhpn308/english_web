@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from backend.app.application.operations import OperationConflict
-from backend.app.enrichment.lookup import LookupService, normalize_term
+from backend.app.enrichment.lookup import LookupConsentRequired, LookupService, normalize_term
 from backend.app.http.errors import error_response
 from backend.app.http.session import COOKIE_NAME
 from backend.app.vocabulary.models import LookupPreview
@@ -104,26 +104,9 @@ def _service_for(request: Request) -> LookupService | None:
     return service if isinstance(service, LookupService) else None
 
 
-def _operation_error(
-    error: OperationConflict, service: LookupService | None = None
-) -> JSONResponse:
-    if error.code == "AI_CONSENT_REQUIRED":
-        details = None
-        if service is not None:
-            try:
-                snapshot = service.admission.consent.get_snapshot(service.admission.policy_source)
-                details = {
-                    "kind": "AI_CONSENT",
-                    "consentState": snapshot.state.state,
-                    "currentPolicyVersion": snapshot.policy.version if snapshot.policy else None,
-                }
-            except Exception:
-                details = {
-                    "kind": "AI_CONSENT",
-                    "consentState": "NOT_GRANTED",
-                    "currentPolicyVersion": None,
-                }
-        return error_response(403, "AI_CONSENT_REQUIRED", details)
+def _operation_error(error: OperationConflict) -> JSONResponse:
+    if isinstance(error, LookupConsentRequired):
+        return error_response(403, "AI_CONSENT_REQUIRED", error.details)
 
     details = None
     if error.operation_id is not None and error.code in {
@@ -157,15 +140,22 @@ async def post_lookup(
         return error_response(401, "SESSION_REQUIRED")
     start_time = getattr(request.state, "request_start_time", None)
     try:
-        preview = await service.lookup(
+
+        def finalize(preview: LookupPreview) -> JSONResponse:
+            return JSONResponse(_result(preview).model_dump(mode="json"))
+
+        response = await service.lookup(
             term=body.term,
             idempotency_key=idempotency_key,
             owner_session_id=_session_fingerprint(owner_session_id),
             request_start_time=start_time,
+            finalize=finalize,
         )
-        return _result(preview)
+        if not isinstance(response, JSONResponse):
+            raise ValueError("Lookup finalizer did not produce a response")
+        return response
     except OperationConflict as error:
-        return _operation_error(error, service)
+        return _operation_error(error)
     except PreviewOwnerMismatchError:
         return error_response(403, "ORIGIN_FORBIDDEN")
     except (PreviewExpiredError, PreviewNotFoundError, SQLAlchemyError):

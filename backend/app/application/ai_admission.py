@@ -1,5 +1,6 @@
 """Durable consent admission shared by the three AI use cases (T016)."""
 
+import asyncio
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass
@@ -22,6 +23,21 @@ from pydantic import ValidationError
 from sqlalchemy import Connection
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
+
+
+async def _local_stage[T](function: Callable[[], T]) -> T:
+    worker = asyncio.create_task(run_in_threadpool(function))
+    try:
+        return await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        # The caller retains this worker until its transaction actually settles.
+        while not worker.done():
+            try:
+                await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                continue
+        worker.result()
+        raise
 
 
 @dataclass(frozen=True)
@@ -187,7 +203,13 @@ class AiAdmissionCoordinator:
             raise rejection
 
     async def dispatch(
-        self, *, operation_id: str, scope: str, payload: dict[str, Any], deadline: float
+        self,
+        *,
+        operation_id: str,
+        scope: str,
+        payload: dict[str, Any],
+        deadline: float,
+        on_dispatch: Callable[[], None] | None = None,
     ) -> dict[str, Any]:
         # Snapshot immediately before any await or validation
         # so caller mutation cannot inject fields
@@ -218,7 +240,7 @@ class AiAdmissionCoordinator:
                 self.consent.storage_reliable = False
                 raise OperationConflict(503, "STORAGE_BUSY", operation_id) from None
 
-        captured = await run_in_threadpool(_pre_dispatch)
+        captured = await _local_stage(_pre_dispatch)
 
         selected_payload = deepcopy(frozen_payload)
         selected_payload["model"] = captured.rule.modelId
@@ -237,10 +259,12 @@ class AiAdmissionCoordinator:
                 self.consent.storage_reliable = False
                 raise OperationConflict(503, "STORAGE_BUSY", operation_id) from None
 
-        await run_in_threadpool(_do_admit)
+        await _local_stage(_do_admit)
 
         self._deadline(deadline)
         # No await or network call occurs in the admission transaction above.
+        if on_dispatch is not None:
+            on_dispatch()
         result = await self.bridge.dispatch_chat(selected_payload, deadline)
         self._deadline(deadline)
         return result

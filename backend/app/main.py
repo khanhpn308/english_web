@@ -1,5 +1,6 @@
 """FastAPI application factory and ASGI entrypoint (T003)."""
 
+import asyncio
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -28,7 +29,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 STATIC_ROOT = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 _SHELL_ROUTES = {"", "lookup", "search", "review", "quiz/new", "status"}
@@ -76,15 +77,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 app.state.storage_error = "UNAVAILABLE"
         yield
     finally:
-        app.state.sessions.invalidate()
-        app.state.ready = False
-        app.state.storage_info = None
-        app.state.operation_ledger = None
-        app.state.consent_service = None
-        app.state.lookup_service = None
-        if database is not None:
-            await run_in_threadpool(database.close)
-        app.state.database = None
+        try:
+            lookup_service = app.state.lookup_service
+            if lookup_service is not None:
+                await lookup_service.drain()
+        finally:
+            app.state.sessions.invalidate()
+            app.state.ready = False
+            app.state.storage_info = None
+            app.state.operation_ledger = None
+            app.state.consent_service = None
+            app.state.lookup_service = None
+            if database is not None:
+                await run_in_threadpool(database.close)
+            app.state.database = None
 
 
 class RequestBudgetMiddleware:
@@ -105,6 +111,28 @@ class RequestBudgetMiddleware:
             if clock is None:
                 clock = monotonic
             scope.setdefault("state", {})["request_start_time"] = clock()
+        if (
+            scope["type"] == "http"
+            and scope.get("method") == "POST"
+            and scope.get("path") == "/api/v1/lookups"
+        ):
+            from backend.app.enrichment import lookup as lookup_module
+
+            budget_clock = clock or monotonic
+            deadline = scope["state"]["request_start_time"] + lookup_module.LOOKUP_DEADLINE_SECONDS
+
+            async def bounded_receive() -> Message:
+                remaining = deadline - budget_clock()
+                if remaining <= 0:
+                    raise TimeoutError("Lookup request body deadline exhausted")
+                async with asyncio.timeout(remaining):
+                    return await receive()
+
+            try:
+                await self.app(scope, bounded_receive, send)
+            except TimeoutError:
+                await error_response(503, "BRIDGE_UNAVAILABLE")(scope, receive, send)
+            return
         await self.app(scope, receive, send)
 
 

@@ -1,3 +1,11 @@
+## 03/10/2026 - T008: Round-4 correctness remediation (Asia/Bangkok)
+
+- Under `tasks/t008-r4-shared-remediation.md`, retain service-owned claim/admission/parse/completion/render workers, classify cancellation durably, drain them before database shutdown, and preserve atomic preview/SUCCEEDED commits. Request deadlines cover blocked body receive and final HTTP serialization; late work cannot create a new success. Preserve predeadline success on replay after a lost response.
+- Correct the canonical consent schema to required string-or-null, regenerate OpenAPI/TypeScript, reject lone surrogate input before fingerprinting, and classify invalid bridge UTF-8 at the adapter as 502 BRIDGE_INVALID_RESPONSE. Bound real concurrency rendezvous/task/future waits, including cancellation-resistant drain evidence.
+- Add RED/GREEN proofs and adversarial cases in `backend/tests/test_lookups.py`; shared operation-test changes only add synchronization bounds. Keep terminal-write failures visible and deny further AI admission. Preserve immutable payload, Cambridge URL, idempotency and preview-only behavior.
+- Update the parent card and todo status to `IMPLEMENTATION_COMPLETE_ENVIRONMENT_VERIFICATION_PENDING`. Pre-freeze lookup 82 tests pass; mypy/Ruff/format/TS and contract 9 pass; pinned secrets/code/dependency scans report zero findings. Final verification is recorded after source freeze in the remediation report and `/tmp/t008-r4-final-results.json`.
+- Native Windows Python is unavailable despite Windows PowerShell access; genuine Windows filesystem/ACL evidence remains pending. No task/integration completion, independent audit verdict, commit or push. T027, main, audited worktree, migrations, lockfiles, frontend UI, and historical audit records remain untouched.
+
 ## 03/10/2026 - T008: Hoàn thành Remediation Round 3 (Asia/Bangkok)
 
 - Khắc phục R3-B01 (Ledger-owned commit-boundary eligibility protocol): Kiểm tra điều kiện hoàn tất (eligibility) tại chính ranh giới DBAPI commit thông qua SQLAlchemy event listener `commit` trên connection giao dịch. Nếu deadline hết hạn hoặc coroutine bị hủy ngay trước commit, transaction bị hủy bỏ và rollback hoàn toàn: zero preview, zero SUCCEEDED receipt. Bổ sung kiểm thử tất định dừng chính xác tại ranh giới commit.

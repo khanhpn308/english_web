@@ -146,7 +146,8 @@ def test_error_details_supports_ai_consent():
     assert "consentState" in props
     assert props["consentState"]["enum"] == ["NOT_GRANTED", "GRANTED", "REVOKED", "STALE"]
     assert "currentPolicyVersion" in props
-    assert props["currentPolicyVersion"].get("nullable") is True
+    assert props["currentPolicyVersion"]["anyOf"] == [{"type": "string"}, {"type": "null"}]
+    assert "currentPolicyVersion" in consent_schema["required"]
 
     # 2. Runtime 403 AI_CONSENT conforms to OpenAPI ErrorResponse
     runtime_403_consent = {
@@ -171,3 +172,42 @@ def test_error_details_supports_ai_consent():
     ts_content = Path("frontend/src/shared/api/generated.ts").read_text()
     assert 'kind: "AI_CONSENT";' in ts_content
     assert 'consentState: "NOT_GRANTED" | "GRANTED" | "REVOKED" | "STALE";' in ts_content
+
+
+def test_r4_consent_required_nullable_json_schema():
+    schema = build_contract()["components"]["schemas"]["ErrorDetails"]
+    # AJV implements a legacy OpenAPI nullable extension. Remove that annotation
+    # when evaluating actual OpenAPI 3.1 JSON Schema semantics, where it has no effect.
+    script = r"""
+const Ajv = require('@redocly/ajv/dist/2020').default;
+const fs = require('fs');
+const schema = JSON.parse(fs.readFileSync(0, 'utf8'));
+function annotations(value) {
+  if (value && typeof value === 'object') {
+    delete value.nullable;
+    for (const v of Object.values(value)) annotations(v);
+  }
+}
+annotations(schema);
+const validate = new Ajv({strict: false}).compile(schema);
+const base = {kind: 'AI_CONSENT', consentState: 'REVOKED'};
+process.stdout.write(JSON.stringify([
+  validate(base), validate({...base, currentPolicyVersion:null}),
+  validate({...base, currentPolicyVersion:'policy-v1'})
+]));
+"""
+    result = subprocess.run(
+        ["node", "-e", script],
+        input=json.dumps(schema),
+        text=True,
+        capture_output=True,
+        check=True,
+        timeout=10,
+    )
+    assert json.loads(result.stdout) == [False, True, True]
+
+
+def test_r4_consent_typescript_property_required_nullable():
+    ts = Path("frontend/src/shared/api/generated.ts").read_text()
+    assert "currentPolicyVersion: string | null;" in ts
+    assert "currentPolicyVersion?:" not in ts

@@ -6,11 +6,12 @@ import json
 import threading
 import unicodedata
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from secrets import token_urlsafe
 from time import monotonic
-from typing import Any, cast
+from typing import Any, Never, cast
 from urllib.parse import urlsplit
 
 from backend.app.application.ai_admission import AiAdmissionCoordinator
@@ -107,6 +108,8 @@ def normalize_term(term: str) -> str:
     nfc = unicodedata.normalize("NFC", term)
     # 2. Reject forbidden controls: check for C0/C1 and Cc controls (excluding standard whitespace)
     for ch in nfc:
+        if 0xD800 <= ord(ch) <= 0xDFFF:
+            raise ValueError("term contains malformed Unicode")
         if unicodedata.category(ch) == "Cc" and ch not in " \t\n\r\x0b\x0c":
             raise ValueError("term contains forbidden control characters")
         if 0x80 <= ord(ch) <= 0x9F:
@@ -302,6 +305,40 @@ def _render_prompt(term: str) -> str:
     return template.replace("{{term_json}}", json.dumps(term, ensure_ascii=False))
 
 
+class LookupConsentRequired(OperationConflict):
+    """Consent denial details captured within the owned request budget."""
+
+    def __init__(self, operation_id: str | None, details: dict[str, Any]) -> None:
+        super().__init__(403, "AI_CONSENT_REQUIRED", operation_id)
+        self.details = details
+
+
+@dataclass
+class _Lifecycle:
+    abort: threading.Event = field(default_factory=threading.Event)
+    dispatched: threading.Event = field(default_factory=threading.Event)
+    operation_id: str | None = None
+
+
+async def _settle[T](task: asyncio.Task[T]) -> T:
+    """Observe the actual worker result even if its waiter is cancelled again."""
+    while True:
+        try:
+            return await asyncio.shield(task)
+        except asyncio.CancelledError:
+            if task.done():
+                return task.result()
+
+
+async def _thread_call[T](function: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+    worker = asyncio.create_task(run_in_threadpool(function, *args, **kwargs))
+    try:
+        return await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        await _settle(worker)
+        raise
+
+
 class LookupService:
     """Claim, admit, validate, persist and replay one lookup operation (T008)."""
 
@@ -321,78 +358,160 @@ class LookupService:
         self.on_before_receipt_update: Callable[[], None] | None = None
         self.on_before_commit: Callable[[], None] | None = None
         self.release_commit_boundary: Callable[[], None] | None = None
+        self._owners: set[asyncio.Task[Any]] = set()
+        self._cleanup_errors: list[BaseException] = []
 
-    async def lookup(
+    def _owner_done(self, task: asyncio.Task[Any]) -> None:
+        self._owners.discard(task)
+        if not task.cancelled():
+            error = task.exception()
+            if error is not None and not isinstance(error, OperationConflict):
+                self.admission.consent.storage_reliable = False
+                self._cleanup_errors.append(error)
+
+    async def drain(self) -> None:
+        """Lifespan owns every unfinished lookup before disposing its database."""
+        while self._owners:
+            waiter = asyncio.ensure_future(asyncio.gather(*self._owners, return_exceptions=True))
+            while not waiter.done():
+                try:
+                    await asyncio.shield(waiter)
+                except asyncio.CancelledError:
+                    continue
+        if self._cleanup_errors:
+            raise RuntimeError("Lookup durable cleanup failed") from None
+
+    async def lookup[T](
         self,
         *,
         term: str,
         idempotency_key: str,
         owner_session_id: str,
         request_start_time: float | None = None,
-    ) -> LookupPreview:
+        finalize: Callable[[LookupPreview], T] | None = None,
+    ) -> LookupPreview | T:
         start_time = request_start_time if request_start_time is not None else self.clock()
         deadline = start_time + LOOKUP_DEADLINE_SECONDS
         normalized = normalize_term(term)
-        claimed = await run_in_threadpool(
-            self.ledger.claim,
-            kind=LOOKUP_SCOPE,
-            key=idempotency_key,
-            method=LOOKUP_METHOD,
-            path=LOOKUP_PATH,
-            body={"term": normalized},
-            preconditions={},
+        state = _Lifecycle()
+        owner = asyncio.create_task(
+            self._execute(normalized, idempotency_key, owner_session_id, deadline, state, finalize)
         )
-        operation = claimed.operation
-        if claimed.replayed:
-            if operation.status == "SUCCEEDED" and operation.result_ref is not None:
-                return await run_in_threadpool(
-                    self.vocabulary.get_preview,
-                    operation.result_ref,
-                    requesting_session_id=owner_session_id,
-                )
-            raise OperationConflict(
-                operation.response_status or 409,
-                operation.error_category or "IDEMPOTENCY_IN_FLIGHT",
-                operation.operation_id,
-            )
+        self._owners.add(owner)
+        owner.add_done_callback(self._owner_done)
 
-        operation_id = operation.operation_id
-        payload = {"messages": [{"role": "user", "content": _render_prompt(normalized)}]}
+        def abort() -> None:
+            # Only this request owns cancellation of its lifecycle; repeated caller
+            # cancellation cannot reach the worker/mandatory terminalization awaits.
+            if not state.abort.is_set():
+                state.abort.set()
+                if self.release_commit_boundary is not None:
+                    self.release_commit_boundary()
+                owner.cancel()
 
-        cancellation_event = threading.Event()
-        thread_done = threading.Event()
+        try:
+            done, _ = await asyncio.wait({owner}, timeout=max(0.0, deadline - self.clock()))
+            if not done or self.clock() >= deadline:
+                abort()
+                raise OperationConflict(503, "BRIDGE_UNAVAILABLE", state.operation_id)
+            try:
+                return owner.result()
+            except OperationConflict:
+                raise
+            except Exception:
+                # The owner callback retains the durable failure for drain;
+                # the HTTP boundary still emits the existing redacted taxonomy.
+                raise OperationConflict(503, "STORAGE_BUSY", state.operation_id) from None
+        except asyncio.CancelledError:
+            abort()
+            raise
+
+    async def _execute[T](
+        self,
+        normalized: str,
+        idempotency_key: str,
+        owner_session_id: str,
+        deadline: float,
+        state: _Lifecycle,
+        finalize: Callable[[LookupPreview], T] | None,
+    ) -> LookupPreview | T:
+        operation_id: str | None = None
+        cancellation_event = state.abort
         active_connection: list[Connection | None] = [None]
         cursor_listener: list[Any] = [None]
         commit_listener: list[Any] = [None]
 
+        def check() -> None:
+            if state.abort.is_set() or self.clock() >= deadline:
+                raise TimeoutError("Lookup budget exhausted")
+
+        async def reject(code: str, status: int, *, unknown: bool = False) -> Never:
+            if code == "TIMEOUT" or state.abort.is_set() or self.clock() >= deadline:
+                code, status, unknown = "TIMEOUT", 503, state.dispatched.is_set()
+            if operation_id is not None:
+                await self._record_failure(operation_id, code, status, unknown=unknown)
+            public_code = "BRIDGE_UNAVAILABLE" if code == "TIMEOUT" else code
+            raise OperationConflict(status, public_code, state.operation_id) from None
+
         try:
-            # 1. Hard enforcement: check if deadline already expired before dispatch
-            remaining = deadline - self.clock()
-            if remaining <= 0.0:
-                raise TimeoutError("Deadline already expired before dispatch")
-
-            # 2. Hard enforcement: provider dispatch bounded by cancellation-aware timeout scope
+            check()
+            claim_worker = asyncio.create_task(
+                run_in_threadpool(
+                    self.ledger.claim,
+                    kind=LOOKUP_SCOPE,
+                    key=idempotency_key,
+                    method=LOOKUP_METHOD,
+                    path=LOOKUP_PATH,
+                    body={"term": normalized},
+                    preconditions={},
+                )
+            )
             try:
-                async with asyncio.timeout(remaining):
-                    provider_response = await self.admission.dispatch(
-                        operation_id=operation_id,
-                        scope=LOOKUP_SCOPE,
-                        payload=payload,
-                        deadline=deadline,
+                claimed = await asyncio.shield(claim_worker)
+            except asyncio.CancelledError:
+                claimed = await _settle(claim_worker)
+            operation = claimed.operation
+            state.operation_id = operation.operation_id
+            if claimed.replayed:
+                check()
+                if operation.status == "SUCCEEDED" and operation.result_ref is not None:
+                    preview = await _thread_call(
+                        self.vocabulary.get_preview,
+                        operation.result_ref,
+                        requesting_session_id=owner_session_id,
                     )
-            except TimeoutError:
-                unknown = await self._admitted(operation_id)
-                await self._record_failure(operation_id, "TIMEOUT", 503, unknown=unknown)
-                raise OperationConflict(503, "BRIDGE_UNAVAILABLE", operation_id) from None
+                    check()
+                    result = await _thread_call(finalize, preview) if finalize else preview
+                    check()
+                    return result
+                raise OperationConflict(
+                    operation.response_status or 409,
+                    operation.error_category or "IDEMPOTENCY_IN_FLIGHT",
+                    operation.operation_id,
+                )
+            operation_id = operation.operation_id
+            check()
+            payload = {
+                "messages": [
+                    {"role": "user", "content": await _thread_call(_render_prompt, normalized)}
+                ]
+            }
+            check()
 
-            if self.clock() >= deadline:
-                raise TimeoutError("Deadline expired after dispatch")
+            def transport_entry() -> None:
+                check()
+                state.dispatched.set()
 
-            forms = parse_provider_response(provider_response)
-
-            if self.clock() >= deadline:
-                raise TimeoutError("Deadline expired after parse")
-
+            provider_response = await self.admission.dispatch(
+                operation_id=operation_id,
+                scope=LOOKUP_SCOPE,
+                payload=payload,
+                deadline=deadline,
+                on_dispatch=transport_entry,
+            )
+            check()
+            forms = await _thread_call(parse_provider_response, provider_response)
+            check()
             lookup_id = f"lookup_{token_urlsafe(12)}"
             created_at = datetime.now(UTC).timestamp()
 
@@ -459,7 +578,6 @@ class LookupService:
                         local_write=_local_write,
                     )
                 finally:
-                    thread_done.set()
                     conn = active_connection[0]
                     if conn is not None:
                         with contextlib.suppress(Exception):
@@ -468,91 +586,85 @@ class LookupService:
                             if commit_listener[0] is not None:
                                 event.remove(conn, "commit", commit_listener[0])
 
-            try:
-                await run_in_threadpool(_do_complete)
-            except (asyncio.CancelledError, GeneratorExit):
-                cancellation_event.set()
-                if self.release_commit_boundary is not None:
-                    self.release_commit_boundary()
-                # Wait bounded for worker thread to rollback and finish
-                await run_in_threadpool(lambda: thread_done.wait(timeout=5.0))
-                # Durably record cancellation failure state
-                admitted = await self._admitted(operation_id)
-                await self._record_failure(operation_id, "TIMEOUT", 503, unknown=admitted)
-                raise
-
-            return await run_in_threadpool(
+            await _thread_call(_do_complete)
+            check()
+            preview = await _thread_call(
                 self.vocabulary.get_preview, lookup_id, requesting_session_id=owner_session_id
             )
-        except (asyncio.CancelledError, GeneratorExit):
-            # Outer cancellation catch: ensures operation is NEVER silently left in PENDING
-            cancellation_event.set()
-            if self.release_commit_boundary is not None:
-                self.release_commit_boundary()
-            with contextlib.suppress(Exception):
-                admitted = await self._admitted(operation_id)
-                await self._record_failure(operation_id, "TIMEOUT", 503, unknown=admitted)
-            raise
+            check()
+            result = await _thread_call(finalize, preview) if finalize else preview
+            check()
+            return result
+        except (asyncio.CancelledError, TimeoutError):
+            await reject("TIMEOUT", 503)
         except OperationConflict as error:
-            if error.code not in {"IDEMPOTENCY_IN_FLIGHT", "IDEMPOTENCY_KEY_REUSED"}:
-                await self._record_failure(operation_id, error.code, error.status_code)
+            if error.code == "AI_CONSENT_REQUIRED":
+                try:
+                    snapshot = await _thread_call(
+                        self.admission.consent.get_snapshot, self.admission.policy_source
+                    )
+                    check()
+                    details = {
+                        "kind": "AI_CONSENT",
+                        "consentState": snapshot.state.state,
+                        "currentPolicyVersion": snapshot.policy.version
+                        if snapshot.policy
+                        else None,
+                    }
+                except (asyncio.CancelledError, TimeoutError):
+                    if operation_id is not None:
+                        await self._record_failure(operation_id, "TIMEOUT", 503)
+                    raise OperationConflict(503, "BRIDGE_UNAVAILABLE", state.operation_id) from None
+                except Exception:
+                    if state.abort.is_set() or self.clock() >= deadline:
+                        if operation_id is not None:
+                            await self._record_failure(operation_id, "TIMEOUT", 503)
+                        raise OperationConflict(
+                            503, "BRIDGE_UNAVAILABLE", state.operation_id
+                        ) from None
+                    details = {
+                        "kind": "AI_CONSENT",
+                        "consentState": "NOT_GRANTED",
+                        "currentPolicyVersion": None,
+                    }
+                if operation_id is not None:
+                    await self._record_failure(operation_id, error.code, error.status_code)
+                raise LookupConsentRequired(state.operation_id, details) from None
+            if operation_id is not None and error.code not in {
+                "IDEMPOTENCY_IN_FLIGHT",
+                "IDEMPOTENCY_KEY_REUSED",
+            }:
+                await reject(error.code, error.status_code)
             raise
-        except ProviderResponseError:
-            await self._record_failure(operation_id, "BRIDGE_INVALID_RESPONSE", 502)
-            raise OperationConflict(502, "BRIDGE_INVALID_RESPONSE", operation_id) from None
-        except BridgeInvalidResponseError:
-            await self._record_failure(operation_id, "BRIDGE_INVALID_RESPONSE", 502)
-            raise OperationConflict(502, "BRIDGE_INVALID_RESPONSE", operation_id) from None
+        except (ProviderResponseError, BridgeInvalidResponseError):
+            await reject("BRIDGE_INVALID_RESPONSE", 502)
         except BridgeAuthError:
-            await self._record_failure(operation_id, "BRIDGE_AUTH_ERROR", 502)
-            raise OperationConflict(502, "BRIDGE_AUTH_ERROR", operation_id) from None
+            await reject("BRIDGE_AUTH_ERROR", 502)
         except BridgeConfigError:
-            await self._record_failure(operation_id, "CONFIGURATION_REQUIRED", 503)
-            raise OperationConflict(503, "CONFIGURATION_REQUIRED", operation_id) from None
+            await reject("CONFIGURATION_REQUIRED", 503)
         except BridgeUnavailableError:
-            unknown = await self._admitted(operation_id)
-            if self.clock() >= deadline:
-                await self._record_failure(operation_id, "TIMEOUT", 503, unknown=unknown)
-                raise OperationConflict(503, "BRIDGE_UNAVAILABLE", operation_id) from None
-            await self._record_failure(operation_id, "BRIDGE_UNAVAILABLE", 503, unknown=unknown)
-            raise OperationConflict(503, "BRIDGE_UNAVAILABLE", operation_id) from None
-        except TimeoutError:
-            unknown = await self._admitted(operation_id)
-            await self._record_failure(operation_id, "TIMEOUT", 503, unknown=unknown)
-            raise OperationConflict(503, "BRIDGE_UNAVAILABLE", operation_id) from None
-        except OSError:
-            await self._record_failure(operation_id, "STORAGE_BUSY", 503)
-            raise OperationConflict(503, "STORAGE_BUSY", operation_id) from None
+            await reject("BRIDGE_UNAVAILABLE", 503, unknown=state.dispatched.is_set())
         except Exception:
-            await self._record_failure(operation_id, "STORAGE_BUSY", 503)
-            raise OperationConflict(503, "STORAGE_BUSY", operation_id) from None
-
-    def _is_admitted_sync(self, operation_id: str) -> bool:
-        try:
-            with self.ledger.engine.connect() as connection:
-                return (
-                    connection.exec_driver_sql(
-                        "SELECT 1 FROM ai_operation_admission WHERE operation_id=?",
-                        (operation_id,),
-                    ).first()
-                    is not None
-                )
-        except Exception:
-            return True
-
-    async def _admitted(self, operation_id: str) -> bool:
-        return await run_in_threadpool(self._is_admitted_sync, operation_id)
+            await reject("STORAGE_BUSY", 503)
 
     async def _record_failure(
         self, operation_id: str, code: str, status: int, *, unknown: bool = False
     ) -> None:
         def _record() -> None:
-            with contextlib.suppress(Exception):
+            try:
                 self.ledger.record_failure(
-                    operation_id,
-                    error_category=code,
-                    response_status=status,
-                    unknown=unknown,
+                    operation_id, error_category=code, response_status=status, unknown=unknown
                 )
+            except OperationConflict:
+                # A receipt committed before cancellation/deadline is immutable;
+                # losing its HTTP response must not overwrite it as a failure.
+                operation = self.ledger.get(operation_id)
+                if operation is None or operation.status != "SUCCEEDED":
+                    raise
 
-        await run_in_threadpool(_record)
+        try:
+            await _thread_call(_record)
+        except Exception as error:
+            self.admission.consent.storage_reliable = False
+            self._cleanup_errors.append(error)
+            raise OperationConflict(503, "STORAGE_BUSY", operation_id) from None

@@ -253,7 +253,7 @@ def test_two_database_connections_race_to_claim_one_key(tmp_path: Path) -> None:
     barrier = Barrier(2)
 
     def attempt(database: Database) -> ClaimResult | OperationConflict:
-        barrier.wait()
+        barrier.wait(timeout=5)
         try:
             return OperationLedger(database.engine).claim(
                 kind="LOOKUP",
@@ -270,7 +270,7 @@ def test_two_database_connections_race_to_claim_one_key(tmp_path: Path) -> None:
         with ThreadPoolExecutor(max_workers=2) as pool:
             left = pool.submit(attempt, first_db)
             right = pool.submit(attempt, second_db)
-            results = [left.result(), right.result()]
+            results = [left.result(timeout=10), right.result(timeout=10)]
         claims = [result for result in results if isinstance(result, ClaimResult)]
         conflicts = [result for result in results if isinstance(result, OperationConflict)]
         assert len(claims) == 1 and claims[0].replayed is False

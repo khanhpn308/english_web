@@ -235,7 +235,7 @@ export interface components {
         } | {
             /** @enum {string} */
             consentState: "NOT_GRANTED" | "GRANTED" | "REVOKED" | "STALE";
-            currentPolicyVersion?: string | null;
+            currentPolicyVersion: string | null;
             /** @enum {string} */
             kind: "AI_CONSENT";
         };

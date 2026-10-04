@@ -14,7 +14,7 @@ import pytest
 import sqlalchemy as sa
 from backend.app.application.ai_admission import AiAdmissionCoordinator
 from backend.app.application.consent import ConsentApplied, ConsentService, ConsentSnapshot
-from backend.app.application.operations import OperationLedger
+from backend.app.application.operations import OperationConflict, OperationLedger
 from backend.app.enrichment.lookup import LookupService
 from backend.app.main import create_app
 from backend.app.platform.bridge_port import (
@@ -119,7 +119,7 @@ class FakeBridge:
         if self.entered_dispatch is not None:
             self.entered_dispatch.set()
         if self.release_dispatch is not None:
-            await self.release_dispatch.wait()
+            await asyncio.wait_for(self.release_dispatch.wait(), 5)
         if self.failure is not None:
             raise self.failure
         import json
@@ -196,6 +196,7 @@ async def test_valid_lookup_persists_preview_and_replays_without_dispatch(
     assert changed.json()["error"]["code"] == "IDEMPOTENCY_KEY_REUSED"
     assert bridge.dispatches == 1
 
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as connection:
         assert connection.exec_driver_sql("SELECT count(*) FROM lookup_previews").scalar_one() == 1
         assert connection.exec_driver_sql("SELECT count(*) FROM word_forms").scalar_one() == 0
@@ -243,6 +244,7 @@ async def test_malformed_provider_response_is_terminal_failure_without_preview(
     )
     assert response.status_code == 502
     assert response.json()["error"]["code"] == "BRIDGE_INVALID_RESPONSE"
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as connection:
         assert connection.exec_driver_sql("SELECT count(*) FROM lookup_previews").scalar_one() == 0
         assert (
@@ -443,6 +445,7 @@ async def test_consent_denial_zero_dispatch(
         assert revoked_data["error"]["details"]["consentState"] == "REVOKED"
         assert revoked_data["error"]["details"]["currentPolicyVersion"] == "policy-v1"
 
+        await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
         with app.state.database.engine.connect() as connection:
             statuses = (
                 connection.exec_driver_sql(
@@ -533,10 +536,11 @@ async def test_concurrent_inflight_duplicate(
     finally:
         bridge.release_dispatch.set()
 
-    res1 = await t1
+    res1 = await asyncio.wait_for(asyncio.shield(t1), 5)
     assert res1.status_code == 200
     assert bridge.dispatches == 1
 
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
         previews = conn.execute(sa.text("SELECT count(*) FROM lookup_previews")).scalar()
         succeeded = conn.execute(
@@ -577,6 +581,7 @@ async def test_privacy_safe_failure_diagnostics(
         assert sentinel not in captured.err
         assert sentinel not in res.text
 
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
         row = (
             conn.execute(
@@ -624,6 +629,7 @@ async def test_unrelated_history_sentinels_zero_effects(
     app_client: tuple[Any, AsyncClient, FakeBridge],
 ) -> None:
     app, client, _bridge = app_client
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
         conn.exec_driver_sql(
             "INSERT INTO source_files (id, relative_path, note_date, status, revision, etag, "
@@ -637,6 +643,7 @@ async def test_unrelated_history_sentinels_zero_effects(
     )
     assert res.status_code == 200, res.json()
 
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
         sources = conn.exec_driver_sql("SELECT COUNT(*) FROM source_files").scalar()
         assert sources == 1
@@ -685,6 +692,7 @@ async def test_bearer_cookie_is_fingerprinted_not_persisted_in_raw_form(
         assert cookie_val not in payload_str
 
         # Verify raw cookie is not in DB
+        await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
         with app.state.database.engine.connect() as conn:
             previews = conn.exec_driver_sql(
                 "SELECT owner_session_id FROM lookup_previews"
@@ -701,23 +709,21 @@ async def test_bearer_cookie_is_fingerprinted_not_persisted_in_raw_form(
 @pytest.mark.anyio
 async def test_deadline_exhaustion_at_claim(
     app_client: tuple[Any, AsyncClient, FakeBridge],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app, client, bridge = app_client
     service = app.state.lookup_service
 
-    class MockClock:
-        def __init__(self) -> None:
-            self.calls = 0
-            self.base = time.monotonic()
+    now = [time.monotonic()]
+    service.clock = lambda: now[0]
+    original = service.ledger.claim
 
-        def __call__(self) -> float:
-            self.calls += 1
-            if self.calls == 1:
-                return self.base
-            else:
-                return self.base + 121
+    def expire_after_claim(**kwargs: Any) -> Any:
+        result = original(**kwargs)
+        now[0] += 121
+        return result
 
-    service.clock = MockClock()
+    monkeypatch.setattr(service.ledger, "claim", expire_after_claim)
 
     res = await client.post(
         "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "dl-1"}
@@ -729,6 +735,7 @@ async def test_deadline_exhaustion_at_claim(
     assert bridge.dispatches == 0
 
     op_id = body["error"]["details"]["operationId"]
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
         op = (
             conn.execute(
@@ -754,23 +761,23 @@ async def test_deadline_exhaustion_at_claim(
 @pytest.mark.anyio
 async def test_deadline_exhaustion_at_parse(
     app_client: tuple[Any, AsyncClient, FakeBridge],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app, client, bridge = app_client
     service = app.state.lookup_service
 
-    class MockClock:
-        def __init__(self) -> None:
-            self.calls = 0
-            self.base = time.monotonic()
+    now = [time.monotonic()]
+    service.clock = lambda: now[0]
+    import backend.app.enrichment.lookup as lookup_module
 
-        def __call__(self) -> float:
-            self.calls += 1
-            if self.calls <= 3:  # up to dispatch
-                return self.base
-            else:
-                return self.base + 121
+    original = lookup_module.parse_provider_response
 
-    service.clock = MockClock()
+    def expire_after_parse(response: dict[str, Any]) -> Any:
+        result = original(response)
+        now[0] += 121
+        return result
+
+    monkeypatch.setattr(lookup_module, "parse_provider_response", expire_after_parse)
 
     res = await client.post(
         "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "dl-2"}
@@ -782,6 +789,7 @@ async def test_deadline_exhaustion_at_parse(
     assert bridge.dispatches == 1
 
     op_id = body["error"]["details"]["operationId"]
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
         op = (
             conn.execute(
@@ -811,16 +819,13 @@ async def test_deadline_exhaustion_at_persistence(
     app, client, _bridge = app_client
     service = app.state.lookup_service
 
-    class MockClock:
-        def __init__(self) -> None:
-            self.calls = 0
-            self.base = time.monotonic()
+    now = [time.monotonic()]
+    service.clock = lambda: now[0]
 
-        def __call__(self) -> float:
-            self.calls += 1
-            return self.base + 121 if self.calls >= 4 else self.base
+    def expire_at_preview() -> None:
+        now[0] += 121
 
-    service.clock = MockClock()
+    service.on_preview_written = expire_at_preview
 
     res = await client.post(
         "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "dl-3"}
@@ -831,6 +836,7 @@ async def test_deadline_exhaustion_at_persistence(
     assert body["error"]["details"]["kind"] == "RETRY"
 
     op_id = body["error"]["details"]["operationId"]
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
         op = (
             conn.execute(
@@ -879,6 +885,7 @@ async def test_deadline_preview_sql_boundary(
     assert body["error"]["details"]["kind"] == "RETRY"
     op_id = body["error"]["details"]["operationId"]
 
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
         op = (
             conn.execute(
@@ -928,6 +935,7 @@ async def test_deadline_receipt_update_boundary(
     assert body["error"]["details"]["kind"] == "RETRY"
     op_id = body["error"]["details"]["operationId"]
 
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
         op = (
             conn.execute(
@@ -963,7 +971,7 @@ async def test_cancellation_while_completion_active(
 
     def _pause_in_worker() -> None:
         worker_entered.set()
-        worker_release.wait(timeout=5.0)
+        assert worker_release.wait(timeout=5.0)
 
     service.on_before_receipt_update = _pause_in_worker
     service.release_commit_boundary = worker_release.set
@@ -977,15 +985,16 @@ async def test_cancellation_while_completion_active(
     )
 
     try:
-        await anyio.to_thread.run_sync(lambda: worker_entered.wait(timeout=5.0))
+        assert await anyio.to_thread.run_sync(lambda: worker_entered.wait(timeout=5.0))
         assert worker_entered.is_set()
 
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
-            await task
+            await asyncio.wait_for(asyncio.shield(task), 5)
     finally:
         worker_release.set()
 
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
         previews = conn.execute(
             sa.text("SELECT count(*) FROM lookup_previews WHERE term = 'robust'")
@@ -1033,6 +1042,7 @@ async def test_deadline_immediately_before_db_commit(
     assert body["error"]["details"]["kind"] == "RETRY"
     op_id = body["error"]["details"]["operationId"]
 
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
         op = (
             conn.execute(
@@ -1068,7 +1078,7 @@ async def test_cancellation_immediately_before_db_commit(
 
     def _pause_in_commit() -> None:
         commit_entered.set()
-        commit_release.wait(timeout=5.0)
+        assert commit_release.wait(timeout=5.0)
 
     service.on_before_commit = _pause_in_commit
     service.release_commit_boundary = commit_release.set
@@ -1082,15 +1092,16 @@ async def test_cancellation_immediately_before_db_commit(
     )
 
     try:
-        await anyio.to_thread.run_sync(lambda: commit_entered.wait(timeout=5.0))
+        assert await anyio.to_thread.run_sync(lambda: commit_entered.wait(timeout=5.0))
         assert commit_entered.is_set()
 
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
-            await task
+            await asyncio.wait_for(asyncio.shield(task), 5)
     finally:
         commit_release.set()
 
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
         previews = conn.execute(
             sa.text("SELECT count(*) FROM lookup_previews WHERE term = 'robust'")
@@ -1123,7 +1134,7 @@ async def test_provider_held_beyond_hard_overall_deadline(
 
     async def _hanging_dispatch(_payload: dict[str, Any], _deadline: float) -> dict[str, Any]:
         bridge.dispatches += 1
-        await hang_event.wait()
+        await asyncio.wait_for(hang_event.wait(), 5)
         return {}
 
     bridge.dispatch_override = _hanging_dispatch
@@ -1146,6 +1157,7 @@ async def test_provider_held_beyond_hard_overall_deadline(
         assert body["error"]["details"]["kind"] == "RETRY"
         op_id = body["error"]["details"]["operationId"]
 
+        await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
         with app.state.database.engine.connect() as conn:
             op = (
                 conn.execute(
@@ -1184,7 +1196,7 @@ async def test_provider_cancellation_durable_state(
     async def _pausing_dispatch(_payload: dict[str, Any], _deadline: float) -> dict[str, Any]:
         bridge.dispatches += 1
         dispatch_started.set()
-        await dispatch_release.wait()
+        await asyncio.wait_for(dispatch_release.wait(), 5)
         return {}
 
     bridge.dispatch_override = _pausing_dispatch
@@ -1203,10 +1215,11 @@ async def test_provider_cancellation_durable_state(
 
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
-            await task
+            await asyncio.wait_for(asyncio.shield(task), 5)
     finally:
         dispatch_release.set()
 
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
         op = (
             conn.execute(
@@ -1256,28 +1269,14 @@ async def test_request_body_time_exhausted_before_dispatch(
     assert body["error"]["code"] == "BRIDGE_UNAVAILABLE"
     assert bridge.dispatches == 0  # Zero provider dispatch!
 
-    op_id = body["error"]["details"]["operationId"]
+    assert bridge.preflights == 0
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
-        op = (
-            conn.execute(
-                sa.text(
-                    "SELECT status, error_category, response_status "
-                    "FROM operations WHERE operation_id = :op_id"
-                ),
-                {"op_id": op_id},
-            )
-            .mappings()
-            .one()
+        assert (
+            conn.exec_driver_sql("SELECT count(*) FROM operations WHERE kind='LOOKUP'").scalar_one()
+            == 0
         )
-        assert op["status"] == "FAILED"
-        assert op["error_category"] == "TIMEOUT"
-        assert op["response_status"] == 503
-
-        previews = conn.execute(
-            sa.text("SELECT count(*) FROM lookup_previews WHERE operation_id = :op_id"),
-            {"op_id": op_id},
-        ).scalar()
-        assert previews == 0
+        assert conn.exec_driver_sql("SELECT count(*) FROM lookup_previews").scalar_one() == 0
 
 
 @pytest.mark.anyio
@@ -1309,7 +1308,7 @@ async def test_admission_payload_mutation_race(
 
     async def _hooked_preflight(_deadline: float) -> BridgeProfile:
         preflight_entered.set()
-        await preflight_release.wait()
+        await asyncio.wait_for(preflight_release.wait(), 5)
         return bridge.profile
 
     bridge.preflight_override = _hooked_preflight
@@ -1335,7 +1334,7 @@ async def test_admission_payload_mutation_race(
     finally:
         preflight_release.set()
 
-    result = await dispatch_task
+    result = await asyncio.wait_for(asyncio.shield(dispatch_task), 5)
     assert result is not None
 
     # Assert that the dispatched payload contains ONLY the frozen validated fields
@@ -1449,6 +1448,7 @@ async def test_cambridge_url_validation(app_client: tuple[Any, AsyncClient, Fake
 
         # Verify no preview created and operation is FAILED
         key_digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+        await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
         with app.state.database.engine.connect() as conn:
             op_row = (
                 conn.execute(
@@ -1471,3 +1471,875 @@ async def test_cambridge_url_validation(app_client: tuple[Any, AsyncClient, Fake
                 {"op_id": op_row["operation_id"]},
             ).scalar()
             assert preview_count == 0
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("term", ["\ud800", "\udfff", "ro\ud800bust", "ro\udfffbust"])
+async def test_r4_invalid_unicode_has_no_side_effects(
+    app_client: tuple[Any, AsyncClient, FakeBridge], term: str
+) -> None:
+    app, client, bridge = app_client
+    response = await client.post(
+        "/api/v1/lookups",
+        content=json.dumps({"term": term}).encode("ascii"),
+        headers={"Idempotency-Key": "r4-unicode", "Content-Type": "application/json"},
+    )
+    assert response.status_code == 422
+    assert bridge.preflights == bridge.dispatches == 0
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
+    with app.state.database.engine.connect() as connection:
+        assert (
+            connection.exec_driver_sql(
+                "SELECT count(*) FROM operations WHERE kind='LOOKUP'"
+            ).scalar_one()
+            == 0
+        )
+        assert connection.exec_driver_sql("SELECT count(*) FROM lookup_previews").scalar_one() == 0
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("endpoint", ["models", "chat"])
+@pytest.mark.parametrize("body", [b"\xff", b"{"])
+async def test_r4_bridge_decode_boundary(
+    app_client: tuple[Any, AsyncClient, FakeBridge], endpoint: str, body: bytes
+) -> None:
+    import httpx
+    from backend.app.adapters.bridge import BridgeAdapter
+
+    app, client, _bridge = app_client
+    paths: list[str] = []
+
+    def transport(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        if request.url.path == "/v1/models":
+            if "authorization" not in request.headers:
+                return httpx.Response(401)
+            if endpoint == "models":
+                return httpx.Response(200, content=body)
+            return httpx.Response(200, json={"data": [{"id": MODEL, "owned_by": "google"}]})
+        assert request.url.path == "/v1/chat/completions"
+        return httpx.Response(200, content=body)
+
+    app.state.lookup_service.admission.bridge = BridgeAdapter(
+        "synthetic-key", transport=httpx.MockTransport(transport)
+    )
+    response = await client.post(
+        "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "r4-bytes"}
+    )
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "BRIDGE_INVALID_RESPONSE"
+    assert len(paths) == (2 if endpoint == "models" else 3)
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
+    with app.state.database.engine.connect() as connection:
+        assert (
+            connection.exec_driver_sql(
+                "SELECT status FROM operations WHERE kind='LOOKUP'"
+            ).scalar_one()
+            == "FAILED"
+        )
+        assert connection.exec_driver_sql("SELECT count(*) FROM lookup_previews").scalar_one() == 0
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("mode", ["cancel", "deadline"])
+async def test_r4_real_claim_commit_is_owned(
+    app_client: tuple[Any, AsyncClient, FakeBridge], monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    import backend.app.enrichment.lookup as lookup_module
+
+    app, client, bridge = app_client
+    engine = app.state.database.engine
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+
+    def pause_commit(_connection: sa.Connection) -> None:
+        # The hook is attached only after fixture grant/session setup; first writer is claim.
+        if not entered.is_set():
+            entered.set()
+            assert release.wait(5)
+
+    original_claim = app.state.lookup_service.ledger.claim
+
+    def tracked_claim(**kwargs: Any) -> Any:
+        try:
+            return original_claim(**kwargs)
+        finally:
+            finished.set()
+
+    monkeypatch.setattr(app.state.lookup_service.ledger, "claim", tracked_claim)
+    if mode == "deadline":
+        monkeypatch.setattr(lookup_module, "LOOKUP_DEADLINE_SECONDS", 0.5)
+    sa.event.listen(engine, "commit", pause_commit)
+    task = asyncio.create_task(
+        client.post(
+            "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "r4-claim"}
+        )
+    )
+    try:
+        assert await asyncio.to_thread(entered.wait, 5)
+        if mode == "cancel":
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(asyncio.shield(task), 1)
+        else:
+            response = await asyncio.wait_for(asyncio.shield(task), 1)
+            assert response.status_code == 503
+            assert response.json()["error"]["code"] == "BRIDGE_UNAVAILABLE"
+    finally:
+        release.set()
+        assert await asyncio.to_thread(finished.wait, 5)
+        sa.event.remove(engine, "commit", pause_commit)
+        drain = getattr(app.state.lookup_service, "drain", None)
+        if drain is not None:
+            await asyncio.wait_for(asyncio.shield(drain()), 5)
+        if not task.done():
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, 5)
+    with engine.connect() as connection:
+        assert (
+            connection.exec_driver_sql(
+                "SELECT status FROM operations WHERE kind='LOOKUP'"
+            ).scalar_one()
+            == "FAILED"
+        )
+        assert connection.exec_driver_sql("SELECT count(*) FROM lookup_previews").scalar_one() == 0
+    assert bridge.preflights == bridge.dispatches == 0
+    replay = await client.post(
+        "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "r4-claim"}
+    )
+    assert replay.status_code == 503
+    assert bridge.dispatches == 0
+
+
+@pytest.mark.anyio
+async def test_r4_repeated_cancel_during_terminalization(
+    app_client: tuple[Any, AsyncClient, FakeBridge], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app, client, bridge = app_client
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+    dispatched = asyncio.Event()
+    bridge.release_dispatch = asyncio.Event()
+    bridge.entered_dispatch = dispatched
+    original = app.state.lookup_service.ledger.record_failure
+
+    def terminalize(*args: Any, **kwargs: Any) -> Any:
+        entered.set()
+        try:
+            assert release.wait(5)
+            return original(*args, **kwargs)
+        finally:
+            finished.set()
+
+    monkeypatch.setattr(app.state.lookup_service.ledger, "record_failure", terminalize)
+    task = asyncio.create_task(
+        client.post(
+            "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "r4-recancel"}
+        )
+    )
+    try:
+        await asyncio.wait_for(dispatched.wait(), 5)
+        task.cancel()
+        assert await asyncio.to_thread(entered.wait, 5)
+        task.cancel()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(asyncio.shield(task), 1)
+    finally:
+        release.set()
+        assert await asyncio.to_thread(finished.wait, 5)
+        bridge.release_dispatch.set()
+        drain = getattr(app.state.lookup_service, "drain", None)
+        if drain is not None:
+            await asyncio.wait_for(asyncio.shield(drain()), 5)
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
+    with app.state.database.engine.connect() as connection:
+        assert (
+            connection.exec_driver_sql(
+                "SELECT status FROM operations WHERE kind='LOOKUP'"
+            ).scalar_one()
+            == "UNKNOWN"
+        )
+        assert connection.exec_driver_sql("SELECT count(*) FROM lookup_previews").scalar_one() == 0
+    assert bridge.dispatches == 1
+
+
+@pytest.mark.anyio
+async def test_r4_blocked_body_receive_deadline(
+    app_client: tuple[Any, AsyncClient, FakeBridge], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import backend.app.enrichment.lookup as lookup_module
+
+    app, client, bridge = app_client
+    monkeypatch.setattr(lookup_module, "LOOKUP_DEADLINE_SECONDS", 0.5)
+    entered = asyncio.Event()
+    never = asyncio.Event()
+    messages: list[dict[str, Any]] = []
+
+    async def receive() -> dict[str, Any]:
+        entered.set()
+        await asyncio.wait_for(never.wait(), 5)
+        return {"type": "http.request", "body": b"{}"}
+
+    async def send(message: dict[str, Any]) -> None:
+        messages.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/api/v1/lookups",
+        "raw_path": b"/api/v1/lookups",
+        "query_string": b"",
+        "root_path": "",
+        "server": ("127.0.0.1", 8000),
+        "client": ("127.0.0.1", 1000),
+        "headers": [
+            (b"host", b"127.0.0.1:8000"),
+            (b"origin", BASE.encode()),
+            (b"content-type", b"application/json"),
+            (b"cookie", client.headers["cookie"].encode()),
+            (b"idempotency-key", b"r4-body"),
+        ],
+    }
+    task = asyncio.create_task(app(scope, receive, send))
+    try:
+        await asyncio.wait_for(entered.wait(), 5)
+        await asyncio.wait_for(asyncio.shield(task), 1)
+    finally:
+        if not task.done():
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, 5)
+    assert messages[0]["status"] == 503
+    assert b"content-security-policy" in dict(messages[0]["headers"])
+    assert json.loads(messages[1]["body"])["error"]["code"] == "BRIDGE_UNAVAILABLE"
+    assert bridge.preflights == bridge.dispatches == 0
+
+
+@pytest.mark.anyio
+async def test_r4_repeated_cancel_before_failure_write(
+    app_client: tuple[Any, AsyncClient, FakeBridge], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app, client, bridge = app_client
+    bridge.entered_dispatch = asyncio.Event()
+    bridge.release_dispatch = asyncio.Event()
+    gates = [asyncio.Event(), asyncio.Event()]
+    release = asyncio.Event()
+    original = app.state.lookup_service._record_failure
+    entries = 0
+
+    async def pause_failure(*args: Any, **kwargs: Any) -> None:
+        nonlocal entries
+        gates[min(entries, 1)].set()
+        entries += 1
+        await asyncio.wait_for(release.wait(), 5)
+        await original(*args, **kwargs)
+
+    monkeypatch.setattr(app.state.lookup_service, "_record_failure", pause_failure)
+    task = asyncio.create_task(
+        client.post(
+            "/api/v1/lookups",
+            json={"term": "robust"},
+            headers={"Idempotency-Key": "r4-cancel-gate"},
+        )
+    )
+    try:
+        await asyncio.wait_for(bridge.entered_dispatch.wait(), 5)
+        task.cancel()
+        await asyncio.wait_for(gates[0].wait(), 5)
+        task.cancel()
+        # Existing code re-enters cleanup; owned implementation has already returned.
+        if not task.done():
+            await asyncio.wait_for(gates[1].wait(), 5)
+            task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(asyncio.shield(task), 1)
+    finally:
+        release.set()
+        bridge.release_dispatch.set()
+        drain = getattr(app.state.lookup_service, "drain", None)
+        if drain is not None:
+            await asyncio.wait_for(asyncio.shield(drain()), 5)
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
+    with app.state.database.engine.connect() as connection:
+        assert (
+            connection.exec_driver_sql(
+                "SELECT status FROM operations WHERE kind='LOOKUP'"
+            ).scalar_one()
+            == "UNKNOWN"
+        )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("stage", ["admission", "parse", "completion", "load"])
+async def test_r4_blocked_stage_deadline(
+    app_client: tuple[Any, AsyncClient, FakeBridge], monkeypatch: pytest.MonkeyPatch, stage: str
+) -> None:
+    import backend.app.enrichment.lookup as lookup_module
+
+    app, client, bridge = app_client
+    service = app.state.lookup_service
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+    monkeypatch.setattr(lookup_module, "LOOKUP_DEADLINE_SECONDS", 0.5)
+    if stage == "admission":
+        target, name = service.admission, "_admit"
+    elif stage == "parse":
+        target, name = lookup_module, "parse_provider_response"
+    elif stage == "load":
+        target, name = service.vocabulary, "get_preview"
+    else:
+        target, name = service.ledger, "complete"
+    original = getattr(target, name)
+
+    def blocked(*args: Any, **kwargs: Any) -> Any:
+        entered.set()
+        try:
+            assert release.wait(5)
+            return original(*args, **kwargs)
+        finally:
+            finished.set()
+
+    monkeypatch.setattr(target, name, blocked)
+    task = asyncio.create_task(
+        client.post(
+            "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "r4-stage"}
+        )
+    )
+    try:
+        assert await asyncio.to_thread(entered.wait, 5)
+        response = await asyncio.wait_for(asyncio.shield(task), 1)
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "BRIDGE_UNAVAILABLE"
+    finally:
+        release.set()
+        assert await asyncio.to_thread(finished.wait, 5)
+        drain = getattr(service, "drain", None)
+        if drain is not None:
+            await asyncio.wait_for(asyncio.shield(drain()), 5)
+        if not task.done():
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, 5)
+    await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
+    with app.state.database.engine.connect() as connection:
+        status = connection.exec_driver_sql(
+            "SELECT status FROM operations WHERE kind='LOOKUP'"
+        ).scalar_one()
+        count = connection.exec_driver_sql("SELECT count(*) FROM lookup_previews").scalar_one()
+    if stage == "load":
+        # Success was committed before expiry, then the response was lost.
+        assert status == "SUCCEEDED" and count == 1
+    else:
+        assert status in {"FAILED", "UNKNOWN"} and count == 0
+    assert bridge.dispatches == (0 if stage == "admission" else 1)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("term", ["😀", "😀" * 80, "😀" * 81, "é", "e\u0301"])
+async def test_r4_valid_scalar_unicode_boundaries(
+    app_client: tuple[Any, AsyncClient, FakeBridge], term: str
+) -> None:
+    _app, client, bridge = app_client
+    response = await client.post(
+        "/api/v1/lookups",
+        content=json.dumps({"term": term}).encode("ascii"),
+        headers={"Content-Type": "application/json", "Idempotency-Key": "r4-scalar"},
+    )
+    assert response.status_code == (422 if len(term) > 80 else 200)
+    assert bridge.dispatches == (0 if len(term) > 80 else 1)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("endpoint", ["models", "chat"])
+@pytest.mark.parametrize("body", [b"\xff", b"{", None])
+async def test_r4_adapter_typed_decode_and_valid_control(endpoint: str, body: bytes | None) -> None:
+    import httpx
+    from backend.app.adapters.bridge import BridgeAdapter
+
+    requests: list[str] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        requests.append(request.url.path)
+        if request.url.path == "/v1/models" and "authorization" not in request.headers:
+            return httpx.Response(401)
+        if body is not None:
+            return httpx.Response(200, content=body)
+        if endpoint == "models":
+            return httpx.Response(200, json={"data": [{"id": MODEL, "owned_by": "google"}]})
+        return httpx.Response(200, json={"choices": [{"message": {"content": provider_content()}}]})
+
+    adapter = BridgeAdapter("synthetic-key", transport=httpx.MockTransport(handle))
+    call: Coroutine[Any, Any, Any]
+    if endpoint == "models":
+        call = adapter.preflight(time.monotonic() + 5)
+    else:
+        call = adapter.dispatch_chat({"messages": []}, time.monotonic() + 5)
+    if body is not None:
+        with pytest.raises(BridgeInvalidResponseError):
+            await asyncio.wait_for(call, 5)
+    else:
+        result = await asyncio.wait_for(call, 5)
+        assert result is not None
+    assert len(requests) == (2 if endpoint == "models" else 1)
+
+
+@pytest.mark.anyio
+async def test_r4_cancel_during_admission_commit_is_known_failure(
+    app_client: tuple[Any, AsyncClient, FakeBridge],
+) -> None:
+    app, client, bridge = app_client
+    engine = app.state.database.engine
+    entered, release = threading.Event(), threading.Event()
+    admission_connection: list[sa.Connection] = []
+
+    def admission_insert(
+        connection: sa.Connection,
+        _cursor: Any,
+        statement: str,
+        _parameters: Any,
+        _context: Any,
+        _executemany: bool,
+    ) -> None:
+        if "INSERT INTO ai_operation_admission" in statement:
+            admission_connection.append(connection)
+
+    def commit(connection: sa.Connection) -> None:
+        if connection in admission_connection:
+            entered.set()
+            assert release.wait(5)
+
+    sa.event.listen(engine, "before_cursor_execute", admission_insert)
+    sa.event.listen(engine, "commit", commit)
+    task = asyncio.create_task(
+        client.post(
+            "/api/v1/lookups",
+            json={"term": "robust"},
+            headers={"Idempotency-Key": "r4-admit-cancel"},
+        )
+    )
+    try:
+        assert await asyncio.to_thread(entered.wait, 5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(asyncio.shield(task), 1)
+    finally:
+        release.set()
+        await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
+        sa.event.remove(engine, "before_cursor_execute", admission_insert)
+        sa.event.remove(engine, "commit", commit)
+    with engine.connect() as connection:
+        assert (
+            connection.exec_driver_sql("SELECT count(*) FROM ai_operation_admission").scalar_one()
+            == 1
+        )
+        assert (
+            connection.exec_driver_sql(
+                "SELECT status FROM operations WHERE kind='LOOKUP'"
+            ).scalar_one()
+            == "FAILED"
+        )
+        assert connection.exec_driver_sql("SELECT count(*) FROM lookup_previews").scalar_one() == 0
+    assert bridge.dispatches == 0
+
+
+@pytest.mark.anyio
+async def test_r4_cleanup_error_surfaces_and_denies_future_dispatch(
+    app_client: tuple[Any, AsyncClient, FakeBridge], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app, client, bridge = app_client
+    service = app.state.lookup_service
+    original = service.ledger.record_failure
+    bridge.entered_dispatch = asyncio.Event()
+    bridge.release_dispatch = asyncio.Event()
+
+    def broken_storage(*_args: Any, **_kwargs: Any) -> Any:
+        raise OSError("synthetic storage failure")
+
+    monkeypatch.setattr(service.ledger, "record_failure", broken_storage)
+    task = asyncio.create_task(
+        client.post(
+            "/api/v1/lookups",
+            json={"term": "robust"},
+            headers={"Idempotency-Key": "r4-cleanup-error"},
+        )
+    )
+    try:
+        await asyncio.wait_for(bridge.entered_dispatch.wait(), 5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(asyncio.shield(task), 1)
+        with pytest.raises(RuntimeError, match="durable cleanup failed"):
+            await asyncio.wait_for(asyncio.shield(service.drain()), 5)
+        assert service.admission.consent.storage_reliable is False
+        assert bridge.dispatches == 1
+        response = await client.post(
+            "/api/v1/lookups",
+            json={"term": "robust"},
+            headers={"Idempotency-Key": "r4-storage-deny"},
+        )
+        assert response.status_code == 503
+        assert bridge.dispatches == 1
+    finally:
+        # Restore synthetic failed storage so fixture shutdown can dispose normally.
+        monkeypatch.setattr(service.ledger, "record_failure", original)
+        service._cleanup_errors.clear()
+        service.ledger.recover_pending()
+        bridge.release_dispatch.set()
+
+
+@pytest.mark.anyio
+async def test_r4_snapshot_worker_remains_owned_after_cancellation(
+    app_client: tuple[Any, AsyncClient, FakeBridge], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app, client, bridge = app_client
+    service = app.state.lookup_service
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+    original = service.admission.consent.get_snapshot
+
+    def blocked_snapshot(*args: Any, **kwargs: Any) -> Any:
+        entered.set()
+        try:
+            assert release.wait(5)
+            return original(*args, **kwargs)
+        finally:
+            finished.set()
+
+    monkeypatch.setattr(service.admission.consent, "get_snapshot", blocked_snapshot)
+    task = asyncio.create_task(
+        client.post(
+            "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "r4-snapshot"}
+        )
+    )
+    drain: asyncio.Task[None] | None = None
+    try:
+        assert await asyncio.to_thread(entered.wait, 5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(asyncio.shield(task), 1)
+        drain = asyncio.create_task(service.drain())
+        done, _ = await asyncio.wait({drain}, timeout=0.05)
+        assert not done, "Service released ownership while snapshot worker was still held"
+    finally:
+        release.set()
+        if drain is not None:
+            await asyncio.wait_for(asyncio.shield(drain), 5)
+        assert await asyncio.to_thread(finished.wait, 5)
+    assert bridge.preflights == bridge.dispatches == 0
+    with app.state.database.engine.connect() as connection:
+        assert (
+            connection.exec_driver_sql(
+                "SELECT status FROM operations WHERE kind='LOOKUP'"
+            ).scalar_one()
+            == "FAILED"
+        )
+
+
+@pytest.mark.anyio
+async def test_r4_consent_error_details_are_deadline_bounded(
+    app_client: tuple[Any, AsyncClient, FakeBridge], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import backend.app.enrichment.lookup as lookup_module
+
+    app, client, bridge = app_client
+    service = app.state.lookup_service
+    service.admission.consent.revoke("r4-revoke-details")
+    original = service.admission.consent.get_snapshot
+    release, finished = threading.Event(), threading.Event()
+    reads = 0
+    monkeypatch.setattr(lookup_module, "LOOKUP_DEADLINE_SECONDS", 0.5)
+
+    def blocked_details(*args: Any, **kwargs: Any) -> Any:
+        nonlocal reads
+        reads += 1
+        if reads == 2:
+            try:
+                assert release.wait(5)
+                return original(*args, **kwargs)
+            finally:
+                finished.set()
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(service.admission.consent, "get_snapshot", blocked_details)
+    task = asyncio.create_task(
+        client.post(
+            "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "r4-details"}
+        )
+    )
+    try:
+        response = await asyncio.wait_for(asyncio.shield(task), 1)
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "BRIDGE_UNAVAILABLE"
+    finally:
+        release.set()
+        await asyncio.wait_for(asyncio.shield(service.drain()), 5)
+    assert finished.is_set()
+    assert bridge.preflights == bridge.dispatches == 0
+
+
+@pytest.mark.anyio
+async def test_r4_swallowed_preflight_cancellation_cannot_dispatch(
+    app_client: tuple[Any, AsyncClient, FakeBridge],
+) -> None:
+    app, client, bridge = app_client
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def preflight(_deadline: float) -> BridgeProfile:
+        entered.set()
+        try:
+            await asyncio.wait_for(release.wait(), 5)
+        except asyncio.CancelledError:
+            return bridge.profile
+        return bridge.profile
+
+    bridge.preflight_override = preflight
+    task = asyncio.create_task(
+        client.post(
+            "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "r4-swallow"}
+        )
+    )
+    try:
+        await asyncio.wait_for(entered.wait(), 5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(asyncio.shield(task), 1)
+    finally:
+        release.set()
+        await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
+    assert bridge.dispatches == 0
+    with app.state.database.engine.connect() as connection:
+        assert (
+            connection.exec_driver_sql(
+                "SELECT status FROM operations WHERE kind='LOOKUP'"
+            ).scalar_one()
+            == "FAILED"
+        )
+        assert connection.exec_driver_sql("SELECT count(*) FROM lookup_previews").scalar_one() == 0
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("blocked", [False, True])
+async def test_r4_http_result_finalization_is_deadline_bounded(
+    app_client: tuple[Any, AsyncClient, FakeBridge], monkeypatch: pytest.MonkeyPatch, blocked: bool
+) -> None:
+    import backend.app.enrichment.lookup as lookup_module
+    import backend.app.http.lookups as lookup_http
+
+    app, client, bridge = app_client
+    service = app.state.lookup_service
+    original = lookup_http._result
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+    now = [time.monotonic()]
+    if blocked:
+        monkeypatch.setattr(lookup_module, "LOOKUP_DEADLINE_SECONDS", 0.5)
+    else:
+        service.clock = lambda: now[0]
+
+    def render(preview: Any) -> Any:
+        entered.set()
+        try:
+            if blocked:
+                assert release.wait(5)
+            else:
+                now[0] += 120
+            return original(preview)
+        finally:
+            finished.set()
+
+    monkeypatch.setattr(lookup_http, "_result", render)
+    task = asyncio.create_task(
+        client.post(
+            "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "r4-render"}
+        )
+    )
+    try:
+        assert await asyncio.to_thread(entered.wait, 5)
+        response = await asyncio.wait_for(asyncio.shield(task), 2)
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "BRIDGE_UNAVAILABLE"
+    finally:
+        release.set()
+        await asyncio.wait_for(asyncio.shield(service.drain()), 5)
+    assert finished.is_set()
+    with app.state.database.engine.connect() as connection:
+        assert (
+            connection.exec_driver_sql(
+                "SELECT status FROM operations WHERE kind='LOOKUP'"
+            ).scalar_one()
+            == "SUCCEEDED"
+        )
+        assert connection.exec_driver_sql("SELECT count(*) FROM lookup_previews").scalar_one() == 1
+    monkeypatch.setattr(lookup_http, "_result", original)
+    replay = await client.post(
+        "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "r4-render"}
+    )
+    assert replay.status_code == 200
+    assert bridge.dispatches == 1
+
+
+@pytest.mark.anyio
+async def test_r4_active_cleanup_failure_returns_redacted_storage_error(
+    app_client: tuple[Any, AsyncClient, FakeBridge], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app, client, bridge = app_client
+    service = app.state.lookup_service
+    bridge.failure = BridgeInvalidResponseError("synthetic invalid output")
+
+    def broken(*_args: Any, **_kwargs: Any) -> Any:
+        raise OSError("synthetic storage sentinel")
+
+    monkeypatch.setattr(service.ledger, "record_failure", broken)
+    try:
+        response = await client.post(
+            "/api/v1/lookups",
+            json={"term": "robust"},
+            headers={"Idempotency-Key": "r4-active-storage"},
+        )
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "STORAGE_BUSY"
+        assert "sentinel" not in response.text
+        assert service.admission.consent.storage_reliable is False
+        with pytest.raises(RuntimeError, match="durable cleanup failed") as failure:
+            await asyncio.wait_for(asyncio.shield(service.drain()), 5)
+        assert failure.value.__cause__ is None
+    finally:
+        service._cleanup_errors.clear()
+        service.ledger.recover_pending()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("stage", ["consent", "parse", "admission"])
+async def test_r4_worker_error_after_timeout_keeps_timeout_classification(
+    app_client: tuple[Any, AsyncClient, FakeBridge], monkeypatch: pytest.MonkeyPatch, stage: str
+) -> None:
+    import backend.app.enrichment.lookup as lookup_module
+
+    app, client, _bridge = app_client
+    service = app.state.lookup_service
+    entered, release = threading.Event(), threading.Event()
+    monkeypatch.setattr(lookup_module, "LOOKUP_DEADLINE_SECONDS", 0.5)
+    if stage == "consent":
+        service.admission.consent.revoke("r4-revoke-late-error")
+        target, name = service.admission.consent, "get_snapshot"
+    elif stage == "admission":
+        target, name = service.admission, "_admit"
+    else:
+        target, name = lookup_module, "parse_provider_response"
+    original = getattr(target, name)
+    reads = 0
+
+    def delayed_error(*args: Any, **kwargs: Any) -> Any:
+        nonlocal reads
+        reads += 1
+        if stage in {"parse", "admission"} or reads == 2:
+            entered.set()
+            assert release.wait(5)
+            if stage == "admission":
+                raise OperationConflict(503, "STORAGE_BUSY")
+            if stage == "parse":
+                raise lookup_module.ProviderResponseError("synthetic malformed result")
+            raise OSError("synthetic failed snapshot")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(target, name, delayed_error)
+    task = asyncio.create_task(
+        client.post(
+            "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "r4-late-error"}
+        )
+    )
+    try:
+        assert await asyncio.to_thread(entered.wait, 5)
+        response = await asyncio.wait_for(asyncio.shield(task), 2)
+        assert response.status_code == 503
+    finally:
+        release.set()
+        await asyncio.wait_for(asyncio.shield(service.drain()), 5)
+    with app.state.database.engine.connect() as connection:
+        row = connection.exec_driver_sql(
+            "SELECT status, error_category, response_status FROM operations WHERE kind='LOOKUP'"
+        ).one()
+        assert row == ("UNKNOWN" if stage == "parse" else "FAILED", "TIMEOUT", 503)
+        assert connection.exec_driver_sql("SELECT count(*) FROM lookup_previews").scalar_one() == 0
+
+
+@pytest.mark.anyio
+async def test_r4_consent_null_details_still_denies_without_dispatch(
+    app_client: tuple[Any, AsyncClient, FakeBridge], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app, client, bridge = app_client
+    service = app.state.lookup_service
+    service.admission.consent.revoke("r4-null-revoke")
+    original = service.admission.consent.get_snapshot
+    reads = 0
+
+    def snapshot(*args: Any, **kwargs: Any) -> Any:
+        nonlocal reads
+        reads += 1
+        if reads == 2:
+            raise OSError("synthetic unavailable snapshot")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(service.admission.consent, "get_snapshot", snapshot)
+    response = await client.post(
+        "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "r4-null-details"}
+    )
+    assert response.status_code == 403
+    assert response.json()["error"]["details"] == {
+        "kind": "AI_CONSENT",
+        "consentState": "NOT_GRANTED",
+        "currentPolicyVersion": None,
+    }
+    assert bridge.preflights == bridge.dispatches == 0
+    with app.state.database.engine.connect() as connection:
+        assert connection.exec_driver_sql("SELECT count(*) FROM lookup_previews").scalar_one() == 0
+
+
+@pytest.mark.anyio
+async def test_r4_drain_waiter_bound_does_not_cancel_durable_worker(
+    app_client: tuple[Any, AsyncClient, FakeBridge], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app, client, bridge = app_client
+    service = app.state.lookup_service
+    bridge.failure = BridgeInvalidResponseError("synthetic invalid response")
+    entered, release = threading.Event(), threading.Event()
+    original = service.ledger.record_failure
+
+    def blocked_failure(*args: Any, **kwargs: Any) -> Any:
+        entered.set()
+        assert release.wait(5)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(service.ledger, "record_failure", blocked_failure)
+    request = asyncio.create_task(
+        client.post(
+            "/api/v1/lookups",
+            json={"term": "robust"},
+            headers={"Idempotency-Key": "r4-drain-bound"},
+        )
+    )
+    drain: asyncio.Task[None] | None = None
+    try:
+        assert await asyncio.to_thread(entered.wait, 5)
+        request.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(asyncio.shield(request), 1)
+        drain = asyncio.create_task(service.drain())
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(asyncio.shield(drain), 0.05)
+        drain.cancel()
+        done, _ = await asyncio.wait({drain}, timeout=0.05)
+        assert not done
+        assert service._owners
+    finally:
+        release.set()
+        if drain is not None:
+            await asyncio.wait_for(asyncio.shield(drain), 5)
+    with app.state.database.engine.connect() as connection:
+        assert (
+            connection.exec_driver_sql(
+                "SELECT status FROM operations WHERE kind='LOOKUP'"
+            ).scalar_one()
+            == "FAILED"
+        )
+    assert bridge.dispatches == 1
