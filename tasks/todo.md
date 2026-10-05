@@ -76,6 +76,8 @@
 - [ ] [T045](t045-git-release-hygiene.md): Git hooks, branch and commit hygiene
 - [ ] [T057](t057-release-verification.md): Windows/offline release evidence matrix
 
+- [ ] [T086](t086-parallel-review-fanout.md): Intra-task parallel read-only review fan-out
+
 ## Checkpoints
 
 - [x] CP01: T001, T002, T058 — review criteria, applicable checks, integration và recorded evidence trước task kế tiếp.
