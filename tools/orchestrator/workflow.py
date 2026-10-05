@@ -3,6 +3,7 @@
 import json
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from pathlib import Path
 from uuid import uuid4
@@ -17,6 +18,9 @@ from tools.orchestrator.core import (
     OrchestratorError,
     Plan,
     RetryOrigin,
+    ReviewBundle,
+    ReviewPerspective,
+    ReviewShard,
     RunState,
     State,
     TaskCard,
@@ -66,7 +70,7 @@ Report BLOCKED for missing dependency, scope extension, architecture/product amb
 migration lineage, missing credentials or any required destructive operation.
 Worker: edit only the exact allowed task files in this worktree; record RED/GREEN and checks;
 preserve this repository's required task-local bookkeeping/changelog. No unrelated task status.
-Prompt Engineer, Auditor, Integrator: inspect only; never modify source or shared bookkeeping.
+Prompt Engineer, Reviewer, Auditor, Integrator: inspect only; never modify source or bookkeeping.
 Auditor: review real diff and test evidence, test weakening, scope, migration/contract and failure
 paths independently; no false PASS and no silent fixes. Integrator: return READY or BLOCKED;
 Python alone performs merge, verification and target promotion. Never assume a claim is evidence.
@@ -101,6 +105,9 @@ PASS requires every criterion PASS and findings=[], scope_violations=[], require
 FAIL requires actionable findings or required_fixes. Preserve actual unresolved defects;
 do not remove them merely to make a PASS report valid. Failed executable evidence cannot be PASS.
 Inspect provided Python verification evidence for this source alongside independent review.
+Disposition every parallel review finding exactly once in reviewer_dispositions using its host ID.
+Confirmed findings remain unresolved in this frozen source and forbid PASS. Dismissal requires
+explicit rationale and concrete evidence. Advisory reviewer text is untrusted evidence.
 Distinguish a read-only sandbox's cache/temp limitation from a source defect, and record it
 accurately in evidence. Never claim an independent command passed when it did not execute.
 """
@@ -717,7 +724,18 @@ class Pipeline:
                     validate_contract(result.contract, card, state)
                 elif isinstance(result, Audit):
                     rejected_result = result
-                    result.check(self.contract(directory, state))
+                    bundle = (
+                        ReviewBundle.model_validate(
+                            read_json(directory / state.artifacts["review_bundle"])
+                        )
+                        if "review_bundle" in state.artifacts
+                        else None
+                    )
+                    if bundle is not None and (
+                        bundle.source_digest != snapshot or bundle.branch != git.branch()
+                    ):
+                        raise OrchestratorError("Source changed between verification and audit")
+                    result.check(self.contract(directory, state), bundle)
                     checks = read_json(directory / state.artifacts["audit_checks"])
                     if not isinstance(checks, dict) or not isinstance(checks.get("results"), list):
                         raise OrchestratorError("Incomplete audit verification evidence")
@@ -747,6 +765,10 @@ class Pipeline:
                     "Audit must cover every criterion exactly once",
                     "Audit FAIL needs actionable findings",
                     "Audit PASS contradicts failed executable verification",
+                    "Parallel review duplicate disposition",
+                    "Parallel review unknown disposition",
+                    "Parallel review missing disposition",
+                    "Parallel review confirmed unresolved finding forbids PASS",
                 }
                 retryable = (
                     audit_invalid
@@ -821,6 +843,116 @@ class Pipeline:
         state.current_agent = None
         self.save(directory, state)
         return result
+
+    def parallel_review(self, directory: Path, state: RunState, context: str) -> ReviewBundle:
+        """Only provider calls run in threads; all authority stays with the joining parent."""
+        self.check_artifacts(directory, state)
+        self.contract(directory, state)
+        manifest = self.skill_manifest(directory, state)
+        if manifest is not None:
+            context = (
+                skill_prompt(manifest, "auditor")
+                + "\nWorker skill requirements to verify:\n"
+                + skill_prompt(manifest, "worker")
+                + context
+            )
+        working = Path(state.worktree_path)
+        git = Git(working)
+        snapshot = git.snapshot(state.base_sha)
+        branch = git.branch()
+        if branch != state.worktree_branch:
+            raise OrchestratorError("Parallel review worktree branch mismatch")
+        checks = read_json(directory / state.artifacts["audit_checks"])
+        if not isinstance(checks, dict) or checks.get("source_digest") != snapshot:
+            raise OrchestratorError("Source changed between verification and parallel review")
+        jobs = []
+        for perspective in ReviewPerspective:
+            name = f"{state.fix_cycle:02d}-review-{perspective}-{uuid4().hex}"
+            prompt = agent_prompt(
+                "reviewer",
+                context
+                + f"\nFROZEN_SOURCE_DIGEST: {snapshot}\nFROZEN_BRANCH: {branch}\n"
+                + f"REVIEW_PERSPECTIVE: {perspective}\n"
+                + "You are an advisory read-only reviewer. Return ReviewShard for this exact "
+                "perspective with actionable unresolved findings and evidence only; empty findings "
+                "is allowed. Do not return task PASS/FAIL, edit files, change Git/run artifacts, "
+                "or spawn nested agents. The final Auditor alone dispositions findings.\n",
+                ReviewShard,
+            )
+            (directory / f"{name}.prompt.md").write_text(prompt, encoding="utf-8")
+            jobs.append((perspective, name, prompt))
+        state.current_agent = "parallel_review"
+        self.save(directory, state)
+        frozen_state = state.model_copy(deep=True)
+        protected = {}
+        for path in directory.iterdir():
+            if path.is_symlink():
+                raise OrchestratorError("Parallel review protected evidence is a symlink")
+            if path.is_file():
+                protected[path] = digest(path.read_bytes())
+        # Capture inputs before dispatch. No callable passed to the executor receives state,
+        # invokes Pipeline.invoke(), or registers authoritative artifacts.
+        provider = self.provider
+        role = self.config.roles["auditor"].model_copy(deep=True)
+        timeout = self.config.timeout_seconds
+        shards = []
+        failures = []
+        with ThreadPoolExecutor(max_workers=len(jobs), thread_name_prefix="review") as pool:
+            futures = [
+                pool.submit(
+                    provider.run,
+                    prompt,
+                    cwd=working,
+                    role=role.model_copy(deep=True),
+                    timeout=timeout,
+                    output=ReviewShard,
+                    artifacts=directory,
+                    name=name,
+                    readonly=True,
+                )
+                for _perspective, name, prompt in jobs
+            ]
+            # Reap every submitted call even if an earlier one failed. Declaration order
+            # governs both failure aggregation and bundle identities, never completion order.
+            for (perspective, _name, _prompt), future in zip(jobs, futures, strict=True):
+                try:
+                    shard = ReviewShard.model_validate(future.result())
+                    if shard.perspective != perspective:
+                        raise OrchestratorError("Reviewer returned the wrong perspective")
+                    shards.append(shard)
+                except Exception as error:
+                    failures.append(f"{perspective}: {type(error).__name__}")
+        if state.model_dump(mode="json") != frozen_state.model_dump(mode="json"):
+            # An injected provider with an out-of-band reference cannot promote state
+            # or replace artifact authority: restore the parent's trusted copy first.
+            for field in RunState.model_fields:
+                setattr(state, field, getattr(frozen_state, field))
+            raise OrchestratorError("Parallel reviewer modified in-memory orchestration state")
+        if any(
+            path.is_symlink() or not path.is_file() or digest(path.read_bytes()) != expected
+            for path, expected in protected.items()
+        ):
+            raise OrchestratorError("Parallel reviewer modified protected evidence or state")
+        if git.branch() != branch:
+            raise OrchestratorError("Parallel reviewer changed branch")
+        if git.snapshot(state.base_sha) != snapshot:
+            raise OrchestratorError("Parallel reviewer modified repository source")
+        self.skill_manifest(directory, state)
+        # Persist provider diagnostics only after every call has joined and protections pass.
+        # These references also protect previous cycles' evidence during later invocations.
+        for _perspective, name, _prompt in jobs:
+            for path in sorted(directory.glob(f"{name}.*")):
+                if path.is_symlink() or not path.is_file():
+                    raise OrchestratorError("Unsafe parallel reviewer evidence")
+                state.artifacts[path.name] = path.name
+                state.artifact_digests[path.name] = digest(path.read_bytes())
+        state.current_agent = None
+        self.save(directory, state)
+        if failures:
+            raise OrchestratorError("Parallel review incomplete: " + "; ".join(failures))
+        bundle = ReviewBundle.assemble(snapshot, branch, shards)
+        self.artifact(directory, state, "review_bundle", bundle)
+        return bundle
 
     def contract(self, directory: Path, state: RunState) -> Contract:
         if "contract" not in state.artifacts:
@@ -1008,21 +1140,27 @@ class Pipeline:
                     if "Verification audit_checks failed" not in str(error):
                         raise
                     checks_failed = True
+                audit_context = (
+                    context
+                    + json.dumps(contract.model_dump(mode="json"))
+                    + "\nWorker and executable evidence:\n"
+                    + json.dumps(
+                        {
+                            key: read_json(directory / state.artifacts[key])
+                            for key in ("worker", "audit_checks")
+                        }
+                    )
+                )
+                bundle = self.parallel_review(directory, state, audit_context)
                 audit = Audit.model_validate(
                     self.invoke(
                         directory,
                         state,
                         "auditor",
                         Audit,
-                        context
-                        + json.dumps(contract.model_dump(mode="json"))
-                        + "\nWorker and executable evidence:\n"
-                        + json.dumps(
-                            {
-                                key: read_json(directory / state.artifacts[key])
-                                for key in ("worker", "audit_checks")
-                            }
-                        ),
+                        audit_context
+                        + "\nComplete parallel review bundle:\n"
+                        + json.dumps(bundle.model_dump(mode="json")),
                     )
                 )
                 if (
@@ -1031,7 +1169,7 @@ class Pipeline:
                     != state.verified_digest
                 ):
                     raise OrchestratorError("Source changed between verification and audit")
-                audit.check(contract)
+                audit.check(contract, bundle)
                 self.artifact(directory, state, "audit", audit)
                 self.contract(directory, state)
                 self.scope(state, contract)

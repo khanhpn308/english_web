@@ -106,6 +106,67 @@ source bao gồm HEAD, diff đã stage, nội dung và chế độ của tệp. 
 không thay đổi API công khai của ứng dụng, migration cơ sở dữ liệu hay client sinh
 tự động.
 
+## T086: parallel read-only review trong một task
+
+Sau Worker/Fix Worker và executable audit checks, Pipeline chạy ba advisory reviewer
+song song, rồi mới gọi authoritative Auditor:
+
+```text
+Worker -> executable evidence -> correctness-contract-concurrency      ┐
+                             -> verification-failure-regression       ├-> bundle -> Auditor
+                             -> security-architecture-scope-privacy    ┘
+```
+
+Các reviewer dùng chính cấu hình role `auditor`, kể cả provider, model, reasoning
+và timeout; không cần thêm provider entry. Đổi auditor model cho run mới tự áp dụng
+cho cả ba perspective. Worker/Fix Worker vẫn là writer duy nhất. Reviewer không
+được spawn nested agents hoặc quyết định task PASS/FAIL.
+
+`ThreadPoolExecutor` chỉ gọi `AgentProvider.run(..., readonly=True)`; không gọi
+`Pipeline.invoke()` concurrently vì method đó thay đổi RunState và authority.
+Parent kiểm tra contract/artifact/skills, cố định Git source digest và branch,
+đối chiếu source digest của executable evidence, tạo cả ba prompt rồi mới dispatch.
+Mỗi call có prefix perspective/cycle và UUID đầy đủ cho prompt/schema/log/response.
+Parent ghi `current_agent=parallel_review` một lần trước dispatch; threads không
+nhận RunState và không gọi `save()` hoặc `artifact()`.
+
+Parent join/reap tất cả futures, kể cả khi có shard thất bại. Sau join, source,
+branch, in-memory state, `state.json`, các file run đã có và skill manifest phải
+khớp snapshot. Mutation bị từ chối; source lỗi được giữ lại để điều tra, không tự
+rollback. Provider là trusted local CLI: đây là kiểm tra sau thực thi, không phải
+OS isolation trước tiến trình độc hại hoặc mutation rồi hoàn nguyên giữa hai lần
+kiểm tra. Timeout/output limit/process-tree recovery giữ nguyên từ runtime.
+
+Khi protection checks đạt, chỉ parent đăng ký/băm các file reviewer theo thứ tự
+perspective rồi filename. `ReviewBundle` được ghi nguyên tử và đăng ký sau khi
+cả ba shard thành công. Kết quả và lỗi được xử lý theo declaration order, không
+theo completion order. Host gán finding ID `<perspective>:<ordinal bốn chữ số>`;
+reviewer không được cung cấp ID. ID có phạm vi bundle của source/cycle hiện tại.
+Bundle parser từ chối perspective thiếu/trùng/sai thứ tự và ID ngoài host order.
+
+Final Auditor nhận task/contract, Worker result, executable evidence và toàn bộ
+bundle. `Audit.reviewer_dispositions` mặc định `[]` để đọc historical Audit không
+có bundle. Khi có bundle, mỗi finding phải được disposition đúng một lần bằng ID:
+`confirmed` nghĩa là unresolved trong frozen source và cấm PASS; `dismissed`
+cần rationale/evidence cụ thể, không được rỗng hoặc chỉ whitespace. Python từ
+chối missing/unknown/duplicate dispositions và confirmed finding + PASS. Sửa
+Audit JSON vẫn tối đa ba lượt trên cùng bundle/source, không lặp lại reviewer hoặc
+Worker. Findings confirmed phải đi qua fix cycle hiện có trước audit tiếp theo.
+
+Shard process failure, timeout, output limit, malformed/schema-invalid response,
+sai perspective hoặc source/branch/protected-evidence mutation khiến toàn phase
+FAILED; không tạo partial bundle và không gọi authoritative Auditor. Fan-out không
+retry; diagnostic files được giữ, và được đăng ký khi protection checks đạt.
+Level 2 giữ tối đa ba task; T086 có thể tạo tối đa chín advisory calls khi cả ba
+task cùng audit. Global resource arbitration thuộc task khác.
+
+Behavioral tests dùng barrier ba bên và event chain, buộc cả ba provider active
+trước khi completion theo thứ tự security -> verification -> correctness. Đây là
+proof concurrency với logical rounds, không đo tốc độ model/internet. Local CLI
+fixtures còn chứng minh exit 7, timeout, oversized output và malformed JSON đi qua
+runtime thật. Chưa benchmark T023; không có claim speedup thực tế. Protocol mới
+yêu cầu fake/custom providers hỗ trợ `ReviewShard` ngoài các output trước T086.
+
 ## Level 2: lập lịch DAG toàn repository (T079)
 
 `scheduler.py` là lớp mỏng phía trên `Pipeline`, dùng thư viện chuẩn và các model
@@ -643,7 +704,7 @@ tiến trình; không gọi dịch vụ trả phí. Xác thực provider thật 
 vẫn cần được kiểm chứng khi vận hành, không phải bằng chứng từ các bài kiểm thử.
 Runtime của ứng dụng không phụ thuộc vào package điều phối hay các CLI.
 
-Level 1 chạy đồng bộ trong từng task, dùng JSON để lưu trạng thái, ba admission
+Level 1 giữ state transition đồng bộ với T086 parallel advisory review, dùng JSON, ba admission
 slots và tích hợp tuần tự. T079 bổ sung pool process và lập lịch DAG phía trên
 Pipeline, giữ nguyên contract của các vai trò. Không có cơ sở dữ liệu scheduler,
 dashboard, khóa phân tán hay resume chạy nền. Resource-aware scheduling và cơ chế

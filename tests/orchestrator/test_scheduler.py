@@ -17,9 +17,13 @@ from tools.orchestrator.core import (
     IntegrationReview,
     OrchestratorError,
     Plan,
+    ReviewBundle,
+    ReviewPerspective,
+    ReviewShard,
     Role,
     State,
     WorkerResult,
+    read_json,
     task_card,
 )
 from tools.orchestrator.runtime import Git, LockBusy, lock
@@ -72,6 +76,11 @@ class SyntheticProvider:
                 commands_run=[],
                 known_issues=[],
             )
+        elif output == ReviewShard:
+            assert readonly
+            matched = re.search(r"REVIEW_PERSPECTIVE: ([^\n]+)", prompt)
+            assert matched is not None
+            result = ReviewShard(perspective=ReviewPerspective(matched[1]), findings=[])
         elif output == Audit:
             assert readonly
             result = Audit(
@@ -509,6 +518,12 @@ def test_spawned_multiple_ready_pipelines_no_integration(pipeline: Pipeline) -> 
         assert state.state == State.AUDIT_PASS
         assert Path(state.worktree_path).is_dir()
         assert set(state.artifacts) >= {"plan", "contract", "worker", "audit", "skills"}
+        assert "review_bundle" in state.artifacts
+        bundle = ReviewBundle.model_validate(
+            read_json(pipeline.run_path(task, state.run_id) / state.artifacts["review_bundle"])
+        )
+        assert [shard.perspective for shard in bundle.shards] == list(ReviewPerspective)
+        assert all(not shard.findings for shard in bundle.shards)
         assert len(list((pipeline.runs / task).iterdir())) == 1
 
 
