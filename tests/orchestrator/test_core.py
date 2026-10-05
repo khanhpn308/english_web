@@ -28,6 +28,7 @@ from tools.orchestrator.core import (
     RunState,
     State,
     atomic_json,
+    digest,
     read_json,
     safe_path,
     transition,
@@ -1600,3 +1601,170 @@ def test_no_task_id_specific_scheduler_or_runtime_exceptions() -> None:
         text = path.read_text(encoding="utf-8")
         for task_id in ("T008", "T018", "T021", "T023", "T027", "T034"):
             assert task_id not in text, f"Hardcoded task ID {task_id} in {path.name}"
+
+
+@pytest.mark.parametrize("mode", ["success", "exit", "timeout", "oversized", "setup", "oserror"])
+def test_concurrent_audit_collection_detached_inputs_and_failure_semantics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    from dataclasses import FrozenInstanceError, fields
+
+    from tools.orchestrator.core import VerificationRequest
+    from tools.orchestrator.runtime import ProcessResult
+    from tools.orchestrator.workflow import collect_verification
+
+    commands = (("python", "-m", "pytest"), ("python", "-m", "ruff"), ("git", "diff", "--check"))
+    request = VerificationRequest(tmp_path, commands, None, "a" * 64, "T100")
+    assert {field.name for field in fields(request)} == {
+        "cwd",
+        "commands",
+        "timeout",
+        "source_digest",
+        "task_id",
+    }
+    for field in fields(request):
+        with pytest.raises(FrozenInstanceError):
+            setattr(request, field.name, getattr(request, field.name))
+    executed: list[tuple[str, ...]] = []
+
+    def executing(command: list[str], cwd: Path, *, timeout: int | None = None) -> ProcessResult:
+        assert cwd == tmp_path and timeout is None
+        executed.append(tuple(command))
+        failing = len(executed) == 2 and mode != "success"
+        if failing and mode == "setup":
+            raise OrchestratorError("Executable unavailable: synthetic")
+        if failing and mode == "oserror":
+            raise PermissionError("synthetic-private-os-error-sentinel")
+        return ProcessResult(
+            command=command,
+            cwd=str(cwd),
+            started_at="start",
+            ended_at="end",
+            exit_code=9 if failing and mode == "exit" else 0,
+            stdout=f"synthetic-{len(executed)}",
+            stderr="synthetic diagnostic",
+            timed_out=failing and mode == "timeout",
+            oversized=failing and mode == "oversized",
+        )
+
+    monkeypatch.setattr("tools.orchestrator.workflow.execute", executing)
+    collection = collect_verification(request)
+    expected_cmds = list(commands)[: 3 if mode == "success" else 2]
+    assert len(executed) == len(expected_cmds)
+    for exec_cmd, orig_cmd in zip(executed, expected_cmds, strict=True):
+        if exec_cmd[0].endswith("env"):
+            assert exec_cmd[1].startswith("PATH=")
+            assert str(tmp_path / ".venv") in exec_cmd[1]
+            assert str(tmp_path / "node_modules/.bin") in exec_cmd[1]
+            assert list(exec_cmd[2:]) == list(orig_cmd)
+        else:
+            assert list(exec_cmd) == list(orig_cmd)
+    setup = mode in {"setup", "oserror"}
+    assert collection.failed is (mode in {"exit", "timeout", "oversized"})
+    assert (collection.setup_error is not None) is setup
+    if setup:
+        assert collection.setup_error is not None and "SETUP_FAILED" in collection.setup_error
+        assert "synthetic-private-os-error-sentinel" not in collection.setup_error
+    assert [result["command_index"] for result in collection.results] == list(
+        range(1 if setup else 3 if mode == "success" else 2)
+    )
+    assert [result["stdout_digest"] for result in collection.results] == [
+        digest(f"synthetic-{index}".encode()) for index in range(1, len(collection.results) + 1)
+    ]
+    assert all("stdout" not in result and "stderr" not in result for result in collection.results)
+    assert not list(tmp_path.iterdir())  # Collector cannot persist/register evidence.
+
+
+def test_concurrent_audit_transient_output_isolated_from_request_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.core import VerificationRequest
+    from tools.orchestrator.runtime import ProcessResult
+    from tools.orchestrator.workflow import collect_verification
+
+    commands = (("python", "-m", "pytest"),)
+    request = VerificationRequest(tmp_path, commands, None, "b" * 64, "T100")
+
+    def executing(command: list[str], cwd: Path, *, timeout: int | None = None) -> ProcessResult:
+        assert cwd == tmp_path and timeout is None
+        cache_dir = cwd / ".pytest_cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        (cache_dir / "transient").write_text("transient pytest cache content")
+        return ProcessResult(
+            command=command,
+            cwd=str(cwd),
+            started_at="start",
+            ended_at="end",
+            exit_code=0,
+            stdout="collected stdout",
+            stderr="",
+            timed_out=False,
+            oversized=False,
+        )
+
+    monkeypatch.setattr("tools.orchestrator.workflow.execute", executing)
+    collection = collect_verification(request)
+    assert not collection.failed
+    assert len(collection.results) == 1
+    assert "transient" not in json.dumps(collection.results[0])
+    assert ".pytest_cache" not in json.dumps(collection.results[0])
+    assert (tmp_path / ".pytest_cache/transient").is_file()
+
+
+def test_concurrent_audit_toolchain_backlink_validation_rules(tmp_path: Path) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.workflow import validate_toolchain_backlinks
+
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    (worktree / "src").mkdir()
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    auth_roots = {worktree.resolve(), repo.resolve()}
+
+    # 1. Safe toolchain with internal relative symlink
+    safe_nm = worktree / "safe_node_modules"
+    safe_nm.mkdir()
+    (safe_nm / "typescript/bin").mkdir(parents=True)
+    (safe_nm / "typescript/bin/tsc").write_text("tsc")
+    (safe_nm / ".bin").mkdir()
+    (safe_nm / ".bin/tsc").symlink_to("../typescript/bin/tsc")
+    validate_toolchain_backlinks(safe_nm, auth_roots)
+
+    # 2. Toolchain root itself resolves to worktree
+    root_link = worktree / "root_link"
+    root_link.symlink_to(worktree)
+    with pytest.raises(OrchestratorError, match="Unsafe toolchain root"):
+        validate_toolchain_backlinks(root_link, auth_roots)
+
+    # 3. Direct symlink inside node_modules pointing to worktree
+    unsafe_nm = worktree / "unsafe_node_modules"
+    unsafe_nm.mkdir()
+    (unsafe_nm / "local-candidate").symlink_to(worktree)
+    with pytest.raises(OrchestratorError, match="Unsafe toolchain backlink"):
+        validate_toolchain_backlinks(unsafe_nm, auth_roots)
+
+    # 4. Relative escaping symlink pointing to worktree/src
+    escaping_nm = worktree / "escaping_node_modules"
+    escaping_nm.mkdir()
+    (escaping_nm / "escape").symlink_to(Path("../src"))
+    with pytest.raises(OrchestratorError, match="Unsafe toolchain backlink"):
+        validate_toolchain_backlinks(escaping_nm, auth_roots)
+
+    # 5. External directory with nested backlink into repo
+    ext_dir = tmp_path / "external"
+    ext_dir.mkdir()
+    (ext_dir / "back_to_repo").symlink_to(repo)
+    nested_nm = worktree / "nested_nm"
+    nested_nm.mkdir()
+    (nested_nm / "ext_link").symlink_to(ext_dir)
+    with pytest.raises(OrchestratorError, match="Unsafe toolchain backlink"):
+        validate_toolchain_backlinks(nested_nm, auth_roots)
+
+    # 6. Unresolvable circular symlink loop
+    loop_nm = worktree / "loop_nm"
+    loop_nm.mkdir()
+    (loop_nm / "a").symlink_to(loop_nm / "b")
+    (loop_nm / "b").symlink_to(loop_nm / "a")
+    with pytest.raises(OrchestratorError, match="Unresolvable toolchain symlink"):
+        validate_toolchain_backlinks(loop_nm, auth_roots)

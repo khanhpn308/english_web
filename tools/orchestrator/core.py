@@ -6,6 +6,7 @@ import os
 import re
 import shlex
 import tempfile
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
@@ -261,7 +262,9 @@ class ReviewBundle(Model):
                     perspective=perspective,
                     findings=[
                         IdentifiedFinding(
-                            **finding.model_dump(), finding_id=f"{perspective}:{index:04d}"
+                            action=finding.action,
+                            evidence=finding.evidence,
+                            finding_id=f"{perspective}:{index:04d}",
                         )
                         for index, finding in enumerate(ordered[perspective].findings, 1)
                     ],
@@ -350,6 +353,24 @@ class RetryOrigin(Model):
     base_sha: Sha
     state_digest: Nonempty
     retained_worktrees: list[Nonempty]
+
+
+@dataclass(frozen=True)
+class VerificationRequest:
+    """Detached collection inputs; no state, artifact directory or pipeline authority."""
+
+    cwd: Path
+    commands: tuple[tuple[str, ...], ...]
+    timeout: int | None
+    source_digest: str
+    task_id: str
+
+
+@dataclass(frozen=True)
+class VerificationCollection:
+    results: tuple[dict[str, object], ...]
+    failed: bool = False
+    setup_error: str | None = None
 
 
 class RunState(Model):
