@@ -19,6 +19,11 @@ from tools.orchestrator.core import (
     Fix,
     OrchestratorError,
     Plan,
+    ReviewBundle,
+    ReviewDisposition,
+    ReviewFinding,
+    ReviewPerspective,
+    ReviewShard,
     Role,
     RunState,
     State,
@@ -28,6 +33,103 @@ from tools.orchestrator.core import (
     transition,
 )
 from tools.orchestrator.runtime import CliProvider, Git, LockBusy, execute, lock, slot
+
+
+def parallel_review_bundle() -> ReviewBundle:
+    return ReviewBundle.assemble(
+        "a" * 64,
+        "agent/fixture",
+        [
+            ReviewShard(
+                perspective=perspective,
+                findings=[ReviewFinding(action="Repair synthetic defect", evidence="feature.py:1")],
+            )
+            for perspective in reversed(ReviewPerspective)
+        ],
+    )
+
+
+def test_parallel_review_canonical_identity_and_complete_bundle() -> None:
+    bundle = parallel_review_bundle()
+    assert [s.perspective for s in bundle.shards] == list(ReviewPerspective)
+    assert [s.findings[0].finding_id for s in bundle.shards] == [
+        f"{perspective}:0001" for perspective in ReviewPerspective
+    ]
+    assert ReviewBundle.model_validate_json(bundle.model_dump_json()) == bundle
+    for shards in (bundle.shards[:2], list(reversed(bundle.shards)), [bundle.shards[0]] * 3):
+        with pytest.raises(ValidationError):
+            ReviewBundle.model_validate({**bundle.model_dump(), "shards": shards})
+    data = bundle.model_dump()
+    data["shards"][1]["findings"][0]["finding_id"] = data["shards"][0]["findings"][0]["finding_id"]
+    with pytest.raises(ValidationError):
+        ReviewBundle.model_validate(data)
+    with pytest.raises(OrchestratorError, match="incomplete"):
+        ReviewBundle.assemble("a" * 64, "fixture", [])
+
+
+@pytest.mark.parametrize("mode", ["valid", "missing", "unknown", "duplicate", "confirmed"])
+def test_parallel_review_audit_dispositions(mode: str) -> None:
+    bundle = parallel_review_bundle()
+    audit = Audit(
+        status="PASS",
+        findings=[],
+        acceptance_criteria=[Criterion(criterion="Behavior", status="PASS", evidence="Fixture")],
+        scope_violations=[],
+        required_fixes=[],
+        reviewer_dispositions=[
+            ReviewDisposition(
+                finding_id=shard.findings[0].finding_id,
+                disposition="dismissed",
+                evidence="feature.py:1 and synthetic failure test refute this claim",
+            )
+            for shard in bundle.shards
+        ],
+    )
+    if mode == "valid":
+        audit.check(contract(), bundle)
+        with pytest.raises(OrchestratorError, match="unknown"):
+            audit.check(contract())
+        return
+    if mode == "missing":
+        audit.reviewer_dispositions.pop()
+    elif mode == "unknown":
+        audit.reviewer_dispositions[0].finding_id = "unknown:0001"
+    elif mode == "duplicate":
+        audit.reviewer_dispositions.append(audit.reviewer_dispositions[0])
+    else:
+        audit.reviewer_dispositions[0].disposition = "confirmed"
+    with pytest.raises(OrchestratorError, match=mode):
+        audit.check(contract(), bundle)
+    if mode == "confirmed":
+        audit.status = "FAIL"
+        audit.findings = ["Repair synthetic defect"]
+        audit.acceptance_criteria[0].status = "FAIL"
+        audit.check(contract(), bundle)
+
+
+def test_parallel_review_historical_audit_compatibility() -> None:
+    historical = {
+        "status": "PASS",
+        "findings": [],
+        "acceptance_criteria": [{"criterion": "Behavior", "status": "PASS", "evidence": "Fixture"}],
+        "scope_violations": [],
+        "required_fixes": [],
+    }
+    audit = Audit.model_validate_json(json.dumps(historical))
+    assert audit.reviewer_dispositions == []
+    audit.check(contract())
+    with pytest.raises(OrchestratorError, match="missing"):
+        audit.check(contract(), parallel_review_bundle())
+
+
+def test_parallel_review_dismissal_requires_evidence() -> None:
+    for evidence in ("", " \n "):
+        with pytest.raises(ValidationError):
+            ReviewDisposition(finding_id="fixture:0001", disposition="dismissed", evidence=evidence)
+        with pytest.raises(ValidationError):
+            ReviewFinding(action="Repair synthetic issue", evidence=evidence)
+        with pytest.raises(ValidationError):
+            ReviewFinding(action=evidence, evidence="feature.txt:1")
 
 
 def test_state_transition_and_atomic_roundtrip(tmp_path: Path) -> None:

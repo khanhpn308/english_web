@@ -2,7 +2,7 @@
 
 **Task ID:** `T086`
 **Title:** Intra-task parallel read-only review fan-out
-**Status:** `TODO`
+**Status:** `DONE`
 **Goal:** Giảm wall-clock time và số vòng Worker/Auditor của một task bằng cách chạy nhiều reviewer read-only độc lập song song sau implementation, fan-in toàn bộ findings vào một authoritative Auditor duy nhất, trong khi giữ nguyên single-writer, deterministic state machine, fail-closed verification và Git/worktree safety.
 **Level:** High
 
@@ -17,6 +17,7 @@
 - `tools/orchestrator/workflow.py`
 - `tests/orchestrator/test_core.py`
 - `tests/orchestrator/test_workflow.py`
+- `tests/orchestrator/test_scheduler.py`
 - `docs/orchestrator.md`
 - `tasks/t086-parallel-review-fanout.md`
 - `tasks/todo.md`
@@ -203,32 +204,32 @@ Global resource-aware arbitration là task riêng sau T086.
 
 ## Acceptance criteria
 
-- [ ] Một task có ít nhất ba read-only reviewer perspectives có thể chạy concurrent trong cùng audit phase.
-- [ ] Reviewer shards dùng cùng frozen source snapshot và contract.
-- [ ] Không gọi mutable `Pipeline.invoke()` concurrently.
-- [ ] Reviewer threads/processes không mutate authoritative RunState.
-- [ ] Single-writer invariant được giữ.
-- [ ] Reviewer bundle có deterministic ordering độc lập completion order.
-- [ ] Reviewer finding có deterministic identity.
-- [ ] Final authoritative Auditor nhận đầy đủ executable evidence và review bundle.
-- [ ] Final Audit disposition mọi actionable reviewer finding.
-- [ ] Missing reviewer disposition bị deterministic validation reject.
-- [ ] Confirmed unresolved finding không thể tạo Audit PASS.
-- [ ] Reviewer process/schema/timeout failure fail-closed và không chạy final Auditor trên incomplete bundle.
-- [ ] Read-only reviewer source mutation bị phát hiện và từ chối.
-- [ ] Regression test chứng minh reviewer invocations overlap thực sự.
-- [ ] Regression test chứng minh out-of-order completion vẫn fan-in deterministic.
-- [ ] Historical pre-T086 Audit artifacts vẫn parse được.
-- [ ] Existing Worker -> fix -> Auditor state transitions vẫn tương thích.
-- [ ] T085 dependency semantics không regress.
-- [ ] T084 portable verification semantics không regress.
-- [ ] Level 2 scheduler semantics không đổi.
-- [ ] Focused orchestrator tests PASS.
-- [ ] Full orchestrator regression suite được chạy ít nhất một lần và PASS như extended evidence.
-- [ ] Ruff PASS.
-- [ ] Ruff format PASS.
-- [ ] Mypy PASS.
-- [ ] `git diff --check` PASS.
+- [x] Một task có ít nhất ba read-only reviewer perspectives có thể chạy concurrent trong cùng audit phase.
+- [x] Reviewer shards dùng cùng frozen source snapshot và contract.
+- [x] Không gọi mutable `Pipeline.invoke()` concurrently.
+- [x] Reviewer threads/processes không mutate authoritative RunState.
+- [x] Single-writer invariant được giữ.
+- [x] Reviewer bundle có deterministic ordering độc lập completion order.
+- [x] Reviewer finding có deterministic identity.
+- [x] Final authoritative Auditor nhận đầy đủ executable evidence và review bundle.
+- [x] Final Audit disposition mọi actionable reviewer finding.
+- [x] Missing reviewer disposition bị deterministic validation reject.
+- [x] Confirmed unresolved finding không thể tạo Audit PASS.
+- [x] Reviewer process/schema/timeout failure fail-closed và không chạy final Auditor trên incomplete bundle.
+- [x] Read-only reviewer source mutation bị phát hiện và từ chối.
+- [x] Regression test chứng minh reviewer invocations overlap thực sự.
+- [x] Regression test chứng minh out-of-order completion vẫn fan-in deterministic.
+- [x] Historical pre-T086 Audit artifacts vẫn parse được.
+- [x] Existing Worker -> fix -> Auditor state transitions vẫn tương thích.
+- [x] T085 dependency semantics không regress.
+- [x] T084 portable verification semantics không regress.
+- [x] Level 2 scheduler semantics không đổi.
+- [x] Focused orchestrator tests PASS.
+- [x] Full orchestrator regression suite được chạy ít nhất một lần và PASS như extended evidence.
+- [x] Ruff PASS.
+- [x] Ruff format PASS.
+- [x] Mypy PASS.
+- [x] `git diff --check` PASS.
 
 ## Verification commands
 
@@ -298,3 +299,124 @@ DỪNG thay vì mở rộng scope nếu implementation cần:
 ## Commit message đề xuất
 
 `feat(T086): parallelize intra-task review fanout`
+
+## Initial implementation handoff — 05/10/2026 (Asia/Bangkok)
+
+Starting HEAD: `da662a3dc5af7dd2b2c8f44dbaff08031b46fe0c`. No commit, merge,
+rebase, reset, clean or push performed. Source implementation is confined to
+`core.py` and `workflow.py`; tests, orchestrator documentation and task-local
+bookkeeping are the other six allowed files.
+
+Implemented dedicated read-only `ThreadPoolExecutor` dispatch after executable
+evidence. Parent owns frozen source/branch/state/artifacts, builds every prompt
+before dispatch, joins all futures, validates protections, deterministically
+registers evidence, then atomically persists the complete canonical bundle.
+Threads call provider.run only and never Pipeline.invoke/save/artifact. Every
+reviewer inherits the configured auditor role/model; perspectives and host IDs
+are generic and independent of task ID. Final Audit validates complete explicit
+dispositions, rejects unresolved confirmed findings with PASS, and keeps old JSON
+parseable. Reviewer failures do not retry or invoke final Auditor; existing final
+Audit report correction remains bounded to three attempts on the same bundle.
+
+Behavioral evidence uses a three-party barrier and reverse event chain:
+all three calls are active before any completes (`max_active=3`), timeline is
+three starts followed by three finishes, and completion is security -> verification
+-> correctness while bundle order remains correctness -> verification -> security.
+This proves three review units overlap in one coordinated logical round; no
+internet or wall-clock latency assertion and no real T023 speedup claim.
+Local CLI fixtures exercise real exit 7, timeout, oversized output and malformed
+JSON. Additional tests reject schema/wrong perspective, source/branch/state/prompt/
+contract mutation and out-of-band in-memory authority changes; all calls are
+reaped, and final Auditor is absent on incomplete fan-out. Parent-thread assertions
+guard invoke/save/artifact. Disposition tests cover successful dismissal,
+missing/unknown/duplicate/confirmed findings and historical JSON without dispositions.
+
+Verification snapshot:
+
+- Focused fan-out plus timeout compatibility: 31 passed, 224 deselected (54.00s).
+- Exact focused card command: 25 passed, 230 deselected (33.97s), exit 0.
+- Extended `python -m pytest tests/orchestrator -q --no-cov`: 317 passed,
+  4 failed (241.35s), exit 1. All four are scheduler fake-provider incompatibility;
+  the complete core/workflow, parser, portable gate and other regressions pass.
+  Full log: `/tmp/t086-orchestrator-regression.log`.
+- Ruff check PASS; Ruff format PASS (10 files); Mypy PASS (6 source files);
+  `git diff --check` PASS.
+- First full regression: 310 passed, 10 failed (261.34s). Six timeout-call-count
+  expectations were corrected in the allowed workflow test file to include three
+  reviewers per audit cycle; the remaining four failures are described below.
+
+Initial scope blocker (resolved by the owner extension below): the independent `SyntheticProvider` in
+`tests/orchestrator/test_scheduler.py` supports Plan/WorkerResult/Audit/
+IntegrationReview but raises AssertionError for ReviewShard. Four existing spawned
+pipeline tests failed before final Auditor. This file was outside the initial
+T086 allowlist and remained unchanged at that checkpoint. The smallest
+required extension is imports plus a ReviewShard branch returning the requested
+perspective and no findings in that test-only provider, preserving every scheduler
+assertion and production behavior. Approval was pending at the initial handoff;
+no runtime fallback, skipped/weakened tests or scheduler-specific exception added.
+
+Intentionally untouched: runtime.py, scheduler.py, test_scheduler.py, config,
+package/dependencies, CONSTRAINTS.md, all product files, T023/T084/T085, retained
+worktrees/evidence and Git history. Next action: authorize/update the scheduler
+fake-provider fixture and rerun the full orchestrator suite before marking T086
+complete. No next product task dispatched.
+
+## Owner-approved fixture scope extension — 05/10/2026 (Asia/Bangkok)
+
+Owner explicitly authorized adding only `tests/orchestrator/test_scheduler.py`
+to the T086 allowlist to adapt its existing SyntheticProvider to ReviewShard.
+The initial scope blocker above is resolved by this authorization. Production
+scheduler/runtime semantics, DAG/admission/dispatch concurrency and all existing
+scheduler assertions must remain unchanged. No other path is added to scope.
+
+The fixture derives the required perspective from the actual reviewer prompt,
+asserts read-only invocation and returns schema-valid ReviewShard with no actionable
+findings. It writes no source in this branch and leaves final Audit PASS semantics
+intact. Existing spawned scheduler tests still execute the actual Pipeline fan-out;
+additional assertions inspect the persisted complete empty review bundle. All
+owner-required reruns are complete; final evidence is recorded below.
+
+- Previously failing exact selection: all four spawned integration, independent
+  dispatch, admission-slot and failure-isolation tests PASS (4 passed, 9.22s).
+- Ruff check PASS; Ruff format PASS (10 files); Mypy PASS (6 source files);
+  `git diff --check` PASS after the fixture adaptation.
+
+- Exact focused command `python -m pytest tests/orchestrator/test_core.py tests/orchestrator/test_workflow.py -q --no-cov -k parallel_review`: 25 passed, 230 deselected (33.27s), exit 0.
+- Scheduler command `python -m pytest tests/orchestrator/test_scheduler.py -q --no-cov`: 48 passed (12.40s), exit 0.
+
+## Final owner-approved handoff — 05/10/2026 (Asia/Bangkok)
+
+Outcome: `IMPLEMENTATION_READY`. Implementation acceptance is complete; candidate
+remains uncommitted on `feature/t086-parallel-review-fanout`. Starting/current HEAD
+is `da662a3dc5af7dd2b2c8f44dbaff08031b46fe0c`. The nine changed files are exactly
+the current allowlist, including the owner-authorized scheduler test fixture.
+
+Final exact verification results:
+
+- The four formerly failing tests, selected explicitly by node ID, all PASS:
+  `test_spawned_pipeline_integrates_and_unlocks_downstream`,
+  `test_spawned_multiple_ready_pipelines_no_integration`,
+  `test_spawned_pipelines_respect_external_admission_slots`,
+  `test_spawned_pipeline_failure_does_not_stop_another_branch` (4 passed, 9.22s).
+- `python -m pytest tests/orchestrator/test_core.py tests/orchestrator/test_workflow.py -q --no-cov -k parallel_review`: 25 passed, 230 deselected (33.27s), exit 0.
+- `python -m pytest tests/orchestrator/test_scheduler.py -q --no-cov`: 48 passed (12.40s), exit 0.
+- `python -m pytest tests/orchestrator -q --no-cov`: 321 passed (271.43s), exit 0.
+  Extended evidence log: `/tmp/t086-owner-authorized-regression.log`; this full
+  suite remains outside automatic per-cycle verification metadata.
+- `python -m ruff check tools/orchestrator tests/orchestrator`: PASS.
+- `python -m ruff format --check tools/orchestrator tests/orchestrator`: PASS, 10 files.
+- `python -m mypy tools/orchestrator`: PASS, 6 source files.
+- `git diff --check`: PASS.
+
+Final inspection: `git status --short`, `git diff --name-only`, `git diff --stat`
+and diff-check confirm exactly nine authorized changed files and no staged changes.
+Production scheduler/runtime bytes match HEAD; no product/config/package/constraints,
+T023/T084/T085 or retained worktree/evidence changes. Scheduler fixture diff adds
+only imports, ReviewShard handling and persisted-bundle assertions; every existing
+scheduler assertion remains intact. No tests skipped, deleted or weakened. Actual
+spawned Pipeline fan-out still runs; empty reviewer findings leave Audit validation
+and PASS semantics unchanged. No real inference/network calls or T023 speedup claim.
+
+Unresolved findings: none. Prior scope blocker resolved by explicit owner approval.
+Next action: independent review of this uncommitted candidate; no further task
+was dispatched. No commit, merge, rebase, reset, clean or push performed.

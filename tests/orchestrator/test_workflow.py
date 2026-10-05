@@ -1,5 +1,7 @@
 import json
 import re
+import sys
+import threading
 from multiprocessing.connection import Connection as PipeConnection
 from multiprocessing.synchronize import Barrier
 from pathlib import Path
@@ -16,6 +18,10 @@ from tools.orchestrator.core import (
     IntegrationReview,
     OrchestratorError,
     Plan,
+    ReviewBundle,
+    ReviewFinding,
+    ReviewPerspective,
+    ReviewShard,
     Role,
     RunState,
     State,
@@ -25,7 +31,7 @@ from tools.orchestrator.core import (
     read_json,
     task_card,
 )
-from tools.orchestrator.runtime import Git, ProcessResult, execute, lock
+from tools.orchestrator.runtime import CliProvider, Git, ProcessResult, execute, lock
 from tools.orchestrator.workflow import Pipeline
 
 Output = TypeVar("Output", bound=BaseModel)
@@ -110,6 +116,7 @@ def configuration(*, integrate: bool = True, cycles: int = 3) -> Config:
 class FakeAgents:
     def __init__(self, *, failures: int = 0, lie: bool = False, timeout: int | None = 30) -> None:
         self.calls: list[str] = []
+        self.reviewer_calls: list[ReviewPerspective] = []
         self.timeout = timeout
         self.failures = failures
         self.lie = lie
@@ -131,6 +138,13 @@ class FakeAgents:
         assert timeout == self.timeout
         assert artifacts.is_dir()
         assert name
+        if output == ReviewShard:
+            assert readonly
+            matched = re.search(r"REVIEW_PERSPECTIVE: ([^\n]+)", prompt)
+            assert matched is not None
+            perspective = ReviewPerspective(matched[1])
+            self.reviewer_calls.append(perspective)
+            return output.model_validate(ReviewShard(perspective=perspective, findings=[]))
         self.calls.append(output.__name__)
         task_match = re.search(r'"task_id": "(T[0-9]{3})"', prompt)
         assert task_match is not None
@@ -200,6 +214,315 @@ class FakeAgents:
         else:
             raise AssertionError("Unexpected role")
         return output.model_validate(result.model_dump())
+
+
+class AuthorityProbePipeline(Pipeline):
+    def __init__(self, repository: Path, config: Config, provider: FakeAgents) -> None:
+        super().__init__(repository, config, provider)
+        self.owner = threading.get_ident()
+        self.live_state: RunState | None = None
+
+    def save(self, directory: Path, state: RunState) -> None:
+        assert threading.get_ident() == self.owner, "reviewer thread attempted state write"
+        self.live_state = state
+        super().save(directory, state)
+
+    def artifact(self, directory: Path, state: RunState, key: str, value: BaseModel) -> None:
+        assert threading.get_ident() == self.owner, "reviewer thread registered authority"
+        super().artifact(directory, state, key, value)
+
+    def invoke(
+        self,
+        directory: Path,
+        state: RunState,
+        role_name: str,
+        output: type[BaseModel],
+        context: str,
+        *,
+        cwd: Path | None = None,
+    ) -> BaseModel:
+        assert threading.get_ident() == self.owner, "Pipeline.invoke called in reviewer thread"
+        return super().invoke(directory, state, role_name, output, context, cwd=cwd)
+
+
+class CoordinatedReviewAgents(FakeAgents):
+    """Logical time: all three enter before any completes; completions are forced 2,1,0."""
+
+    def __init__(self, mode: str = "success") -> None:
+        super().__init__()
+        self.mode = mode
+        self.barrier = threading.Barrier(3, timeout=10)
+        self.finished = [threading.Event() for _ in ReviewPerspective]
+        self.mutex = threading.Lock()
+        self.active = 0
+        self.max_active = 0
+        self.completions: list[ReviewPerspective] = []
+        self.timeline: list[str] = []
+        self.names: list[str] = []
+        self.source_digests: list[str] = []
+        self.frozen_states: list[str] = []
+        self.audit_prompts: list[str] = []
+        self.pipeline: AuthorityProbePipeline | None = None
+        self.failure_cli: Path | None = None
+
+    def run(
+        self,
+        prompt: str,
+        *,
+        cwd: Path,
+        role: Role,
+        timeout: int | None,
+        output: type[Output],
+        artifacts: Path,
+        name: str,
+        readonly: bool,
+    ) -> Output:
+        if output != ReviewShard:
+            result = super().run(
+                prompt,
+                cwd=cwd,
+                role=role,
+                timeout=timeout,
+                output=output,
+                artifacts=artifacts,
+                name=name,
+                readonly=readonly,
+            )
+            if output == Audit:
+                self.audit_prompts.append(prompt)
+                bundle = ReviewBundle.model_validate(read_json(artifacts / "00-review_bundle.json"))
+                for shard in bundle.shards:
+                    assert shard.findings[0].action in prompt
+                    assert shard.findings[0].finding_id in prompt
+                assert '"results"' in prompt and '"summary"' in prompt
+                data = result.model_dump()
+                data["reviewer_dispositions"] = [
+                    {
+                        "finding_id": shard.findings[0].finding_id,
+                        "disposition": "dismissed",
+                        "evidence": "Source and executable test refute the advisory claim",
+                    }
+                    for shard in bundle.shards
+                ]
+                if self.mode == "missing_disposition":
+                    data["reviewer_dispositions"].pop()
+                elif self.mode == "unknown_disposition":
+                    data["reviewer_dispositions"][0]["finding_id"] = "unknown:0001"
+                elif self.mode == "duplicate_disposition":
+                    data["reviewer_dispositions"].append(data["reviewer_dispositions"][0])
+                elif self.mode == "confirmed_disposition":
+                    data["reviewer_dispositions"][0]["disposition"] = "confirmed"
+                return output.model_validate(data)
+            return result
+        assert readonly and role.model == "configured-future-auditor-model"
+        assert timeout == 30
+        assert "code-review-and-quality" in prompt
+        assert len(list(artifacts.glob("00-review-*.prompt.md"))) == 3
+        assert not (artifacts / "00-review_bundle.json").exists()
+        match = re.search(r"REVIEW_PERSPECTIVE: ([^\n]+)", prompt)
+        assert match is not None
+        perspective = ReviewPerspective(match[1])
+        index = list(ReviewPerspective).index(perspective)
+        frozen = (artifacts / "state.json").read_bytes()
+        saved = RunState.model_validate_json(frozen)
+        assert saved.current_agent == "parallel_review" and saved.state == State.AUDIT_RUNNING
+        match = re.search(r"FROZEN_SOURCE_DIGEST: ([a-f0-9]+)", prompt)
+        assert match is not None
+        with self.mutex:
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            self.timeline.append("start")
+            self.names.append(name)
+            self.source_digests.append(match[1])
+            self.frozen_states.append(digest(frozen))
+        try:
+            self.barrier.wait()
+            if index < 2:
+                assert self.finished[index + 1].wait(10)
+            atomic_json(
+                artifacts / f"{name}.log.json", {"synthetic": True, "perspective": perspective}
+            )
+            if index == 1:
+                if self.mode in {"process", "timeout", "oversized", "malformed"}:
+                    assert self.failure_cli is not None
+                    return CliProvider().run(
+                        f"FAULT: {self.mode}",
+                        cwd=cwd,
+                        role=role.model_copy(update={"executable": str(self.failure_cli)}),
+                        timeout=1,
+                        output=output,
+                        artifacts=artifacts,
+                        name=name,
+                        readonly=True,
+                    )
+                if self.mode == "schema":
+                    return output.model_validate({"perspective": perspective, "findings": "bad"})
+                if self.mode == "wrong_perspective":
+                    return output.model_validate(
+                        {"perspective": ReviewPerspective.SECURITY, "findings": []}
+                    )
+                if self.mode == "source":
+                    (cwd / "feature.txt").write_text("Reviewer source mutation")
+                if self.mode == "branch":
+                    Git(cwd).run("symbolic-ref", "HEAD", "refs/heads/main")
+                if self.mode == "state":
+                    (artifacts / "state.json").write_bytes(frozen + b" ")
+                if self.mode == "artifact":
+                    (artifacts / "00-contract.json").write_text("corrupt")
+                if self.mode == "prompt":
+                    path = next(artifacts.glob("00-review-*.prompt.md"))
+                    path.write_text("corrupt")
+                if self.mode == "memory":
+                    assert self.pipeline is not None and self.pipeline.live_state is not None
+                    self.pipeline.live_state.current_agent = "intruder"
+                    self.pipeline.live_state.state = State.DONE
+                    self.pipeline.live_state.artifacts = {}
+                    self.pipeline.live_state.artifact_digests = {}
+            return output.model_validate(
+                ReviewShard(
+                    perspective=perspective,
+                    findings=[
+                        ReviewFinding(
+                            action=f"Check synthetic {perspective}", evidence="feature.txt:1"
+                        )
+                    ],
+                )
+            )
+        finally:
+            with self.mutex:
+                self.active -= 1
+                self.completions.append(perspective)
+                self.timeline.append("finish")
+            self.finished[index].set()
+
+
+def parallel_review_pipeline(
+    repository: Path, agents: CoordinatedReviewAgents
+) -> AuthorityProbePipeline:
+    config = configuration(integrate=False)
+    config.roles["auditor"].model = "configured-future-auditor-model"
+    if agents.mode in {"process", "timeout", "oversized", "malformed"}:
+        cli = repository.parent / "review-failure-cli"
+        cli.write_text(f"""#!{sys.executable}
+import pathlib, sys, threading
+if '--version' in sys.argv:
+    print('synthetic 1.0')
+elif '--help' in sys.argv:
+    print('--ask-for-approval --output-schema --output-last-message --sandbox --ephemeral')
+else:
+    fault = sys.stdin.read().strip().split()[-1]
+    if fault == 'process':
+        raise SystemExit(7)
+    if fault == 'timeout':
+        threading.Event().wait()
+    if fault == 'oversized':
+        sys.stdout.buffer.write(b'x' * 5000000)
+        sys.stdout.flush()
+        threading.Event().wait()
+    response = pathlib.Path(sys.argv[sys.argv.index('--output-last-message') + 1])
+    response.write_text('{{broken')
+""")
+        cli.chmod(0o700)
+        agents.failure_cli = cli
+    pipeline = AuthorityProbePipeline(repository, config, agents)
+    agents.pipeline = pipeline
+    return pipeline
+
+
+def test_parallel_review_real_overlap_and_out_of_order_fanin(repository: Path) -> None:
+    agents = CoordinatedReviewAgents()
+    pipeline = parallel_review_pipeline(repository, agents)
+    state = pipeline.start("T100")
+    assert state.state == State.AUDIT_PASS
+    assert agents.max_active == 3 and agents.active == 0
+    assert agents.timeline == ["start"] * 3 + ["finish"] * 3
+    assert agents.completions == list(reversed(ReviewPerspective))
+    assert len(set(agents.names)) == 3
+    assert len(set(agents.source_digests)) == len(set(agents.frozen_states)) == 1
+    directory = pipeline.run_path("T100", state.run_id)
+    bundle = ReviewBundle.model_validate(read_json(directory / state.artifacts["review_bundle"]))
+    assert bundle.source_digest == agents.source_digests[0] == state.audited_digest
+    assert [s.perspective for s in bundle.shards] == list(ReviewPerspective)
+    assert len(bundle.shards) == 3 and all(len(s.findings) == 1 for s in bundle.shards)
+    assert len(agents.audit_prompts) == 1
+    assert state.current_agent is None
+    pipeline.check_artifacts(directory, state)
+    for name in agents.names:
+        assert f"{name}.log.json" in state.artifact_digests
+        assert f"{name}.prompt.md" in state.artifact_digests
+    # Logical concurrency proof is machine-speed independent: a serial dispatcher cannot
+    # reach this barrier; three units of advisory work occupy a single coordinated round.
+    assert all(event.is_set() for event in agents.finished)
+
+
+@pytest.mark.parametrize(
+    "mode,reason",
+    [
+        ("process", "incomplete"),
+        ("timeout", "incomplete"),
+        ("oversized", "incomplete"),
+        ("malformed", "incomplete"),
+        ("schema", "incomplete"),
+        ("wrong_perspective", "incomplete"),
+        ("source", "repository source"),
+        ("branch", "changed branch"),
+        ("state", "protected evidence or state"),
+        ("artifact", "protected evidence or state"),
+        ("prompt", "protected evidence or state"),
+        ("memory", "in-memory orchestration state"),
+    ],
+)
+def test_parallel_review_failure_reaps_every_reviewer_and_blocks_auditor(
+    repository: Path, mode: str, reason: str
+) -> None:
+    agents = CoordinatedReviewAgents(mode)
+    pipeline = parallel_review_pipeline(repository, agents)
+    initial = Git(repository).sha()
+    state = pipeline.start("T100")
+    assert state.state == State.FAILED and state.blocked_from == State.AUDIT_RUNNING
+    assert reason in (state.last_error or "")
+    assert agents.max_active == 3 and agents.active == 0
+    assert agents.completions == list(reversed(ReviewPerspective))
+    assert all(event.is_set() for event in agents.finished)
+    assert "Audit" not in agents.calls and "IntegrationReview" not in agents.calls
+    assert "review_bundle" not in state.artifacts
+    directory = pipeline.run_path("T100", state.run_id)
+    assert not (directory / "00-review_bundle.json").exists()
+    assert Git(repository).sha() == initial
+    if mode in {"process", "timeout", "oversized", "malformed", "schema", "wrong_perspective"}:
+        assert (Path(state.worktree_path) / "feature.txt").read_text() == "good"
+        assert state.current_agent is None
+        pipeline.check_artifacts(directory, state)
+        assert all(f"{name}.log.json" in state.artifact_digests for name in agents.names)
+        if mode in {"process", "timeout", "oversized", "malformed"}:
+            name = next(n for n in agents.names if ReviewPerspective.VERIFICATION in n)
+            log = read_json(directory / f"{name}.log.json")
+            assert isinstance(log, dict)
+            execution = log["execution"]
+            if mode == "process":
+                assert execution["exit_code"] == 7
+            elif mode == "timeout":
+                assert execution["timed_out"] is True
+            elif mode == "oversized":
+                assert execution["oversized"] is True
+            else:
+                assert execution["exit_code"] == 0
+
+
+@pytest.mark.parametrize("mode", ["missing", "unknown", "duplicate", "confirmed"])
+def test_parallel_review_authoritative_audit_disposition_failures_are_bounded(
+    repository: Path, mode: str
+) -> None:
+    agents = CoordinatedReviewAgents(f"{mode}_disposition")
+    pipeline = parallel_review_pipeline(repository, agents)
+    state = pipeline.start("T100")
+    assert state.state == State.FAILED
+    assert mode in (state.last_error or "")
+    assert agents.calls.count("Audit") == 3 and agents.worker_calls == 1
+    assert len(agents.completions) == 3  # Report correction never repeats the fan-out.
+    assert "IntegrationReview" not in agents.calls and "audit" not in state.artifacts
+    directory = pipeline.run_path("T100", state.run_id)
+    assert len(list(directory.glob("*-auditor-*.rejected.json"))) == 3
 
 
 def test_no_agent_run_without_valid_config(tmp_path: Path) -> None:
@@ -1554,7 +1877,9 @@ def test_opt_in_timeout_reaches_roles_checks_and_saved_state(
     state = pipeline.start("T100")
     assert state.state == State.DONE
     assert state.fix_cycle == failures
-    assert agent_timeouts == [expected] * (4 + 3 * failures)
+    # Three advisory calls inherit the same timeout on each initial/fix audit cycle.
+    assert agent_timeouts == [expected] * (7 + 6 * failures)
+    assert len(agents.reviewer_calls) == 3 * (1 + failures)
     assert observed and all(value == expected for value in observed)
     loaded = pipeline.status("T100", state.run_id)
     assert loaded.config is not None

@@ -19,6 +19,7 @@ from pydantic import (
     StrictInt,
     TypeAdapter,
     field_validator,
+    model_validator,
 )
 
 TASK_PATTERN = r"T[0-9]{3}"
@@ -196,6 +197,97 @@ class Criterion(Model):
     )
 
 
+class ReviewPerspective(StrEnum):
+    CORRECTNESS = "correctness-contract-concurrency"
+    VERIFICATION = "verification-failure-regression"
+    SECURITY = "security-architecture-scope-privacy"
+
+
+class ReviewFinding(Model):
+    action: Nonempty = Field(description="Actionable unresolved defect and required remediation")
+    evidence: Nonempty = Field(description="Concrete source/test evidence and rationale")
+
+    @field_validator("action", "evidence")
+    @classmethod
+    def meaningful_finding(cls, value: str) -> str:
+        if not value.strip():
+            raise OrchestratorError("Reviewer finding requires an action and evidence")
+        return value
+
+
+class ReviewShard(Model):
+    perspective: ReviewPerspective
+    findings: list[ReviewFinding]
+
+
+class IdentifiedFinding(ReviewFinding):
+    finding_id: Nonempty
+
+
+class BundledShard(Model):
+    perspective: ReviewPerspective
+    findings: list[IdentifiedFinding]
+
+
+class ReviewBundle(Model):
+    source_digest: Sha
+    branch: Nonempty
+    shards: list[BundledShard]
+
+    @model_validator(mode="after")
+    def canonical(self) -> "ReviewBundle":
+        if [shard.perspective for shard in self.shards] != list(ReviewPerspective):
+            raise OrchestratorError("Parallel review requires every perspective in canonical order")
+        for shard in self.shards:
+            for index, finding in enumerate(shard.findings, 1):
+                if finding.finding_id != f"{shard.perspective}:{index:04d}":
+                    raise OrchestratorError(
+                        "Parallel review finding identity differs from host order"
+                    )
+        return self
+
+    @classmethod
+    def assemble(cls, source_digest: str, branch: str, shards: list[ReviewShard]) -> "ReviewBundle":
+        if len(shards) != len(ReviewPerspective) or {s.perspective for s in shards} != set(
+            ReviewPerspective
+        ):
+            raise OrchestratorError("Parallel review is incomplete")
+        ordered = {shard.perspective: shard for shard in shards}
+        return cls(
+            source_digest=source_digest,
+            branch=branch,
+            shards=[
+                BundledShard(
+                    perspective=perspective,
+                    findings=[
+                        IdentifiedFinding(
+                            **finding.model_dump(), finding_id=f"{perspective}:{index:04d}"
+                        )
+                        for index, finding in enumerate(ordered[perspective].findings, 1)
+                    ],
+                )
+                for perspective in ReviewPerspective
+            ],
+        )
+
+
+class ReviewDisposition(Model):
+    finding_id: Nonempty
+    disposition: Literal["confirmed", "dismissed"] = Field(
+        description="Confirmed means unresolved in the frozen source and forbids PASS"
+    )
+    evidence: Nonempty = Field(
+        description="Explicit rationale and concrete evidence for disposition"
+    )
+
+    @field_validator("evidence")
+    @classmethod
+    def meaningful_evidence(cls, value: str) -> str:
+        if not value.strip():
+            raise OrchestratorError("Reviewer disposition requires explicit evidence")
+        return value
+
+
 class Audit(Model):
     status: Literal["PASS", "FAIL", "BLOCKED"] = Field(
         description="PASS requires every criterion PASS and empty findings, scope_violations "
@@ -213,8 +305,25 @@ class Audit(Model):
     required_fixes: list[str] = Field(
         description="Concrete required remediation for unresolved problems; return [] for PASS."
     )
+    reviewer_dispositions: list[ReviewDisposition] = Field(default_factory=list)
 
-    def check(self, contract: Contract) -> None:
+    def check(self, contract: Contract, bundle: ReviewBundle | None = None) -> None:
+        expected = (
+            {finding.finding_id for shard in bundle.shards for finding in shard.findings}
+            if bundle is not None
+            else set()
+        )
+        supplied = [item.finding_id for item in self.reviewer_dispositions]
+        if len(supplied) != len(set(supplied)):
+            raise OrchestratorError("Parallel review duplicate disposition")
+        if set(supplied) - expected:
+            raise OrchestratorError("Parallel review unknown disposition")
+        if expected - set(supplied):
+            raise OrchestratorError("Parallel review missing disposition")
+        if self.status == "PASS" and any(
+            item.disposition == "confirmed" for item in self.reviewer_dispositions
+        ):
+            raise OrchestratorError("Parallel review confirmed unresolved finding forbids PASS")
         criteria = [item.criterion for item in self.acceptance_criteria]
         if sorted(criteria) != sorted(contract.acceptance_criteria):
             raise OrchestratorError("Audit must cover every criterion exactly once")
