@@ -76,7 +76,7 @@
 - [ ] [T045](t045-git-release-hygiene.md): Git hooks, branch and commit hygiene
 - [ ] [T057](t057-release-verification.md): Windows/offline release evidence matrix
 
-- [x] [T086](t086-parallel-review-fanout.md): `IMPLEMENTATION_READY` for independent review: owner-approved scheduler SyntheticProvider fixture extension resolves the prior blocker and preserves actual Pipeline fan-out with empty findings. Former failures 4/4 PASS; focused 25 PASS, scheduler 48 PASS, full orchestrator 321 PASS; Ruff/format/Mypy/diff-check PASS. Scheduler/runtime/product source unchanged; candidate uncommitted.
+- [x] [T086](t086-parallel-review-fanout.md): `DONE` — intra-task parallel read-only review fan-out integrated into main; three reviewer perspectives execute concurrently with deterministic fan-in and authoritative final Audit. Independent audit PASS_FOR_INTEGRATION; focused 25 PASS, scheduler 48 PASS, full orchestrator 321 PASS; scheduler/runtime/product semantics preserved.
 
 ## Checkpoints
 
