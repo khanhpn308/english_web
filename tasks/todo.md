@@ -77,6 +77,7 @@
 - [ ] [T057](t057-release-verification.md): Windows/offline release evidence matrix
 
 - [x] [T086](t086-parallel-review-fanout.md): `DONE` — intra-task parallel read-only review fan-out integrated into main; three reviewer perspectives execute concurrently with deterministic fan-in and authoritative final Audit. Independent audit PASS_FOR_INTEGRATION; focused 25 PASS, scheduler 48 PASS, full orchestrator 321 PASS; scheduler/runtime/product semantics preserved.
+- [ ] [T087](t087-concurrent-audit-preparation.md): Run executable verification concurrently with T086 read-only reviewer fan-out, then deterministic evidence fan-in before final Auditor.
 
 ## Checkpoints
 
