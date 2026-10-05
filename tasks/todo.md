@@ -77,7 +77,7 @@
 - [ ] [T057](t057-release-verification.md): Windows/offline release evidence matrix
 
 - [x] [T086](t086-parallel-review-fanout.md): `DONE` — intra-task parallel read-only review fan-out integrated into main; three reviewer perspectives execute concurrently with deterministic fan-in and authoritative final Audit. Independent audit PASS_FOR_INTEGRATION; focused 25 PASS, scheduler 48 PASS, full orchestrator 321 PASS; scheduler/runtime/product semantics preserved.
-- [ ] [T087](t087-concurrent-audit-preparation.md): Run executable verification concurrently with T086 read-only reviewer fan-out, then deterministic evidence fan-in before final Auditor.
+- [ ] [T087](t087-concurrent-audit-preparation.md): R4 `IMPLEMENTATION_READY` pending independent re-audit — R3 independent audit verdict `NEEDS_REMEDIATION` (external regular-file symlink write-through violated private sandbox invariant); R4 remediation eliminates writable external backlinks by failing closed on external regular files and directories in toolchains (`OrchestratorError: Unsafe external file symlink in toolchain`) while materializing virtualenv interpreter as a private executable copy in sandbox (`shutil.copy2`), with post-materialization containment assertion; behavioral regression tests prove exact audit exploit reproduction fails closed before dispatch with original host file unchanged (content, inode, mtime) and 0 lane dispatches; 13 private toolchain tests, 42 focused T087 tests, 25 T086 tests, 48 scheduler tests pass; uncommitted candidate awaiting independent re-audit; product/scheduler/runtime untouched.
 
 ## Checkpoints
 

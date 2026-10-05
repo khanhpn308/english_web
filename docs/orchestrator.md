@@ -108,6 +108,7 @@ tự động.
 
 ## T086: parallel read-only review trong một task
 
+Phần này mô tả protocol T086; T087 bên dưới thay đổi thời điểm dispatch trong audit cycle.
 Sau Worker/Fix Worker và executable audit checks, Pipeline chạy ba advisory reviewer
 song song, rồi mới gọi authoritative Auditor:
 
@@ -166,6 +167,108 @@ proof concurrency với logical rounds, không đo tốc độ model/internet. L
 fixtures còn chứng minh exit 7, timeout, oversized output và malformed JSON đi qua
 runtime thật. Chưa benchmark T023; không có claim speedup thực tế. Protocol mới
 yêu cầu fake/custom providers hỗ trợ `ReviewShard` ngoài các output trước T086.
+
+## T087: concurrent audit preparation
+
+Audit cycle hiện chạy executable verification đồng thời với ba reviewer T086 để
+che latency kiểm tra sau thời gian static review, giữ toàn bộ verification và một
+parent writer duy nhất:
+
+```text
+Worker/Fix Worker -> freeze candidate -> executable verification (commands sequential) ┐
+                                     -> correctness-contract-concurrency              │
+                                     -> verification-failure-regression               ├-> parent fan-in -> Auditor
+                                     -> security-architecture-scope-privacy            ┘
+```
+
+Parent kiểm tra contract, authoritative artifacts và skills; freeze Git source digest,
+branch, RunState và các file run đã có; chuẩn bị cả ba prompt rồi ghi
+`current_agent=concurrent_audit_preparation` đúng một lần trước dispatch. Frozen
+`VerificationRequest` chứa cwd, tuple command arrays, timeout, source digest và task ID;
+không chứa RunState, Pipeline hay thư mục artifact. Function `collect_verification()`
+chỉ chạy commands tuần tự và trả redacted metadata với `command_index` theo declaration
+order. Nó không save state, transition, gọi `artifact()` hay đăng ký evidence. Existing
+`verify()` tiếp tục dùng tuần tự cho setup/baseline/integration. Existing
+`parallel_review()` vẫn hỗ trợ T086 entrypoint với executable evidence đã hoàn tất;
+production audit cycle dùng `concurrent_audit()` và shared protected fan-in.
+
+Một executor bốn threads dispatch một verification future và ba provider futures.
+Reviewer vẫn dùng configured auditor role, read-only, unique names và canonical
+perspectives T086, và inspect trực tiếp original frozen task worktree.
+Executable verification chạy trong một host-owned temporary Git verification workspace
+riêng biệt (`verification_workspace`), materialize từ repository detached tại `base_sha`.
+Để tái tạo chính xác cả trạng thái Git index lẫn working tree mà không làm xáo trộn (collapse)
+hai tầng nội dung:
+1. Host clone repository bằng `--shared --no-checkout` và checkout detached tại `base_sha`.
+2. Host trích xuất staged patch qua `git diff --cached --binary base_sha --`, kiểm tra `safe_path`
+   cho từng đường dẫn, rồi áp dụng bằng `git apply --binary --index` để tái tạo đúng trạng thái index.
+3. Host trích xuất unstaged patch qua `git diff --binary --`, kiểm tra `safe_path`, và áp dụng bằng
+   `git apply --binary` lên working tree mà không stage vào index.
+4. Host truy vấn các non-ignored untracked files qua `git ls-files --others --exclude-standard -z`,
+   sao chép nguyên vẹn nội dung byte và quyền thực thi (`chmod`), giữ nguyên ở trạng thái untracked
+   (không gọi `git add`).
+5. Trước khi dispatch, host bắt buộc chứng minh:
+   `Git(verification_workspace).snapshot(base_sha) == frozen_source_digest`.
+   Nếu không tương đương tuyệt đối, host fail closed ngay trước khi dispatch.
+
+Về an toàn toolchain và kiến trúc Private Toolchain Materialization (R3 & R4):
+- Độc lập kiểm toán R3 đưa ra kết luận `NEEDS_REMEDIATION`: phát hiện lỗi HIGH do việc giữ lại symlink tệp hệ thống ngoại vi dẫn tới write-through (`sandbox/node_modules/pkg/link.js -> host_toolchain/external.js`), cho phép ghi từ sandbox làm biến đổi tệp trên host, vi phạm bất biến private sandbox filesystem.
+- Quyết định kiến trúc R4 — Bất biến an ninh NO WRITABLE EXTERNAL BACKLINKS:
+  1. Thư mục đích sandbox `node_modules` và `.venv` là thư mục thật (`is_dir() and not is_symlink()`). Do đó `node_modules/..` phân giải tuyệt đối về chính `verification_workspace`, không thể thoát về authoritative worktree.
+  2. Sao chép nội dung bằng tệp thật (copy, không dùng hardlink). Mọi symlink nội bộ bên trong toolchain nguồn được tái tạo thành relative symlink trỏ tương đối bên trong private sandbox toolchain mới.
+  3. Chính sách symlink ngoại vi:
+     - Mọi external directory symlink: FAIL CLOSED trước dispatch (`OrchestratorError: Unsafe external directory symlink in toolchain`).
+     - Mọi external regular-file symlink trong `node_modules` (hoặc tệp không phải interpreter trong `.venv`): FAIL CLOSED trước dispatch (`OrchestratorError: Unsafe external file symlink in toolchain`), ngăn chặn triệt để hành vi write-through ra host.
+     - Virtualenv interpreter trong `.venv`: materialize thành bản sao executable độc lập riêng bên trong sandbox (`shutil.copy2`), bảo toàn quyền thực thi `0o755`, bảo toàn `pyvenv.cfg`/site-packages (`import pytest` thành công), và triệt tiêu hoàn toàn backlink ra host.
+  4. Post-materialization containment validation: duyệt đệ quy toàn bộ symlink trong thư mục đích sau khi copy, xác nhận mọi symlink đều phân giải về đối tượng tồn tại bên trong chính thư mục đích; bất kỳ symlink nào trỏ ra ngoài hoặc dangling đều fail closed ngay lập tức.
+  5. Mọi lỗi đọc, stat, lstat, scandir hoặc resolution trong quá trình validate/copy toolchain đều fail closed (`OrchestratorError`), không có nhánh fail-open.
+- Khám phá authoritative roots (`Pipeline.authoritative_roots`): sử dụng định dạng lossless `git worktree list --porcelain -z` tách bằng ký tự NUL (`\0`), bảo toàn chính xác các đường dẫn chứa khoảng trắng đầu/cuối (không dùng `.strip()`), và fail-closed khi Git gặp lỗi hoặc bản ghi malformed.
+- Môi trường chạy verification command: loại bỏ hoàn toàn launcher shell script và proxy python. Không thay đổi `runtime.py` hay mutate `os.environ` toàn cục. Host điều khiển qua argv an toàn `/usr/bin/env PATH=... <command...>` (hoặc tương đương platform không shell parsing), ưu tiên `verify_path/.venv/bin` và `verify_path/node_modules/.bin` trước `PATH` thừa kế. Metadata báo cáo giữ nguyên tên command gốc (`python`, `npm`), không báo cáo nhầm `env`.
+- Cả `node_modules` và `.venv` đều được loại trừ trong `.git/info/exclude` của verification workspace.
+- Trạng thái hiện tại: `R4 IMPLEMENTATION_READY PENDING INDEPENDENT RE-AUDIT`; không tuyên bố `PASS_FOR_INTEGRATION` và không tuyên bố speedup thực tế T023.
+
+Prompt reviewer chỉ chứa frozen task/contract/Worker/skill context và yêu cầu
+`STATIC REVIEW ONLY`; không có kết quả audit checks. Nhờ private toolchain materialization,
+không gian làm việc và tệp phụ thuộc được phân lập hoàn toàn; các transient artifacts do verification
+sinh ra (như `.pytest_cache/transient`, coverage, build artifacts) hoàn toàn nằm trong temporary
+workspace và không thể bị reviewer quan sát trong reviewer worktree. Ignored generated output không
+thể lọt vào ReviewShard hay ReviewBundle.
+
+Parent reap tất cả futures dù một lane thất bại, rồi đối chiếu original worktree source/branch,
+in-memory state, state.json, protected artifacts/prompts và skill manifest. Đồng thời, host kiểm tra
+sandbox source integrity sau khi chạy lệnh: candidate source trong verification workspace phải tiếp tục
+khớp `frozen_source_digest`; mọi sửa đổi vào tracked source, non-ignored untracked source hay file mode
+đều fail closed.
+Khi integrity đạt, parent persist/register `audit_checks` trước reviewer diagnostics, theo perspective
+rồi filename. Chỉ khi cả ba reviewer hợp lệ và verification không gặp setup failure mới assemble/register
+complete ReviewBundle. Temporary verification workspace được dọn dẹp sạch sẽ sau khi lane kết thúc
+mà không bao giờ xóa task worktree hay branch. Auditor chạy tuần tự qua `Pipeline.invoke()` sau khi cả hai
+loại evidence đã authoritative và concurrent-phase marker đã clear. Không dùng concurrent `invoke()`
+hay mutable `verify()`; threads không nhận state authority.
+
+Nonzero exit, timeout và oversized result vẫn là task regression: collector giữ evidence
+và dừng tại command lỗi đầu tiên như `verify()` hiện có. Reviewers tiếp tục được reap,
+Auditor có thể báo FAIL, và Python từ chối PASS trên failed executable evidence; bounded
+correction vẫn tối đa ba attempts trên cùng evidence. Execute infrastructure exception
+vẫn `SETUP_FAILED`, giữ partial metadata khi có và ngăn final Auditor sau khi join mọi
+reviewer. Reviewer process/schema/perspective failure cũng ngăn bundle/Auditor; diagnostics
+được giữ và đăng ký khi integrity đạt. Finding IDs, disposition rules và historical Audit
+compatibility giữ nguyên T086.
+
+Behavioral tests dùng barrier bốn bên trong fake executable call và ba provider calls,
+Lock đếm tối đa bốn active lanes, Events buộc verification-first hoặc reviewers-first
+và reverse reviewer completion. Cả hai ordering đều chứng minh Auditor chờ cả hai lanes;
+parent-thread guards bảo vệ invoke/save/artifact/verify, với max active invoke bằng một.
+Adversarial probe tests chứng minh: transient file `.pytest_cache/transient` được tạo trong
+verification cwd nhưng reviewer không thấy trong reviewer cwd; ReviewShard, ReviewBundle và
+Auditor prompt không chứa transient evidence; source finding IDs hoàn toàn ổn định (`:0001`)
+ở cả hai thứ tự hoàn tất (verification trước hoặc reviewer trước) và không bị trượt sang `:0002`.
+Tests dùng fake commands/providers, không network/inference hoặc arbitrary sleep làm proof.
+Đây là bằng chứng overlap và evidence isolation, chưa là real-task/T023 wall-clock benchmark. Vì mỗi task có thêm
+một executable lane overlap inference, CPU/I/O có thể cạnh tranh giữa ba task đang audit;
+T087 giữ nguyên admission/scheduler concurrency, gate commands/thresholds và max_fix_cycles.
+Resource arbitration thuộc task sau. Post-execution integrity checks vẫn không thay thế
+OS isolation hoặc phát hiện mutation rồi hoàn nguyên giữa hai snapshot.
 
 ## Level 2: lập lịch DAG toàn repository (T079)
 
@@ -704,7 +807,7 @@ tiến trình; không gọi dịch vụ trả phí. Xác thực provider thật 
 vẫn cần được kiểm chứng khi vận hành, không phải bằng chứng từ các bài kiểm thử.
 Runtime của ứng dụng không phụ thuộc vào package điều phối hay các CLI.
 
-Level 1 giữ state transition đồng bộ với T086 parallel advisory review, dùng JSON, ba admission
+Level 1 giữ state transition đồng bộ với T087 concurrent verification và T086 advisory review, dùng JSON, ba admission
 slots và tích hợp tuần tự. T079 bổ sung pool process và lập lịch DAG phía trên
 Pipeline, giữ nguyên contract của các vai trò. Không có cơ sở dữ liệu scheduler,
 dashboard, khóa phân tán hay resume chạy nền. Resource-aware scheduling và cơ chế

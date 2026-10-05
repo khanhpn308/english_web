@@ -1,5 +1,7 @@
 import json
+import os
 import re
+import subprocess
 import sys
 import threading
 from multiprocessing.connection import Connection as PipeConnection
@@ -32,7 +34,7 @@ from tools.orchestrator.core import (
     task_card,
 )
 from tools.orchestrator.runtime import CliProvider, Git, ProcessResult, execute, lock
-from tools.orchestrator.workflow import Pipeline
+from tools.orchestrator.workflow import Pipeline, materialize_private_toolchain
 
 Output = TypeVar("Output", bound=BaseModel)
 
@@ -221,6 +223,8 @@ class AuthorityProbePipeline(Pipeline):
         super().__init__(repository, config, provider)
         self.owner = threading.get_ident()
         self.live_state: RunState | None = None
+        self.invoke_active = 0
+        self.max_invoke_active = 0
 
     def save(self, directory: Path, state: RunState) -> None:
         assert threading.get_ident() == self.owner, "reviewer thread attempted state write"
@@ -242,7 +246,25 @@ class AuthorityProbePipeline(Pipeline):
         cwd: Path | None = None,
     ) -> BaseModel:
         assert threading.get_ident() == self.owner, "Pipeline.invoke called in reviewer thread"
-        return super().invoke(directory, state, role_name, output, context, cwd=cwd)
+        self.invoke_active += 1
+        self.max_invoke_active = max(self.max_invoke_active, self.invoke_active)
+        assert self.invoke_active == 1
+        try:
+            return super().invoke(directory, state, role_name, output, context, cwd=cwd)
+        finally:
+            self.invoke_active -= 1
+
+    def verify(
+        self,
+        directory: Path,
+        state: RunState,
+        commands: list[list[str]],
+        name: str,
+        *,
+        working: Path | None = None,
+    ) -> None:
+        assert threading.get_ident() == self.owner, "Mutable verify called in collection thread"
+        super().verify(directory, state, commands, name, working=working)
 
 
 class CoordinatedReviewAgents(FakeAgents):
@@ -325,7 +347,8 @@ class CoordinatedReviewAgents(FakeAgents):
         index = list(ReviewPerspective).index(perspective)
         frozen = (artifacts / "state.json").read_bytes()
         saved = RunState.model_validate_json(frozen)
-        assert saved.current_agent == "parallel_review" and saved.state == State.AUDIT_RUNNING
+        assert saved.current_agent == "concurrent_audit_preparation"
+        assert saved.state == State.AUDIT_RUNNING
         match = re.search(r"FROZEN_SOURCE_DIGEST: ([a-f0-9]+)", prompt)
         assert match is not None
         with self.mutex:
@@ -2013,3 +2036,1392 @@ def test_legacy_handoff_without_skills_resumes_unchanged(repository: Path) -> No
     pipeline.config.integrate = True
     assert pipeline.resume("T100", state.run_id).state == State.DONE
     assert (directory / "worker_prompt.md").read_bytes() == handoff
+
+
+class ConcurrentAuditAgents(FakeAgents):
+    """Four-party rendezvous and explicit lane ordering; no timing-based proof."""
+
+    def __init__(self, mode: str) -> None:
+        super().__init__()
+        self.mode = mode
+        self.barrier = threading.Barrier(4, timeout=10)
+        self.collection_done = threading.Event()
+        self.finished = [threading.Event() for _ in ReviewPerspective]
+        self.mutex = threading.Lock()
+        self.active = 0
+        self.max_active = 0
+        self.completions: list[ReviewPerspective] = []
+        self.audit_prompts: list[str] = []
+        self.pipeline: AuthorityProbePipeline | None = None
+        self.command_order: list[str] = []
+        self.phase_saves = 0
+        self.verification_cwds: list[Path] = []
+        self.verification_saw_transient: list[bool] = []
+        self.reviewer_cwds: list[Path] = []
+        self.observed_transients: list[bool] = []
+        self.reviewer_prompts: list[str] = []
+
+    def enter(self, *, rendezvous: bool = True) -> None:
+        with self.mutex:
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+        if rendezvous:
+            self.barrier.wait()
+
+    def leave(self) -> None:
+        with self.mutex:
+            self.active -= 1
+
+    def run(
+        self,
+        prompt: str,
+        *,
+        cwd: Path,
+        role: Role,
+        timeout: int | None,
+        output: type[Output],
+        artifacts: Path,
+        name: str,
+        readonly: bool,
+    ) -> Output:
+        if output != ReviewShard:
+            if output == Audit:
+                assert self.collection_done.is_set()
+                assert all(event.is_set() for event in self.finished)
+                assert self.active == 0
+                self.audit_prompts.append(prompt)
+                saved = RunState.model_validate(read_json(artifacts / "state.json"))
+                assert saved.current_agent == "auditor"
+                checks = read_json(artifacts / saved.artifacts["audit_checks"])
+                bundle = ReviewBundle.model_validate(
+                    read_json(artifacts / saved.artifacts["review_bundle"])
+                )
+                assert json.dumps(checks) in prompt
+                assert json.dumps(bundle.model_dump(mode="json")) in prompt
+                result = super().run(
+                    prompt,
+                    cwd=cwd,
+                    role=role,
+                    timeout=timeout,
+                    output=output,
+                    artifacts=artifacts,
+                    name=name,
+                    readonly=readonly,
+                )
+                data = result.model_dump()
+                data["reviewer_dispositions"] = [
+                    {
+                        "finding_id": shard.findings[0].finding_id,
+                        "disposition": "dismissed",
+                        "evidence": "Synthetic source refutes claim",
+                    }
+                    for shard in bundle.shards
+                ]
+                if self.mode == "regression_fail":
+                    data.update(
+                        status="FAIL",
+                        findings=["Executable check failed"],
+                        required_fixes=["Repair failed command"],
+                    )
+                    data["acceptance_criteria"][0]["status"] = "FAIL"
+                return output.model_validate(data)
+            return super().run(
+                prompt,
+                cwd=cwd,
+                role=role,
+                timeout=timeout,
+                output=output,
+                artifacts=artifacts,
+                name=name,
+                readonly=readonly,
+            )
+        assert readonly and role.model == "configured-future-auditor-model"
+        assert "STATIC REVIEW ONLY" in prompt and "transient" in prompt
+        assert '"results"' not in prompt and "Worker and executable evidence" not in prompt
+        match = re.search(r"REVIEW_PERSPECTIVE: ([^\n]+)", prompt)
+        assert match is not None
+        perspective = ReviewPerspective(match[1])
+        if name.startswith("probe"):
+            transient_path = cwd / ".pytest_cache/transient"
+            findings = []
+            if transient_path.is_file():
+                findings.append(
+                    ReviewFinding(
+                        action=f"Transient finding in {perspective}",
+                        evidence=".pytest_cache/transient:1",
+                    )
+                )
+            findings.append(ReviewFinding(action=f"Check {perspective}", evidence="feature.txt:1"))
+            return output.model_validate(
+                ReviewShard(
+                    perspective=perspective,
+                    findings=findings,
+                )
+            )
+        self.reviewer_prompts.append(prompt)
+        assert len(list(artifacts.glob("00-review-*.prompt.md"))) == 3
+        saved = RunState.model_validate(read_json(artifacts / "state.json"))
+        assert saved.current_agent == "concurrent_audit_preparation"
+        assert "audit_checks" not in saved.artifacts
+        index = list(ReviewPerspective).index(perspective)
+        self.enter()
+        try:
+            if self.mode == "verification_first":
+                assert self.collection_done.wait(10)
+                assert not self.audit_prompts
+            if index < 2:
+                assert self.finished[index + 1].wait(10)
+            if index == 1:
+                if self.mode == "review_failure":
+                    raise OrchestratorError("Agent process failed: synthetic")
+                if self.mode == "source":
+                    (cwd / "feature.txt").write_text("tampered")
+                elif self.mode == "branch":
+                    Git(cwd).run("symbolic-ref", "HEAD", "refs/heads/main")
+                elif self.mode == "state":
+                    path = artifacts / "state.json"
+                    path.write_bytes(path.read_bytes() + b" ")
+                elif self.mode == "artifact":
+                    (artifacts / "00-contract.json").write_text("tampered")
+                elif self.mode == "memory":
+                    assert self.pipeline is not None and self.pipeline.live_state is not None
+                    self.pipeline.live_state.state = State.DONE
+                    self.pipeline.live_state.artifacts = {}
+            atomic_json(artifacts / f"{name}.log.json", {"synthetic": True})
+            self.reviewer_cwds.append(cwd)
+            transient_path = cwd / ".pytest_cache/transient"
+            transient_found = transient_path.is_file()
+            self.observed_transients.append(transient_found)
+            findings = []
+            if transient_found:
+                findings.append(
+                    ReviewFinding(
+                        action=f"Transient finding in {perspective}",
+                        evidence=".pytest_cache/transient:1",
+                    )
+                )
+            findings.append(ReviewFinding(action=f"Check {perspective}", evidence="feature.txt:1"))
+            return output.model_validate(
+                ReviewShard(
+                    perspective=perspective,
+                    findings=findings,
+                )
+            )
+        finally:
+            self.leave()
+            self.completions.append(perspective)
+            self.finished[index].set()
+
+
+def concurrent_audit_pipeline(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    agents: ConcurrentAuditAgents | None = None,
+) -> tuple[AuthorityProbePipeline, ConcurrentAuditAgents]:
+    from tools.orchestrator import workflow
+
+    agents = agents or ConcurrentAuditAgents(mode)
+    config = configuration(integrate=False, cycles=0)
+    config.roles["auditor"].model = "configured-future-auditor-model"
+    config.verification = [["python", "-m", "ruff", "check", "."], ["python", "-m", "mypy", "."]]
+    pipeline = AuthorityProbePipeline(repository, config, agents)
+    agents.pipeline = pipeline
+    collect = workflow.collect_verification
+    original_execute = workflow.execute
+
+    def collecting(request: workflow.VerificationRequest) -> workflow.VerificationCollection:
+        assert threading.get_ident() != pipeline.owner
+        agents.enter(rendezvous=False)
+        try:
+            return collect(request)
+        finally:
+            agents.leave()
+            agents.collection_done.set()
+
+    def executing(command: list[str], cwd: Path, *, timeout: int | None = None) -> ProcessResult:
+        if command[0] == "git":
+            return original_execute(command, cwd, timeout=timeout)
+        assert timeout == 30
+        assert pipeline.live_state is not None
+        concurrent = pipeline.live_state.current_agent == "concurrent_audit_preparation"
+        if concurrent:
+            assert threading.get_ident() != pipeline.owner
+            if not agents.command_order:
+                agents.barrier.wait()
+                if mode == "reviewers_first":
+                    assert all(event.wait(10) for event in agents.finished)
+            target_cmd = command[2:] if command[0].endswith("env") else command
+            check_name = target_cmd[2] if len(target_cmd) > 2 else target_cmd[0]
+            agents.command_order.append(check_name)
+            if mode == "setup" and check_name == "ruff":
+                raise OrchestratorError("Executable unavailable: synthetic")
+            if mode == "verification_source":
+                (cwd / "feature.txt").write_text("verification mutation")
+            (cwd / ".pytest_cache").mkdir(exist_ok=True)
+            (cwd / ".pytest_cache/transient").write_text("ignored verification output")
+            agents.verification_cwds.append(cwd)
+            agents.verification_saw_transient.append((cwd / ".pytest_cache/transient").is_file())
+        failed = concurrent and mode in {
+            "regression_pass",
+            "regression_fail",
+            "timeout",
+            "oversized",
+        }
+        return ProcessResult(
+            command=command,
+            cwd=str(cwd),
+            started_at="start",
+            ended_at="end",
+            exit_code=7 if failed else 0,
+            stdout="synthetic output",
+            stderr="",
+            timed_out=concurrent and mode == "timeout",
+            oversized=concurrent and mode == "oversized",
+        )
+
+    save = pipeline.save
+
+    def saving(directory: Path, state: RunState) -> None:
+        if state.current_agent == "concurrent_audit_preparation":
+            agents.phase_saves += 1
+        save(directory, state)
+
+    monkeypatch.setattr(workflow, "collect_verification", collecting)
+    monkeypatch.setattr(workflow, "execute", executing)
+    monkeypatch.setattr(pipeline, "save", saving)
+    return pipeline, agents
+
+
+@pytest.mark.parametrize("mode", ["verification_first", "reviewers_first"])
+def test_concurrent_audit_overlap_ordering_and_final_barrier(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    pipeline, agents = concurrent_audit_pipeline(repository, monkeypatch, mode)
+    state = pipeline.start("T100")
+    assert state.state == State.AUDIT_PASS, state.last_error
+    assert agents.max_active == 4 and agents.active == 0
+    assert agents.phase_saves == 1
+    assert pipeline.max_invoke_active == 1 and pipeline.invoke_active == 0
+    assert agents.completions == list(reversed(ReviewPerspective))
+    assert agents.command_order == ["pytest", "ruff", "mypy"]
+    assert len(agents.audit_prompts) == 1
+    directory = pipeline.run_path("T100", state.run_id)
+    checks = read_json(directory / state.artifacts["audit_checks"])
+    assert isinstance(checks, dict)
+    assert [item["command_index"] for item in checks["results"]] == [0, 1, 2]
+    assert checks["source_digest"] == state.verified_digest == state.audited_digest
+    assert all("stdout" not in item and "stderr" not in item for item in checks["results"])
+    bundle = ReviewBundle.model_validate(read_json(directory / state.artifacts["review_bundle"]))
+    assert [shard.perspective for shard in bundle.shards] == list(ReviewPerspective)
+    assert [shard.findings[0].finding_id for shard in bundle.shards] == [
+        f"{perspective}:0001" for perspective in ReviewPerspective
+    ]
+    pipeline.check_artifacts(directory, state)
+
+
+@pytest.mark.parametrize(
+    "mode,reason",
+    [
+        ("review_failure", "incomplete"),
+        ("setup", "SETUP_FAILED"),
+        ("source", "repository source"),
+        ("verification_source", "repository source"),
+        ("branch", "changed branch"),
+        ("state", "protected evidence or state"),
+        ("artifact", "protected evidence or state"),
+        ("memory", "in-memory orchestration state"),
+    ],
+)
+def test_concurrent_audit_failures_reap_all_lanes(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    reason: str,
+) -> None:
+    pipeline, agents = concurrent_audit_pipeline(repository, monkeypatch, mode)
+    state = pipeline.start("T100")
+    assert state.state == State.FAILED and reason in (state.last_error or "")
+    assert agents.max_active == 4 and agents.active == 0
+    assert agents.collection_done.is_set() and all(event.is_set() for event in agents.finished)
+    assert agents.completions == list(reversed(ReviewPerspective))
+    assert not agents.audit_prompts and "review_bundle" not in state.artifacts
+    if mode in {"setup", "review_failure"}:
+        directory = pipeline.run_path("T100", state.run_id)
+        pipeline.check_artifacts(directory, state)
+        assert "audit_checks" in state.artifacts
+        assert len([name for name in state.artifacts if name.endswith(".log.json")]) == (
+            2 if mode == "review_failure" else 3
+        )
+        assert agents.command_order == (
+            ["pytest", "ruff"] if mode == "setup" else ["pytest", "ruff", "mypy"]
+        )
+
+
+@pytest.mark.parametrize("mode", ["regression_pass", "regression_fail", "timeout", "oversized"])
+def test_concurrent_audit_regression_evidence_and_pass_rejection(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    pipeline, agents = concurrent_audit_pipeline(repository, monkeypatch, mode)
+    state = pipeline.start("T100")
+    assert state.state == State.FAILED
+    assert agents.collection_done.is_set() and all(event.is_set() for event in agents.finished)
+    assert agents.command_order == ["pytest"]  # Existing stop-at-first-failed-command semantics.
+    assert len(agents.audit_prompts) == (1 if mode == "regression_fail" else 3)
+    assert (
+        "Maximum fix" in (state.last_error or "")
+        if mode == "regression_fail"
+        else "contradicts failed" in (state.last_error or "")
+    )
+    directory = pipeline.run_path("T100", state.run_id)
+    checks = read_json(directory / state.artifacts["audit_checks"])
+    assert isinstance(checks, dict)
+    assert len(checks["results"]) == 1 and checks["results"][0]["exit_code"] == 7
+    assert checks["results"][0]["timed_out"] is (mode == "timeout")
+    assert checks["results"][0]["oversized"] is (mode == "oversized")
+    assert "review_bundle" in state.artifacts
+    assert ("audit" in state.artifacts) is (mode == "regression_fail")
+
+
+@pytest.mark.parametrize("mode", ["verification_first", "reviewers_first"])
+def test_concurrent_audit_transient_boundary_and_stable_finding_ids(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    pipeline, agents = concurrent_audit_pipeline(repository, monkeypatch, mode)
+    state = pipeline.start("T100")
+    assert state.state == State.AUDIT_PASS, state.last_error
+    # 1. Assert verification sees and creates the transient file in its own cwd
+    assert agents.verification_cwds
+    assert agents.verification_saw_transient
+    assert all(saw is True for saw in agents.verification_saw_transient)
+    # The temporary verification workspace is cleaned up after verification completes:
+    assert all(not c.exists() for c in agents.verification_cwds)
+    # 2. Assert reviewer does NOT see it from its reviewer cwd (workspace boundary)
+    assert len(agents.observed_transients) == 3
+    assert all(observed is False for observed in agents.observed_transients)
+    assert not (Path(state.worktree_path) / ".pytest_cache/transient").exists()
+    assert all(cwd == Path(state.worktree_path) for cwd in agents.reviewer_cwds)
+    assert all(c != Path(state.worktree_path) for c in agents.verification_cwds)
+    # 3. Assert transient content does not appear in ReviewShard or ReviewBundle
+    directory = pipeline.run_path("T100", state.run_id)
+    bundle = ReviewBundle.model_validate(read_json(directory / state.artifacts["review_bundle"]))
+    for shard in bundle.shards:
+        assert len(shard.findings) == 1
+        assert shard.findings[0].finding_id == f"{shard.perspective}:0001"
+        assert shard.findings[0].action == f"Check {shard.perspective}"
+        assert shard.findings[0].evidence == "feature.txt:1"
+        assert ".pytest_cache" not in shard.findings[0].evidence
+        assert "transient" not in shard.findings[0].evidence
+    # 4. Assert transient content is not delivered to final Auditor
+    assert len(agents.audit_prompts) == 1
+    assert ".pytest_cache" not in agents.audit_prompts[0]
+    assert "transient" not in agents.audit_prompts[0]
+    # 5. Counterfactual probe verification: prove probe WOULD observe transient and shift IDs
+    # if boundary were removed and probe was invoked in a directory with transient output
+    unisolated_dir = repository.parent / f"unisolated-{mode}"
+    unisolated_dir.mkdir(exist_ok=True)
+    (unisolated_dir / "feature.txt").write_text("good\n")
+    (unisolated_dir / ".pytest_cache").mkdir(exist_ok=True)
+    (unisolated_dir / ".pytest_cache/transient").write_text("ignored verification output")
+    counterfactual = agents.run(
+        agents.reviewer_prompts[0],
+        cwd=unisolated_dir,
+        role=pipeline.config.roles["auditor"],
+        timeout=30,
+        output=ReviewShard,
+        artifacts=directory,
+        name=f"probe-{mode}",
+        readonly=True,
+    )
+    assert isinstance(counterfactual, ReviewShard)
+    assert len(counterfactual.findings) == 2
+    assert counterfactual.findings[0].evidence == ".pytest_cache/transient:1"
+    # If bundled in same cwd, the source finding would shift to :0002:
+    counterfactual_bundle = ReviewBundle.assemble(
+        state.verified_digest,
+        state.worktree_branch,
+        [
+            counterfactual,
+            *[shard for shard in bundle.shards if shard.perspective != counterfactual.perspective],
+        ],
+    )
+    shifted = next(
+        s for s in counterfactual_bundle.shards if s.perspective == counterfactual.perspective
+    )
+    assert shifted.findings[0].finding_id == f"{counterfactual.perspective}:0001"
+    assert shifted.findings[0].evidence == ".pytest_cache/transient:1"
+    assert shifted.findings[1].finding_id == f"{counterfactual.perspective}:0002"
+    assert shifted.findings[1].evidence == "feature.txt:1"
+
+
+def test_concurrent_audit_toolchain_unsafe_backlink_fails_closed(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (repository / ".gitignore").write_text(
+        (repository / ".gitignore").read_text() + "node_modules/\n.venv/\n"
+    )
+    Git(repository).run("add", ".gitignore")
+    Git(repository).run("commit", "-m", "ignore local toolchains")
+
+    class UnsafeBacklinkAgents(ConcurrentAuditAgents):
+        def run(
+            self,
+            prompt: str,
+            *,
+            cwd: Path,
+            role: Role,
+            timeout: int | None,
+            output: type[Output],
+            artifacts: Path,
+            name: str,
+            readonly: bool,
+        ) -> Output:
+            result = super().run(
+                prompt,
+                cwd=cwd,
+                role=role,
+                timeout=timeout,
+                output=output,
+                artifacts=artifacts,
+                name=name,
+                readonly=readonly,
+            )
+            if output == WorkerResult:
+                # Reproduce the exact independent audit finding:
+                # node_modules/local-candidate -> reviewer/task worktree
+                nm = cwd / "node_modules"
+                nm.mkdir(parents=True, exist_ok=True)
+                (nm / "local-candidate").symlink_to(cwd)
+            return result
+
+    agents = UnsafeBacklinkAgents("verification_first")
+    pipeline, agents = concurrent_audit_pipeline(
+        repository, monkeypatch, "verification_first", agents=agents
+    )
+
+    state = pipeline.start("T100")
+    assert state.state == State.FAILED
+    assert "Unsafe toolchain backlink" in (state.last_error or "")
+    assert len(agents.reviewer_cwds) == 0
+    assert len(agents.verification_cwds) == 0
+    assert "review_bundle" not in state.artifacts
+    assert len(agents.audit_prompts) == 0
+    assert Git(repository).snapshot(state.base_sha) is not None
+
+
+def test_concurrent_audit_toolchain_safe_shared_toolchains_work(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (repository / ".gitignore").write_text(
+        (repository / ".gitignore").read_text() + "node_modules/\n.venv/\n"
+    )
+    Git(repository).run("add", ".gitignore")
+    Git(repository).run("commit", "-m", "ignore local toolchains")
+
+    class SafeToolchainAgents(ConcurrentAuditAgents):
+        def run(
+            self,
+            prompt: str,
+            *,
+            cwd: Path,
+            role: Role,
+            timeout: int | None,
+            output: type[Output],
+            artifacts: Path,
+            name: str,
+            readonly: bool,
+        ) -> Output:
+            result = super().run(
+                prompt,
+                cwd=cwd,
+                role=role,
+                timeout=timeout,
+                output=output,
+                artifacts=artifacts,
+                name=name,
+                readonly=readonly,
+            )
+            if output == WorkerResult:
+                # Safe node_modules with internal symlink
+                nm = cwd / "node_modules"
+                (nm / "typescript/bin").mkdir(parents=True, exist_ok=True)
+                (nm / "typescript/bin/tsc").write_text("console.log('tsc');\n")
+                (nm / ".bin").mkdir(parents=True, exist_ok=True)
+                (nm / ".bin/tsc").symlink_to("../typescript/bin/tsc")
+
+                # Safe .venv with system interpreter link
+                venv = cwd / ".venv"
+                bin_dir = venv / ("Scripts" if os.name == "nt" else "bin")
+                bin_dir.mkdir(parents=True, exist_ok=True)
+                (bin_dir / "python").symlink_to(Path(sys.executable).resolve())
+            return result
+
+    agents = SafeToolchainAgents("verification_first")
+    pipeline, agents = concurrent_audit_pipeline(
+        repository, monkeypatch, "verification_first", agents=agents
+    )
+
+    state = pipeline.start("T100")
+    assert state.state == State.AUDIT_PASS, state.last_error
+    assert len(agents.reviewer_cwds) == 3
+    assert len(agents.verification_cwds) > 0
+    assert "review_bundle" in state.artifacts
+    assert len(agents.audit_prompts) == 1
+
+
+def test_concurrent_audit_materialization_distinct_staged_and_working_content(
+    repository: Path,
+) -> None:
+    git = Git(repository)
+    base_sha = git.sha()
+    worktree_path = repository.parent / "test-worktree-distinct"
+    git.create_worktree(worktree_path, "feature-distinct", base_sha)
+    worktree_git = Git(worktree_path)
+
+    target_file = worktree_path / "distinct.txt"
+    target_file.write_text("value 0\n")
+    worktree_git.run("add", "distinct.txt")
+    worktree_git.run("commit", "-m", "base value 0")
+    distinct_base = worktree_git.sha()
+
+    target_file.write_text("value 1\n")
+    worktree_git.run("add", "distinct.txt")
+    target_file.write_text("value 2\n")
+
+    frozen_digest = worktree_git.snapshot(distinct_base)
+    pipeline = Pipeline(repository, configuration(), FakeAgents())
+
+    with pipeline.verification_workspace(
+        worktree_path, frozen_digest, distinct_base, "T100", "run-1"
+    ) as (verify_path, verify_git):
+        # 1. Assert independently sandbox cached/index content == "value 1\n"
+        sandbox_index_diff = verify_git.run("diff", "--cached", "--binary", distinct_base, "--")
+        original_index_diff = worktree_git.run("diff", "--cached", "--binary", distinct_base, "--")
+        assert sandbox_index_diff == original_index_diff
+        assert "value 1" in sandbox_index_diff
+        assert "value 2" not in sandbox_index_diff
+
+        # 2. Assert independently sandbox working content == "value 2\n"
+        assert (verify_path / "distinct.txt").read_text() == "value 2\n"
+
+        # 3. Assert sandbox snapshot == original frozen snapshot before any test execution
+        assert verify_git.snapshot(distinct_base) == frozen_digest
+
+
+def test_concurrent_audit_materialization_binary_mode_and_deletion(
+    repository: Path,
+) -> None:
+    git = Git(repository)
+    base_sha = git.sha()
+    worktree_path = repository.parent / "test-worktree-binary-mode-del"
+    git.create_worktree(worktree_path, "feature-bmd", base_sha)
+    worktree_git = Git(worktree_path)
+
+    (worktree_path / "binary.bin").write_bytes(bytes(range(256)))
+    (worktree_path / "staged_delete.txt").write_text("delete staged\n")
+    (worktree_path / "unstaged_delete.txt").write_text("delete unstaged\n")
+    (worktree_path / "script.sh").write_text("#!/bin/sh\necho hi\n")
+    worktree_git.run("add", ".")
+    worktree_git.run("commit", "-m", "initial files for c4")
+    c4_base = worktree_git.sha()
+
+    (worktree_path / "binary.bin").write_bytes(b"staged" + bytes(range(128)))
+    worktree_git.run("add", "binary.bin")
+    (worktree_path / "binary.bin").write_bytes(b"working" + bytes(range(64)))
+
+    worktree_git.run("rm", "staged_delete.txt")
+    (worktree_path / "unstaged_delete.txt").unlink()
+
+    (worktree_path / "script.sh").chmod(0o755)
+    worktree_git.run("add", "script.sh")
+
+    nested_dir = worktree_path / "nested/sub"
+    nested_dir.mkdir(parents=True)
+    untracked = nested_dir / "candidate.txt"
+    untracked.write_text("untracked payload\n")
+    untracked.chmod(0o755)
+
+    cache_dir = worktree_path / ".pytest_cache"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "transient").write_text("transient cache\n")
+
+    frozen_digest = worktree_git.snapshot(c4_base)
+    pipeline = Pipeline(repository, configuration(), FakeAgents())
+
+    with pipeline.verification_workspace(
+        worktree_path, frozen_digest, c4_base, "T100", "run-1"
+    ) as (verify_path, verify_git):
+        assert verify_git.snapshot(c4_base) == frozen_digest
+        assert (verify_path / "binary.bin").read_bytes() == b"working" + bytes(range(64))
+        assert not (verify_path / "staged_delete.txt").exists()
+        assert not (verify_path / "unstaged_delete.txt").exists()
+        assert (verify_path / "script.sh").stat().st_mode & 0o111 != 0
+        assert (verify_path / "nested/sub/candidate.txt").is_file()
+        assert (verify_path / "nested/sub/candidate.txt").read_text() == "untracked payload\n"
+        assert not (verify_path / ".pytest_cache").exists()
+
+
+def _ignore_toolchains(repo: Path) -> str:
+    gi = repo / ".gitignore"
+    gi.write_text(gi.read_text() + "node_modules\nnode_modules/\n.venv\n.venv/\n")
+    git = Git(repo)
+    git.run("add", ".gitignore")
+    git.run("commit", "-m", "ignore toolchains")
+    return git.sha()
+
+
+def test_concurrent_audit_private_toolchain_root_symlink_parent_traversal(
+    repository: Path,
+) -> None:
+    git = Git(repository)
+    base_sha = _ignore_toolchains(repository)
+    worktree_path = repository.parent / "test-worktree-parent-traversal"
+    git.create_worktree(worktree_path, "feature-parent-traversal", base_sha)
+    worktree_git = Git(worktree_path)
+
+    nm = worktree_path / "node_modules"
+    (nm / "pkg/bin").mkdir(parents=True)
+    (nm / "pkg/bin/run.js").write_text("console.log('pkg');\n")
+
+    frozen_digest = worktree_git.snapshot(base_sha)
+    pipeline = Pipeline(repository, configuration(), FakeAgents())
+
+    with pipeline.verification_workspace(
+        worktree_path, frozen_digest, base_sha, "T100", "run-1"
+    ) as (verify_path, _):
+        assert (verify_path / "node_modules").is_dir()
+        assert not (verify_path / "node_modules").is_symlink()
+
+        parent_dir = (verify_path / "node_modules" / "..").resolve()
+        assert parent_dir == verify_path.resolve()
+        assert parent_dir != worktree_path.resolve()
+
+        transient_file = verify_path / "node_modules/../.pytest_cache/transient"
+        transient_file.parent.mkdir(parents=True, exist_ok=True)
+        transient_file.write_text("transient verification data\n")
+
+        assert (verify_path / ".pytest_cache/transient").exists()
+        assert not (worktree_path / ".pytest_cache/transient").exists()
+        assert not (worktree_path / ".pytest_cache").exists()
+
+
+def test_concurrent_audit_private_toolchain_node_modules_root_alias(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base_sha = _ignore_toolchains(repository)
+
+    worktree_path = repository.parent / "test-worktree-nm-symlink-src"
+    Git(repository).create_worktree(worktree_path, "feature-nm-symlink", base_sha)
+    repo_nm = repository / "node_modules"
+    (repo_nm / "real-pkg").mkdir(parents=True, exist_ok=True)
+    (repo_nm / "real-pkg/index.js").write_text("module.exports = 1;\n")
+    (worktree_path / "node_modules").symlink_to(repo_nm)
+    pipeline = Pipeline(repository, configuration(), FakeAgents())
+    frozen_digest = Git(worktree_path).snapshot(base_sha)
+    with pipeline.verification_workspace(
+        worktree_path, frozen_digest, base_sha, "T100", "run-symlink-src"
+    ) as (verify_path, _):
+        assert (verify_path / "node_modules").is_dir()
+        assert not (verify_path / "node_modules").is_symlink()
+        assert (verify_path / "node_modules/real-pkg/index.js").is_file()
+
+    class RootAliasAgents(ConcurrentAuditAgents):
+        def run(
+            self,
+            prompt: str,
+            *,
+            cwd: Path,
+            role: Role,
+            timeout: int | None,
+            output: type[Output],
+            artifacts: Path,
+            name: str,
+            readonly: bool,
+        ) -> Output:
+            result = super().run(
+                prompt,
+                cwd=cwd,
+                role=role,
+                timeout=timeout,
+                output=output,
+                artifacts=artifacts,
+                name=name,
+                readonly=readonly,
+            )
+            if output == WorkerResult:
+                cache_dir = cwd / ".pytest_cache"
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                (cache_dir / "marker.txt").write_text("SECRET_REVIEWER_MARKER\n")
+                nm_alias = cwd / "node_modules"
+                if nm_alias.exists() or nm_alias.is_symlink():
+                    nm_alias.unlink()
+                nm_alias.symlink_to(cache_dir)
+            return result
+
+    agents = RootAliasAgents("verification_first")
+    pipeline, agents = concurrent_audit_pipeline(
+        repository, monkeypatch, "verification_first", agents=agents
+    )
+    state = pipeline.start("T100")
+    assert state.state == State.FAILED
+    assert "Unsafe toolchain root" in (state.last_error or "")
+    assert len(agents.reviewer_cwds) == 0
+    assert len(agents.verification_cwds) == 0
+    assert "review_bundle" not in state.artifacts
+    assert len(agents.audit_prompts) == 0
+    directory = pipeline.run_path("T100", state.run_id)
+    assert not any(
+        "SECRET_REVIEWER_MARKER" in p.read_text(errors="replace") for p in directory.glob("*.json")
+    )
+
+
+def test_concurrent_audit_private_toolchain_unreadable_directory_fails_closed(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _ignore_toolchains(repository)
+
+    class UnreadableToolchainAgents(ConcurrentAuditAgents):
+        def run(
+            self,
+            prompt: str,
+            *,
+            cwd: Path,
+            role: Role,
+            timeout: int | None,
+            output: type[Output],
+            artifacts: Path,
+            name: str,
+            readonly: bool,
+        ) -> Output:
+            result = super().run(
+                prompt,
+                cwd=cwd,
+                role=role,
+                timeout=timeout,
+                output=output,
+                artifacts=artifacts,
+                name=name,
+                readonly=readonly,
+            )
+            if output == WorkerResult:
+                nm = cwd / "node_modules"
+                (nm / "secret_sub").mkdir(parents=True, exist_ok=True)
+                (nm / "secret_sub/file.js").write_text("console.log(1);\n")
+            return result
+
+    agents = UnreadableToolchainAgents("verification_first")
+    pipeline, agents = concurrent_audit_pipeline(
+        repository, monkeypatch, "verification_first", agents=agents
+    )
+
+    real_scandir = os.scandir
+
+    def faulty_scandir(path: object = ".") -> object:
+        path_str = str(path)
+        if "secret_sub" in path_str:
+            raise PermissionError("Simulated permission denied on toolchain inspection")
+        return real_scandir(path)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "scandir", faulty_scandir)
+
+    state = pipeline.start("T100")
+    assert state.state == State.FAILED
+    assert "Unreadable toolchain directory" in (state.last_error or "")
+    assert len(agents.reviewer_cwds) == 0
+    assert len(agents.verification_cwds) == 0
+    assert "review_bundle" not in state.artifacts
+    assert len(agents.audit_prompts) == 0
+
+
+def test_concurrent_audit_root_discovery_whitespace_sensitive_and_failure(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    git = Git(repository)
+    base_sha = git.sha()
+
+    space_worktree = repository.parent / "worktree_with_trailing_space   "
+    git.create_worktree(space_worktree, "space-branch", base_sha)
+    pipeline = Pipeline(repository, configuration(), FakeAgents())
+
+    roots = pipeline.authoritative_roots(space_worktree)
+    assert space_worktree.resolve() in roots
+
+    test_tree = repository.parent / "test-worktree-backlink-space"
+    git.create_worktree(test_tree, "feature-backlink-space", base_sha)
+    nm = test_tree / "node_modules"
+    nm.mkdir(parents=True)
+    (nm / "backlink").symlink_to(space_worktree)
+
+    with pytest.raises(OrchestratorError, match="Unsafe toolchain backlink"):
+        materialize_private_toolchain(
+            nm,
+            test_tree / "sandbox_nm",
+            roots,
+            "node_modules",
+            repo_root=repository,
+            working_root=test_tree,
+        )
+
+    def faulty_run(*args: str, **kwargs: object) -> str:
+        if args and args[0] == "worktree":
+            raise OrchestratorError("Simulated git worktree list failure")
+        return git.run(*args, **kwargs)
+
+    monkeypatch.setattr(pipeline.git, "run", faulty_run)
+    with pytest.raises(OrchestratorError, match="Failed to discover registered worktrees"):
+        pipeline.authoritative_roots(space_worktree)
+
+
+def test_concurrent_audit_private_toolchain_no_shell_launcher_or_injection(
+    repository: Path,
+) -> None:
+    git = Git(repository)
+    base_sha = _ignore_toolchains(repository)
+    worktree_path = repository.parent / "test-worktree-no-launcher"
+    git.create_worktree(worktree_path, "feature-no-launcher", base_sha)
+
+    venv = worktree_path / ".venv"
+    bin_dir = venv / ("Scripts" if os.name == "nt" else "bin")
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "python").symlink_to(Path(sys.executable).resolve())
+
+    injection_name = "$(touch LAUNCHER_INJECTION)"
+    (bin_dir / injection_name).write_text("payload\n")
+
+    frozen_digest = Git(worktree_path).snapshot(base_sha)
+    pipeline = Pipeline(repository, configuration(), FakeAgents())
+
+    with pipeline.verification_workspace(
+        worktree_path, frozen_digest, base_sha, "T100", "run-no-launcher"
+    ) as (verify_path, _):
+        python_exe = verify_path / ".venv" / ("Scripts/python" if os.name == "nt" else "bin/python")
+        assert python_exe.exists()
+        if python_exe.is_symlink():
+            target = python_exe.resolve()
+            assert target == Path(sys.executable).resolve()
+        else:
+            header = python_exe.read_bytes()[:16]
+            assert b"#!/bin/sh" not in header
+
+        assert not (worktree_path / "LAUNCHER_INJECTION").exists()
+        assert not (repository / "LAUNCHER_INJECTION").exists()
+        assert not (verify_path / "LAUNCHER_INJECTION").exists()
+        assert not Path("LAUNCHER_INJECTION").exists()
+
+
+def test_concurrent_audit_private_toolchain_real_venv_package_preservation(
+    repository: Path,
+) -> None:
+    git = Git(repository)
+    base_sha = _ignore_toolchains(repository)
+    worktree_path = repository.parent / "test-worktree-real-venv"
+    git.create_worktree(worktree_path, "feature-real-venv", base_sha)
+
+    venv = worktree_path / ".venv"
+    bin_dir = venv / ("Scripts" if os.name == "nt" else "bin")
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "python").symlink_to(Path(sys.executable).resolve())
+    py_ver = f"{sys.version_info.major}.{sys.version_info.minor}"
+    sp = (
+        venv / "Lib" / "site-packages"
+        if os.name == "nt"
+        else venv / "lib" / f"python{py_ver}" / "site-packages"
+    )
+    (sp / "pytest").mkdir(parents=True)
+    (sp / "pytest" / "__init__.py").write_text(f"__version__ = {pytest.__version__!r}\n")
+    (venv / "pyvenv.cfg").write_text(
+        f"home = {Path(sys.executable).resolve().parent}\n"
+        "include-system-site-packages = false\n"
+        f"version = {py_ver}\n"
+    )
+
+    frozen_digest = Git(worktree_path).snapshot(base_sha)
+    pipeline = Pipeline(repository, configuration(), FakeAgents())
+
+    with pipeline.verification_workspace(
+        worktree_path, frozen_digest, base_sha, "T100", "run-real-venv"
+    ) as (verify_path, _):
+        sandbox_python = (
+            verify_path / ".venv" / ("Scripts/python" if os.name == "nt" else "bin/python")
+        )
+        assert sandbox_python.exists()
+
+        proc = subprocess.run(
+            [str(sandbox_python), "-c", "import pytest; print(pytest.__version__)"],
+            cwd=verify_path,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert proc.returncode == 0, (
+            f"Subprocess failed: stderr={proc.stderr}, stdout={proc.stdout}"
+        )
+        assert proc.stdout.strip()
+
+        # R4 invariant: sandbox_python resolves strictly inside verify_path,
+        # not into worktree or host
+        assert sandbox_python.resolve().is_relative_to((verify_path / ".venv").resolve())
+        assert not sandbox_python.resolve().is_relative_to(worktree_path.resolve())
+        assert not sandbox_python.resolve().is_relative_to(repository.resolve())
+        # Materialized private executable copy has distinct inode
+        assert sandbox_python.stat().st_ino != Path(sys.executable).resolve().stat().st_ino
+
+
+def test_concurrent_audit_private_toolchain_copy_write_isolation(
+    repository: Path,
+) -> None:
+    git = Git(repository)
+    base_sha = _ignore_toolchains(repository)
+    worktree_path = repository.parent / "test-worktree-write-isolation"
+    git.create_worktree(worktree_path, "feature-write-iso", base_sha)
+
+    nm = worktree_path / "node_modules"
+    (nm / "pkg").mkdir(parents=True)
+    (nm / "pkg/index.js").write_text("original\n")
+
+    venv = worktree_path / ".venv"
+    (venv / "bin").mkdir(parents=True)
+    (venv / "bin/python").symlink_to(Path(sys.executable).resolve())
+    (venv / "cfg.txt").write_text("original_venv\n")
+
+    frozen_digest = Git(worktree_path).snapshot(base_sha)
+    pipeline = Pipeline(repository, configuration(), FakeAgents())
+
+    with pipeline.verification_workspace(
+        worktree_path, frozen_digest, base_sha, "T100", "run-write-iso"
+    ) as (verify_path, _):
+        assert (verify_path / "node_modules").is_dir()
+        assert not (verify_path / "node_modules").is_symlink()
+        assert (verify_path / ".venv").is_dir()
+        assert not (verify_path / ".venv").is_symlink()
+
+        sandbox_file = verify_path / "node_modules/pkg/index.js"
+        host_file = worktree_path / "node_modules/pkg/index.js"
+        assert sandbox_file.stat().st_ino != host_file.stat().st_ino
+
+        (verify_path / "node_modules/pkg/sandbox_mutation.txt").write_text("private write")
+        (verify_path / ".venv/sandbox_mutation.txt").write_text("private venv write")
+
+        assert not (worktree_path / "node_modules/pkg/sandbox_mutation.txt").exists()
+        assert not (worktree_path / ".venv/sandbox_mutation.txt").exists()
+
+        assert not (repository / "node_modules/pkg/sandbox_mutation.txt").exists()
+        assert not (repository / ".venv/sandbox_mutation.txt").exists()
+
+        # R4 invariant: modifying existing files in private toolchain does not mutate host files
+        sandbox_file.write_text("mutated_sandbox_file\n")
+        assert host_file.read_text() == "original\n"
+
+        sandbox_venv_file = verify_path / ".venv/cfg.txt"
+        sandbox_venv_file.write_text("mutated_sandbox_venv\n")
+        assert (worktree_path / ".venv/cfg.txt").read_text() == "original_venv\n"
+
+
+def test_concurrent_audit_private_toolchain_internal_symlinks_preserved(
+    repository: Path,
+) -> None:
+    git = Git(repository)
+    base_sha = _ignore_toolchains(repository)
+    worktree_path = repository.parent / "test-worktree-internal-symlinks"
+    git.create_worktree(worktree_path, "feature-internal-symlinks", base_sha)
+
+    nm = worktree_path / "node_modules"
+    (nm / "typescript/bin").mkdir(parents=True)
+    (nm / "typescript/bin/tsc").write_text("console.log('tsc')\n")
+    (nm / ".bin").mkdir(parents=True)
+    (nm / ".bin/tsc").symlink_to("../typescript/bin/tsc")
+
+    venv = worktree_path / ".venv"
+    (venv / "bin").mkdir(parents=True)
+    (venv / "bin/python3").symlink_to(Path(sys.executable).resolve())
+    (venv / "bin/python").symlink_to("python3")
+    (venv / "lib").mkdir(parents=True)
+    (venv / "lib/site.py").write_text("site\n")
+    (venv / "lib64").symlink_to("lib")
+
+    frozen_digest = Git(worktree_path).snapshot(base_sha)
+    pipeline = Pipeline(repository, configuration(), FakeAgents())
+
+    with pipeline.verification_workspace(
+        worktree_path, frozen_digest, base_sha, "T100", "run-internal-symlinks"
+    ) as (verify_path, _):
+        sandbox_tsc = verify_path / "node_modules/.bin/tsc"
+        assert sandbox_tsc.is_symlink()
+        assert sandbox_tsc.resolve().is_relative_to((verify_path / "node_modules").resolve())
+        assert not sandbox_tsc.resolve().is_relative_to(worktree_path.resolve())
+        assert not sandbox_tsc.resolve().is_relative_to(repository.resolve())
+
+        sandbox_lib64 = verify_path / ".venv/lib64"
+        assert sandbox_lib64.is_symlink()
+        assert sandbox_lib64.resolve().is_relative_to((verify_path / ".venv").resolve())
+        assert not sandbox_lib64.resolve().is_relative_to(worktree_path.resolve())
+
+
+def test_concurrent_audit_private_toolchain_external_regular_file_symlink_reproduction(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Exact reproduction of Audit #3 HIGH finding:
+
+    Writing through sandbox/node_modules/pkg/link.js must NOT mutate host file.
+    R4 policy: external regular-file symlink is rejected before lane dispatch (Outcome A),
+    leaving the original external host file completely unchanged (content, inode, mtime).
+    """
+    git = Git(repository)
+    base_sha = _ignore_toolchains(repository)
+
+    # 1. External host toolchain file outside all repositories and worktrees
+    host_toolchain = tmp_path / "host_toolchain"
+    host_toolchain.mkdir()
+    host_file = host_toolchain / "external.js"
+    orig_content = "console.log('original host toolchain content');\n"
+    host_file.write_text(orig_content, encoding="utf-8")
+    orig_stat = host_file.stat()
+    orig_inode = orig_stat.st_ino
+    orig_mtime_ns = orig_stat.st_mtime_ns
+
+    # 2. Worktree with symlink pointing to external regular file
+    worktree_path = repository.parent / "test-worktree-ext-file"
+    git.create_worktree(worktree_path, "feature-ext-file", base_sha)
+    nm = worktree_path / "node_modules"
+    (nm / "pkg").mkdir(parents=True)
+    link_js = nm / "pkg/link.js"
+    link_js.symlink_to(host_file)
+
+    frozen_digest = Git(worktree_path).snapshot(base_sha)
+    pipeline = Pipeline(repository, configuration(), FakeAgents())
+
+    # Verification workspace preparation rejects the external symlink before dispatch
+    with (
+        pytest.raises(OrchestratorError, match="Unsafe external file symlink in toolchain"),
+        pipeline.verification_workspace(
+            worktree_path, frozen_digest, base_sha, "T100", "run-ext-file"
+        ),
+    ):
+        pass
+
+    # Host file evidence is completely unchanged
+    assert host_file.read_text(encoding="utf-8") == orig_content
+    assert host_file.stat().st_ino == orig_inode
+    assert host_file.stat().st_mtime_ns == orig_mtime_ns
+
+    # 3. Prove pre-dispatch failure semantics during pipeline run
+    class ExternalFileSymlinkAgents(ConcurrentAuditAgents):
+        def run(
+            self,
+            prompt: str,
+            *,
+            cwd: Path,
+            role: Role,
+            timeout: int | None,
+            output: type[Output],
+            artifacts: Path,
+            name: str,
+            readonly: bool,
+        ) -> Output:
+            result = super().run(
+                prompt,
+                cwd=cwd,
+                role=role,
+                timeout=timeout,
+                output=output,
+                artifacts=artifacts,
+                name=name,
+                readonly=readonly,
+            )
+            if output == WorkerResult:
+                pkg_dir = cwd / "node_modules/pkg"
+                pkg_dir.mkdir(parents=True, exist_ok=True)
+                (pkg_dir / "link.js").symlink_to(host_file)
+            return result
+
+    agents = ExternalFileSymlinkAgents("verification_first")
+    pipeline, agents = concurrent_audit_pipeline(
+        repository, monkeypatch, "verification_first", agents=agents
+    )
+
+    state = pipeline.start("T100")
+    assert state.state == State.FAILED
+    assert "Unsafe external file symlink in toolchain" in (state.last_error or "")
+    # Pre-dispatch failure assertions: zero calls executed
+    assert len(agents.reviewer_cwds) == 0
+    assert len(agents.verification_cwds) == 0
+    assert "review_bundle" not in state.artifacts
+    assert len(agents.audit_prompts) == 0
+
+    # Host file remains completely untouched
+    assert host_file.read_text(encoding="utf-8") == orig_content
+    assert host_file.stat().st_ino == orig_inode
+    assert host_file.stat().st_mtime_ns == orig_mtime_ns
+
+
+def test_concurrent_audit_private_toolchain_external_directory_symlink_fails_closed(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """External directory symlinks fail closed before dispatch."""
+    git = Git(repository)
+    base_sha = _ignore_toolchains(repository)
+
+    ext_dir = tmp_path / "host_external_dir"
+    ext_dir.mkdir()
+    (ext_dir / "data.txt").write_text("external dir data\n")
+
+    worktree_path = repository.parent / "test-worktree-ext-dir"
+    git.create_worktree(worktree_path, "feature-ext-dir", base_sha)
+    nm = worktree_path / "node_modules"
+    nm.mkdir(parents=True)
+    (nm / "ext_pkg").symlink_to(ext_dir)
+
+    frozen_digest = Git(worktree_path).snapshot(base_sha)
+    pipeline = Pipeline(repository, configuration(), FakeAgents())
+
+    with (
+        pytest.raises(OrchestratorError, match="Unsafe external directory symlink in toolchain"),
+        pipeline.verification_workspace(
+            worktree_path, frozen_digest, base_sha, "T100", "run-ext-dir"
+        ),
+    ):
+        pass
+
+    assert (ext_dir / "data.txt").read_text() == "external dir data\n"
+
+    # Pre-dispatch failure in pipeline
+    class ExternalDirSymlinkAgents(ConcurrentAuditAgents):
+        def run(
+            self,
+            prompt: str,
+            *,
+            cwd: Path,
+            role: Role,
+            timeout: int | None,
+            output: type[Output],
+            artifacts: Path,
+            name: str,
+            readonly: bool,
+        ) -> Output:
+            result = super().run(
+                prompt,
+                cwd=cwd,
+                role=role,
+                timeout=timeout,
+                output=output,
+                artifacts=artifacts,
+                name=name,
+                readonly=readonly,
+            )
+            if output == WorkerResult:
+                (cwd / "node_modules").mkdir(parents=True, exist_ok=True)
+                (cwd / "node_modules/ext_pkg").symlink_to(ext_dir)
+            return result
+
+    agents = ExternalDirSymlinkAgents("verification_first")
+    pipeline, agents = concurrent_audit_pipeline(
+        repository, monkeypatch, "verification_first", agents=agents
+    )
+
+    state = pipeline.start("T100")
+    assert state.state == State.FAILED
+    assert "Unsafe external directory symlink in toolchain" in (state.last_error or "")
+    assert len(agents.reviewer_cwds) == 0
+    assert len(agents.verification_cwds) == 0
+    assert "review_bundle" not in state.artifacts
+    assert len(agents.audit_prompts) == 0
+
+
+def test_concurrent_audit_private_toolchain_nested_symlink_chain_cannot_escape(
+    repository: Path,
+    tmp_path: Path,
+) -> None:
+    """Nested symlink chains cannot escape sandbox via chained or relative paths."""
+    git = Git(repository)
+    base_sha = _ignore_toolchains(repository)
+
+    ext_file = tmp_path / "host_secret.txt"
+    ext_file.write_text("secret\n")
+
+    worktree_path = repository.parent / "test-worktree-nested-chain"
+    git.create_worktree(worktree_path, "feature-nested-chain", base_sha)
+
+    nm = worktree_path / "node_modules"
+    (nm / "pkg").mkdir(parents=True)
+    # link3 points outside -> link2 points to link3 -> link1 points to link2
+    (nm / "pkg/link3").symlink_to(ext_file)
+    (nm / "pkg/link2").symlink_to("link3")
+    (nm / "pkg/link1").symlink_to("link2")
+
+    frozen_digest = Git(worktree_path).snapshot(base_sha)
+    pipeline = Pipeline(repository, configuration(), FakeAgents())
+
+    with (
+        pytest.raises(OrchestratorError, match="Unsafe external file symlink in toolchain"),
+        pipeline.verification_workspace(
+            worktree_path, frozen_digest, base_sha, "T100", "run-nested"
+        ),
+    ):
+        pass
+
+    assert ext_file.read_text() == "secret\n"
+
+    # Relative escaping chain: link_a -> link_b -> relative path to outside_relative.txt
+    outside_file = tmp_path / "outside_relative.txt"
+    outside_file.write_text("outside\n")
+    nm2 = worktree_path / "node_modules/escape_rel"
+    nm2.mkdir(parents=True)
+    rel_path = os.path.relpath(outside_file, nm2)
+    (nm2 / "link_b").symlink_to(Path(rel_path))
+    (nm2 / "link_a").symlink_to("link_b")
+
+    frozen_digest2 = Git(worktree_path).snapshot(base_sha)
+    with (
+        pytest.raises(OrchestratorError, match="Unsafe external file symlink in toolchain"),
+        pipeline.verification_workspace(
+            worktree_path, frozen_digest2, base_sha, "T100", "run-nested-rel"
+        ),
+    ):
+        pass
+
+    assert outside_file.read_text() == "outside\n"
+
+
+def test_concurrent_audit_private_toolchain_symlink_loop_fails_closed(
+    repository: Path,
+) -> None:
+    """Circular symlink loops fail closed with OrchestratorError."""
+    git = Git(repository)
+    base_sha = _ignore_toolchains(repository)
+
+    worktree_path = repository.parent / "test-worktree-symlink-loop"
+    git.create_worktree(worktree_path, "feature-symlink-loop", base_sha)
+
+    nm = worktree_path / "node_modules/loop"
+    nm.mkdir(parents=True)
+    (nm / "a").symlink_to("b")
+    (nm / "b").symlink_to("a")
+
+    frozen_digest = Git(worktree_path).snapshot(base_sha)
+    pipeline = Pipeline(repository, configuration(), FakeAgents())
+
+    with (
+        pytest.raises(OrchestratorError, match="Unresolvable toolchain symlink"),
+        pipeline.verification_workspace(worktree_path, frozen_digest, base_sha, "T100", "run-loop"),
+    ):
+        pass
+
+
+def test_concurrent_audit_private_toolchain_dangling_symlink_fails_closed(
+    repository: Path,
+) -> None:
+    """Dangling symlinks fail closed with OrchestratorError."""
+    git = Git(repository)
+    base_sha = _ignore_toolchains(repository)
+
+    worktree_path = repository.parent / "test-worktree-dangling-symlink"
+    git.create_worktree(worktree_path, "feature-dangling", base_sha)
+
+    nm = worktree_path / "node_modules/dangling"
+    nm.mkdir(parents=True)
+    (nm / "broken").symlink_to("nonexistent_target_file")
+
+    frozen_digest = Git(worktree_path).snapshot(base_sha)
+    pipeline = Pipeline(repository, configuration(), FakeAgents())
+
+    with (
+        pytest.raises(OrchestratorError, match="Unresolvable toolchain symlink"),
+        pipeline.verification_workspace(
+            worktree_path, frozen_digest, base_sha, "T100", "run-dangling"
+        ),
+    ):
+        pass
+
+
+def test_concurrent_audit_private_toolchain_venv_non_interpreter_external_symlink_fails_closed(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """External symlinks in .venv that are not interpreters fail closed."""
+    git = Git(repository)
+    base_sha = _ignore_toolchains(repository)
+
+    host_file = tmp_path / "host_secret.conf"
+    host_file.write_text("HOST SECRET\n")
+
+    worktree_path = repository.parent / "test-worktree-venv-non-interp"
+    git.create_worktree(worktree_path, "feature-venv-non-interp", base_sha)
+
+    venv = worktree_path / ".venv"
+    (venv / "bin").mkdir(parents=True)
+    (venv / "bin/python").symlink_to(Path(sys.executable).resolve())
+    (venv / "bin/secret.conf").symlink_to(host_file)
+
+    frozen_digest = Git(worktree_path).snapshot(base_sha)
+    pipeline = Pipeline(repository, configuration(), FakeAgents())
+
+    with (
+        pytest.raises(OrchestratorError, match="Unsafe external file symlink in toolchain"),
+        pipeline.verification_workspace(
+            worktree_path, frozen_digest, base_sha, "T100", "run-venv-non-interp"
+        ),
+    ):
+        pass
+
+    assert host_file.read_text() == "HOST SECRET\n"
+
+    # Pre-dispatch failure in pipeline
+    class VenvNonInterpAgents(ConcurrentAuditAgents):
+        def run(
+            self,
+            prompt: str,
+            *,
+            cwd: Path,
+            role: Role,
+            timeout: int | None,
+            output: type[Output],
+            artifacts: Path,
+            name: str,
+            readonly: bool,
+        ) -> Output:
+            result = super().run(
+                prompt,
+                cwd=cwd,
+                role=role,
+                timeout=timeout,
+                output=output,
+                artifacts=artifacts,
+                name=name,
+                readonly=readonly,
+            )
+            if output == WorkerResult:
+                v = cwd / ".venv"
+                (v / "bin").mkdir(parents=True, exist_ok=True)
+                (v / "bin/python").symlink_to(Path(sys.executable).resolve())
+                (v / "bin/secret.conf").symlink_to(host_file)
+            return result
+
+    agents = VenvNonInterpAgents("verification_first")
+    pipeline, agents = concurrent_audit_pipeline(
+        repository, monkeypatch, "verification_first", agents=agents
+    )
+
+    state = pipeline.start("T100")
+    assert state.state == State.FAILED
+    assert "Unsafe external file symlink in toolchain" in (state.last_error or "")
+    assert len(agents.reviewer_cwds) == 0
+    assert len(agents.verification_cwds) == 0
+    assert "review_bundle" not in state.artifacts
+    assert len(agents.audit_prompts) == 0
+    assert host_file.read_text() == "HOST SECRET\n"

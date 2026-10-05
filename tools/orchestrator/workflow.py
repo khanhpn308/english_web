@@ -1,10 +1,14 @@
 """Deterministic role pipeline; model responses never execute Git or choose states."""
 
 import json
+import os
 import re
+import shutil
 import sys
+import tempfile
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager, nullcontext
 from pathlib import Path
 from uuid import uuid4
 
@@ -24,6 +28,8 @@ from tools.orchestrator.core import (
     RunState,
     State,
     TaskCard,
+    VerificationCollection,
+    VerificationRequest,
     WorkerResult,
     atomic_json,
     contract_template,
@@ -129,6 +135,363 @@ def agent_prompt(role: str, context: str, output: type[BaseModel]) -> str:
         + "\nOUTPUT SCHEMA:\n"
         + json.dumps(output.model_json_schema())
     )
+
+
+def verification_command_argv(cwd: Path, command: list[str]) -> list[str]:
+    venv_bin = cwd / (".venv/Scripts" if os.name == "nt" else ".venv/bin")
+    node_bin = cwd / "node_modules/.bin"
+    inherited_path = os.environ.get("PATH", "")
+    new_path = f"{venv_bin}{os.pathsep}{node_bin}{os.pathsep}{inherited_path}"
+
+    env_bin = "/usr/bin/env" if Path("/usr/bin/env").exists() else (shutil.which("env") or "env")
+    if os.name != "nt" or shutil.which("env"):
+        return [env_bin, f"PATH={new_path}", *command]
+    return [
+        sys.executable,
+        "-c",
+        "import os, sys, subprocess; os.environ['PATH'] = sys.argv[1]; "
+        "sys.exit(subprocess.call(sys.argv[2:]))",
+        new_path,
+        *command,
+    ]
+
+
+def collect_verification(request: VerificationRequest) -> VerificationCollection:
+    """Execute in declaration order without receiving or persisting any run authority."""
+    results: list[dict[str, object]] = []
+    for index, command in enumerate(request.commands):
+        print(f"TEST {request.task_id}: {command[0]} (arguments in contract/config)")
+        try:
+            exec_argv = verification_command_argv(request.cwd, list(command))
+            result = execute(exec_argv, request.cwd, timeout=request.timeout)
+        except (OrchestratorError, OSError) as error:
+            detail = str(error) if isinstance(error, OrchestratorError) else type(error).__name__
+            return VerificationCollection(
+                tuple(results), setup_error=f"SETUP_FAILED: audit_checks: {detail}"
+            )
+        meta = result.metadata()
+        meta["command"] = [Path(command[0]).name, "<arguments withheld>"]
+        results.append({**meta, "command_index": index})
+        if result.exit_code or result.timed_out or result.oversized:
+            return VerificationCollection(tuple(results), failed=True)
+    return VerificationCollection(tuple(results))
+
+
+def validate_toolchain_backlinks(toolchain_root: Path, authoritative_roots: set[Path]) -> None:
+    try:
+        toolchain_canonical = toolchain_root.resolve()
+    except (OSError, RuntimeError) as err:
+        raise OrchestratorError(f"Unresolvable toolchain root: {toolchain_root}") from err
+    for root in authoritative_roots:
+        if toolchain_canonical == root:
+            raise OrchestratorError(
+                f"Unsafe toolchain root: {toolchain_root} resolves to "
+                f"authoritative source {toolchain_canonical}"
+            )
+    visited_dirs: set[Path] = set()
+    visited_symlinks: set[Path] = set()
+
+    def check_dir(current_dir: Path) -> None:
+        try:
+            curr_canonical = current_dir.resolve()
+        except (OSError, RuntimeError) as err:
+            raise OrchestratorError(
+                f"Failed to resolve toolchain directory: {current_dir}"
+            ) from err
+        if curr_canonical in visited_dirs:
+            return
+        visited_dirs.add(curr_canonical)
+
+        try:
+            with os.scandir(current_dir) as iterator:
+                entries = list(iterator)
+        except (OSError, PermissionError) as err:
+            raise OrchestratorError(f"Unreadable toolchain directory: {current_dir}") from err
+
+        for entry in entries:
+            try:
+                is_link = entry.is_symlink()
+            except (OSError, PermissionError) as err:
+                raise OrchestratorError(f"Failed to inspect toolchain entry: {entry.path}") from err
+            entry_path = Path(entry.path)
+            if is_link:
+                if entry_path in visited_symlinks:
+                    continue
+                visited_symlinks.add(entry_path)
+                try:
+                    target = entry_path.resolve()
+                except (OSError, RuntimeError) as err:
+                    raise OrchestratorError(
+                        f"Unresolvable toolchain symlink: {entry_path}"
+                    ) from err
+
+                for root in authoritative_roots:
+                    if (target == root or target.is_relative_to(root)) and not (
+                        target.is_relative_to(toolchain_canonical)
+                    ):
+                        raise OrchestratorError(
+                            f"Unsafe toolchain backlink: {entry_path} resolves to "
+                            f"authoritative source {target}"
+                        )
+                try:
+                    is_target_dir = target.is_dir()
+                except (OSError, PermissionError) as err:
+                    raise OrchestratorError(f"Failed to inspect symlink target: {target}") from err
+                if is_target_dir and target not in visited_dirs:
+                    check_dir(target)
+            else:
+                try:
+                    is_entry_dir = entry.is_dir(follow_symlinks=False)
+                except (OSError, PermissionError) as err:
+                    raise OrchestratorError(
+                        f"Failed to inspect toolchain entry: {entry.path}"
+                    ) from err
+                if is_entry_dir:
+                    check_dir(entry_path)
+
+    check_dir(toolchain_root)
+
+
+def materialize_private_toolchain(
+    src_root: Path,
+    dst_root: Path,
+    auth_roots: set[Path],
+    toolchain_name: str,
+    *,
+    repo_root: Path,
+    working_root: Path,
+) -> None:
+    try:
+        canonical_src = src_root.resolve()
+    except (OSError, RuntimeError) as err:
+        raise OrchestratorError(f"Toolchain source {src_root} cannot be resolved") from err
+
+    try:
+        if not canonical_src.exists():
+            raise OrchestratorError(f"Toolchain source does not exist: {src_root}")
+        if not canonical_src.is_dir():
+            raise OrchestratorError(f"Toolchain source is not a directory: {src_root}")
+    except (OSError, PermissionError) as err:
+        raise OrchestratorError(f"Failed to inspect toolchain source: {src_root}") from err
+
+    valid_names = {toolchain_name}
+    if toolchain_name == ".venv":
+        valid_names.add("venv")
+
+    # Validate the toolchain root itself
+    for root in auth_roots:
+        if canonical_src == root:
+            raise OrchestratorError(
+                f"Unsafe toolchain root: {src_root} resolves to "
+                f"authoritative source {canonical_src}"
+            )
+        if canonical_src.is_relative_to(root):
+            rel = canonical_src.relative_to(root)
+            if str(rel) not in valid_names:
+                raise OrchestratorError(
+                    f"Unsafe toolchain root: {src_root} aliases non-toolchain path: {canonical_src}"
+                )
+            if root != repo_root and root != working_root:
+                raise OrchestratorError(
+                    f"Unsafe toolchain root: {src_root} points to another worktree: {canonical_src}"
+                )
+
+    try:
+        dst_root.mkdir(parents=True, exist_ok=True)
+    except (OSError, PermissionError) as err:
+        raise OrchestratorError(
+            f"Failed to create private toolchain directory: {dst_root}"
+        ) from err
+
+    def copy_dir(src_dir: Path, dst_dir: Path) -> None:
+        try:
+            with os.scandir(src_dir) as iterator:
+                entries = list(iterator)
+        except (OSError, PermissionError) as err:
+            raise OrchestratorError(f"Unreadable toolchain directory: {src_dir}") from err
+
+        for entry in entries:
+            entry_path = Path(entry.path)
+            try:
+                is_link = entry.is_symlink()
+            except (OSError, PermissionError) as err:
+                raise OrchestratorError(f"Failed to inspect toolchain entry: {entry.path}") from err
+
+            dst_entry = dst_dir / entry.name
+
+            if is_link:
+                try:
+                    target_canonical = entry_path.resolve()
+                except (OSError, RuntimeError) as err:
+                    raise OrchestratorError(
+                        f"Unresolvable toolchain symlink: {entry_path}"
+                    ) from err
+
+                try:
+                    target_exists = target_canonical.exists()
+                except (OSError, PermissionError) as err:
+                    raise OrchestratorError(
+                        f"Failed to inspect symlink target: {target_canonical}"
+                    ) from err
+                if not target_exists:
+                    raise OrchestratorError(
+                        f"Unresolvable toolchain symlink: {entry_path} -> {target_canonical}"
+                    )
+
+                is_internal = False
+                try:
+                    is_internal = target_canonical.is_relative_to(canonical_src)
+                except (ValueError, OSError):
+                    is_internal = False
+
+                if is_internal:
+                    rel_target = target_canonical.relative_to(canonical_src)
+                    dst_target = dst_root / rel_target
+                    dst_entry.parent.mkdir(parents=True, exist_ok=True)
+                    rel_link = os.path.relpath(dst_target, dst_entry.parent)
+                    try:
+                        target_is_dir = target_canonical.is_dir()
+                    except (OSError, PermissionError) as err:
+                        raise OrchestratorError(
+                            f"Failed to inspect symlink target: {target_canonical}"
+                        ) from err
+                    try:
+                        os.symlink(rel_link, dst_entry, target_is_directory=target_is_dir)
+                    except (OSError, PermissionError) as err:
+                        raise OrchestratorError(
+                            f"Failed to recreate internal symlink: {dst_entry}"
+                        ) from err
+                else:
+                    # External symlink: check for authoritative roots
+                    for root in auth_roots:
+                        if target_canonical == root or target_canonical.is_relative_to(root):
+                            raise OrchestratorError(
+                                f"Unsafe toolchain backlink: {entry_path} resolves to "
+                                f"authoritative source {target_canonical}"
+                            )
+                    try:
+                        target_is_dir = target_canonical.is_dir()
+                    except (OSError, PermissionError) as err:
+                        raise OrchestratorError(
+                            f"Failed to inspect external symlink target: {target_canonical}"
+                        ) from err
+                    if target_is_dir:
+                        raise OrchestratorError(
+                            f"Unsafe external directory symlink in toolchain: "
+                            f"{entry_path} -> {target_canonical}"
+                        )
+                    try:
+                        target_is_file = target_canonical.is_file()
+                    except (OSError, PermissionError) as err:
+                        raise OrchestratorError(
+                            f"Failed to inspect external symlink target: {target_canonical}"
+                        ) from err
+                    if not target_is_file:
+                        raise OrchestratorError(
+                            f"Unsafe external non-file symlink in toolchain: "
+                            f"{entry_path} -> {target_canonical}"
+                        )
+
+                    is_venv_interpreter = (
+                        toolchain_name == ".venv"
+                        and entry_path.parent.name in ("bin", "Scripts")
+                        and entry.name.lower().startswith("python")
+                        and os.access(target_canonical, os.X_OK)
+                    )
+                    if not is_venv_interpreter:
+                        raise OrchestratorError(
+                            f"Unsafe external file symlink in toolchain: "
+                            f"{entry_path} -> {target_canonical}"
+                        )
+
+                    # Materialize virtualenv interpreter into private sandbox
+                    raw_target = os.readlink(entry_path)
+                    dst_entry.parent.mkdir(parents=True, exist_ok=True)
+                    if (
+                        not os.path.isabs(raw_target)
+                        and (entry_path.parent / raw_target).name.lower().startswith("python")
+                        and (entry_path.parent / raw_target).parent == entry_path.parent
+                    ):
+                        try:
+                            os.symlink(raw_target, dst_entry)
+                        except (OSError, PermissionError) as err:
+                            raise OrchestratorError(
+                                f"Failed to recreate interpreter symlink: {dst_entry}"
+                            ) from err
+                    else:
+                        try:
+                            shutil.copy2(target_canonical, dst_entry)
+                        except (OSError, PermissionError) as err:
+                            raise OrchestratorError(
+                                f"Failed to materialize private interpreter executable: {dst_entry}"
+                            ) from err
+            else:
+                try:
+                    is_dir = entry.is_dir(follow_symlinks=False)
+                except (OSError, PermissionError) as err:
+                    raise OrchestratorError(
+                        f"Failed to inspect toolchain entry: {entry.path}"
+                    ) from err
+
+                if is_dir:
+                    try:
+                        dst_entry.mkdir(parents=True, exist_ok=True)
+                    except (OSError, PermissionError) as err:
+                        raise OrchestratorError(
+                            f"Failed to create toolchain directory: {dst_entry}"
+                        ) from err
+                    copy_dir(entry_path, dst_entry)
+                else:
+                    dst_entry.parent.mkdir(parents=True, exist_ok=True)
+                    try:
+                        shutil.copy2(entry_path, dst_entry, follow_symlinks=False)
+                    except (OSError, PermissionError) as err:
+                        raise OrchestratorError(
+                            f"Failed to copy toolchain file: {entry_path}"
+                        ) from err
+
+    copy_dir(canonical_src, dst_root)
+
+    def verify_dst_containment(root_dir: Path) -> None:
+        try:
+            root_canonical = root_dir.resolve()
+        except (OSError, RuntimeError) as err:
+            raise OrchestratorError(
+                f"Failed to resolve materialized toolchain root: {root_dir}"
+            ) from err
+
+        for dirpath, dirnames, filenames in os.walk(root_dir, followlinks=False):
+            for name in dirnames + filenames:
+                p = Path(dirpath) / name
+                try:
+                    is_link = p.is_symlink()
+                except (OSError, PermissionError) as err:
+                    raise OrchestratorError(f"Failed to inspect materialized entry: {p}") from err
+                if is_link:
+                    try:
+                        res = p.resolve()
+                    except (OSError, RuntimeError) as err:
+                        raise OrchestratorError(
+                            f"Materialized symlink cannot be resolved: {p}"
+                        ) from err
+                    if not res.is_relative_to(root_canonical):
+                        raise OrchestratorError(
+                            f"Materialized symlink escapes toolchain: {p} resolves to {res}, "
+                            f"outside {root_canonical}"
+                        )
+                    if not res.exists():
+                        raise OrchestratorError(f"Materialized symlink is dangling: {p} -> {res}")
+
+    verify_dst_containment(dst_root)
+
+    if toolchain_name == ".venv" and not (dst_root / "pyvenv.cfg").exists():
+        try:
+            (dst_root / "pyvenv.cfg").write_text(
+                "include-system-site-packages = false\nversion = 3.12\n",
+                encoding="utf-8",
+            )
+        except (OSError, PermissionError) as err:
+            raise OrchestratorError(f"Failed to write fallback pyvenv.cfg: {err}") from err
 
 
 class Pipeline:
@@ -845,7 +1208,196 @@ class Pipeline:
         return result
 
     def parallel_review(self, directory: Path, state: RunState, context: str) -> ReviewBundle:
-        """Only provider calls run in threads; all authority stays with the joining parent."""
+        """Historical T086 entrypoint for already completed executable evidence."""
+        bundle, _failed = self._review_phase(directory, state, context)
+        return bundle
+
+    def concurrent_audit(
+        self, directory: Path, state: RunState, context: str, commands: list[list[str]]
+    ) -> tuple[ReviewBundle, bool]:
+        return self._review_phase(
+            directory, state, context, commands=tuple(tuple(command) for command in commands)
+        )
+
+    def authoritative_roots(self, working: Path) -> set[Path]:
+        try:
+            repo_resolved = self.repository.resolve()
+            working_resolved = working.resolve()
+        except (OSError, RuntimeError) as err:
+            raise OrchestratorError(
+                f"Failed to resolve base repository or working path: {err}"
+            ) from err
+
+        roots = {repo_resolved, working_resolved}
+        try:
+            raw = self.git.run("worktree", "list", "--porcelain", "-z")
+        except OrchestratorError as err:
+            raise OrchestratorError(f"Failed to discover registered worktrees: {err}") from err
+
+        for token in raw.split("\0"):
+            if token.startswith("worktree "):
+                path_str = token[len("worktree ") :]
+                if not path_str:
+                    raise OrchestratorError("Malformed worktree record: empty path")
+                try:
+                    path = Path(path_str).resolve()
+                except (OSError, RuntimeError) as err:
+                    raise OrchestratorError(f"Failed to resolve worktree path: {path_str}") from err
+                roots.add(path)
+        return roots
+
+    @contextmanager
+    def verification_workspace(
+        self,
+        working: Path,
+        snapshot: str,
+        base_sha: str,
+        task_id: str,
+        run_id: str,
+    ) -> Iterator[tuple[Path, Git]]:
+        self.worktrees.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(
+            prefix=f"verify-{task_id}-{run_id}-",
+            dir=self.worktrees,
+            ignore_cleanup_errors=True,
+        ) as temporary:
+            verify_path = Path(temporary) / "workspace"
+            self.git.run(
+                "clone", "--shared", "--no-checkout", str(self.repository), str(verify_path)
+            )
+            verify_git = Git(verify_path)
+            verify_git.run("checkout", "--detach", base_sha)
+            worktree_git = Git(working)
+
+            # Step B2: Reproduce original index
+            staged_paths = [
+                p
+                for p in worktree_git.run(
+                    "diff", "--cached", "--name-only", "-z", base_sha, "--"
+                ).split("\0")
+                if p
+            ]
+            for rel in staged_paths:
+                safe_path(rel)
+                src = working / rel
+                if src.is_symlink() or (
+                    src.exists() and not src.resolve().is_relative_to(working.resolve())
+                ):
+                    raise OrchestratorError("Changed path escapes worktree")
+            cached_diff = worktree_git.run(
+                "diff", "--cached", "--binary", base_sha, "--", preserve_newlines=True
+            )
+            if cached_diff.strip():
+                cached_patch = Path(temporary) / "cached.patch"
+                cached_patch.write_bytes(cached_diff.encode("utf-8"))
+                verify_git.run("apply", "--binary", "--index", str(cached_patch))
+
+            # Step B3: Reproduce working tree on top of index
+            unstaged_paths = [
+                p for p in worktree_git.run("diff", "--name-only", "-z", "--").split("\0") if p
+            ]
+            for rel in unstaged_paths:
+                safe_path(rel)
+                src = working / rel
+                if src.is_symlink() or (
+                    src.exists() and not src.resolve().is_relative_to(working.resolve())
+                ):
+                    raise OrchestratorError("Changed path escapes worktree")
+            unstaged_diff = worktree_git.run("diff", "--binary", "--", preserve_newlines=True)
+            if unstaged_diff.strip():
+                unstaged_patch = Path(temporary) / "unstaged.patch"
+                unstaged_patch.write_bytes(unstaged_diff.encode("utf-8"))
+                verify_git.run("apply", "--binary", str(unstaged_patch))
+
+            # Step B4: Copy untracked candidate files
+            untracked_paths = [
+                p
+                for p in worktree_git.run("ls-files", "--others", "--exclude-standard", "-z").split(
+                    "\0"
+                )
+                if p
+            ]
+            for rel in untracked_paths:
+                safe_path(rel)
+                src = working / rel
+                if src.is_symlink() or not src.resolve().is_relative_to(working.resolve()):
+                    raise OrchestratorError("Changed path escapes worktree")
+                dst = verify_path / rel
+                if src.is_file():
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    dst.write_bytes(src.read_bytes())
+                    dst.chmod(src.stat().st_mode)
+
+            # Toolchain handling & backlink safety
+            auth_roots = self.authoritative_roots(working)
+            exclude_file = verify_path / ".git/info/exclude"
+            exclude_file.parent.mkdir(parents=True, exist_ok=True)
+
+            node_modules_src = (
+                working / "node_modules"
+                if ((working / "node_modules").is_symlink() or (working / "node_modules").exists())
+                else (
+                    self.repository / "node_modules"
+                    if (
+                        (self.repository / "node_modules").is_symlink()
+                        or (self.repository / "node_modules").exists()
+                    )
+                    else None
+                )
+            )
+            if node_modules_src is not None:
+                materialize_private_toolchain(
+                    node_modules_src,
+                    verify_path / "node_modules",
+                    auth_roots,
+                    "node_modules",
+                    repo_root=self.repository,
+                    working_root=working,
+                )
+                with exclude_file.open("a", encoding="utf-8") as stream:
+                    stream.write("\nnode_modules\nnode_modules/\n")
+
+            venv_src = (
+                working / ".venv"
+                if ((working / ".venv").is_symlink() or (working / ".venv").exists())
+                else (
+                    self.repository / ".venv"
+                    if (
+                        (self.repository / ".venv").is_symlink()
+                        or (self.repository / ".venv").exists()
+                    )
+                    else None
+                )
+            )
+            if venv_src is not None:
+                materialize_private_toolchain(
+                    venv_src,
+                    verify_path / ".venv",
+                    auth_roots,
+                    ".venv",
+                    repo_root=self.repository,
+                    working_root=working,
+                )
+                with exclude_file.open("a", encoding="utf-8") as stream:
+                    stream.write("\n.venv\n.venv/\n")
+
+            # Step B5: Verify exact snapshot equivalence before dispatch
+            if verify_git.snapshot(base_sha) != snapshot:
+                raise OrchestratorError(
+                    f"Verification workspace source differs from candidate digest: "
+                    f"expected {snapshot}, got {verify_git.snapshot(base_sha)}"
+                )
+            yield verify_path, verify_git
+
+    def _review_phase(
+        self,
+        directory: Path,
+        state: RunState,
+        context: str,
+        *,
+        commands: tuple[tuple[str, ...], ...] | None = None,
+    ) -> tuple[ReviewBundle, bool]:
+        """Detached lanes collect; the joining parent alone validates and registers authority."""
         self.check_artifacts(directory, state)
         self.contract(directory, state)
         manifest = self.skill_manifest(directory, state)
@@ -862,9 +1414,17 @@ class Pipeline:
         branch = git.branch()
         if branch != state.worktree_branch:
             raise OrchestratorError("Parallel review worktree branch mismatch")
-        checks = read_json(directory / state.artifacts["audit_checks"])
-        if not isinstance(checks, dict) or checks.get("source_digest") != snapshot:
-            raise OrchestratorError("Source changed between verification and parallel review")
+        request = None
+        if commands is None:
+            checks = read_json(directory / state.artifacts["audit_checks"])
+            if not isinstance(checks, dict) or checks.get("source_digest") != snapshot:
+                raise OrchestratorError("Source changed between verification and parallel review")
+        else:
+            context += (
+                "\nSTATIC REVIEW ONLY: executable verification is still running. Do not claim "
+                "or infer test PASS/FAIL. Ignore transient coverage/build/test output; it is "
+                "non-authoritative. Inspect frozen source, contract, task and Worker result.\n"
+            )
         jobs = []
         for perspective in ReviewPerspective:
             name = f"{state.fix_cycle:02d}-review-{perspective}-{uuid4().hex}"
@@ -881,7 +1441,9 @@ class Pipeline:
             )
             (directory / f"{name}.prompt.md").write_text(prompt, encoding="utf-8")
             jobs.append((perspective, name, prompt))
-        state.current_agent = "parallel_review"
+        state.current_agent = (
+            "parallel_review" if commands is None else "concurrent_audit_preparation"
+        )
         self.save(directory, state)
         frozen_state = state.model_copy(deep=True)
         protected = {}
@@ -897,47 +1459,89 @@ class Pipeline:
         timeout = self.config.timeout_seconds
         shards = []
         failures = []
-        with ThreadPoolExecutor(max_workers=len(jobs), thread_name_prefix="review") as pool:
-            futures = [
-                pool.submit(
-                    provider.run,
-                    prompt,
-                    cwd=working,
-                    role=role.model_copy(deep=True),
-                    timeout=timeout,
-                    output=ReviewShard,
-                    artifacts=directory,
-                    name=name,
-                    readonly=True,
+        collection = None
+        workspace_context = (
+            self.verification_workspace(
+                working, snapshot, state.base_sha, state.task_id, state.run_id
+            )
+            if commands is not None
+            else nullcontext((None, None))
+        )
+        with workspace_context as (verify_path, verify_git):
+            request = (
+                VerificationRequest(
+                    verify_path, commands, self.config.timeout_seconds, snapshot, state.task_id
                 )
-                for _perspective, name, prompt in jobs
-            ]
-            # Reap every submitted call even if an earlier one failed. Declaration order
-            # governs both failure aggregation and bundle identities, never completion order.
-            for (perspective, _name, _prompt), future in zip(jobs, futures, strict=True):
-                try:
-                    shard = ReviewShard.model_validate(future.result())
-                    if shard.perspective != perspective:
-                        raise OrchestratorError("Reviewer returned the wrong perspective")
-                    shards.append(shard)
-                except Exception as error:
-                    failures.append(f"{perspective}: {type(error).__name__}")
-        if state.model_dump(mode="json") != frozen_state.model_dump(mode="json"):
-            # An injected provider with an out-of-band reference cannot promote state
-            # or replace artifact authority: restore the parent's trusted copy first.
-            for field in RunState.model_fields:
-                setattr(state, field, getattr(frozen_state, field))
-            raise OrchestratorError("Parallel reviewer modified in-memory orchestration state")
-        if any(
-            path.is_symlink() or not path.is_file() or digest(path.read_bytes()) != expected
-            for path, expected in protected.items()
-        ):
-            raise OrchestratorError("Parallel reviewer modified protected evidence or state")
-        if git.branch() != branch:
-            raise OrchestratorError("Parallel reviewer changed branch")
-        if git.snapshot(state.base_sha) != snapshot:
-            raise OrchestratorError("Parallel reviewer modified repository source")
-        self.skill_manifest(directory, state)
+                if commands is not None and verify_path is not None
+                else None
+            )
+            with ThreadPoolExecutor(
+                max_workers=len(jobs) + int(request is not None), thread_name_prefix="audit-prepare"
+            ) as pool:
+                verification_future = (
+                    pool.submit(collect_verification, request) if request is not None else None
+                )
+                futures = [
+                    pool.submit(
+                        provider.run,
+                        prompt,
+                        cwd=working,
+                        role=role.model_copy(deep=True),
+                        timeout=timeout,
+                        output=ReviewShard,
+                        artifacts=directory,
+                        name=name,
+                        readonly=True,
+                    )
+                    for _perspective, name, prompt in jobs
+                ]
+                if verification_future is not None:
+                    try:
+                        collection = verification_future.result()
+                    except Exception as error:
+                        collection = VerificationCollection(
+                            (), setup_error=f"SETUP_FAILED: audit_checks: {type(error).__name__}"
+                        )
+                # Reap every submitted call even if an earlier one failed. Declaration order
+                # governs both failure aggregation and bundle identities, never completion order.
+                for (perspective, _name, _prompt), future in zip(jobs, futures, strict=True):
+                    try:
+                        shard = ReviewShard.model_validate(future.result())
+                        if shard.perspective != perspective:
+                            raise OrchestratorError("Reviewer returned the wrong perspective")
+                        shards.append(shard)
+                    except Exception as error:
+                        failures.append(f"{perspective}: {type(error).__name__}")
+            actor = "Parallel reviewer" if request is None else "Concurrent audit preparation"
+            if state.model_dump(mode="json") != frozen_state.model_dump(mode="json"):
+                # An injected provider with an out-of-band reference cannot promote state
+                # or replace artifact authority: restore the parent's trusted copy first.
+                for field in RunState.model_fields:
+                    setattr(state, field, getattr(frozen_state, field))
+                raise OrchestratorError(f"{actor} modified in-memory orchestration state")
+            if any(
+                path.is_symlink() or not path.is_file() or digest(path.read_bytes()) != expected
+                for path, expected in protected.items()
+            ):
+                raise OrchestratorError(f"{actor} modified protected evidence or state")
+            if git.branch() != branch:
+                raise OrchestratorError(f"{actor} changed branch")
+            if git.snapshot(state.base_sha) != snapshot:
+                raise OrchestratorError(f"{actor} modified repository source")
+            if verify_git is not None and verify_git.snapshot(state.base_sha) != snapshot:
+                raise OrchestratorError(f"{actor} modified repository source")
+            self.skill_manifest(directory, state)
+        # Persist completed executable evidence before reviewer diagnostics. No lane writes it.
+        if collection is not None:
+            artifact = f"{state.fix_cycle:02d}-audit_checks-{uuid4().hex[:8]}.json"
+            atomic_json(
+                directory / artifact,
+                {"level": "TEST", "source_digest": snapshot, "results": collection.results},
+            )
+            state.artifacts["audit_checks"] = artifact
+            state.artifact_digests[artifact] = digest((directory / artifact).read_bytes())
+            if not collection.failed and collection.setup_error is None:
+                state.verified_digest = snapshot
         # Persist provider diagnostics only after every call has joined and protections pass.
         # These references also protect previous cycles' evidence during later invocations.
         for _perspective, name, _prompt in jobs:
@@ -948,11 +1552,13 @@ class Pipeline:
                 state.artifact_digests[path.name] = digest(path.read_bytes())
         state.current_agent = None
         self.save(directory, state)
+        if collection is not None and collection.setup_error is not None:
+            failures.insert(0, collection.setup_error)
         if failures:
             raise OrchestratorError("Parallel review incomplete: " + "; ".join(failures))
         bundle = ReviewBundle.assemble(snapshot, branch, shards)
         self.artifact(directory, state, "review_bundle", bundle)
-        return bundle
+        return bundle, collection.failed if collection is not None else False
 
     def contract(self, directory: Path, state: RunState) -> Contract:
         if "contract" not in state.artifacts:
@@ -1127,19 +1733,16 @@ class Pipeline:
                 self.move(directory, state, State.IMPLEMENTED)
             if state.state == State.IMPLEMENTED:
                 self.move(directory, state, State.AUDIT_RUNNING)
-                # Independent executable evidence is gathered by Python, not trusted from Worker.
-                checks_failed = False
-                try:
-                    self.verify(
-                        directory,
-                        state,
-                        contract.required_verification + self.config.verification,
-                        "audit_checks",
-                    )
-                except OrchestratorError as error:
-                    if "Verification audit_checks failed" not in str(error):
-                        raise
-                    checks_failed = True
+                # Reviewers see only frozen static inputs while detached verification runs.
+                bundle, checks_failed = self.concurrent_audit(
+                    directory,
+                    state,
+                    context
+                    + json.dumps(contract.model_dump(mode="json"))
+                    + "\nWorker result:\n"
+                    + json.dumps(read_json(directory / state.artifacts["worker"])),
+                    contract.required_verification + self.config.verification,
+                )
                 audit_context = (
                     context
                     + json.dumps(contract.model_dump(mode="json"))
@@ -1151,7 +1754,6 @@ class Pipeline:
                         }
                     )
                 )
-                bundle = self.parallel_review(directory, state, audit_context)
                 audit = Audit.model_validate(
                     self.invoke(
                         directory,

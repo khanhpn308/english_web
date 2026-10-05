@@ -1,3 +1,100 @@
+## 05/10/2026 - T087 remediation R4: eliminate writable external symlink backlinks (Asia/Bangkok)
+
+- Independent audit findings & verdict:
+  - R3 independent audit verdict: `NEEDS_REMEDIATION`.
+  - HIGH finding: external regular-file symlink write-through violated private sandbox invariant (`sandbox/node_modules/pkg/link.js -> external host toolchain file` allowed writes through the sandbox symlink to mutate the host file).
+  - Explicit statement: Candidate remains pending independent re-audit. Do NOT claim `PASS_FOR_INTEGRATION` or T023 speedup until independent R4 audit actually passes.
+- `tools/orchestrator/workflow.py`:
+  - Updated `materialize_private_toolchain`:
+    - Enforced central security invariant: NO WRITABLE EXTERNAL BACKLINKS. Every path reachable by ordinary toolchain traversal must resolve inside `verification_workspace` or fail closed before lane dispatch.
+    - External regular files in `node_modules` (and any non-interpreter external files in `.venv`): FAIL CLOSED before dispatch (`OrchestratorError: Unsafe external file symlink in toolchain: <path> -> <target>`).
+    - External directory symlinks: FAIL CLOSED before dispatch (`OrchestratorError: Unsafe external directory symlink in toolchain`).
+    - Virtualenv interpreter: materialized as a private executable copy in the sandbox via `shutil.copy2` (preserving `0o755` executable permissions, virtualenv semantics, package resolution, and distinct inode without hardlinks or backlinks).
+    - Post-materialization containment validation pass (`verify_dst_containment`): recursively walks `dst_root` and asserts every symlink resolves to an existing target inside `dst_root.resolve()`; escapes and dangling symlinks fail closed.
+    - Early dangling symlink detection in `copy_dir`: `not target_canonical.exists()` fails closed immediately.
+- `tests/orchestrator/test_workflow.py`:
+  - Added `test_concurrent_audit_private_toolchain_external_regular_file_symlink_reproduction`: exact behavioral reproduction of the audit exploit; proves external regular-file symlinks fail closed before dispatch with original external host file contents, inode, and mtime 100% unchanged, and proves pre-dispatch failure produces 0 verification calls, 0 reviewer calls, 0 ReviewBundle creation, and 0 Auditor calls.
+  - Added `test_concurrent_audit_private_toolchain_external_directory_symlink_fails_closed`: proves external directory symlinks fail closed before dispatch with 0 lane dispatches.
+  - Added `test_concurrent_audit_private_toolchain_nested_symlink_chain_cannot_escape`: proves multi-hop and relative symlink chains escaping the toolchain fail closed.
+  - Added `test_concurrent_audit_private_toolchain_symlink_loop_fails_closed`: proves circular symlink loops fail closed.
+  - Added `test_concurrent_audit_private_toolchain_dangling_symlink_fails_closed`: proves broken symlinks fail closed.
+  - Added `test_concurrent_audit_private_toolchain_venv_non_interpreter_external_symlink_fails_closed`: proves non-interpreter external symlinks in `.venv` fail closed before dispatch.
+  - Strengthened `test_concurrent_audit_private_toolchain_real_venv_package_preservation`: asserts sandbox python resolves inside `verify_path/.venv`, does not resolve to worktree or repo, has distinct inode from host python, and executes `import pytest`.
+  - Strengthened `test_concurrent_audit_private_toolchain_copy_write_isolation`: asserts modifying existing files in `verify_path/node_modules` and `verify_path/.venv` leaves host files completely untouched.
+- `docs/orchestrator.md`, `tasks/t087-concurrent-audit-preparation.md`, `tasks/todo.md`: documented R4 architecture, audit reconciliation, and handoff evidence.
+- Status: `R4 IMPLEMENTATION_READY PENDING INDEPENDENT RE-AUDIT`.
+
+## 05/10/2026 - T087 remediation R3: private toolchain materialization (Asia/Bangkok)
+
+- Independent audit findings addressed (six findings):
+  1. HIGH 1: Shared writable `node_modules` root is inherently unsafe (`verification_workspace/node_modules/../.pytest_cache/transient` escapes through root symlink into authoritative source; `node_modules -> reviewer_worktree/.pytest_cache` passed previous validation).
+  2. HIGH 2: Symlink graph inspection fails open when `os.scandir()` raises `OSError` or `PermissionError`.
+  3. MEDIUM 3: Registered worktree discovery corrupted valid paths because `.strip()` stripped trailing spaces, and discovery exceptions were silently ignored.
+  4. MEDIUM 4: Shell launcher interpolation of `real_python` permitted command substitution.
+  5. MEDIUM 5: Selected `real_python` was not reliably rejected when residing inside an authoritative root.
+  6. MEDIUM 6: Resolving a venv interpreter to system Python loses the virtual environment and its installed packages.
+  - Explicit statement: R2's claim of complete toolchain isolation was invalidated by independent audit. Candidate remains pending independent re-audit. No claim of `PASS_FOR_INTEGRATION` or T023 speedup.
+- `tools/orchestrator/workflow.py`:
+  - Complete removal of writable toolchain sharing and launcher shell scripts.
+  - Implemented `materialize_private_toolchain(src_root, dst_root, auth_roots, toolchain_name, repo_root, working_root)`: materializes real directories for `node_modules` and `.venv` in the temporary verification workspace. Copies regular files with permissions (no hardlinks). Rewrites internal symlinks to relative links strictly within the private copied tree. Validates external symlinks so they can only be retained if pointing to a system file outside all authoritative roots. External directory symlinks and backlinks to authoritative roots fail closed (`OrchestratorError`). All inspection/copy operations fail closed on `OSError`/`PermissionError`.
+  - Updated `authoritative_roots(working)`: queries `git worktree list --porcelain -z` with NUL delimiter parsing without whitespace stripping (`.strip()`), preserving exact trailing spaces, and fails closed on git failures or malformed records.
+  - Implemented deterministic argv-based `verification_command_argv(cwd, command)`: executes `/usr/bin/env PATH=... <command...>` prepending `verify_path/.venv/bin` and `verify_path/node_modules/.bin` to `PATH` without mutating `os.environ` globally and without shell string parsing.
+  - Updated `collect_verification`: executes commands with private toolchain environment and redacts command metadata to preserve original command identity (`python`, `npm`), avoiding misleading `env` reporting.
+- `tests/orchestrator/test_workflow.py`:
+  - Updated `concurrent_audit_pipeline` fixture to unwrap private `env` prefix when resolving check names.
+  - Updated `_ignore_toolchains` helper to ignore both bare names and directory patterns so git ignores toolchain symlinks.
+  - Added test 7A: `test_concurrent_audit_private_toolchain_root_symlink_parent_traversal` proving `verify/node_modules/..` resolves to `verify_path` and parent traversal cannot reach reviewer worktree.
+  - Added test 7B: `test_concurrent_audit_private_toolchain_node_modules_root_alias` proving symlinked root alias to non-toolchain paths fails closed before dispatch.
+  - Added test 7C: `test_concurrent_audit_private_toolchain_unreadable_directory_fails_closed` proving unreadable toolchain subtrees fail closed before dispatch with 0 lane dispatches.
+  - Added test 7D: `test_concurrent_audit_root_discovery_whitespace_sensitive_and_failure` proving exact preservation of trailing spaces in worktree paths, backlink rejection, and discovery failure fail-closed semantics.
+  - Added test 7E: `test_concurrent_audit_private_toolchain_no_shell_launcher_or_injection` proving absence of shell launchers and immunity to command injection.
+  - Added test 7F: `test_concurrent_audit_private_toolchain_real_venv_package_preservation` executing real subprocess `.venv/bin/python -c "import pytest; print(pytest.__version__)"` inside the private sandbox.
+  - Added test 8: `test_concurrent_audit_private_toolchain_copy_write_isolation` proving sandbox toolchain writes do not alter host/reviewer/repo toolchains.
+  - Added `test_concurrent_audit_private_toolchain_internal_symlinks_preserved` proving internal symlink rewriting and isolation.
+- `tests/orchestrator/test_core.py`:
+  - Updated `test_concurrent_audit_collection_detached_inputs_and_failure_semantics` to verify argv-based env execution and private PATH precedence.
+- `docs/orchestrator.md`, `tasks/t087-concurrent-audit-preparation.md`, `tasks/todo.md`: documented R3 architecture, audit reconciliation, and handoff evidence.
+- Verification: focused private toolchain 7 passed (2.37s); root discovery 1 passed (0.66s); transient boundary 3 passed (1.93s); materialization 2 passed (0.57s); focused T087 36 passed, 255 deselected (16.21s); T086 selection 25 passed, 266 deselected (33.63s); scheduler 48 passed (14.07s); full orchestrator 357 passed (268.26s / 4m28s), exit 0; Ruff check/format (10 files), Mypy (6 source files), and `git diff --check` PASS. Uncommitted candidate, starting/current HEAD `20447177c48a556d63709906cb8c953142f62e4b`, branch `feature/t087-concurrent-audit-preparation`. No commit, merge, push, reset, clean, or rebase. Product source, scheduler, runtime, orchestrator.yaml, package.json untouched.
+
+## 05/10/2026 - T087 remediation R2: close toolchain backlinks and preserve index/worktree state (Asia/Bangkok)
+
+- Independent audit findings addressed:
+  1. HIGH: shared writable toolchain symlinks contained nested links back into the authoritative reviewer/task worktree (`node_modules/local-candidate/.pytest_cache/transient` -> `reviewer_cwd/.pytest_cache/transient`), leaking transient verification output into ReviewShard/ReviewBundle/Auditor while snapshot checks passed because output was ignored.
+  2. MEDIUM: verification workspace materialization previously collapsed distinct staged and working contents by copying working bytes and running `git add -A`.
+- `tools/orchestrator/workflow.py`:
+  - Implemented `Pipeline.authoritative_roots` resolving repository root, task worktree root, and any additional git worktrees discovered via `git worktree list --porcelain`.
+  - Implemented `validate_toolchain_backlinks(toolchain_root, authoritative_roots)`: recursively traverses symlink graph of shared toolchain with cycle detection (`visited_dirs`) and loop handling (`RuntimeError`/`OSError`). Canonicalizes each symlink and asserts its target does not resolve into any authoritative source root outside `toolchain_canonical`, raising `OrchestratorError` fail-closed before concurrent dispatch.
+  - Safe `.venv` protection: host refuses to expose writable `.venv` tree into verification workspace; validates `.venv` backlinks and real Python binary, then generates an isolated launcher proxy script (`.venv/bin/python` / `Scripts/python.exe`) that executes the validated Python directly without write-through backlinks into authoritative roots. Both `.venv` and `node_modules` are excluded via `.git/info/exclude`.
+  - Two-layer materialization: clones `--shared --no-checkout` at `base_sha` detached; reproduces Git index via `git apply --binary --index` on staged diff (`git diff --cached --binary base_sha --`); reproduces working-tree state via `git apply --binary` on unstaged diff (`git diff --binary --`); copies non-ignored untracked files (`git ls-files --others --exclude-standard -z`) with byte contents and execution modes (`chmod`) while keeping them untracked (no `git add`).
+  - Pre-dispatch snapshot equivalence and post-verification sandbox integrity asserted against frozen candidate source digest.
+- `tests/orchestrator/test_workflow.py`:
+  - Added `test_concurrent_audit_toolchain_unsafe_backlink_fails_closed`: proves nested `node_modules/local-candidate -> reviewer_cwd` fails closed before dispatch with 0 reviewer cwds, 0 verification cwds, no ReviewBundle, and no Auditor.
+  - Added `test_concurrent_audit_toolchain_safe_shared_toolchains_work`: proves safe shared `node_modules` and safe `.venv` launcher proxy pass all lanes and invoke Auditor.
+  - Added `test_concurrent_audit_materialization_distinct_staged_and_working_content`: asserts verification workspace faithfully preserves distinct staged index (`value 1`) and working tree (`value 2`) contents on the same tracked file, with snapshot equivalence.
+  - Added `test_concurrent_audit_materialization_binary_mode_and_deletion`: proves binary changes, staged deletions, unstaged deletions, file mode changes (`0o755`), non-ignored untracked files, and ignored transient files are correctly handled.
+- `tests/orchestrator/test_core.py`:
+  - Added `test_concurrent_audit_toolchain_backlink_validation_rules`: verifies `validate_toolchain_backlinks` rules for clean trees, internal symlinks, root escapes, direct backlinks, `../` escapes, external nested links, and circular symlink loops.
+- `docs/orchestrator.md`, `tasks/t087-concurrent-audit-preparation.md`, `tasks/todo.md`: documented R2 toolchain backlink validation, safe venv proxy, exact two-layer materialization, and handoff evidence.
+- Verification: toolchain tests 3 passed (1.95s); materialization tests 2 passed (0.59s); transient boundary tests 3 passed (1.77s); focused T087 28 passed, 255 deselected (13.20s); T086 selection 25 passed, 250 deselected (31.92s); scheduler 48 passed (11.05s); full orchestrator 349 passed (256.39s), exit 0; Ruff check/format (10 files), Mypy (6 source files), and `git diff --check` PASS. Uncommitted candidate, starting/current HEAD `20447177c48a556d63709906cb8c953142f62e4b`, branch `feature/t087-concurrent-audit-preparation`. No commit, merge, push, reset, clean, or rebase. Product source, scheduler, runtime, orchestrator.yaml, package.json untouched.
+
+## 05/10/2026 - T087 remediation R1: enforce frozen review evidence boundary (Asia/Bangkok)
+
+- Independent audit finding addressed: previously, reviewers and verification ran in the same worktree, allowing ignored transient verification output (`.pytest_cache/transient`) to be observed by reviewers, entering ReviewBundle/Auditor and shifting stable source finding IDs from `:0001` to `:0002` depending on completion order.
+- `tools/orchestrator/workflow.py`: implemented `Pipeline.verification_workspace` context manager providing an isolated temporary Git verification workspace checked out at `base_sha` detached, overlaid with candidate changes, deletions, file modes, and non-ignored untracked files. Toolchain paths (`node_modules`, `.venv`) shared via symlinks excluded in `.git/info/exclude`. Pre-dispatch assertion verifies `Git(verification_workspace).snapshot(base_sha) == frozen_source_digest` (failing closed). `Pipeline._review_phase` executes verification with `cwd=verify_path` while reviewers inspect original worktree `state.worktree_path`. Post-join assertion verifies sandbox source integrity (`verify_git.snapshot(base_sha) == snapshot`), failing closed on source/mode mutation while permitting ignored transient files.
+- `tools/orchestrator/core.py`: fixed `ReviewBundle.assemble` argument passing (`action=finding.action, evidence=finding.evidence`) to prevent keyword collision when findings are already `IdentifiedFinding` instances.
+- `tests/orchestrator/test_workflow.py`: added `test_concurrent_audit_transient_boundary_and_stable_finding_ids` parametrized over both completion orders (`verification_first`, `reviewers_first`), proving verification creates and sees `.pytest_cache/transient`, reviewer does not observe it, ReviewShard and ReviewBundle do not contain transient evidence, final Auditor receives clean static evidence, and finding IDs remain stable at `correctness:0001`. Added counterfactual probe proving regression reproduction when boundary is omitted.
+- `tests/orchestrator/test_core.py`: added `test_concurrent_audit_transient_output_isolated_from_request_evidence` verifying verification collector does not leak transient files into results or mutate request.
+- `docs/orchestrator.md`, `tasks/t087-concurrent-audit-preparation.md`, `tasks/todo.md`: documented remediation architecture, verification workspace lifecycle, snapshot equivalence, sandbox source integrity, and handoff evidence.
+- Verification: transient tests 3 passed (2.36s); focused T087 23 passed, 255 deselected (10.74s); T086 selection 25 passed, 250 deselected (27.99s); scheduler 48 passed (10.87s); full orchestrator 344 passed (231.19s), exit 0. Ruff check/format (10 files), Mypy (6 source files), and `git diff --check` PASS. Uncommitted candidate, starting/current HEAD `20447177c48a556d63709906cb8c953142f62e4b`, branch `feature/t087-concurrent-audit-preparation`. No commit, merge, push, reset, clean, or rebase. Product source, scheduler, runtime, orchestrator.yaml, package.json untouched.
+
+## 05/10/2026 - T087 concurrent audit preparation (Asia/Bangkok)
+
+- `tools/orchestrator/core.py`: frozen detached verification request and collected metadata, with ordinary regression and fatal setup failure distinguished.
+- `tools/orchestrator/workflow.py`: overlap one non-authoritative sequential command collector with three read-only reviewer provider calls; share T086 parent freeze/join/integrity protection, persist executable evidence and reviewer diagnostics only after all futures join, and invoke final Auditor sequentially with complete evidence. Static reviewer prompts exclude executable results and reject transient output as authority. Existing mutable verify remains sequential for other phases; T086 disposition/correction semantics remain intact.
+- `tests/orchestrator/test_core.py`, `tests/orchestrator/test_workflow.py`: deterministic four-party executable/provider barrier, reverse reviewer completion, both lane-completion orderings and final Auditor barrier, command metadata order/privacy, parent authority guards (`max_invoke_active=1`), failed-command PASS rejection, reviewer/setup failure reaping and source/branch/state/artifact mutation rejection. Existing T086 phase-marker assertion follows the new production phase while every T086 behavioral requirement stays enforced.
+- `docs/orchestrator.md`, `tasks/t087-concurrent-audit-preparation.md`, `tasks/todo.md`: record architecture, tradeoffs and task-local handoff. Documentation follows documentation-and-adrs. No new dependency, schema migration, product/runtime/scheduler/config/package/gate/threshold/default change; T084/T085/T086 cards untouched.
+- Final verification: exact focused T087 20 passed, 255 deselected (11.69s); T086 selection 25 passed, 250 deselected (33.74s); full orchestrator 341 passed (233.71s), exit 0. Ruff check/format (10 files), Mypy (6 source files) and diff-check PASS. Logs `/tmp/t087-focused-final.log`, `/tmp/t087-t086-final.log`, `/tmp/t087-orchestrator-final.log`. Earlier full run also passed 341 (240.08s); repeated because a raw-OS-error privacy fix landed during it. OS setup errors now keep only type names; sentinel regression verifies redaction. Task acceptance complete; `IMPLEMENTATION_READY`, uncommitted and awaiting independent review. Starting/current HEAD `20447177c48a556d63709906cb8c953142f62e4b`; branch `feature/t087-concurrent-audit-preparation`. No commit, merge, push, reset, clean, rebase or retained/other worktree changes. No unresolved findings; real-task speedup unmeasured.
+
 ## 05/10/2026 - T086 owner-approved scheduler fixture compatibility (Asia/Bangkok)
 
 - Owner explicitly extends T086 scope by exactly `tests/orchestrator/test_scheduler.py`; `tasks/t086-parallel-review-fanout.md` records the revised allowlist and resolves the earlier authorization blocker without changing production scope.
