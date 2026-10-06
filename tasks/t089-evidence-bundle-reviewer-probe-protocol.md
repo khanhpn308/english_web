@@ -10,7 +10,7 @@
 
 - T088
 
-T089 MUST preserve T086 parallel reviewer semantics (ngữ nghĩa reviewer song song), T087 concurrent audit preparation (chuẩn bị audit đồng thời) và T088 EvidenceBundle authority (thẩm quyền EvidenceBundle).
+This task MUST preserve T086 parallel reviewer semantics (ngữ nghĩa reviewer song song), T087 concurrent audit preparation (chuẩn bị audit đồng thời) và T088 EvidenceBundle authority (thẩm quyền EvidenceBundle).
 
 ## Files được phép sửa
 
