@@ -78,6 +78,7 @@
 
 - [x] [T086](t086-parallel-review-fanout.md): `DONE` — intra-task parallel read-only review fan-out integrated into main; three reviewer perspectives execute concurrently with deterministic fan-in and authoritative final Audit. Independent audit PASS_FOR_INTEGRATION; focused 25 PASS, scheduler 48 PASS, full orchestrator 321 PASS; scheduler/runtime/product semantics preserved.
 - [x] [T087](t087-concurrent-audit-preparation.md): `DONE` — concurrent executable verification and parallel read-only review fan-out integrated; R4 independent audit `PASS_FOR_INTEGRATION`, no unresolved HIGH/CRITICAL findings.
+- [ ] [T088](t088-deterministic-evidence-bundle.md): Deterministic host evidence collection and versioned EvidenceBundle.
 
 ## Checkpoints
 
