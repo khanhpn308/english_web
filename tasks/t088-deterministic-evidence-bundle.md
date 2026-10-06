@@ -2,7 +2,7 @@
 
 **Task ID:** `T088`  
 **Title:** Deterministic host evidence collection and EvidenceBundle  
-**Status:** `R1 IMPLEMENTATION_READY_FOR_HOST_VERIFICATION`
+**Status:** `DONE`
 **Goal:** Tách toàn bộ deterministic/mechanical evidence collection (thu thập bằng chứng xác định/cơ học) khỏi vòng lặp AI; host/control plane (máy chủ/lớp điều khiển) trực tiếp thu thập, kiểm tra, chuẩn hóa và đóng gói Git, scope, verification, integrity, provenance và timing evidence thành một `EvidenceBundle` có cấu trúc, deterministic và fail-closed để các AI reviewer/auditor về sau chỉ làm semantic/adversarial reasoning (suy luận ngữ nghĩa/đối kháng).  
 **Level:** High
 
@@ -305,14 +305,14 @@ All executed deterministic commands remain repository/contract-owned.
 - [x] No AI provider is invoked by evidence collection.
 - [x] `Pipeline.invoke()` is not used by deterministic evidence collection.
 - [x] Existing `audit_checks` compatibility remains intact.
-- [ ] T086 focused regression passes.
-- [ ] T087 focused regression passes.
-- [ ] Scheduler regression passes.
-- [ ] Full orchestrator regression passes.
-- [ ] Ruff passes.
-- [ ] Ruff format passes.
-- [ ] Mypy passes.
-- [ ] `git diff --check` passes.
+- [x] T086 focused regression passes.
+- [x] T087 focused regression passes.
+- [x] Scheduler regression passes.
+- [x] Full orchestrator regression passes.
+- [x] Ruff passes.
+- [x] Ruff format passes.
+- [x] Mypy passes.
+- [x] `git diff --check` passes.
 - [x] No product source changes.
 - [x] No provider/model default changes.
 
@@ -343,6 +343,23 @@ Status: `R1 IMPLEMENTATION_READY_FOR_HOST_VERIFICATION`, uncommitted. This is an
 Earlier diagnostics exposed two exception-type expectations and one unrealistic setup-failure fixture. These were corrected; no test was skipped or weakened. R1 regression coverage includes real disposable Git candidate mutation, successful-prefix rejection, failed-prefix preservation, same-display declaration substitution, six missing-metadata cases, timing-only equality, injected monotonic duration with backward wall time, source-digest rejection on validation/access, historical-artifact association and manifest revalidation after in-memory result-list mutation.
 
 Files intentionally untouched: runtime, scheduler, CLI, orchestrator configuration, package/lockfiles, gates, constraints, product source and T086/T087 task cards. No new provider/AI calls or shell interface. No unresolved implementation issue; host verification remains outstanding. Next action is the owner's focused probes and authoritative deterministic verification, before any next task.
+
+
+## Authoritative host verification closeout
+
+T088 authoritative host verification completed on 2026-10-06.
+
+- EvidenceBundle focused: 21 passed, 311 deselected.
+- concurrent_audit: 43 passed, 262 deselected.
+- parallel_review: 25 passed, 280 deselected.
+- scheduler: 48 passed.
+- full orchestrator: 398 passed.
+- Ruff check: PASS.
+- Ruff format check: PASS.
+- Mypy: PASS.
+- git diff --check: PASS.
+- Host verification is authoritative for deterministic/mechanical evidence.
+- T088 is DONE.
 
 ## Verification commands
 
