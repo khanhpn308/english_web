@@ -1,3 +1,49 @@
+## 06/10/2026 - T088 remediation R1: frozen evidence identity, completeness and timing (Asia/Bangkok)
+
+- Independent semantic audit: `NEEDS_REMEDIATION`, with HIGH verification/candidate source binding, HIGH required-command completeness, and MEDIUM diagnostic timing semantics. Earlier T088 notes overstated those properties and are corrected below.
+- `tools/orchestrator/core.py`: immutable typed `FrozenEvidenceIdentity` binds task/base/branch/source and ordered canonical argv SHA-256 manifest. Requests validate declarations, collections retain identity, and bundles/artifact references validate association. Strict required execution metadata and exact result-order/completeness checks reject successful prefixes while preserving explicit failed prefixes. Semantic payload excludes all direct diagnostic timing, including command duration.
+- `tools/orchestrator/evidence.py`: reject verification/current provenance mismatch, unbound/mismatched references and historical audit_checks source/result substitution. Validate existing artifact source metadata and bind historical declaration association through authoritative typed metadata without changing artifact contents. Preserve path containment, hash/size checks, privacy and schema version 1.
+- `tools/orchestrator/workflow.py`: measure execution using `time.monotonic_ns()`, retain frozen request identity through collection, validate before parent persistence, preserve historical audit_checks format, and validate current source digest in the accessor. Reviewer fan-out, private verification workspace, authority and provider boundaries stay unchanged.
+- `tests/orchestrator/test_core.py`, `tests/orchestrator/test_evidence.py`, `tests/orchestrator/test_workflow.py`: regressions for frozen A-to-B mismatch using real Git/source fixtures, incomplete successful prefix, explicit failed prefix, declaration substitution after redaction, missing mandatory metadata, timing-only equality, monotonic timing with backward wall-clock metadata, source digest on access/load, result order and historical artifact association.
+- `docs/orchestrator.md`, `tasks/t088-deterministic-evidence-bundle.md`, `tasks/todo.md`: record the semantic audit and R1 implementation status. Documentation follows documentation-and-adrs and unslop.
+- Agent-local diagnostics: evidence tests 27 passed; manifest-revalidation follow-up 1 passed; selected core/workflow 15 passed, 290 deselected; Ruff check/format, Mypy on 3 source files and diff-check PASS. Exact commands/outcomes are recorded in the task card. Earlier diagnostic fixture/exception expectation, formatting/import and decorated-validator type failures were corrected. No full orchestrator, scheduler, T086 full or T087 full regression was run by the implementation agent.
+- Intentionally untouched: runtime/scheduler/CLI/configuration, package/lockfiles, gates, constraints, backend/frontend and T086/T087 task cards. No Git finalization. Candidate remains uncommitted at HEAD `80163a5cc7692ec741166eed12d1fa32a0f7ad41` on `feature/t088-deterministic-evidence-bundle`.
+- Status: `R1 IMPLEMENTATION_READY_FOR_HOST_VERIFICATION`. Host verification remains pending; no integration verdict, T023 speedup or Herdr integration is claimed. No unresolved implementation issue; next action is owner/host targeted probes and authoritative deterministic verification.
+
+## 06/10/2026 - T088: deterministic evidence collection and EvidenceBundle (Asia/Bangkok)
+
+- Control plane / host deterministic evidence subsystem:
+  - Enforced architectural principle: if correctness can be determined from exit codes, Git/filesystem state, hashes, schema validation, deterministic parsing, or predefined tests, AI must not be in that execution or decision loop.
+  - Subsystem executes entirely within host Python logic with 0 AI provider calls, 0 CLI provider calls, and 0 Pipeline.invoke calls. No model decides which commands to run and no arbitrary AI-generated commands are permitted.
+- `tools/orchestrator/core.py`:
+  - Added strict Pydantic models with `extra="forbid"`:
+    - `EvidenceArtifactRef`: captures name, relative path, SHA-256 digest, byte size, classification, and optional summary with `safe_path` enforcement.
+    - `CandidateProvenance`: bound to `base_sha`, `branch`, `source_digest` (matching `Git.snapshot(base_sha)`), `head_sha`, and distinguishes all 3 candidate Git layers: staged/index (`staged_paths`, `staged_diff_digest`), unstaged working tree (`unstaged_paths`, `unstaged_diff_digest`), and non-ignored untracked files (`untracked_paths`, `untracked_digest`). Canonical sorting and uniqueness enforced.
+    - `ScopeEvidence`: captures `allowed_paths`, `actual_changed_paths`, `unexpected_changed_paths`, and `verdict` (`PASS` | `FAIL`). Fails closed on unexpected changed paths.
+    - `VerificationCommandEvidence`: captures declaration order (`command_index`), command identity with withheld arguments, exit code, timeout/oversize status, digests, bytes, duration, and failure classification. Raw unbounded stdout/stderr is strictly forbidden.
+    - `VerificationEvidence`: aggregates verification command results, enforcing declaration order, failure classification, and ensuring setup errors or failed commands cannot be misreported as PASS.
+    - `TimingEvidence`: captures monotonic duration (`time.monotonic_ns()`) for diagnostics only; timing does not alter PASS/FAIL verdicts.
+    - `EvidenceBundle`: versioned (`schema_version: Version = 1`), strictly validated, fail-closed completeness check (`check_completeness`, `is_complete: Literal[True] = True`). Initial `semantic_payload()` excluded top-level timing but retained command durations; the independent audit required R1 correction.
+- `tools/orchestrator/evidence.py`:
+  - Implemented `collect_candidate_provenance`: deterministically extracts Git metadata and patches across staged index, unstaged working tree, and untracked files.
+  - Implemented `collect_scope_evidence`: deterministically validates changes against task allowlist without AI assistance; unexpected paths fail closed.
+  - Implemented `collect_verification_evidence`: maps executable verification collection to structured command evidence while preserving declaration order.
+  - Implemented `create_artifact_ref` & `validate_artifact_ref`: validates safe relative path, non-symlink, regular file, boundary containment, byte size, and SHA-256 digest. Tampering is behaviorally detected and fails closed.
+  - Introduced `build_evidence_bundle` with top-level monotonic timing and canonical ordering; independent semantic audit found source-binding and command-completeness defects, addressed in R1.
+  - Implemented `validate_evidence_bundle`: validates schema, candidate bindings (base_sha, branch, source_digest), and all referenced artifacts.
+- `tools/orchestrator/workflow.py`:
+  - Parent-only authority: in `concurrent_audit` (`_review_phase`), parent persists and registers `evidence_bundle` in `state.artifacts` alongside existing `audit_checks` artifact. Worker threads and reviewer threads have zero artifact registration authority.
+  - Added `evidence_bundle(directory, state)` accessor to `Pipeline` verifying artifact integrity, base SHA and branch. Expected source-digest validation was missing until R1.
+  - Preserved 100% backward compatibility with `audit_checks`. Reviewer prompts and schemas remain untouched; ProbeRequest and reviewer protocol rewrite deferred to T089.
+- `tests/orchestrator/test_core.py`:
+  - Added unit tests for schema/version validation, provenance ordering, scope validation, verification integrity, artifact reference rules, and bundle completeness fail-closed checks.
+- `tests/orchestrator/test_evidence.py`:
+  - Added 11 focused behavioral tests: host-only construction (0 provider/Pipeline calls), candidate provenance binding, staged/unstaged/untracked layer distinction, untracked identity preservation, scope calculation and unexpected path fail-closed, declaration order preservation, failure representation, setup failure fail-closed, artifact reference creation and tamper detection, path escape rejection, bundle validation mismatches, shuffled input canonical ordering, and thread completion order invariance.
+- `tests/orchestrator/test_workflow.py`:
+  - Added `test_concurrent_audit_evidence_bundle_persistence_and_parent_authority` verifying parent-only bundle registration, accessor validation, artifact referencing, and tamper detection alongside `audit_checks`.
+- `docs/orchestrator.md`, `tasks/t088-deterministic-evidence-bundle.md`, `tasks/todo.md`: documented T088 EvidenceBundle architecture, updated status to `IMPLEMENTATION_READY_FOR_HOST_VERIFICATION`.
+- Status: `IMPLEMENTATION_READY_FOR_HOST_VERIFICATION`.
+
 ## 05/10/2026 - T087 remediation R4: eliminate writable external symlink backlinks (Asia/Bangkok)
 
 - Independent audit findings & verdict:

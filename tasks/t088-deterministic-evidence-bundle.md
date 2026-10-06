@@ -2,7 +2,7 @@
 
 **Task ID:** `T088`  
 **Title:** Deterministic host evidence collection and EvidenceBundle  
-**Status:** `TODO`  
+**Status:** `R1 IMPLEMENTATION_READY_FOR_HOST_VERIFICATION`
 **Goal:** Tách toàn bộ deterministic/mechanical evidence collection (thu thập bằng chứng xác định/cơ học) khỏi vòng lặp AI; host/control plane (máy chủ/lớp điều khiển) trực tiếp thu thập, kiểm tra, chuẩn hóa và đóng gói Git, scope, verification, integrity, provenance và timing evidence thành một `EvidenceBundle` có cấu trúc, deterministic và fail-closed để các AI reviewer/auditor về sau chỉ làm semantic/adversarial reasoning (suy luận ngữ nghĩa/đối kháng).  
 **Level:** High
 
@@ -228,7 +228,7 @@ Behavioral tests must prove tampering is detected.
 
 ### 11. Timing evidence
 
-Collect monotonic wall-clock durations for deterministic execution where useful.
+Collect monotonic clock durations for deterministic execution where useful.
 
 Timing is diagnostic evidence only.
 
@@ -287,24 +287,24 @@ All executed deterministic commands remain repository/contract-owned.
 
 ## Acceptance criteria
 
-- [ ] Strict versioned `EvidenceBundle` schema exists.
-- [ ] Host can build `EvidenceBundle` without any AI/provider call.
-- [ ] `EvidenceBundle` is bound to exact task/candidate provenance.
-- [ ] Scope/allowlist verdict is computed deterministically by host.
-- [ ] Verification PASS/FAIL metadata comes from executable host results, not AI judgment.
-- [ ] Existing verification declaration order is preserved.
-- [ ] Large/raw evidence uses integrity-checkable artifact references rather than unbounded embedding.
-- [ ] Artifact SHA-256 and size metadata are deterministic and validated.
-- [ ] Missing required evidence fails closed.
-- [ ] Source/branch/digest mismatch fails closed.
-- [ ] Unexpected changed path fails closed under existing policy.
-- [ ] Referenced-artifact tampering is behaviorally detected.
-- [ ] Bundle serialization/order is deterministic across equivalent runs.
-- [ ] Thread completion order cannot change semantic bundle ordering.
-- [ ] Parent remains the only authoritative bundle writer/registrar.
-- [ ] No AI provider is invoked by evidence collection.
-- [ ] `Pipeline.invoke()` is not used by deterministic evidence collection.
-- [ ] Existing `audit_checks` compatibility remains intact.
+- [x] Strict versioned `EvidenceBundle` schema exists.
+- [x] Host can build `EvidenceBundle` without any AI/provider call.
+- [x] `EvidenceBundle` is bound to exact task/candidate provenance.
+- [x] Scope/allowlist verdict is computed deterministically by host.
+- [x] Verification PASS/FAIL metadata comes from executable host results, not AI judgment.
+- [x] Existing verification declaration order is preserved.
+- [x] Large/raw evidence uses integrity-checkable artifact references rather than unbounded embedding.
+- [x] Artifact SHA-256 and size metadata are deterministic and validated.
+- [x] Missing required evidence fails closed.
+- [x] Source/branch/digest mismatch fails closed.
+- [x] Unexpected changed path fails closed under existing policy.
+- [x] Referenced-artifact tampering is behaviorally detected.
+- [x] Bundle serialization/order is deterministic across equivalent runs.
+- [x] Thread completion order cannot change semantic bundle ordering.
+- [x] Parent remains the only authoritative bundle writer/registrar.
+- [x] No AI provider is invoked by evidence collection.
+- [x] `Pipeline.invoke()` is not used by deterministic evidence collection.
+- [x] Existing `audit_checks` compatibility remains intact.
 - [ ] T086 focused regression passes.
 - [ ] T087 focused regression passes.
 - [ ] Scheduler regression passes.
@@ -313,10 +313,40 @@ All executed deterministic commands remain repository/contract-owned.
 - [ ] Ruff format passes.
 - [ ] Mypy passes.
 - [ ] `git diff --check` passes.
-- [ ] No product source changes.
-- [ ] No provider/model default changes.
+- [x] No product source changes.
+- [x] No provider/model default changes.
+
+## R1 semantic remediation
+
+Previous independent semantic verdict: `NEEDS_REMEDIATION`.
+
+| Finding | Severity | R1 implementation |
+|---|---|---|
+| Verification/candidate source binding | HIGH | Immutable `FrozenEvidenceIdentity` binds task, base SHA, branch, source digest and required declaration manifest. Request/collection/bundle/artifact identities must agree. Current-source accessor validation rejects stale bundles. |
+| Required-command completeness | HIGH | Each result carries a canonical argv SHA-256 declaration digest. PASS covers the whole ordered manifest; FAILED can stop at its first explicit failure. Mandatory execution metadata has no successful defaults. |
+| Diagnostic timing semantics | MEDIUM | Host measures each command with `time.monotonic_ns()`. Semantic payload excludes top-level timing and every command duration; backward wall-clock metadata does not affect duration. |
+
+`audit_checks` retains its historical format and result fields. References carry authoritative typed identity; validation checks its existing source digest and exact result prefix. No historical artifact is rewritten to add identity or timing data.
+
+Status: `R1 IMPLEMENTATION_READY_FOR_HOST_VERIFICATION`, uncommitted. This is an implementation handoff, with authoritative host verification pending. No integration verdict or performance result is claimed.
+
+### Agent-local diagnostics
+
+- `python -m pytest tests/orchestrator/test_evidence.py -q --no-cov`: 27 passed in 2.76s.
+- `python -m pytest tests/orchestrator/test_core.py tests/orchestrator/test_workflow.py -q --no-cov -k 'evidence_bundle or candidate_provenance_validation or scope_evidence_validation or verification_evidence_validation or evidence_artifact_ref_validation or concurrent_audit_collection_detached_inputs or concurrent_audit_transient_output_isolated'`: 15 passed, 290 deselected in 2.26s.
+- `python -m pytest tests/orchestrator/test_evidence.py -q --no-cov -k revalidates_required_manifest`: 1 passed, 26 deselected in 0.30s.
+- `python -m ruff check tools/orchestrator/core.py tools/orchestrator/evidence.py tools/orchestrator/workflow.py tests/orchestrator/test_core.py tests/orchestrator/test_evidence.py tests/orchestrator/test_workflow.py`: PASS, zero errors after correcting local formatting/import findings.
+- `python -m ruff format --check tools/orchestrator/core.py tools/orchestrator/evidence.py tools/orchestrator/workflow.py tests/orchestrator/test_core.py tests/orchestrator/test_evidence.py tests/orchestrator/test_workflow.py`: PASS, 6 files already formatted.
+- `python -m mypy tools/orchestrator/core.py tools/orchestrator/evidence.py tools/orchestrator/workflow.py`: PASS, 3 source files checked. The direct decorated-validator call exposed a type error during self-review; schema revalidation corrected it.
+- `git diff --check`: PASS, no whitespace errors.
+
+Earlier diagnostics exposed two exception-type expectations and one unrealistic setup-failure fixture. These were corrected; no test was skipped or weakened. R1 regression coverage includes real disposable Git candidate mutation, successful-prefix rejection, failed-prefix preservation, same-display declaration substitution, six missing-metadata cases, timing-only equality, injected monotonic duration with backward wall time, source-digest rejection on validation/access, historical-artifact association and manifest revalidation after in-memory result-list mutation.
+
+Files intentionally untouched: runtime, scheduler, CLI, orchestrator configuration, package/lockfiles, gates, constraints, product source and T086/T087 task cards. No new provider/AI calls or shell interface. No unresolved implementation issue; host verification remains outstanding. Next action is the owner's focused probes and authoritative deterministic verification, before any next task.
 
 ## Verification commands
+
+The following are owner/host verification commands, not implementation-agent final checks.
 
 ```text
 python -m pytest tests/orchestrator/test_core.py tests/orchestrator/test_evidence.py tests/orchestrator/test_workflow.py -q --no-cov -k "evidence_bundle or deterministic_evidence"
@@ -331,7 +361,7 @@ git diff --check
 
 ## Additional verification evidence
 
-Run once before implementation handoff:
+Owner/host runs after the R1 implementation handoff. The implementation agent does not run this as final verification:
 
 ```text
 python -m pytest tests/orchestrator -q --no-cov

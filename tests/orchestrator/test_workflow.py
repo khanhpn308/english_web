@@ -16,6 +16,7 @@ from tools.orchestrator.core import (
     Config,
     Contract,
     Criterion,
+    EvidenceBundle,
     Fix,
     IntegrationReview,
     OrchestratorError,
@@ -3425,3 +3426,71 @@ def test_concurrent_audit_private_toolchain_venv_non_interpreter_external_symlin
     assert "review_bundle" not in state.artifacts
     assert len(agents.audit_prompts) == 0
     assert host_file.read_text() == "HOST SECRET\n"
+
+
+def test_concurrent_audit_evidence_bundle_persistence_and_parent_authority(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pipeline, _agents = concurrent_audit_pipeline(repository, monkeypatch, "verification_first")
+    state = pipeline.start("T100")
+    assert state.state == State.AUDIT_PASS, state.last_error
+
+    directory = pipeline.run_path("T100", state.run_id)
+
+    # 1. Existing audit_checks compatibility preserved
+    assert "audit_checks" in state.artifacts
+    checks_path = directory / state.artifacts["audit_checks"]
+    assert checks_path.is_file()
+    checks = read_json(checks_path)
+    assert isinstance(checks, dict)
+    assert checks["source_digest"] == state.verified_digest
+    assert all(
+        "declaration_digest" not in result and "duration_ns" not in result
+        for result in checks["results"]
+    )
+
+    # 2. EvidenceBundle registered and persisted by parent
+    assert "evidence_bundle" in state.artifacts
+    bundle_path = directory / state.artifacts["evidence_bundle"]
+    assert bundle_path.is_file()
+    assert (
+        digest(bundle_path.read_bytes())
+        == state.artifact_digests[state.artifacts["evidence_bundle"]]
+    )
+
+    # 3. Accessor loads and validates bundle
+    bundle = pipeline.evidence_bundle(directory, state)
+    assert isinstance(bundle, EvidenceBundle)
+    assert bundle.schema_version == 1
+    assert bundle.task_id == "T100"
+    assert bundle.base_sha == state.base_sha
+    assert bundle.source_digest == state.verified_digest
+    assert bundle.scope.verdict == "PASS"
+    assert bundle.verification.passed is True
+    assert bundle.is_complete is True
+
+    # 4. Check referenced artifacts in bundle
+    artifact_names = [a.name for a in bundle.artifacts]
+    assert "audit_checks" in artifact_names
+
+    # 5. Tampering with registered evidence bundle is detected
+    bundle_path.write_text('{"tampered": true}', encoding="utf-8")
+    with pytest.raises(OrchestratorError, match="changed during execution"):
+        pipeline.evidence_bundle(directory, state)
+
+
+def test_evidence_bundle_accessor_rejects_current_source_digest_mismatch(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pipeline, _agents = concurrent_audit_pipeline(repository, monkeypatch, "verification_first")
+    state = pipeline.start("T100")
+    assert state.state == State.AUDIT_PASS, state.last_error
+    directory = pipeline.run_path("T100", state.run_id)
+    bundle = pipeline.evidence_bundle(directory, state)
+    worktree = Path(state.worktree_path)
+    candidate_file = worktree / "candidate-after-verification.txt"
+    candidate_file.write_text("synthetic candidate B\n", encoding="utf-8")
+    assert Git(worktree).snapshot(state.base_sha) != bundle.source_digest
+    with pytest.raises(OrchestratorError, match="source_digest mismatch"):
+        pipeline.evidence_bundle(directory, state)

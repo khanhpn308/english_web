@@ -13,10 +13,14 @@ import pytest
 from pydantic import ValidationError
 from tools.orchestrator.core import (
     Audit,
+    CandidateProvenance,
     Config,
     Contract,
     Criterion,
+    EvidenceArtifactRef,
+    EvidenceBundle,
     Fix,
+    FrozenEvidenceIdentity,
     OrchestratorError,
     Plan,
     ReviewBundle,
@@ -26,7 +30,11 @@ from tools.orchestrator.core import (
     ReviewShard,
     Role,
     RunState,
+    ScopeEvidence,
     State,
+    TimingEvidence,
+    VerificationCommandEvidence,
+    VerificationEvidence,
     atomic_json,
     digest,
     read_json,
@@ -1614,13 +1622,17 @@ def test_concurrent_audit_collection_detached_inputs_and_failure_semantics(
     from tools.orchestrator.workflow import collect_verification
 
     commands = (("python", "-m", "pytest"), ("python", "-m", "ruff"), ("git", "diff", "--check"))
-    request = VerificationRequest(tmp_path, commands, None, "a" * 64, "T100")
+    request = VerificationRequest(
+        tmp_path,
+        commands,
+        None,
+        FrozenEvidenceIdentity.freeze("T100", "a" * 64, "feature/test", "a" * 64, commands),
+    )
     assert {field.name for field in fields(request)} == {
         "cwd",
         "commands",
         "timeout",
-        "source_digest",
-        "task_id",
+        "identity",
     }
     for field in fields(request):
         with pytest.raises(FrozenInstanceError):
@@ -1683,7 +1695,12 @@ def test_concurrent_audit_transient_output_isolated_from_request_evidence(
     from tools.orchestrator.workflow import collect_verification
 
     commands = (("python", "-m", "pytest"),)
-    request = VerificationRequest(tmp_path, commands, None, "b" * 64, "T100")
+    request = VerificationRequest(
+        tmp_path,
+        commands,
+        None,
+        FrozenEvidenceIdentity.freeze("T100", "b" * 64, "feature/test", "b" * 64, commands),
+    )
 
     def executing(command: list[str], cwd: Path, *, timeout: int | None = None) -> ProcessResult:
         assert cwd == tmp_path and timeout is None
@@ -1768,3 +1785,271 @@ def test_concurrent_audit_toolchain_backlink_validation_rules(tmp_path: Path) ->
     (loop_nm / "b").symlink_to(loop_nm / "a")
     with pytest.raises(OrchestratorError, match="Unresolvable toolchain symlink"):
         validate_toolchain_backlinks(loop_nm, auth_roots)
+
+
+def valid_candidate_provenance() -> CandidateProvenance:
+    sha = "a" * 64
+    return CandidateProvenance(
+        base_sha=sha,
+        branch="feature/t088",
+        head_sha=sha,
+        source_digest=sha,
+        changed_paths=["tasks/t088-deterministic-evidence-bundle.md"],
+        staged_paths=[],
+        staged_diff_digest=sha,
+        unstaged_paths=["tasks/t088-deterministic-evidence-bundle.md"],
+        unstaged_diff_digest=sha,
+        untracked_paths=[],
+        untracked_digest=sha,
+    )
+
+
+def valid_scope_evidence() -> ScopeEvidence:
+    return ScopeEvidence(
+        allowed_paths=["docs/changelogs.md", "tasks/t088-deterministic-evidence-bundle.md"],
+        actual_changed_paths=["tasks/t088-deterministic-evidence-bundle.md"],
+        unexpected_changed_paths=[],
+        verdict="PASS",
+    )
+
+
+def valid_verification_evidence() -> VerificationEvidence:
+    sha = "a" * 64
+    return VerificationEvidence(
+        identity=FrozenEvidenceIdentity(
+            task_id="T088",
+            base_sha=sha,
+            branch="feature/t088",
+            source_digest=sha,
+            required_command_digests=(sha,),
+        ),
+        commands=[
+            VerificationCommandEvidence(
+                command_index=0,
+                declaration_digest=sha,
+                command=["python", "<arguments withheld>"],
+                exit_code=0,
+                timed_out=False,
+                oversized=False,
+                stdout_bytes=100,
+                stderr_bytes=0,
+                stdout_digest=sha,
+                stderr_digest=sha,
+                duration_ns=1_000_000,
+            )
+        ],
+        passed=True,
+        failed=False,
+        setup_error=None,
+    )
+
+
+def valid_evidence_bundle() -> EvidenceBundle:
+    sha = "a" * 64
+    prov = valid_candidate_provenance()
+    scope = valid_scope_evidence()
+    verif = valid_verification_evidence()
+    timing = TimingEvidence(duration_ns=5_000_000)
+    artifact = EvidenceArtifactRef(
+        name="audit_checks",
+        path="00-audit_checks.json",
+        digest=sha,
+        byte_size=123,
+        classification="test_execution_record",
+        identity=verif.identity,
+    )
+    return EvidenceBundle(
+        schema_version=1,
+        task_id="T088",
+        base_sha=sha,
+        branch="feature/t088",
+        source_digest=sha,
+        provenance=prov,
+        scope=scope,
+        verification=verif,
+        artifacts=[artifact],
+        timing=timing,
+        is_complete=True,
+    )
+
+
+def test_evidence_bundle_strict_schema_and_version_validation() -> None:
+    bundle = valid_evidence_bundle()
+    assert bundle.schema_version == 1
+    assert bundle.is_complete is True
+
+    # Unknown version rejected
+    data = bundle.model_dump()
+    data["schema_version"] = 2
+    with pytest.raises(ValidationError):
+        EvidenceBundle.model_validate(data)
+
+    data["schema_version"] = 0
+    with pytest.raises(ValidationError):
+        EvidenceBundle.model_validate(data)
+
+    # Extra forbidden fields rejected
+    data = bundle.model_dump()
+    data["extra_ai_field"] = "unexpected"
+    with pytest.raises(ValidationError):
+        EvidenceBundle.model_validate(data)
+
+
+def test_candidate_provenance_validation_and_ordering() -> None:
+    prov = valid_candidate_provenance()
+    # Unsorted paths rejected
+    data = prov.model_dump()
+    data["changed_paths"] = ["z.py", "a.py"]
+    with pytest.raises(ValidationError, match="canonically sorted"):
+        CandidateProvenance.model_validate(data)
+
+    # Duplicate paths rejected
+    data = prov.model_dump()
+    data["changed_paths"] = ["a.py", "a.py"]
+    with pytest.raises((ValidationError, OrchestratorError), match="Duplicate paths"):
+        CandidateProvenance.model_validate(data)
+
+    # Unsafe path rejected
+    data = prov.model_dump()
+    data["changed_paths"] = ["../escape.py"]
+    with pytest.raises((ValidationError, OrchestratorError), match="Unsafe"):
+        CandidateProvenance.model_validate(data)
+
+
+def test_scope_evidence_validation() -> None:
+    scope = valid_scope_evidence()
+    # Out of order allowed_paths rejected
+    data = scope.model_dump()
+    data["allowed_paths"] = ["b.py", "a.py"]
+    with pytest.raises((ValidationError, OrchestratorError), match="canonically sorted"):
+        ScopeEvidence.model_validate(data)
+
+    # PASS with unexpected paths rejected
+    data = scope.model_dump()
+    data["actual_changed_paths"] = ["a.py", "unexpected.py"]
+    data["allowed_paths"] = ["a.py"]
+    data["unexpected_changed_paths"] = ["unexpected.py"]
+    data["verdict"] = "PASS"
+    with pytest.raises((ValidationError, OrchestratorError), match="cannot be PASS"):
+        ScopeEvidence.model_validate(data)
+
+    # FAIL without unexpected paths rejected
+    data = scope.model_dump()
+    data["verdict"] = "FAIL"
+    with pytest.raises((ValidationError, OrchestratorError), match="cannot be FAIL"):
+        ScopeEvidence.model_validate(data)
+
+
+def test_verification_evidence_validation() -> None:
+    data = valid_verification_evidence().model_dump()
+    data["commands"][0]["command_index"] = 1
+    with pytest.raises((ValidationError, OrchestratorError), match="index order"):
+        VerificationEvidence.model_validate(data)
+
+    data = valid_verification_evidence().model_dump()
+    data["commands"] = []
+    data["setup_error"] = "SETUP_FAILED: synthetic"
+    with pytest.raises(
+        (ValidationError, OrchestratorError), match="Setup error cannot be reported"
+    ):
+        VerificationEvidence.model_validate(data)
+
+    data = valid_verification_evidence().model_dump()
+    data["commands"][0]["exit_code"] = 1
+    with pytest.raises(
+        (ValidationError, OrchestratorError), match="Failed command cannot be reported"
+    ):
+        VerificationEvidence.model_validate(data)
+
+    data = valid_verification_evidence().model_dump()
+    data["failed"] = True
+    with pytest.raises((ValidationError, OrchestratorError), match="both passed and failed"):
+        VerificationEvidence.model_validate(data)
+
+
+def test_evidence_artifact_ref_validation() -> None:
+    sha = "a" * 64
+    # Safe path checked
+    with pytest.raises((ValidationError, OrchestratorError), match="Unsafe"):
+        EvidenceArtifactRef(
+            name="bad",
+            path="../outside.json",
+            digest=sha,
+            byte_size=10,
+            classification="test",
+        )
+
+    with pytest.raises(ValidationError):
+        EvidenceArtifactRef(
+            name="bad",
+            path="valid.json",
+            digest=sha,
+            byte_size=-1,
+            classification="test",
+        )
+
+
+def test_evidence_bundle_completeness_and_mismatches() -> None:
+    bundle = valid_evidence_bundle()
+
+    # Base sha mismatch rejected
+    data = bundle.model_dump()
+    data["provenance"]["base_sha"] = "b" * 64
+    with pytest.raises((ValidationError, OrchestratorError), match="base_sha mismatch"):
+        EvidenceBundle.model_validate(data)
+
+    # Branch mismatch rejected
+    data = bundle.model_dump()
+    data["provenance"]["branch"] = "wrong-branch"
+    with pytest.raises((ValidationError, OrchestratorError), match="branch mismatch"):
+        EvidenceBundle.model_validate(data)
+
+    # Source digest mismatch rejected
+    data = bundle.model_dump()
+    data["provenance"]["source_digest"] = "b" * 64
+    with pytest.raises((ValidationError, OrchestratorError), match="source_digest mismatch"):
+        EvidenceBundle.model_validate(data)
+
+    # Scope changed paths mismatch provenance rejected
+    data = bundle.model_dump()
+    data["scope"]["actual_changed_paths"] = ["different.py"]
+    data["scope"]["allowed_paths"] = ["different.py"]
+    with pytest.raises((ValidationError, OrchestratorError), match="mismatch provenance"):
+        EvidenceBundle.model_validate(data)
+
+    # Unexpected changed paths in complete bundle rejected
+    data = bundle.model_dump()
+    data["scope"]["allowed_paths"] = ["other.py"]
+    data["scope"]["actual_changed_paths"] = ["tasks/t088-deterministic-evidence-bundle.md"]
+    data["scope"]["unexpected_changed_paths"] = ["tasks/t088-deterministic-evidence-bundle.md"]
+    data["scope"]["verdict"] = "FAIL"
+    with pytest.raises((ValidationError, OrchestratorError), match="cannot have unexpected"):
+        EvidenceBundle.model_validate(data)
+
+    # Missing verification commands in complete bundle rejected
+    data = bundle.model_dump()
+    data["verification"]["commands"] = []
+    data["verification"]["passed"] = False
+    data["verification"]["failed"] = False
+    with pytest.raises((ValidationError, OrchestratorError), match="Successful prefix"):
+        EvidenceBundle.model_validate(data)
+
+    # Setup error in complete bundle rejected
+    data = bundle.model_dump()
+    data["verification"]["setup_error"] = "SETUP_FAILED: test"
+    data["verification"]["passed"] = False
+    data["verification"]["failed"] = True
+    with pytest.raises((ValidationError, OrchestratorError), match="cannot have setup error"):
+        EvidenceBundle.model_validate(data)
+
+    # Duplicate artifact references rejected
+    art = data["artifacts"][0]
+    data["artifacts"] = [art, art]
+    with pytest.raises((ValidationError, OrchestratorError), match="Duplicate artifact references"):
+        EvidenceBundle.model_validate(data)
+
+    # Semantic payload excludes timing
+    payload = bundle.semantic_payload()
+    assert "timing" not in payload
+    assert payload["schema_version"] == 1
+    assert payload["task_id"] == "T088"

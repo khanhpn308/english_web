@@ -270,6 +270,86 @@ T087 giữ nguyên admission/scheduler concurrency, gate commands/thresholds và
 Resource arbitration thuộc task sau. Post-execution integrity checks vẫn không thay thế
 OS isolation hoặc phát hiện mutation rồi hoàn nguyên giữa hai snapshot.
 
+## T088: Deterministic Evidence Collection và EvidenceBundle
+
+Status: `R1 IMPLEMENTATION_READY_FOR_HOST_VERIFICATION`. Authoritative host verification is pending.
+
+The independent T088 semantic audit returned `NEEDS_REMEDIATION` with two HIGH findings and one MEDIUM finding:
+
+- HIGH: verification evidence could be rebound to another candidate source.
+- HIGH: a successful prefix could claim PASS without executing the complete required declaration.
+- MEDIUM: command duration affected semantic equality and used wall-clock subtraction.
+
+R1 addresses these defects within the existing host evidence path. `FrozenEvidenceIdentity` carries `task_id`, `base_sha`, `branch`, `source_digest` and the ordered `required_command_digests`. The parent freezes it before verification dispatch, the detached request validates its argv against it, and the collection retains it. Bundle construction compares freshly collected provenance against this identity and rejects differences. The workflow accessor validates base SHA, branch and the current candidate's source digest, plus task identity.
+
+Each declaration digest is SHA-256 over the UTF-8 compact JSON argv array, with `ensure_ascii=False` and comma/colon separators. Results retain that digest and a display containing only the executable basename and withheld-arguments marker. PASS requires every declared command in exact order. An explicit failed prefix remains valid FAILED evidence through its first failing command. A successful prefix, reordered results, substituted declarations or missing mandatory exit/timeout/oversize/output digest/byte-size metadata fail closed. Setup failures remain failed collection evidence and cannot form a complete bundle.
+
+Every bundle artifact reference carries the same typed frozen identity. For `audit_checks`, validation also checks the artifact's existing `source_digest` and exact execution result prefix against the bundle. Historical `audit_checks` fields and result metadata remain unchanged. The authoritative bundle metadata supplies the declaration association for those historical records; validators do not rewrite them or synthesize missing execution metadata.
+
+Command duration now measures `time.monotonic_ns()` around host execution. Wall-clock start/end strings remain historical metadata and do not determine duration. `semantic_payload()` excludes the entire top-level timing object and every command's `duration_ns`. Artifact hashes still represent the exact referenced bytes.
+
+Focused local regression tests cover these fixes. Host verification, T086/T087 regressions and scheduler/full-suite checks remain pending. R1 introduces no reviewer protocol, provider call, arbitrary command interface or T089 behavior.
+
+T088 thiết lập tầng bằng chứng xác định (deterministic host evidence) do host / control plane sở hữu, tách biệt hoàn toàn việc thu thập, kiểm tra, chuẩn hóa và đóng gói bằng chứng cơ học khỏi vòng lặp suy luận của AI:
+
+```text
+HOST / DETERMINISTIC CONTROL PLANE
+        |
+        +-- candidate provenance (HEAD, staged index, unstaged WT, untracked)
+        +-- Git / changed-path evidence & allowlist scope verdict
+        +-- executable verification evidence (exit codes, digests, failure metadata)
+        +-- artifact integrity references (safe relative paths, SHA-256, byte sizes)
+        +-- monotonic timing (diagnostics only)
+        |
+        v
+VERSIONED EvidenceBundle (schema_version = 1)
+        |
+        v
+AI semantic/adversarial reasoning (T089+)
+```
+
+### Nguyên tắc kiến trúc và ranh giới thẩm quyền
+- **Nguyên tắc cốt lõi:** Nếu tính đúng đắn có thể xác định từ exit code, trạng thái Git/filesystem, mã băm (hashes), schema validation, deterministic parsing hoặc predefined tests, AI **tuyệt đối không tham gia** vào execution hoặc decision loop đó.
+- **Host-only execution:** Toàn bộ quá trình thu thập evidence thực thi hoàn toàn trong logic tiến trình host Python (`tools/orchestrator/evidence.py`). Subsystem này:
+  - Không import hay gọi `AgentProvider`, `CliProvider`, hoặc `Pipeline.invoke()`;
+  - Không chọn model, không hỏi AI lệnh nào cần chạy;
+  - Không cho phép AI sinh lệnh shell tùy ý; mọi lệnh thực thi đều thuộc quyền quản lý của task card/contract;
+  - Không để AI suy diễn PASS/FAIL cơ học.
+
+### Cấu trúc schema EvidenceBundle (versioned)
+`EvidenceBundle` được mô hình hóa chặt chẽ qua Pydantic (`extra="forbid"`, `schema_version: Version = 1`), bao gồm các cấu trúc con:
+1. `CandidateProvenance`: Liên kết chặt chẽ với candidate đã đóng băng:
+   - `base_sha`, `branch`, `head_sha`, `source_digest` (khớp chính xác `Git.snapshot(base_sha)`);
+   - Phân biệt rõ rệt 3 tầng trạng thái Git:
+     - Tầng staged / index: `staged_paths`, `staged_diff_digest` (`git diff --cached --binary base_sha --`);
+     - Tầng unstaged working tree: `unstaged_paths`, `unstaged_diff_digest` (`git diff --binary --`);
+     - Tầng non-ignored untracked files: `untracked_paths`, `untracked_digest` (băm nội dung và mode của untracked files).
+2. `ScopeEvidence`: Tính toán cơ học tính tuân thủ allowlist:
+   - `allowed_paths`, `actual_changed_paths`, `unexpected_changed_paths`, `verdict` (`PASS` | `FAIL`);
+   - Áp dụng `safe_path()`; chuẩn hóa và từ chối duplicate paths;
+   - Thay đổi ngoài allowlist lập tức fail closed (`BLOCKED_FOR_SCOPE_EXTENSION`). Bundle hoàn chỉnh không thể biểu diễn candidate ngoài phạm vi là hợp lệ.
+3. `VerificationEvidence`: Kế thừa ngữ nghĩa `VerificationCollection` hiện có mà không tạo runner thứ hai:
+   - Bảo toàn thứ tự khai báo qua `FrozenEvidenceIdentity.required_command_digests`, `command_index` và `declaration_digest`; PASS cần toàn bộ manifest, FAILED cho phép prefix kết thúc bằng lỗi rõ ràng;
+   - Lưu trữ metadata có giới hạn: `command`, `exit_code`, `timed_out`, `oversized`, bytes và SHA-256 digest của stdout/stderr, `failure_classification`;
+   - Tuyệt đối không nhúng stdout/stderr không giới hạn;
+   - Lỗi kiểm tra thông thường (exit code != 0) là bằng chứng thực thi hợp lệ (`passed=False`, `failed=True`);
+   - Lỗi hạ tầng / thiết lập (`setup_error`) lập tức fail closed, không bao giờ bị báo cáo nhầm thành PASS.
+4. `EvidenceArtifactRef`: Tham chiếu tệp bằng chứng dung lượng lớn trong thư mục run artifacts:
+   - Ghi nhận `name`, `path` (đường dẫn tương đối an toàn), `digest` (SHA-256), `byte_size`, `classification`, `summary` và `identity` khớp frozen verification identity;
+   - Ngăn chặn triệt để đường dẫn tuyệt đối, path traversal (`..`), và symlink escape;
+   - Hàm `validate_artifact_ref` kiểm tra tính tồn tại, tệp thông thường (regular file), nằm gọn trong thư mục artifacts, đúng kích thước byte và đúng mã băm SHA-256. Mọi hành vi sửa đổi (tampering) đều bị phát hiện và fail closed.
+5. `TimingEvidence`: Ghi nhận thời gian đo lường bằng đồng hồ đơn điệu (`time.monotonic_ns()`). Thời gian thuần túy mang tính chẩn đoán (diagnostic), không quyết định kết quả PASS/FAIL. Phương thức `bundle.semantic_payload()` loại bỏ toàn bộ top-level `timing` và `verification.commands[*].duration_ns`. Artifact digests vẫn phản ánh bytes chính xác của artifact.
+
+### Tính xác định và toàn vẹn
+- **Canonical Ordering:** Các danh sách không có thứ tự hợp đồng (changed_paths, staged_paths, unstaged_paths, untracked_paths, allowed_paths, unexpected_changed_paths, artifacts) đều được sắp xếp canonical deterministically (`sorted()`). Thứ tự hoàn tất của luồng (thread completion order) hoặc thứ tự duyệt filesystem không thể làm thay đổi payload ngữ nghĩa.
+- **Fail-Closed Completeness:** `EvidenceBundle` yêu cầu đầy đủ các bằng chứng cần thiết (`is_complete: Literal[True] = True`). Mọi sai lệch về `base_sha`, `branch`, `source_digest`, sự xuất hiện của unexpected path, thiếu bằng chứng kiểm tra, lỗi setup hoặc artifact digest mismatch đều khiến việc hoàn thành bundle thất bại ngay lập tức.
+- **Parent-Only Authority:** Chỉ tiến trình Pipeline cha mới có quyền persist và đăng ký `EvidenceBundle` vào `RunState.artifacts`. Worker threads và reviewer threads không có quyền hạn tạo hoặc ghi đè artifact này.
+
+### Tính tương thích ngược và phạm vi hoãn lại
+- Artifact lịch sử `audit_checks` giữ nguyên format và metadata kết quả. Các trường identity, declaration digest và monotonic duration mới nằm trong EvidenceBundle, không thêm vào historical artifact.
+- T088 bổ sung artifact `evidence_bundle` song song bên cạnh `audit_checks`.
+- T088 không sửa đổi prompt hay schema của các AI reviewer; việc đưa EvidenceBundle vào giao thức reviewer và triển khai cơ chế `ProbeRequest` thuộc phạm vi của task tiếp theo (T089).
+
 ## Level 2: lập lịch DAG toàn repository (T079)
 
 `scheduler.py` là lớp mỏng phía trên `Pipeline`, dùng thư viện chuẩn và các model
