@@ -30,6 +30,8 @@ Sha = Annotated[str, Field(pattern=f"^{SHA_PATTERN}$")]
 Nonempty = Annotated[str, Field(min_length=1)]
 Count = Annotated[StrictInt, Field(ge=0, le=10)]
 Version = Annotated[StrictInt, Field(ge=1, le=1)]
+Sha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+Nanoseconds = Annotated[StrictInt, Field(ge=0)]
 
 
 class OrchestratorError(ValueError):
@@ -355,6 +357,39 @@ class RetryOrigin(Model):
     retained_worktrees: list[Nonempty]
 
 
+def command_declaration_digest(command: tuple[str, ...]) -> str:
+    validate_command(list(command))
+    return digest(json.dumps(command, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+
+
+class FrozenEvidenceIdentity(Model):
+    """Host-frozen source and ordered, privacy-safe verification declaration."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    task_id: TaskId
+    base_sha: Sha
+    branch: Nonempty
+    source_digest: Sha256
+    required_command_digests: Annotated[tuple[Sha256, ...], Field(min_length=1)]
+
+    @classmethod
+    def freeze(
+        cls,
+        task_id: str,
+        base_sha: str,
+        branch: str,
+        source_digest: str,
+        commands: tuple[tuple[str, ...], ...],
+    ) -> "FrozenEvidenceIdentity":
+        return cls(
+            task_id=task_id,
+            base_sha=base_sha,
+            branch=branch,
+            source_digest=source_digest,
+            required_command_digests=tuple(command_declaration_digest(c) for c in commands),
+        )
+
+
 @dataclass(frozen=True)
 class VerificationRequest:
     """Detached collection inputs; no state, artifact directory or pipeline authority."""
@@ -362,15 +397,251 @@ class VerificationRequest:
     cwd: Path
     commands: tuple[tuple[str, ...], ...]
     timeout: int | None
-    source_digest: str
-    task_id: str
+    identity: FrozenEvidenceIdentity
+
+    def __post_init__(self) -> None:
+        if (
+            tuple(command_declaration_digest(c) for c in self.commands)
+            != self.identity.required_command_digests
+        ):
+            raise OrchestratorError("Verification request command declaration mismatch")
+
+    @property
+    def task_id(self) -> str:
+        return self.identity.task_id
+
+    @property
+    def source_digest(self) -> str:
+        return self.identity.source_digest
 
 
 @dataclass(frozen=True)
 class VerificationCollection:
+    identity: FrozenEvidenceIdentity
     results: tuple[dict[str, object], ...]
     failed: bool = False
     setup_error: str | None = None
+
+
+class EvidenceArtifactRef(Model):
+    name: Nonempty
+    path: str
+    digest: Sha
+    byte_size: Annotated[StrictInt, Field(ge=0)]
+    classification: Nonempty
+    summary: str | None = None
+    identity: FrozenEvidenceIdentity | None = None
+
+    @field_validator("path")
+    @classmethod
+    def check_artifact_path(cls, value: str) -> str:
+        safe_path(value)
+        return value
+
+
+class CandidateProvenance(Model):
+    base_sha: Sha
+    branch: Nonempty
+    head_sha: Sha
+    source_digest: Sha
+    changed_paths: list[str]
+    staged_paths: list[str] = Field(default_factory=list)
+    staged_diff_digest: Sha
+    unstaged_paths: list[str] = Field(default_factory=list)
+    unstaged_diff_digest: Sha
+    untracked_paths: list[str] = Field(default_factory=list)
+    untracked_digest: Sha
+
+    @field_validator("changed_paths", "staged_paths", "unstaged_paths", "untracked_paths")
+    @classmethod
+    def check_paths(cls, paths: list[str]) -> list[str]:
+        for p in paths:
+            safe_path(p)
+        if len(paths) != len(set(paths)):
+            raise OrchestratorError("Duplicate paths in candidate provenance")
+        return paths
+
+    @model_validator(mode="after")
+    def validate_canonical_order(self) -> "CandidateProvenance":
+        if self.changed_paths != sorted(self.changed_paths):
+            raise OrchestratorError("changed_paths must be canonically sorted")
+        if self.staged_paths != sorted(self.staged_paths):
+            raise OrchestratorError("staged_paths must be canonically sorted")
+        if self.unstaged_paths != sorted(self.unstaged_paths):
+            raise OrchestratorError("unstaged_paths must be canonically sorted")
+        if self.untracked_paths != sorted(self.untracked_paths):
+            raise OrchestratorError("untracked_paths must be canonically sorted")
+        return self
+
+
+class ScopeEvidence(Model):
+    allowed_paths: list[str]
+    actual_changed_paths: list[str]
+    unexpected_changed_paths: list[str] = Field(default_factory=list)
+    verdict: Literal["PASS", "FAIL"]
+
+    @field_validator("allowed_paths", "actual_changed_paths", "unexpected_changed_paths")
+    @classmethod
+    def check_scope_paths(cls, paths: list[str]) -> list[str]:
+        for p in paths:
+            safe_path(p)
+        if len(paths) != len(set(paths)):
+            raise OrchestratorError("Duplicate paths in scope evidence")
+        return paths
+
+    @model_validator(mode="after")
+    def validate_scope(self) -> "ScopeEvidence":
+        if self.allowed_paths != sorted(self.allowed_paths):
+            raise OrchestratorError("allowed_paths must be canonically sorted")
+        if self.actual_changed_paths != sorted(self.actual_changed_paths):
+            raise OrchestratorError("actual_changed_paths must be canonically sorted")
+        if self.unexpected_changed_paths != sorted(self.unexpected_changed_paths):
+            raise OrchestratorError("unexpected_changed_paths must be canonically sorted")
+        expected_unexpected = sorted(set(self.actual_changed_paths) - set(self.allowed_paths))
+        if self.unexpected_changed_paths != expected_unexpected:
+            raise OrchestratorError("unexpected_changed_paths mismatch")
+        if self.unexpected_changed_paths and self.verdict == "PASS":
+            raise OrchestratorError("Scope verdict cannot be PASS with unexpected paths")
+        if not self.unexpected_changed_paths and self.verdict == "FAIL":
+            raise OrchestratorError("Scope verdict cannot be FAIL without unexpected paths")
+        return self
+
+
+class VerificationCommandEvidence(Model):
+    command_index: Annotated[StrictInt, Field(ge=0)]
+    command: list[str]
+    declaration_digest: Sha256
+    exit_code: StrictInt
+    timed_out: StrictBool
+    oversized: StrictBool
+    stdout_bytes: Annotated[StrictInt, Field(ge=0)]
+    stderr_bytes: Annotated[StrictInt, Field(ge=0)]
+    stdout_digest: Sha256
+    stderr_digest: Sha256
+    duration_ns: Nanoseconds | None = None
+    failure_classification: str | None = None
+
+
+class VerificationEvidence(Model):
+    identity: FrozenEvidenceIdentity
+    commands: list[VerificationCommandEvidence]
+    passed: StrictBool
+    failed: StrictBool
+    setup_error: str | None = None
+
+    @model_validator(mode="after")
+    def validate_verification_integrity(self) -> "VerificationEvidence":
+        if [c.command_index for c in self.commands] != list(range(len(self.commands))):
+            raise OrchestratorError("Verification commands must be in index order")
+        any_failed = any(c.exit_code != 0 or c.timed_out or c.oversized for c in self.commands)
+        if self.setup_error is not None:
+            if self.passed:
+                raise OrchestratorError("Setup error cannot be reported as passed")
+            if not self.failed:
+                raise OrchestratorError("Setup error must be marked as failed")
+        if any_failed:
+            if self.passed:
+                raise OrchestratorError("Failed command cannot be reported as passed")
+            if not self.failed:
+                raise OrchestratorError("Failed command must be marked as failed")
+        if self.passed and self.failed:
+            raise OrchestratorError("Verification cannot be both passed and failed")
+        manifest = self.identity.required_command_digests
+        if len(self.commands) > len(manifest) or any(
+            c.declaration_digest != manifest[c.command_index] for c in self.commands
+        ):
+            raise OrchestratorError("Verification command declaration mismatch")
+        failures = [
+            i for i, c in enumerate(self.commands) if c.exit_code or c.timed_out or c.oversized
+        ]
+        if failures and (failures != [len(self.commands) - 1] or self.setup_error is not None):
+            raise OrchestratorError("Verification must stop at first explicit failure")
+        if not any_failed and self.setup_error is None:
+            if len(self.commands) != len(manifest):
+                raise OrchestratorError(
+                    "Successful prefix does not cover required command manifest"
+                )
+            if not self.passed or self.failed:
+                raise OrchestratorError("Successful complete verification must be passed")
+        for c in self.commands:
+            classification = (
+                "TIMED_OUT"
+                if c.timed_out
+                else "OVERSIZED"
+                if c.oversized
+                else "COMMAND_FAILED"
+                if c.exit_code
+                else None
+            )
+            if c.failure_classification != classification:
+                raise OrchestratorError("Verification failure classification mismatch")
+        return self
+
+
+class TimingEvidence(Model):
+    collected_at: str = Field(default_factory=now)
+    duration_ns: Nanoseconds
+    step_durations_ns: dict[str, Nanoseconds] = Field(default_factory=dict)
+
+
+class EvidenceBundle(Model):
+    schema_version: Version = 1
+    task_id: TaskId
+    base_sha: Sha
+    branch: Nonempty
+    source_digest: Sha
+    provenance: CandidateProvenance
+    scope: ScopeEvidence
+    verification: VerificationEvidence
+    artifacts: list[EvidenceArtifactRef] = Field(default_factory=list)
+    timing: TimingEvidence
+    is_complete: Literal[True] = True
+
+    def check_completeness(self) -> None:
+        VerificationEvidence.model_validate(self.verification.model_dump())
+        if self.provenance.base_sha != self.base_sha:
+            raise OrchestratorError("Provenance base_sha mismatch")
+        if self.provenance.branch != self.branch:
+            raise OrchestratorError("Provenance branch mismatch")
+        if self.provenance.source_digest != self.source_digest:
+            raise OrchestratorError("Provenance source_digest mismatch")
+        identity = self.verification.identity
+        if (identity.task_id, identity.base_sha, identity.branch, identity.source_digest) != (
+            self.task_id,
+            self.base_sha,
+            self.branch,
+            self.source_digest,
+        ):
+            raise OrchestratorError("Frozen verification provenance mismatch")
+        if self.scope.actual_changed_paths != self.provenance.changed_paths:
+            raise OrchestratorError("Scope changed paths mismatch provenance")
+        if self.scope.verdict != "PASS" or self.scope.unexpected_changed_paths:
+            raise OrchestratorError("Complete evidence bundle cannot have unexpected changed paths")
+        artifact_order = [(a.name, a.path) for a in self.artifacts]
+        if artifact_order != sorted(artifact_order):
+            raise OrchestratorError("Artifact references must be in canonical order")
+        if len(artifact_order) != len(set(artifact_order)):
+            raise OrchestratorError("Duplicate artifact references in evidence bundle")
+        if any(a.identity != identity for a in self.artifacts):
+            raise OrchestratorError("Artifact frozen identity mismatch")
+        if not self.verification.commands:
+            raise OrchestratorError("Complete evidence bundle requires verification evidence")
+        if self.verification.setup_error is not None:
+            raise OrchestratorError("Complete evidence bundle cannot have setup error")
+
+    @model_validator(mode="after")
+    def validate_bundle_completeness(self) -> "EvidenceBundle":
+        self.check_completeness()
+        return self
+
+    def semantic_payload(self) -> dict[str, object]:
+        return self.model_dump(
+            mode="json",
+            exclude={
+                "timing": True,
+                "verification": {"commands": {"__all__": {"duration_ns"}}},
+            },
+        )
 
 
 class RunState(Model):

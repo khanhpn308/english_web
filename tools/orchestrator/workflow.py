@@ -6,6 +6,7 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager, nullcontext
@@ -17,7 +18,9 @@ from tools.orchestrator.core import (
     Audit,
     Config,
     Contract,
+    EvidenceBundle,
     Fix,
+    FrozenEvidenceIdentity,
     IntegrationReview,
     OrchestratorError,
     Plan,
@@ -32,6 +35,7 @@ from tools.orchestrator.core import (
     VerificationRequest,
     WorkerResult,
     atomic_json,
+    command_declaration_digest,
     contract_template,
     digest,
     now,
@@ -42,6 +46,12 @@ from tools.orchestrator.core import (
     task_card,
     transition,
     validate_contract,
+)
+from tools.orchestrator.evidence import (
+    build_evidence_bundle,
+    collect_verification_evidence,
+    create_artifact_ref,
+    validate_evidence_bundle,
 )
 from tools.orchestrator.runtime import (
     AgentProvider,
@@ -163,18 +173,24 @@ def collect_verification(request: VerificationRequest) -> VerificationCollection
         print(f"TEST {request.task_id}: {command[0]} (arguments in contract/config)")
         try:
             exec_argv = verification_command_argv(request.cwd, list(command))
+            started_ns = time.monotonic_ns()
             result = execute(exec_argv, request.cwd, timeout=request.timeout)
+            duration_ns = time.monotonic_ns() - started_ns
         except (OrchestratorError, OSError) as error:
             detail = str(error) if isinstance(error, OrchestratorError) else type(error).__name__
             return VerificationCollection(
-                tuple(results), setup_error=f"SETUP_FAILED: audit_checks: {detail}"
+                request.identity,
+                tuple(results),
+                setup_error=f"SETUP_FAILED: audit_checks: {detail}",
             )
         meta = result.metadata()
         meta["command"] = [Path(command[0]).name, "<arguments withheld>"]
+        meta["declaration_digest"] = command_declaration_digest(command)
+        meta["duration_ns"] = duration_ns
         results.append({**meta, "command_index": index})
         if result.exit_code or result.timed_out or result.oversized:
-            return VerificationCollection(tuple(results), failed=True)
-    return VerificationCollection(tuple(results))
+            return VerificationCollection(request.identity, tuple(results), failed=True)
+    return VerificationCollection(request.identity, tuple(results))
 
 
 def validate_toolchain_backlinks(toolchain_root: Path, authoritative_roots: set[Path]) -> None:
@@ -1470,7 +1486,12 @@ class Pipeline:
         with workspace_context as (verify_path, verify_git):
             request = (
                 VerificationRequest(
-                    verify_path, commands, self.config.timeout_seconds, snapshot, state.task_id
+                    verify_path,
+                    commands,
+                    self.config.timeout_seconds,
+                    FrozenEvidenceIdentity.freeze(
+                        state.task_id, state.base_sha, branch, snapshot, commands
+                    ),
                 )
                 if commands is not None and verify_path is not None
                 else None
@@ -1496,11 +1517,14 @@ class Pipeline:
                     for _perspective, name, prompt in jobs
                 ]
                 if verification_future is not None:
+                    assert request is not None
                     try:
                         collection = verification_future.result()
                     except Exception as error:
                         collection = VerificationCollection(
-                            (), setup_error=f"SETUP_FAILED: audit_checks: {type(error).__name__}"
+                            request.identity,
+                            (),
+                            setup_error=f"SETUP_FAILED: audit_checks: {type(error).__name__}",
                         )
                 # Reap every submitted call even if an earlier one failed. Declaration order
                 # governs both failure aggregation and bundle identities, never completion order.
@@ -1533,15 +1557,87 @@ class Pipeline:
             self.skill_manifest(directory, state)
         # Persist completed executable evidence before reviewer diagnostics. No lane writes it.
         if collection is not None:
+            if request is None or collection.identity != request.identity:
+                raise OrchestratorError("Frozen verification request identity mismatch")
+            collect_verification_evidence(collection)
             artifact = f"{state.fix_cycle:02d}-audit_checks-{uuid4().hex[:8]}.json"
             atomic_json(
                 directory / artifact,
-                {"level": "TEST", "source_digest": snapshot, "results": collection.results},
+                {
+                    "level": "TEST",
+                    "source_digest": snapshot,
+                    # Keep historical audit_checks metadata unchanged. The typed bundle
+                    # carries the host's declaration binding and monotonic duration.
+                    "results": [
+                        {
+                            k: v
+                            for k, v in raw.items()
+                            if k not in {"declaration_digest", "duration_ns"}
+                        }
+                        for raw in collection.results
+                    ],
+                },
             )
             state.artifacts["audit_checks"] = artifact
             state.artifact_digests[artifact] = digest((directory / artifact).read_bytes())
             if not collection.failed and collection.setup_error is None:
                 state.verified_digest = snapshot
+
+            if collection.setup_error is None:
+                contract_allowed = (
+                    self.contract(directory, state).allowed_paths
+                    if "contract" in state.artifacts
+                    else sorted(Git(working).paths(state.base_sha))
+                )
+                refs = [
+                    create_artifact_ref(
+                        "audit_checks",
+                        artifact,
+                        directory,
+                        "test_execution_record",
+                        identity=collection.identity,
+                    )
+                ]
+                if "contract" in state.artifacts:
+                    refs.append(
+                        create_artifact_ref(
+                            "contract",
+                            state.artifacts["contract"],
+                            directory,
+                            "task_contract",
+                            identity=collection.identity,
+                        )
+                    )
+                if "worker" in state.artifacts:
+                    refs.append(
+                        create_artifact_ref(
+                            "worker",
+                            state.artifacts["worker"],
+                            directory,
+                            "worker_result",
+                            identity=collection.identity,
+                        )
+                    )
+                evidence_bundle = build_evidence_bundle(
+                    worktree=working,
+                    task_id=state.task_id,
+                    base_sha=state.base_sha,
+                    branch=branch,
+                    allowed_paths=contract_allowed,
+                    verification_collection=collection,
+                    artifacts_dir=directory,
+                    artifact_refs=refs,
+                    fail_closed=False,
+                )
+                bundle_artifact = f"{state.fix_cycle:02d}-evidence_bundle-{uuid4().hex[:8]}.json"
+                atomic_json(
+                    directory / bundle_artifact,
+                    evidence_bundle.model_dump(mode="json"),
+                )
+                state.artifacts["evidence_bundle"] = bundle_artifact
+                state.artifact_digests[bundle_artifact] = digest(
+                    (directory / bundle_artifact).read_bytes()
+                )
         # Persist provider diagnostics only after every call has joined and protections pass.
         # These references also protect previous cycles' evidence during later invocations.
         for _perspective, name, _prompt in jobs:
@@ -1567,6 +1663,24 @@ class Pipeline:
         if digest(path.read_bytes()) != state.contract_digest:
             raise OrchestratorError("Task contract changed during execution")
         return stored_contract(read_json(path))
+
+    def evidence_bundle(self, directory: Path, state: RunState) -> EvidenceBundle:
+        if "evidence_bundle" not in state.artifacts:
+            raise OrchestratorError("Incomplete state: missing evidence bundle")
+        path = directory / state.artifacts["evidence_bundle"]
+        if digest(path.read_bytes()) != state.artifact_digests.get(path.name):
+            raise OrchestratorError("Evidence bundle changed during execution")
+        bundle = EvidenceBundle.model_validate(read_json(path))
+        validate_evidence_bundle(
+            bundle,
+            directory,
+            expected_base_sha=state.base_sha,
+            expected_branch=state.worktree_branch,
+            expected_source_digest=Git(Path(state.worktree_path)).snapshot(state.base_sha),
+        )
+        if bundle.task_id != state.task_id:
+            raise OrchestratorError("EvidenceBundle task_id mismatch")
+        return bundle
 
     def scope(
         self,
