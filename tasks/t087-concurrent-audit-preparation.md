@@ -2,7 +2,7 @@
 
 **Task ID:** `T087`
 **Title:** Concurrent executable verification and read-only review fan-out
-**Status:** `R4 IMPLEMENTATION_READY PENDING INDEPENDENT RE-AUDIT`
+**Status:** `DONE`
 **Goal:** Giảm audit-cycle wall-clock bằng cách chạy executable verification lane đồng thời với T086 parallel read-only reviewer fan-out trên cùng frozen Git source snapshot, sau đó deterministic fan-in cả verification evidence và review bundle trước authoritative final Auditor.
 **Level:** High
 
@@ -632,3 +632,13 @@ Outcome: `R3 NEEDS_REMEDIATION`. Uncommitted candidate based on `20447177c48a556
 - **Internal symlink preservation**: `test_concurrent_audit_private_toolchain_internal_symlinks_preserved` proves `.bin/tsc` and `.venv/lib64` symlinks resolve strictly inside private sandbox.
 
 Outcome: `R4 IMPLEMENTATION_READY PENDING INDEPENDENT RE-AUDIT`. Uncommitted candidate based on `20447177c48a556d63709906cb8c953142f62e4b` on branch `feature/t087-concurrent-audit-preparation`. No commit, merge, push, reset, clean, or rebase. Product code, scheduler, runtime, orchestrator.yaml, package.json, and gate scripts untouched.
+
+
+## Final integration closeout
+
+- R4 independent audit: `PASS_FOR_INTEGRATION`.
+- Unresolved HIGH/CRITICAL findings: `0`.
+- Candidate commit: `4fd14534b612a2d537fff3a2f0e017f53d87d0b7`.
+- Integrated into canonical `main` by merge commit `9136ab5ab96ea615f3cfc2183964865cb94e28b0`.
+- Post-merge verification: PASS.
+- Final status: `DONE`.
