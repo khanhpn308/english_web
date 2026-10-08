@@ -230,12 +230,15 @@ class Scheduler:
                 if len(live) >= 3:
                     break
                 if task not in active and task not in deferred:
-                    future = executor.submit(
-                        dispatch,
-                        self.pipeline,
-                        task,
-                        defer_verification=self.defer_verification,
-                    )
+                    # Preserve the stable dispatch(pipeline, task) call contract for
+                    # ordinary callers and injected scheduler test doubles. The CLI
+                    # explicitly opts into deferred host verification.
+                    if self.defer_verification:
+                        future = executor.submit(
+                            dispatch, self.pipeline, task, defer_verification=True
+                        )
+                    else:
+                        future = executor.submit(dispatch, self.pipeline, task)
                     live[future] = task
                     active.add(task)
             if not live:
