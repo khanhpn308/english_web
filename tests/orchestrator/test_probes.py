@@ -202,6 +202,136 @@ def test_probe_evidence_schema_valid() -> None:
     assert evidence.result["match_count"] == 1
 
 
+def _source_probe_with_verified_identity(tmp_path: Path) -> tuple[ProbeRequest, ProbeEvidence]:
+    """Obtain an actual catalog observation with the canonical candidate identity."""
+    from tools.orchestrator.probes import ProbeCatalog
+
+    (tmp_path / "module.py").write_text("line one\nneedle\n", encoding="utf-8")
+    request = ProbeRequest(
+        schema_version=1,
+        probe_id="source_inspection",
+        perspective=ReviewPerspective.CORRECTNESS,
+        task_id=SAMPLE_TASK_ID,
+        base_sha=SAMPLE_BASE_SHA,
+        branch=SAMPLE_BRANCH,
+        source_digest=SAMPLE_SOURCE_DIGEST,
+        parameters=ProbeParameters.model_validate({"path": "module.py", "pattern": "needle"}),
+        rationale="Verify a source observation",
+    )
+    evidence = ProbeCatalog().execute_probe(
+        request,
+        workspace=tmp_path,
+        current_source_digest=SAMPLE_SOURCE_DIGEST,
+        eligible_paths=["module.py"],
+    )
+    assert evidence.classification == ProbeResultClassification.SUCCESS
+    assert evidence.result["match_count"] == 1
+    return request, evidence
+
+
+def _check_bound_probe(
+    request: ProbeRequest,
+    evidence: ProbeEvidence,
+    *,
+    artifacts_dir: Path | None = None,
+    artifact_filename: str | None = None,
+    expected_digest: str | None = None,
+) -> None:
+    from tools.orchestrator.probes import validate_probe_evidence
+
+    validate_probe_evidence(
+        evidence,
+        expected_task_id=request.task_id,
+        expected_base_sha=request.base_sha,
+        expected_branch=request.branch,
+        expected_source_digest=request.source_digest,
+        expected_req_digest=probe_request_digest(request),
+        expected_probe_id=request.probe_id,
+        expected_perspective=request.perspective,
+        expected_parameters={"path": "module.py", "pattern": "needle"},
+        artifacts_dir=artifacts_dir,
+        artifact_filename=artifact_filename,
+        expected_digest=expected_digest,
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement", "diagnostic"),
+    [
+        ("task_id", "T090", "task_id mismatch"),
+        ("base_sha", "c" * 40, "base_sha mismatch"),
+        ("branch", "agent/T089-other", "branch mismatch"),
+        ("source_digest", "d" * 64, "source_digest mismatch"),
+        ("request_id", "e" * 64, "request_id mismatch"),
+        ("probe_id", "git_diff_check", "probe_id mismatch"),
+        ("perspective", ReviewPerspective.SECURITY, "perspective mismatch"),
+        ("parameters", {"path": "other.py", "pattern": "needle"}, "parameters mismatch"),
+    ],
+)
+def test_host_rejects_cross_candidate_or_unbound_probe_evidence(
+    tmp_path: Path, field: str, replacement: object, diagnostic: str
+) -> None:
+    request, original_evidence = _source_probe_with_verified_identity(tmp_path)
+    _check_bound_probe(request, original_evidence)
+    forged_evidence = original_evidence.model_copy(update={field: replacement})
+    with pytest.raises(OrchestratorError, match=diagnostic):
+        _check_bound_probe(request, forged_evidence)
+
+
+def test_host_checks_probe_json_digest_and_rejects_symlink(tmp_path: Path) -> None:
+    from tools.orchestrator.core import digest
+
+    request, evidence = _source_probe_with_verified_identity(tmp_path)
+    artifact = tmp_path / "host-probe.json"
+    raw = evidence.model_dump_json().encode("utf-8")
+    artifact.write_bytes(raw)
+    _check_bound_probe(
+        request,
+        evidence,
+        artifacts_dir=tmp_path,
+        artifact_filename=artifact.name,
+        expected_digest=digest(raw),
+    )
+
+    artifact.write_bytes(b"x" * len(raw))
+    with pytest.raises(OrchestratorError, match="artifact digest mismatch"):
+        _check_bound_probe(
+            request,
+            evidence,
+            artifacts_dir=tmp_path,
+            artifact_filename=artifact.name,
+            expected_digest=digest(raw),
+        )
+
+    artifact.unlink()
+    genuine = tmp_path / "genuine.json"
+    genuine.write_bytes(raw)
+    artifact.symlink_to(genuine)
+    with pytest.raises(OrchestratorError, match="artifact file missing or invalid"):
+        _check_bound_probe(
+            request,
+            evidence,
+            artifacts_dir=tmp_path,
+            artifact_filename=artifact.name,
+            expected_digest=digest(raw),
+        )
+
+
+def test_host_verifies_referenced_probe_artifact_bytes(tmp_path: Path) -> None:
+    from tools.orchestrator.evidence import create_artifact_ref
+
+    request, evidence = _source_probe_with_verified_identity(tmp_path)
+    output = tmp_path / "probe-output.txt"
+    output.write_bytes(b"value")
+    output_ref = create_artifact_ref("probe-output", output.name, tmp_path, "probe_result")
+    referenced_evidence = evidence.model_copy(update={"artifacts": [output_ref]})
+    _check_bound_probe(request, referenced_evidence, artifacts_dir=tmp_path)
+
+    output.write_bytes(b"vAlue")
+    with pytest.raises(OrchestratorError, match="Artifact digest mismatch"):
+        _check_bound_probe(request, referenced_evidence, artifacts_dir=tmp_path)
+
+
 def test_probe_evidence_timing_and_oversize_classification_consistency() -> None:
     req_digest = "c" * 64
     with pytest.raises((OrchestratorError, ValidationError), match="Timed out"):
