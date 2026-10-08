@@ -1093,8 +1093,11 @@ def test_codex_worker_full_access_does_not_elevate_readonly(
     ],
 )
 def test_cliprovider_rejects_unsafe_worker_before_any_command(
-    fake_agy: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-    provider: str, permission: str,
+    fake_agy: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    provider: str,
+    permission: str,
 ) -> None:
     from tools.orchestrator import runtime
     from tools.orchestrator.core import WorkerResult
