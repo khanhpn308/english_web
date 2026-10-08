@@ -97,21 +97,19 @@ Do not access credentials or remote Git. Never call application AI providers
 or real inference in tests.
 Do not manually open/copy user vocabulary into reasoning, prompts, reports or new test fixtures.
 The official verification and redacted security scanners are exclusively executed by
-the host. Worker process auto-approval may be enabled by the owner to support
-necessary coding operations without per-command prompts; this does not authorize
-Worker to declare test PASS, replace host evidence, change task scope, commit or merge.
-New fixtures must remain synthetic. Never modify user data, export learning content,
-expose secrets or narrow scans.
+the host, never by an AI Worker. Do not run shell, Git, Python, npm, pytest,
+Ruff, Mypy, build, lint, verification, or subprocess commands from an agent.
+Only inspect host-sealed executable evidence. New fixtures must remain synthetic.
+Never modify user data, export learning content, expose secrets or narrow scans.
 Never weaken tests, quality thresholds or security. Return ONLY JSON matching the supplied schema.
 Only the orchestrator changes state, creates commits or integrates. Never commit, merge, rebase,
 switch branches, stash, reset, clean, delete worktrees, or modify the task contract/run artifacts.
 Report BLOCKED for missing dependency, scope extension, architecture/product ambiguity, unsafe
 migration lineage, missing credentials or any required destructive operation.
-Worker: edit only exact allowed task files in this worktree. If the owner enabled
-process auto-approval, use commands only as needed for authorized coding, not to
-run official verification or change Git history. Never invoke other agents or
-claim RED/GREEN/PASS without host evidence. Report official tests NOT_RUN;
-preserve task-local bookkeeping/changelog. No unrelated task status.
+Worker: only read/edit exact allowed task files; NEVER execute commands or
+invoke other agents. Never claim RED/GREEN/PASS without host evidence. Report
+official tests NOT_RUN; preserve task-local bookkeeping/changelog.
+No unrelated task status.
 Prompt Engineer, Reviewer, Auditor, Integrator: inspect only; never modify source or bookkeeping.
 Auditor: review real diff and test evidence, test weakening, scope, migration/contract and failure
 paths independently; no false PASS and no silent fixes. Integrator: return READY or BLOCKED;
@@ -2524,6 +2522,16 @@ class Pipeline:
                 self.move(directory, state, State.FIX_PROMPT_READY)
             if state.state in {State.PROMPT_READY, State.FIX_PROMPT_READY}:
                 fixing = state.state == State.FIX_PROMPT_READY
+                from tools.orchestrator.runtime import is_worker_code_only
+
+                if not is_worker_code_only(self.config.roles["worker"]):
+                    state.last_error = (
+                        "T090 BLOCKED: Worker process/full-access configuration is "
+                        "not permitted under the reinstated code-only policy"
+                    )
+                    self.move(directory, state, State.BLOCKED)
+                    self.report(directory, state)
+                    return state
                 self.move(directory, state, State.FIX_RUNNING if fixing else State.WORKER_RUNNING)
                 prompt_path = directory / (
                     f"{state.fix_cycle:02d}-fix_prompt.md" if fixing else "worker_prompt.md"
