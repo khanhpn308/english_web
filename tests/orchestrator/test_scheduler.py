@@ -80,7 +80,7 @@ class SyntheticProvider:
             assert readonly
             matched = re.search(r"REVIEW_PERSPECTIVE: ([^\n]+)", prompt)
             assert matched is not None
-            result = ReviewShard(perspective=ReviewPerspective(matched[1]), findings=[])
+            result = ReviewShard(perspective=ReviewPerspective(matched[1]), findings=[], probe_request=None)
         elif output == Audit:
             assert readonly
             result = Audit(
@@ -95,6 +95,7 @@ class SyntheticProvider:
                 ],
                 scope_violations=[],
                 required_fixes=[],
+                reviewer_dispositions=[],
             )
         elif output == IntegrationReview:
             assert readonly and "INTEGRATOR_CONTEXT:" in prompt
