@@ -24,6 +24,7 @@ from tools.orchestrator.core import (
     AuditorWorkerSummary,
     Config,
     Contract,
+    EvidenceArtifactRef,
     EvidenceBundle,
     Fix,
     FrozenEvidenceIdentity,
@@ -66,7 +67,12 @@ from tools.orchestrator.evidence import (
     create_artifact_ref,
     validate_evidence_bundle,
 )
-from tools.orchestrator.probes import build_default_probe_catalog
+from tools.orchestrator.probes import (
+    PROBE_OUTPUT_LIMIT_BYTES,
+    build_default_probe_catalog,
+    probe_request_digest,
+    validate_probe_evidence,
+)
 from tools.orchestrator.runtime import (
     AgentProvider,
     CliProvider,
@@ -89,7 +95,7 @@ Read AGENTS.md, AGENT.md, CONSTRAINTS.md, the task, dependency handoffs and rele
 Do not access credentials or remote Git. Never call application AI providers
 or real inference in tests.
 Do not manually open/copy user vocabulary into reasoning, prompts, reports or new test fixtures.
-Repository-configured verification and redacted security scanners are exclusively executed
+The repository-configured verification and redacted security scanners are exclusively executed
 by the host, never by AI agents. Do not run shell, Git, Python, npm, pytest, Ruff, Mypy,
 test, build, lint, or verification commands. Only inspect host-sealed evidence. New fixtures
 must remain synthetic. Never modify user data, export learning content, expose secrets or narrow scans.
@@ -2104,34 +2110,125 @@ class Pipeline:
                     f"{shard.perspective}"
                 )
 
-            # Execute safe probe via host-owned catalog
-            probe_evidence = catalog.execute_probe(
-                req,
-                workspace=working,
-                artifacts_dir=directory,
-                current_source_digest=snapshot,
-            )
-
-            # Stale candidate between request and execution fails closed
-            if probe_evidence.classification == ProbeResultClassification.STALE_PROBE_REQUEST:
+            # Freeze host-owned parameters and contract eligibility before executing the probe.
+            definition = catalog.get(req.probe_id)
+            if definition is None:
+                raise OrchestratorError(f"Unknown probe_id in request: {req.probe_id}")
+            if req.perspective not in definition.allowed_perspectives:
                 raise OrchestratorError(
-                    f"STALE_PROBE_REQUEST: candidate source changed for {shard.perspective}"
+                    f"Perspective {req.perspective} not authorized for probe {req.probe_id}"
                 )
+            allowed_probe_paths = contract.allowed_paths
+            validated_params = definition.validator(
+                req.parameters.as_dict(), working, allowed_probe_paths
+            )
+            request_digest = probe_request_digest(req)
 
-            # Ensure probe execution did not mutate authoritative source
+            # Host runs probes in a private frozen workspace. Scratch artifacts are not
+            # authoritative until independently checked and copied into the sealed run.
+            with self.verification_workspace(
+                working, snapshot, state.base_sha, state.task_id,
+                f"{state.run_id}-probe-{shard.perspective}",
+            ) as (probe_workspace, probe_git):
+                scratch_dir = probe_workspace.parent / "scratch_artifacts"
+                scratch_dir.mkdir(parents=True, exist_ok=True)
+                if probe_git.snapshot(state.base_sha) != snapshot:
+                    raise OrchestratorError("Probe workspace source differs from candidate")
+                probe_evidence = catalog.execute_probe(
+                    req,
+                    workspace=probe_workspace,
+                    artifacts_dir=scratch_dir,
+                    current_source_digest=snapshot,
+                    eligible_paths=allowed_probe_paths,
+                )
+                if probe_evidence.classification == ProbeResultClassification.STALE_PROBE_REQUEST:
+                    raise OrchestratorError(
+                        f"STALE_PROBE_REQUEST: candidate source changed for {shard.perspective}"
+                    )
+                if probe_git.snapshot(state.base_sha) != snapshot:
+                    raise OrchestratorError("Probe execution mutated private workspace source")
+
+                published_artifacts: list[EvidenceArtifactRef] = []
+                for art_ref in probe_evidence.artifacts:
+                    safe_path(art_ref.path)
+                    source_art = scratch_dir / art_ref.path
+                    if source_art.is_symlink() or not source_art.is_file():
+                        raise OrchestratorError("Probe auxiliary artifact missing or unsafe")
+                    raw_art = source_art.read_bytes()
+                    if len(raw_art) > PROBE_OUTPUT_LIMIT_BYTES or len(raw_art) != art_ref.byte_size:
+                        raise OrchestratorError("Probe auxiliary artifact size violation")
+                    if digest(raw_art) != art_ref.digest:
+                        raise OrchestratorError("Probe auxiliary artifact digest mismatch")
+                    target_name = (
+                        f"{state.fix_cycle:02d}-probe_aux-{shard.perspective}-"
+                        f"{uuid4().hex[:8]}-{Path(art_ref.path).name}"
+                    )
+                    target_art = directory / target_name
+                    target_art.write_bytes(raw_art)
+                    state.artifacts[target_name] = target_name
+                    state.artifact_digests[target_name] = digest(raw_art)
+                    published_artifacts.append(
+                        EvidenceArtifactRef(
+                            name=art_ref.name,
+                            path=target_name,
+                            digest=art_ref.digest,
+                            byte_size=art_ref.byte_size,
+                            classification=art_ref.classification,
+                            summary=art_ref.summary,
+                        )
+                    )
+                if published_artifacts:
+                    probe_evidence = probe_evidence.model_copy(
+                        update={"artifacts": published_artifacts}
+                    )
+
             if git.snapshot(state.base_sha) != snapshot:
-                raise OrchestratorError("Probe execution mutated repository source")
+                raise OrchestratorError("Probe execution mutated authoritative candidate source")
 
-            # Persist probe evidence artifact
             probe_art = f"{state.fix_cycle:02d}-probe_{shard.perspective}-{uuid4().hex[:8]}.json"
             atomic_json(directory / probe_art, probe_evidence.model_dump(mode="json"))
+            probe_digest = digest((directory / probe_art).read_bytes())
             state.artifacts[f"probe_{shard.perspective}"] = probe_art
-            state.artifact_digests[probe_art] = digest((directory / probe_art).read_bytes())
+            state.artifact_digests[probe_art] = probe_digest
 
-            # Register any probe artifact files created
-            for art_ref in probe_evidence.artifacts:
-                state.artifacts[art_ref.name] = art_ref.path
-                state.artifact_digests[art_ref.path] = art_ref.digest
+            # Seal an independent host binding to the request, normalized parameters,
+            # source identity, fix cycle, and exact evidence artifact bytes.
+            binding_name = (
+                f"{state.fix_cycle:02d}-probe_binding-{shard.perspective}-{uuid4().hex[:8]}.json"
+            )
+            atomic_json(
+                directory / binding_name,
+                {
+                    "schema_version": 1,
+                    "cycle": state.fix_cycle,
+                    "task_id": state.task_id,
+                    "base_sha": state.base_sha,
+                    "branch": branch,
+                    "source_digest": snapshot,
+                    "perspective": shard.perspective.value,
+                    "probe_id": req.probe_id,
+                    "request_digest": request_digest,
+                    "validated_parameters": validated_params,
+                    "evidence_artifact": probe_art,
+                    "evidence_digest": probe_digest,
+                },
+            )
+            state.artifacts[f"probe_binding_{shard.perspective}"] = binding_name
+            state.artifact_digests[binding_name] = digest((directory / binding_name).read_bytes())
+            validate_probe_evidence(
+                probe_evidence,
+                expected_task_id=state.task_id,
+                expected_base_sha=state.base_sha,
+                expected_branch=branch,
+                expected_source_digest=snapshot,
+                expected_req_digest=request_digest,
+                expected_probe_id=req.probe_id,
+                expected_perspective=shard.perspective,
+                expected_parameters=validated_params,
+                artifacts_dir=directory,
+                artifact_filename=probe_art,
+                expected_digest=probe_digest,
+            )
 
             # Prepare structured context for bounded round 2 resume
             ev_payload = None
