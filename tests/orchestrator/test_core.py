@@ -1084,6 +1084,47 @@ def test_codex_worker_full_access_does_not_elevate_readonly(
     assert command[command.index("-a") + 1] == "never"
 
 
+@pytest.mark.parametrize(
+    "provider,permission",
+    [
+        ("agy", "allow_process"),
+        ("gemini", "provider"),
+        ("codex", "worker_access"),
+    ],
+)
+def test_cliprovider_rejects_unsafe_worker_before_any_command(
+    fake_agy: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    provider: str, permission: str,
+) -> None:
+    from tools.orchestrator import runtime
+    from tools.orchestrator.core import WorkerResult
+
+    def forbidden_execute(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("Unsafe Worker must be rejected before subprocess dispatch")
+
+    monkeypatch.setattr(runtime, "execute", forbidden_execute)
+    role_fields: dict[str, object] = {
+        "provider": provider,
+        "executable": str(fake_agy),
+    }
+    if permission == "allow_process":
+        role_fields["allow_process"] = True
+    if permission == "worker_access":
+        role_fields["worker_access"] = "full-access"
+    role = Role.model_validate(role_fields)
+    with pytest.raises(OrchestratorError, match="Worker code-only policy"):
+        CliProvider().run(
+            "WORKER",
+            cwd=tmp_path,
+            role=role,
+            timeout=5,
+            output=WorkerResult,
+            artifacts=tmp_path,
+            name="rejected-worker",
+            readonly=False,
+        )
+
+
 def test_agy_direct_worker_status_is_not_cli_envelope_error(fake_agy: Path, tmp_path: Path) -> None:
     from tools.orchestrator.core import WorkerResult
 
