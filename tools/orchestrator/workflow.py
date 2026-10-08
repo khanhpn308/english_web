@@ -99,7 +99,8 @@ Do not manually open/copy user vocabulary into reasoning, prompts, reports or ne
 The repository-configured verification and redacted security scanners are exclusively executed
 by the host, never by AI agents. Do not run shell, Git, Python, npm, pytest, Ruff, Mypy,
 test, build, lint, or verification commands. Only inspect host-sealed evidence. New fixtures
-must remain synthetic. Never modify user data, export learning content, expose secrets or narrow scans.
+must remain synthetic. Never modify user data, export learning content, expose secrets or
+narrow scans.
 Never weaken tests, quality thresholds or security. Return ONLY JSON matching the supplied schema.
 Only the orchestrator changes state, creates commits or integrates. Never commit, merge, rebase,
 switch branches, stash, reset, clean, delete worktrees, or modify the task contract/run artifacts.
@@ -2521,7 +2522,8 @@ class Pipeline:
                 if not is_worker_code_only(self.config.roles["worker"]):
                     state.last_error = (
                         "BLOCKED: Worker code-only configuration preflight rejected the "
-                        "provider permissions; host tool isolation must also be independently verified"
+                        "provider permissions; host tool isolation must also be "
+                        "independently verified"
                     )
                     self.move(directory, state, State.BLOCKED)
                     self.report(directory, state)
