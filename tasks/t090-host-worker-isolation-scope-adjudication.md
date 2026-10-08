@@ -177,3 +177,29 @@ Stop with evidence and `BLOCKED` when:
 - Task definition branch: `feature/t090-host-worker-isolation-scope` (from `main`).
 - T089 reference: Draft PR #5 at tested head `55ad6c20b5f6257761e981729a5df49cb0af16eb`.
 - Task state: `TODO`, no implementation, no live isolation test, no T090 CI evidence yet.
+
+## Phase-2 adjudication record (08/10/2026; no acceptance promotion)
+
+Source: docs/ci-host-verification.md, T090 phase-2 section, on the
+feature/t090-provider-isolation-adjudication branch. It contains eight exact
+out-of-T089-allowlist paths, PR #5 base/head blob identities, host ownership,
+GitHub R5/R4 run links and disposition. The historical PR merge was already
+owner-authorized; this record does not amend original task/run provenance.
+
+Provider feasibility: AGY public documentation offers command(*) and mcp(*)
+denials, while accept-edits permits edits. No installed-version, tool-broker,
+subagent, Windows/WSL or exact-file write-boundary proof has been observed in
+this session. The current CliProvider fail-closed refusal for every WorkerResult
+must remain. No real Worker edit succeeded under an independently attested
+code-only policy; do not mark acceptance criteria completed.
+
+Remaining implementation work: select a tool-broker-enforced edit-only AGY
+session with exact-path write enforcement, or build a host-mediated non-tool
+edit-proposal adapter; bind capability identity to dispatch; run synthetic
+real-provider deny/allow probes; host-run all gates on frozen candidate; then
+perform independent T090 and T089 acceptance review. Codex Worker requires its
+own attestation. Do not infer successful isolation from a green portable CI.
+
+Phase-2 branch is investigative and documentation-only. There is no executable
+Worker enablement, no changed security threshold, and no permission to mark
+T090 DONE or T089 accepted.
