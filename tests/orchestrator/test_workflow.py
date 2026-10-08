@@ -1551,9 +1551,7 @@ def test_run_recovers_known_gemini_trust_failure_only(
 ) -> None:
     # The fixture reproduces pre-policy Gemini history. Production dispatch
     # remains covered by test_worker_configuration_rejects_non_code_only.
-    monkeypatch.setattr(
-        "tools.orchestrator.runtime.is_worker_code_only", lambda _role: True
-    )
+    monkeypatch.setattr("tools.orchestrator.runtime.is_worker_code_only", lambda _role: True)
     config = configuration(integrate=False)
     config.roles["worker"].provider = "gemini"
     agents = RecoveryAgents("trust")
@@ -1636,9 +1634,7 @@ def test_corrected_agy_routing_retries_clean_failed_gemini_run(
 ) -> None:
     # Preserve coverage of historical failover semantics without granting
     # unsafe permissions to any production Worker.
-    monkeypatch.setattr(
-        "tools.orchestrator.runtime.is_worker_code_only", lambda _role: True
-    )
+    monkeypatch.setattr("tools.orchestrator.runtime.is_worker_code_only", lambda _role: True)
     config = configuration(integrate=False)
     config.roles["worker"].provider = "gemini"
     pipeline = Pipeline(repository, config, RecoveryAgents("trust"))
