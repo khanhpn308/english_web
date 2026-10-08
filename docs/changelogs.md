@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ## 07/10/2026 - T089-R3: verified external candidate import control plane (Asia/Bangkok)
 
 - Status: `IMPLEMENTATION_READY_FOR_HOST_VERIFICATION`. Implemented the host-authoritative verified external candidate import control plane (`import-candidate` CLI command and `Pipeline.import_candidate()`):
@@ -534,6 +535,20 @@
   `đ`/`Đ`, infix, POS và các trường hợp zero/single/multi-match.
 - Ghi rõ profile Windows 11/Python 3.12/SQLite và ranh giới bằng chứng: T042
   không tuyên bố kết quả hiệu năng; T065 sở hữu timing/p95.
+=======
+## 03/10/2026 - T027: Sửa F1–F6 sau independent audit (Asia/Bangkok)
+
+- T026: thêm iterator candidate đầy đủ, bounded memory trong `search_index.py`, dùng chung matching/scoring với legacy `search()`; thêm dependency regression tests theo scope owner cấp.
+- T027: bỏ candidate cap và full-population cache, chọn page bằng heap pageSize+1; fingerprint gồm source relationships và stored projection version. Khôi phục detail `partOfSpeech`, kiểm tra canonical cursor encoding, giới hạn content filters và ngày ASCII hợp lệ.
+- Owner xác nhận projection không tương thích ở trang đầu trả `503 CONFIGURATION_REQUIRED`; cursor cũ trả `409 CURSOR_EXPIRED`. OpenAPI/DTO được tạo bằng tooling T017; 49 API + 32 T026 + 11 session tests, 5 contract tests, scoped Ruff/format và Mypy đều đạt. Source/generated hashes giữ nguyên qua verification cuối; independent re-audit còn pending.
+- Không sửa repository/normalization/models/session/migrations/tooling; không commit, không tích hợp T008/main.
+
+## 02/10/2026 - T027: Search/detail API với cursor và filters (Asia/Bangkok)
+
+- Đã triển khai collection/detail read API trên production app factory, dùng T026 Vietnamese projection, allowlist filter/sort, source-validity filtering và cursor HMAC process-local.
+- Đã thêm hai common error mappings được owner cấp scope: `INVALID_QUERY` và `CURSOR_EXPIRED`.
+- Tập trung 5 test T027, contract generation hai lần deterministic và contract tests đều đạt; full backend suite còn các Windows-native fail-closed inherited tests trên Linux.
+>>>>>>> feature/task-t027-search-api
 
 ## 02/10/2026 - T021: Tích hợp adapter source Windows sau xác nhận native PASS (Asia/Bangkok)
 

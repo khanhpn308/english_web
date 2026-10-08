@@ -2,6 +2,7 @@
 
 import unicodedata
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from backend.app.vocabulary.models import (
@@ -26,6 +27,49 @@ from backend.app.vocabulary.search_index import (
     StaleSourceRevisionError,
 )
 from sqlalchemy import create_engine
+from sqlalchemy.engine import MappingResult
+
+
+@pytest.mark.parametrize("query", ["bền", "BEN", "ững", "đ", "d", "v"])
+def test_candidate_iterator_is_complete_and_matches_legacy_scores(query: str) -> None:
+    index = SearchIndex()
+    source = make_source_file("src_iterator")
+    refs = [SourceReference(source.id, source.note_date)]
+    forms = [
+        make_word_form(
+            form_id=f"wf_{number}",
+            lemma=lemma,
+            pos="NOUN",
+            meanings_vi=["đẹp và bền vững", "bền", "đẹp"],
+            source_refs=refs,
+        )
+        for number, lemma in enumerate(["gamma", "alpha", "beta"])
+    ]
+    index.rebuild(forms, [source])
+    expected = index.search(query, limit=10)
+    # A streaming read must not materialize the population with MappingResult.all().
+    with patch.object(MappingResult, "all", side_effect=AssertionError("unbounded read")):
+        actual = list(index.iter_search_candidates(query))
+    assert len(actual) == 3
+    assert len({item.word_form_id for item in actual}) == 3
+    assert {item.word_form_id: item for item in actual} == {
+        item.word_form_id: item for item in expected
+    }
+    frozen_score = {"bền": 5.0, "BEN": 3.0, "ững": 2.0, "đ": 3.0, "d": 1.5, "v": 2.0}
+    assert {item.score for item in actual} == {frozen_score[query]}
+    assert [item.word_form_id for item in expected] == ["wf_1", "wf_2", "wf_0"]
+    assert {item.meaning_vi_match for item in actual} == {
+        "bền" if query in {"bền", "BEN"} else "đẹp và bền vững"
+    }
+    assert index.search(query, limit=1, offset=1) == expected[1:2]
+
+
+def test_candidate_iterator_checks_stored_version() -> None:
+    index = SearchIndex()
+    index.set_version("incompatible")
+    with pytest.raises(ProjectionVersionMismatchError):
+        list(index.iter_search_candidates("ben"))
+    assert list(index.iter_search_candidates("", expected_version="incompatible")) == []
 
 
 # Helper fixture creating synthetic canonical word form

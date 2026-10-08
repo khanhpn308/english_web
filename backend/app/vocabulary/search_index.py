@@ -456,15 +456,13 @@ class SearchIndex:
                     (ng, wf.id, idx),
                 )
 
-    def search(
+    def iter_search_candidates(
         self,
         query: str,
         *,
         expected_version: str | None = None,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> list[SearchResultItem]:
-        """Search canonical word forms by Vietnamese meaning infix/substring.
+    ) -> Iterator[SearchResultItem]:
+        """Stream the complete matching population, retaining only one form's best match.
 
         Supports:
         - Accented exact matching
@@ -482,12 +480,12 @@ class SearchIndex:
             )
 
         if not query or not query.strip():
-            return []
+            return
 
         q_exact = normalize_exact(query)
         q_folded = normalize_accent_fold(query)
         if not q_exact:
-            return []
+            return
 
         # Parameterized LIKE search with deterministic escaping of LIKE metacharacters
         pattern_exact = f"%{escape_like_meta(q_exact)}%"
@@ -500,64 +498,74 @@ class SearchIndex:
             FROM search_projection_entries
             WHERE meaning_vi_normalized_exact LIKE ? ESCAPE '\\'
                OR meaning_vi_normalized_folded LIKE ? ESCAPE '\\'
+            ORDER BY word_form_id ASC, meaning_index ASC
         """
 
+        # Group adjacent rows by form. No population-sized list/dictionary is built.
+        best: SearchResultItem | None = None
         with self._reader() as conn:
-            rows = conn.exec_driver_sql(sql, (pattern_exact, pattern_folded)).mappings().all()
+            rows = conn.exec_driver_sql(sql, (pattern_exact, pattern_folded)).mappings()
+            for row in rows:
+                wf_id = str(row["word_form_id"])
+                if best is not None and best.word_form_id != wf_id:
+                    yield best
+                    best = None
+                exact_text = str(row["meaning_vi_normalized_exact"])
+                folded_text = str(row["meaning_vi_normalized_folded"])
+                raw_meaning = str(row["meaning_vi"])
 
-        # In-memory candidate verification and scoring
-        # Group by word_form_id to ensure the same canonical form is not duplicated
-        best_matches: dict[str, SearchResultItem] = {}
+                is_exact = q_exact in exact_text
+                is_folded = q_folded in folded_text
+                if not is_exact and not is_folded:
+                    # Discard any false-positive from LIKE patterns
+                    continue
 
-        for row in rows:
-            wf_id = str(row["word_form_id"])
-            exact_text = str(row["meaning_vi_normalized_exact"])
-            folded_text = str(row["meaning_vi_normalized_folded"])
-            raw_meaning = str(row["meaning_vi"])
-
-            is_exact = q_exact in exact_text
-            is_folded = q_folded in folded_text
-            if not is_exact and not is_folded:
-                # Discard any false-positive from LIKE patterns
-                continue
-
-            # Deterministic scoring:
-            # - Exact diacritic match scores higher than accent-folded
-            # - Prefix match scores higher than middle/suffix match
-            # - Complete exact match gives highest bonus
-            score = 0.0
-            if is_exact:
-                score += 2.0
-                if exact_text == q_exact:
-                    score += 3.0
-                elif exact_text.startswith(q_exact):
-                    score += 1.0
-            elif is_folded:
-                score += 1.0
-                if folded_text == q_folded:
+                # Deterministic scoring:
+                # - Exact diacritic match scores higher than accent-folded
+                # - Prefix match scores higher than middle/suffix match
+                # - Complete exact match gives highest bonus
+                score = 0.0
+                if is_exact:
                     score += 2.0
-                elif folded_text.startswith(q_folded):
-                    score += 0.5
+                    if exact_text == q_exact:
+                        score += 3.0
+                    elif exact_text.startswith(q_exact):
+                        score += 1.0
+                elif is_folded:
+                    score += 1.0
+                    if folded_text == q_folded:
+                        score += 2.0
+                    elif folded_text.startswith(q_folded):
+                        score += 0.5
 
-            existing = best_matches.get(wf_id)
-            if existing is None or score > existing.score:
-                note_dates = tuple(json.loads(str(row["note_dates_json"])))
-                best_matches[wf_id] = SearchResultItem(
-                    word_form_id=wf_id,
-                    lemma=str(row["lemma"]),
-                    part_of_speech=str(row["part_of_speech"]),
-                    meaning_vi_match=raw_meaning,
-                    verification_summary=str(row["verification_summary"]),
-                    note_dates=note_dates,
-                    revision=int(row["revision"]),
-                    updated_at=str(row["updated_at"]),
-                    score=score,
-                )
+                if best is None or score > best.score:
+                    note_dates = tuple(json.loads(str(row["note_dates_json"])))
+                    best = SearchResultItem(
+                        word_form_id=wf_id,
+                        lemma=str(row["lemma"]),
+                        part_of_speech=str(row["part_of_speech"]),
+                        meaning_vi_match=raw_meaning,
+                        verification_summary=str(row["verification_summary"]),
+                        note_dates=note_dates,
+                        revision=int(row["revision"]),
+                        updated_at=str(row["updated_at"]),
+                        score=score,
+                    )
 
-        # Deterministic sorting: score DESC, lemma ASC, part_of_speech ASC, id ASC
+        if best is not None:
+            yield best
+
+    def search(
+        self,
+        query: str,
+        *,
+        expected_version: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[SearchResultItem]:
+        """Preserve the legacy globally sorted, materialized search interface."""
         sorted_results = sorted(
-            best_matches.values(),
+            self.iter_search_candidates(query, expected_version=expected_version),
             key=lambda item: (-item.score, item.lemma, item.part_of_speech, item.word_form_id),
         )
-
         return sorted_results[offset : offset + limit]

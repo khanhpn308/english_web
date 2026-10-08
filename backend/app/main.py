@@ -4,6 +4,7 @@ import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from secrets import token_bytes
 
 from backend.app.application.consent import ConsentService
 from backend.app.application.operations import OperationLedger
@@ -11,9 +12,11 @@ from backend.app.http.bootstrap import router as bootstrap_router
 from backend.app.http.errors import error_response
 from backend.app.http.health import router as health_router
 from backend.app.http.operations import router as operations_router
+from backend.app.http.search import router as search_router
 from backend.app.http.session import SessionGuard, SessionStore
 from backend.app.persistence.database import Database, StorageError
 from backend.app.platform.config import AppSettings
+from backend.app.vocabulary.search_service import SearchService
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
@@ -39,6 +42,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.storage_error = None
     app.state.operation_ledger = None
     app.state.consent_service = None
+    app.state.search_service = None
     app.state.sessions.activate()
     try:
         if database is not None:
@@ -51,6 +55,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await run_in_threadpool(ledger.recover_pending)
                 app.state.operation_ledger = ledger
                 app.state.consent_service = ConsentService(ledger)
+                app.state.search_service = SearchService(
+                    database.engine, signing_key=app.state.cursor_signing_key
+                )
                 app.state.ready = True
             except StorageError as error:
                 app.state.storage_error = str(error)
@@ -63,6 +70,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.storage_info = None
         app.state.operation_ledger = None
         app.state.consent_service = None
+        app.state.search_service = None
         if database is not None:
             await run_in_threadpool(database.close)
         app.state.database = None
@@ -85,6 +93,8 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.state.storage_error = None
     app.state.operation_ledger = None
     app.state.consent_service = None
+    app.state.search_service = None
+    app.state.cursor_signing_key = token_bytes(32)
     app.state.active_ai_policy = None
     app.state.sessions = SessionStore()
 
@@ -114,6 +124,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(bootstrap_router)
     app.include_router(operations_router)
+    app.include_router(search_router)
 
     from backend.app.http.consent import router as consent_router
 

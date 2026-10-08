@@ -10,6 +10,8 @@ _MESSAGES = {
     "SESSION_INVALID": "Local session invalid or expired",
     "ORIGIN_FORBIDDEN": "Request origin forbidden",
     "VALIDATION_ERROR": "Request validation failed",
+    "INVALID_QUERY": "Syntax or query shape invalid",
+    "CURSOR_EXPIRED": "Cursor expired or is no longer valid",
     "MALFORMED_JSON": "Malformed JSON request",
     "PAYLOAD_TOO_LARGE": "Request body too large",
     "NOT_FOUND": "Resource not found",
