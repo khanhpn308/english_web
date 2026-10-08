@@ -1,3 +1,32 @@
+## 05/10/2026 - T023: Startup/watcher sync và source API - Audit Remediation (Asia/Bangkok)
+
+- Implemented `SourceWatcher` in `backend/app/adapters/watcher.py`: background thread polling/debouncing filesystem events with threadsafe shutdown, typed `on_error` callback invocation, error suppression, and event storm coalescing.
+- Integrated `SourceFileAdapter` (T021) into `SyncService` (`backend/app/application/sync.py`):
+  - F6: Strict filesystem safety and validation: enforces bounded source IDs, safe relative paths, symlink/reparse/junction rejections, hardlink refusal (`SECURITY_VIOLATION`), and read-only checks (`ACCESS_DENIED`) without feeding invalid content to downstream projections; floor constraints verified clean.
+  - F1: T022 write fencing & stale baseline protection: re-queries `source_write_journal` inside per-file writer transactions (`PREPARED`, `SOURCE_REPLACED`, `DEGRADED`); fences active source IDs and planned canonical forms from mutation and missing-state flagging; aborts/defers if source file content hash or revision drifted from baseline.
+  - F2: Comprehensive multi-source semantic conflict detection: detects conflicting semantic variants across ABA/AAB permutations and invalidates all participating sources (`AMBIGUOUS_CONTENT`) without arbitrary winner selection.
+  - F3: Single snapshot consistency for pagination: unifies snapshot token calculation and cursor row query within a single database transaction, eliminating concurrent mutation anomalies.
+  - F4: Truthful receipts and durable sync metadata: `finished_at` is preserved as null for in-flight/queued runs, non-terminal runs are never permanently cached in memory, initial `result_ref` is recorded on startup, and ledger failure recovery records status `UNKNOWN` if local effects were committed.
+  - F5: Canonical vocabulary verification provenance & SRS review card lifecycle: integrates `save_canonical_word_form` to preserve field-level verification status across syncs; recomputes `verification_summary`; avoids revision increment when content unchanged; preserves card review state on non-learning edits; resets card to box 0 once on learning edits; app-write watcher echo does not double reset.
+  - Cryptographic snapshot token in opaque cursors: HMAC-SHA256 pagination tokens bind to all source rows `(id, revision, content_hash, status)` to reliably detect concurrent source revisions and edits.
+  - Consistent numeric `sourceRevision`: guarantees valid integer revisions (falling back to database `COALESCE(MAX(revision), 0)`) across all sync runs, including empty/no-change runs.
+  - Normalized date parsing: converts legacy `DD-MM-YYYY.md` filenames to canonical ISO `YYYY-MM-DD` (`2026-09-29`) and rejects impossible dates (`2026-02-30`) with `422 VALIDATION_ERROR`.
+  - Exact opaque ID matching: replaced SQLite `LIKE` pattern with exact prefix and delimiter substring matching to prevent wildcard exploitation.
+- Hardened source HTTP routes in `backend/app/http/sources.py`:
+  - `GET /api/v1/sources`: cursor pagination, `status` and `noteDate` filters, strict unknown query parameter rejection (`400 INVALID_QUERY`), expired/tampered cursor rejection (`409 CURSOR_EXPIRED`), calendar date validation via `date.fromisoformat`, and session authentication.
+  - `POST /api/v1/sync-runs`: durable operation ledger integration with idempotency keys, replayed identical requests, key reused mismatch rejection (`422 IDEMPOTENCY_KEY_REUSED`), typed `409` conflict responses (`SyncRunConflictErrorResponse`) with retry envelope, typed 409 `IDEMPOTENCY_IN_FLIGHT` on unresolvable claims, and `202 ACCEPTED` responses.
+  - `GET /api/v1/sync-runs/{syncRunId}`: typed status inspection, regex-bounded opaque ID validation, and 404 for missing run IDs.
+- Updated `backend/app/main.py`: wired `SyncService` and `SourceWatcher` into FastAPI lifespan, performing durable source pre-registration, checking persistent `DEGRADED` journal state, launching background watcher with `on_error` degradation hook, and failing closed if storage is absent or degraded.
+- Exported and validated contract specifications:
+  - `contracts/openapi.json`: regenerated via `npm run export:contract`.
+  - `frontend/src/shared/api/generated.ts`: regenerated client types including `SyncRunConflictErrorResponse`.
+  - `npm run test:contract`: 5/5 contract tests pass.
+- Verified test suite:
+  - `backend/tests/test_source_sync.py`: 25/25 focused behavioral, boundary, write-fencing, and audit regression tests pass.
+  - Full dependency regression suite: 339 passed across `test_source_journal.py`, `test_source_files.py`, `test_operations.py`, `test_vocabulary_storage.py`, `test_search_index.py`, `test_srs.py`, and `test_ai_admission.py`.
+  - Portable gate checks: `npm run check:task:portable` passed 100% across all 8 gates (check-fast-active, frontend-coverage, portable-pytest, security-secrets, security-code, security-deps, architecture, coverage-check).
+  - Quality gates: `ruff check`, `ruff format --check`, and `mypy` all pass with 0 errors across all modified files.
+
 ## 05/10/2026 - T084 performance gate remediation: parallel portable-task runner & coverage synchronization (Asia/Bangkok)
 
 - `package.json`: updated `check:task:portable` to delegate to generic runner mode `bash .agent/scripts/run-gates.sh portable-task` rather than serializing all eight gates with `&&`. Full gates (`check:task`, `check:task:active`, `check:full`) and `test:python:portable` remain unchanged.

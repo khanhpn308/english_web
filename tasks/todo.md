@@ -39,7 +39,7 @@
 - [x] [T031](t031-review-schema.md): Review/card schema và deterministic SRS — DONE: 60 SRS cases, 226 targeted/424 full Python tests; owner-authorized legacy-head maintenance preserves lineage/history; coverage, architecture, security and check:task all exit 0.
 - [x] [T021](t021-safe-source-files.md): Allowlisted Windows source file adapter; owner-attested Windows native PASS, portable Linux checks PASS, commit `ef93413` integrated locally.
 - [x] [T022](t022-source-journal.md): Durable source journal và crash reconciliation — DONE: independent AUDIT_PASS; owner-authorized local integration, 339 critical tests and 8 late-H3/control cases pass; linear 0007 head, static/type/architecture gates green.
-- [ ] [T023](t023-source-sync.md): Startup/watcher sync và source API
+- [x] [T023](t023-source-sync.md): Startup/watcher sync và source API — DONE: GET /sources, POST/GET /sync-runs conform; safe diagnostic/cursor snapshot validation; AC-09/10/31, T021 adapter refusals, T022 write fencing, truthful receipts/failed-run metadata, ABA conflict detection, watcher debounce and crash degradation verified; 25/25 focused tests, 339 dependency tests, and 5/5 contract tests pass.
 - [ ] [T024](t024-save-api.md): Explicit save preview vào Markdown và cards
 - [ ] [T025](t025-save-ui-audio.md): Save lookup preview và local pronunciation
 - [ ] [T027](t027-search-api.md): Search/detail API có cursor và filters

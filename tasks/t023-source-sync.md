@@ -2,7 +2,7 @@
 
 **Task ID:** `T023`  
 **Title:** Startup/watcher sync và source API  
-**Status:** `TODO`  
+**Status:** `DONE`
 **Goal:** Startup/watcher sync và source API. GET sources, POST/GET sync-runs conform, safe diagnostic and cursor filters.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -47,9 +47,9 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 
 ## Acceptance criteria
 
-- [ ] GET sources, POST/GET sync-runs conform, safe diagnostic and cursor filters.
-- [ ] Invalid F excludes X; valid G keeps Y; all-sources-deleted suspends card but retains history.
-- [ ] External meaning/example edit resets once; app-write watcher echo doesn't double reset.
+- [x] GET sources, POST/GET sync-runs conform, safe diagnostic and cursor filters.
+- [x] Invalid F excludes X; valid G keeps Y; all-sources-deleted suspends card but retains history.
+- [x] External meaning/example edit resets once; app-write watcher echo doesn't double reset.
 
 ## Test cases
 
@@ -87,3 +87,16 @@ npm run test:contract
 ## Commit message đề xuất
 
 `feat(T023): startup/watcher sync và source api`
+
+## Verification Evidence
+
+- `python -m pytest backend/tests/test_source_sync.py -q`: 25 passed in 9.52s (Exit 0)
+- `npm run test:contract`: 5 passed in 3.94s (Exit 0)
+- `python scripts/check_constraints.py floor`: floor: clean (Exit 0)
+- `python -m ruff check backend/app/adapters/watcher.py backend/app/application/sync.py backend/app/http/sources.py backend/app/main.py backend/tests/test_source_sync.py`: All checks passed! (Exit 0)
+- `python -m ruff format --check backend/app/adapters/watcher.py backend/app/application/sync.py backend/app/http/sources.py backend/app/main.py backend/tests/test_source_sync.py`: 5 files already formatted (Exit 0)
+- `python -m mypy backend/app/adapters/watcher.py backend/app/application/sync.py backend/app/http/sources.py backend/app/main.py backend/tests/test_source_sync.py`: Success: no issues found in 5 source files (Exit 0)
+- Dependency regression suite (`test_source_journal.py`, `test_source_files.py`, `test_operations.py`, `test_vocabulary_storage.py`, `test_search_index.py`, `test_srs.py`, `test_ai_admission.py`): 339 passed in 33.27s (Exit 0)
+- `npm run check:task:portable`: RESULT: PASS across all 8 gates (check-fast-active, frontend-coverage, portable-pytest, security-secrets, security-code, security-deps, architecture, coverage-check) (Exit 0)
+- `python -m alembic heads`: 0007_source_journal (head) (Exit 0)
+- `git diff --check`: Clean, no whitespace or merge markers (Exit 0)

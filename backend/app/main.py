@@ -1,19 +1,27 @@
 """FastAPI application factory and ASGI entrypoint (T003)."""
 
 import re
+import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from backend.app.adapters.source_files import SourceFileAdapter, SourceFileError
+from backend.app.adapters.watcher import SourceWatcher
 from backend.app.application.consent import ConsentService
 from backend.app.application.operations import OperationLedger
+from backend.app.application.source_recovery import SourceRecovery
+from backend.app.application.source_write import SourceWriteCoordinator
+from backend.app.application.sync import SyncService
 from backend.app.http.bootstrap import router as bootstrap_router
 from backend.app.http.errors import error_response
 from backend.app.http.health import router as health_router
 from backend.app.http.operations import router as operations_router
 from backend.app.http.session import SessionGuard, SessionStore
+from backend.app.http.sources import router as sources_router
 from backend.app.persistence.database import Database, StorageError
 from backend.app.platform.config import AppSettings
+from backend.app.vocabulary.models import SourceFile
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
@@ -39,6 +47,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.storage_error = None
     app.state.operation_ledger = None
     app.state.consent_service = None
+    app.state.sync_service = None
+    app.state.watcher = None
     app.state.sessions.activate()
     try:
         if database is not None:
@@ -51,24 +61,161 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await run_in_threadpool(ledger.recover_pending)
                 app.state.operation_ledger = ledger
                 app.state.consent_service = ConsentService(ledger)
-                app.state.ready = True
+
+                markdown_root = app.state.markdown_root
+                if markdown_root is not None:
+                    adapter = SourceFileAdapter(markdown_root)
+                    with database.engine.connect() as conn:
+                        rows = (
+                            conn.exec_driver_sql(
+                                "SELECT id, relative_path, note_date, status, revision, etag, "
+                                "content_hash, last_parsed_at, error_code, created_at, updated_at "
+                                "FROM source_files"
+                            )
+                            .mappings()
+                            .all()
+                        )
+                    for r in rows:
+                        adapter.register_source(
+                            SourceFile(
+                                id=str(r["id"]),
+                                relative_path=str(r["relative_path"]),
+                                note_date=str(r["note_date"]),
+                                status=r["status"],
+                                revision=int(r["revision"]),
+                                etag=str(r["etag"]),
+                                content_hash=str(r["content_hash"])
+                                if r["content_hash"] is not None
+                                else None,
+                                last_parsed_at=str(r["last_parsed_at"])
+                                if r["last_parsed_at"] is not None
+                                else None,
+                                error_code=str(r["error_code"])
+                                if r["error_code"] is not None
+                                else None,
+                                created_at=str(r["created_at"]),
+                                updated_at=str(r["updated_at"]),
+                            )
+                        )
+
+                    coordinator = SourceWriteCoordinator(database.engine, adapter)
+                    recovery = SourceRecovery(coordinator)
+                    reconciled = await run_in_threadpool(
+                        recovery.reconcile, operation_ledger=ledger
+                    )
+                    with database.engine.connect() as conn:
+                        degraded_count: int = conn.exec_driver_sql(
+                            "SELECT count(*) FROM source_write_journal WHERE state = 'DEGRADED'"
+                        ).scalar_one()
+                    is_degraded = degraded_count > 0 or any(
+                        r.state == "DEGRADED" for r in reconciled
+                    )
+                    if is_degraded:
+                        app.state.storage_error = "DEGRADED"
+                        app.state.ready = False
+                    else:
+                        sync_service = SyncService(
+                            database.engine, markdown_root, operation_ledger=ledger
+                        )
+                        app.state.sync_service = sync_service
+
+                        startup_in_progress = True
+                        queued_watcher_batches: list[list[str]] = []
+                        watcher_lock = threading.Lock()
+
+                        def _on_source_change(paths: list[str]) -> None:
+                            with watcher_lock:
+                                if startup_in_progress:
+                                    queued_watcher_batches.append(paths)
+                                    return
+                            res = sync_service.sync(reason="WATCHER")
+                            if res.status == "FAILED":
+                                app.state.storage_error = "WATCHER_SYNC_FAILED"
+                                app.state.ready = False
+
+                        def _on_watcher_error(_batch: list[str], _exc: Exception) -> None:
+                            app.state.storage_error = "WATCHER_FAILED"
+                            app.state.ready = False
+
+                        watcher = SourceWatcher(
+                            markdown_root,
+                            on_change=_on_source_change,
+                            on_error=_on_watcher_error,
+                        )
+                        watcher.start()
+                        app.state.watcher = watcher
+
+                        try:
+                            startup_res = await run_in_threadpool(
+                                sync_service.sync, reason="STARTUP"
+                            )
+                        except Exception:
+                            app.state.storage_error = "STARTUP_SYNC_FAILED"
+                            app.state.ready = False
+                            await run_in_threadpool(watcher.stop)
+                            app.state.watcher = None
+                            raise
+
+                        if startup_res.status == "FAILED":
+                            app.state.storage_error = "STARTUP_SYNC_FAILED"
+                            app.state.ready = False
+                            await run_in_threadpool(watcher.stop)
+                            app.state.watcher = None
+                        else:
+                            with watcher_lock:
+                                startup_in_progress = False
+                                pending_paths = sorted(
+                                    {p for b in queued_watcher_batches for p in b}
+                                )
+                                queued_watcher_batches.clear()
+
+                            poll_changes = await run_in_threadpool(watcher.poll_now)
+                            if pending_paths or poll_changes:
+                                watcher_res = await run_in_threadpool(
+                                    sync_service.sync, reason="WATCHER"
+                                )
+                                if watcher_res.status == "FAILED":
+                                    app.state.storage_error = "WATCHER_SYNC_FAILED"
+                                    app.state.ready = False
+                                else:
+                                    app.state.ready = True
+                            else:
+                                app.state.ready = True
+                else:
+                    app.state.ready = True
             except StorageError as error:
                 app.state.storage_error = str(error)
+                app.state.ready = False
             except SQLAlchemyError:
                 app.state.storage_error = "UNAVAILABLE"
+                app.state.ready = False
+            except SourceFileError:
+                app.state.storage_error = "SOURCE_UNAVAILABLE"
+                app.state.ready = False
+            except Exception:
+                app.state.storage_error = "STARTUP_FAILED"
+                app.state.ready = False
         yield
     finally:
+        if getattr(app.state, "watcher", None) is not None:
+            await run_in_threadpool(app.state.watcher.stop)
+            app.state.watcher = None
         app.state.sessions.invalidate()
         app.state.ready = False
         app.state.storage_info = None
         app.state.operation_ledger = None
         app.state.consent_service = None
+        app.state.sync_service = None
         if database is not None:
             await run_in_threadpool(database.close)
         app.state.database = None
 
 
-def create_app(settings: AppSettings | None = None) -> FastAPI:
+def create_app(
+    settings: AppSettings | None = None,
+    *,
+    markdown_root: Path | None = None,
+) -> FastAPI:
     """Create and configure a FastAPI application instance."""
     app_settings = settings or AppSettings()
 
@@ -79,12 +226,15 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     )
 
     app.state.settings = app_settings
+    app.state.markdown_root = markdown_root
     app.state.ready = False
     app.state.database = None
     app.state.storage_info = None
     app.state.storage_error = None
     app.state.operation_ledger = None
     app.state.consent_service = None
+    app.state.sync_service = None
+    app.state.watcher = None
     app.state.active_ai_policy = None
     app.state.sessions = SessionStore()
 
@@ -114,6 +264,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(bootstrap_router)
     app.include_router(operations_router)
+    app.include_router(sources_router)
 
     from backend.app.http.consent import router as consent_router
 

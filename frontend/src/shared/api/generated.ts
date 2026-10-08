@@ -60,6 +60,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Sources */
+        get: operations["get_sources_api_v1_sources_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Sync Run */
+        post: operations["create_sync_run_api_v1_sync_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync-runs/{syncRunId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Sync Run */
+        get: operations["get_sync_run_api_v1_sync_runs__syncRunId__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/bootstrap/exchange": {
         parameters: {
             query?: never;
@@ -202,6 +253,14 @@ export interface components {
             /** Operationid */
             operationId: string;
         };
+        /** CreateSyncRunRequest */
+        CreateSyncRunRequest: {
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "STARTUP" | "MANUAL" | "WATCHER";
+        };
         ErrorDetails: {
             fields: {
                 field: string;
@@ -262,12 +321,114 @@ export interface components {
             /** Updatedat */
             updatedAt: string;
         };
+        /** PagePagination */
+        PagePagination: {
+            /** Hasmore */
+            hasMore: boolean;
+            /** Nextcursor */
+            nextCursor?: string | null;
+            /** Pagesize */
+            pageSize: number;
+        };
+        /** PageSort */
+        PageSort: {
+            /** By */
+            by: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "ASC" | "DESC";
+        };
+        /** SourceFilePage */
+        SourceFilePage: {
+            /** Data */
+            data: components["schemas"]["SourceFileView"][];
+            pagination: components["schemas"]["PagePagination"];
+            sort: components["schemas"]["PageSort"];
+        };
+        /** SourceFileView */
+        SourceFileView: {
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Etag */
+            etag: string;
+            /** Id */
+            id: string;
+            /** Lastparsedat */
+            lastParsedAt?: string | null;
+            /** Notedate */
+            noteDate: string;
+            /** Relativepath */
+            relativePath: string;
+            /** Revision */
+            revision: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "VALID" | "INVALID" | "MISSING";
+        };
         /**
          * StorageStatus
          * @description Storage availability status.
          * @enum {string}
          */
         StorageStatus: "OK" | "NOT_READY";
+        /** SyncRunConflictError */
+        SyncRunConflictError: {
+            /**
+             * Code
+             * @constant
+             */
+            code: "IDEMPOTENCY_IN_FLIGHT";
+            details: components["schemas"]["SyncRunRetryDetails"];
+            /** Message */
+            message: string;
+            /** Requestid */
+            requestId: string;
+        };
+        /** SyncRunConflictErrorResponse */
+        SyncRunConflictErrorResponse: {
+            error: components["schemas"]["SyncRunConflictError"];
+        };
+        /** SyncRunRetryDetails */
+        SyncRunRetryDetails: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "RETRY";
+            /** Operationid */
+            operationId: string;
+        };
+        /** SyncRunView */
+        SyncRunView: {
+            /** Finishedat */
+            finishedAt?: string | null;
+            /** Id */
+            id: string;
+            /** Operationid */
+            operationId: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "STARTUP" | "MANUAL" | "WATCHER";
+            /** Sourcerevision */
+            sourceRevision?: number | null;
+            /** Sourcesinvalid */
+            sourcesInvalid: number;
+            /** Sourcesscanned */
+            sourcesScanned: number;
+            /** Startedat */
+            startedAt: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
+        };
     };
     responses: never;
     parameters: never;
@@ -735,6 +896,351 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Operation"];
+                };
+            };
+            /** @description Error Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_sources_api_v1_sources_get: {
+        parameters: {
+            query?: {
+                status?: ("VALID" | "INVALID" | "MISSING") | null;
+                noteDate?: string | null;
+                pageSize?: number;
+                cursor?: string | null;
+                sortBy?: "updatedAt" | "noteDate" | "status" | "revision";
+                sortOrder?: "asc" | "desc" | "ASC" | "DESC";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceFilePage"];
+                };
+            };
+            /** @description Error Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_sync_run_api_v1_sync_runs_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSyncRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRunView"];
+                };
+            };
+            /** @description Error Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRunConflictErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_sync_run_api_v1_sync_runs__syncRunId__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                syncRunId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRunView"];
                 };
             };
             /** @description Error Response */
