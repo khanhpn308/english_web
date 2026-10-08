@@ -230,10 +230,13 @@ class Scheduler:
                 if len(live) >= 3:
                     break
                 if task not in active and task not in deferred:
-                    live[executor.submit(
-                        dispatch, self.pipeline, task,
-                        defer_verification=self.defer_verification
-                    )] = task
+                    future = executor.submit(
+                        dispatch,
+                        self.pipeline,
+                        task,
+                        defer_verification=self.defer_verification,
+                    )
+                    live[future] = task
                     active.add(task)
             if not live:
                 if graph.ready:
