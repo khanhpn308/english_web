@@ -25,6 +25,7 @@ def main() -> int:
             "schedule",
             "recover-candidate",
             "import-candidate",
+            "verify-candidate",
         ],
     )
     parser.add_argument("task", nargs="?")
@@ -41,7 +42,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.command != "schedule" and args.task is None:
         parser.error(
-            "task is required for run/status/resume/retry/recover-candidate/import-candidate"
+            "task is required for run/status/resume/retry/verify-candidate/recover-candidate/import-candidate"
         )
     if args.command == "import-candidate":
         if (
@@ -96,7 +97,7 @@ def main() -> int:
                 raise OrchestratorError(
                     "Run IDs are generated; use --run-id for status/resume/retry"
                 )
-            state = pipeline.start(args.task, dry_run=args.dry_run)
+            state = pipeline.start(args.task, dry_run=args.dry_run, defer_verification=True)
         elif args.command == "resume":
             selected = pipeline.status(args.task, args.run_id)
             if "recovery_origin" in selected.artifacts:
@@ -121,7 +122,19 @@ def main() -> int:
                         "Imported candidate resume requires trusted control-plane execution, "
                         f"not candidate modules. Run: {handoff.next_step}"
                     )
-            state = pipeline.resume(args.task, args.run_id)
+            state = pipeline.resume(args.task, args.run_id, defer_verification=True)
+        elif args.command == "verify-candidate":
+            if not args.run_id:
+                raise OrchestratorError("verify-candidate requires --run-id")
+            selected = pipeline.status(args.task, args.run_id)
+            if selected.state != State.IMPLEMENTED:
+                raise OrchestratorError("verify-candidate requires an IMPLEMENTED candidate")
+            if args.integrate:
+                raise OrchestratorError("verify-candidate cannot integrate into main")
+            pipeline.config.integrate = False
+            state = pipeline.resume(
+                args.task, args.run_id, defer_verification=False, stop_after_audit=True
+            )
         elif args.command == "recover-candidate":
             assert args.expected_source_digest is not None
             state = pipeline.recover_candidate(args.task, args.run_id, args.expected_source_digest)
@@ -140,7 +153,7 @@ def main() -> int:
                 expected_provenance_digest=args.expected_provenance_digest,
             )
         elif args.command == "retry":
-            state = pipeline.retry(args.task, args.run_id)
+            state = pipeline.retry(args.task, args.run_id, defer_verification=True)
         else:
             state = pipeline.status(args.task, args.run_id)
         payload = state.model_dump(mode="json")
