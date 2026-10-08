@@ -42,7 +42,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.command != "schedule" and args.task is None:
         parser.error(
-            "task is required for run/status/resume/retry/verify-candidate/recover-candidate/import-candidate"
+            "task is required for run/status/resume/retry/verify-candidate/"
+            "recover-candidate/import-candidate"
         )
     if args.command == "import-candidate":
         if (
