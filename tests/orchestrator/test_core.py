@@ -1084,39 +1084,50 @@ def test_codex_worker_full_access_does_not_elevate_readonly(
     assert command[command.index("-a") + 1] == "never"
 
 
-def test_cliprovider_agy_worker_auto_process_opt_in(fake_agy: Path, tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "provider,allow_process,full_access",
+    [
+        ("agy", False, False),
+        ("agy", True, False),
+        ("codex", False, False),
+        ("codex", False, True),
+        ("gemini", False, False),
+    ],
+)
+def test_t090_worker_cli_fails_closed_before_any_process(
+    fake_agy: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    provider: str,
+    allow_process: bool,
+    full_access: bool,
+) -> None:
+    from tools.orchestrator import runtime
     from tools.orchestrator.core import WorkerResult
 
-    result = CliProvider().run(
-        "WORKER",
-        cwd=tmp_path,
-        role=Role(provider="agy", executable=str(fake_agy), allow_process=True),
-        timeout=5,
-        output=WorkerResult,
-        artifacts=tmp_path,
-        name="approved-worker",
-        readonly=False,
+    def must_not_execute(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("T090 must block before provider probe or inference")
+
+    monkeypatch.setattr(runtime, "execute", must_not_execute)
+    role = Role(
+        provider=provider,
+        executable=str(fake_agy),
+        allow_process=allow_process,
+        worker_access="full-access" if full_access else "workspace-write",
     )
-    assert result.status == "IMPLEMENTED"
-    received = json.loads((tmp_path / "received.json").read_text())
-    assert "--dangerously-skip-permissions" in received["args"]
-    assert received["args"][received["args"].index("--mode") + 1] == "accept-edits"
-
-
-def test_agy_direct_worker_status_is_not_cli_envelope_error(fake_agy: Path, tmp_path: Path) -> None:
-    from tools.orchestrator.core import WorkerResult
-
-    result = CliProvider().run(
-        "WORKER",
-        cwd=tmp_path,
-        role=Role(provider="agy", executable=str(fake_agy)),
-        timeout=5,
-        output=WorkerResult,
-        artifacts=tmp_path,
-        name="direct-worker",
-        readonly=False,
-    )
-    assert result.status == "IMPLEMENTED"
+    with pytest.raises(OrchestratorError, match="T090 BLOCKED"):
+        CliProvider().run(
+            "WORKER",
+            cwd=tmp_path,
+            role=role,
+            timeout=5,
+            output=WorkerResult,
+            artifacts=tmp_path,
+            name="blocked-worker",
+            readonly=False,
+        )
+    assert not (tmp_path / "received.json").exists()
+    assert not (tmp_path / "blocked-worker.log.json").exists()
 
 
 @pytest.mark.parametrize(
