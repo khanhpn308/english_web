@@ -65,8 +65,18 @@ describe('Route Map & v1 Screens', () => {
     const html = renderToStaticMarkup(<AppShell currentPath={path} />);
     expect(html).toContain(`<h1`);
     expect(html).toContain(headingText);
-    // Unimplemented routes indicate availability clearly without fabricated data
-    expect(html).toContain('Tính năng đang được xây dựng (chưa khả dụng)');
+    if (path === '/lookup') {
+      expect(html).toContain('aria-label="Tra cứu và xem trước"');
+      expect(html).toContain('for="lookup-term"');
+      expect(html).toContain('Từ hoặc cụm từ cần tra cứu');
+      expect(html).toContain('aria-describedby="lookup-help lookup-status"');
+      expect(html).toContain('id="lookup-status"');
+      expect(html).toContain('Nhập từ hoặc cụm từ để tra cứu.');
+      expect(html).not.toContain('Tính năng đang được xây dựng (chưa khả dụng)');
+    } else {
+      // Unimplemented routes still explain their availability.
+      expect(html).toContain('Tính năng đang được xây dựng (chưa khả dụng)');
+    }
   });
 
   it('renders accessible 404 screen when route is not found', () => {
@@ -258,6 +268,43 @@ describe('AppShell - Mounted Client-Side Interactions (T076 Coverage Extension)'
     window.requestAnimationFrame = originalRaf!;
     window.cancelAnimationFrame = originalCancelRaf!;
     window.history.pushState(null, '', '/');
+    vi.unstubAllGlobals();
+  });
+
+  it('navigates to the real Lookup page with accessible form and no automatic lookup', async () => {
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify({
+      state: 'NOT_GRANTED', revision: 0, policy: null, canRequestAi: false,
+      acceptedPolicyVersion: null, acceptedPolicyDigest: null, lastChoiceAt: null,
+    }), { headers: { 'Content-Type': 'application/json', ETag: '"shell-consent"' } }));
+    vi.stubGlobal('fetch', fetchSpy);
+    window.history.pushState(null, '', '/');
+    await act(async () => root!.render(<AppShell />));
+
+    const lookupAnchor = container!.querySelector<HTMLAnchorElement>('nav a[href="/lookup"]');
+    expect(lookupAnchor).not.toBeNull();
+    await act(async () => {
+      lookupAnchor!.click();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(window.location.pathname).toBe('/lookup');
+    expect(lookupAnchor!.getAttribute('aria-current')).toBe('page');
+    const main = container!.querySelector('main')!;
+    const heading = main.querySelector('h1');
+    expect(heading?.textContent).toBe('Tra cứu từ vựng');
+    expect(document.activeElement).toBe(heading);
+    const lookup = main.querySelector<HTMLElement>('section[aria-label="Tra cứu và xem trước"]')!;
+    expect(lookup.hidden).toBe(false);
+    expect(lookup.querySelector('label[for="lookup-term"]')?.textContent).toBe('Từ hoặc cụm từ cần tra cứu');
+    expect(lookup.querySelector('input')?.getAttribute('aria-describedby')).toBe('lookup-help lookup-status');
+    expect(lookup.querySelector('button[type="submit"]')?.textContent).toBe('Tra cứu');
+    const status = lookup.querySelector('#lookup-status');
+    expect(status?.getAttribute('role')).toBe('status');
+    expect(status?.getAttribute('aria-live')).toBe('polite');
+    expect(status?.getAttribute('aria-atomic')).toBe('true');
+    expect(status?.textContent).toBe('Nhập từ hoặc cụm từ để tra cứu.');
+    expect(main.textContent).not.toContain('Tính năng đang được xây dựng (chưa khả dụng)');
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('navigates from /lookup to / via real brand anchor DOM interaction and focuses heading (AppShell:270)', async () => {

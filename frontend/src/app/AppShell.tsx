@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { cn } from '@/lib/utils';
 import { AiConsentProvider } from '@/features/consent/AiConsentGate';
 import { AiConsentPanel } from '@/features/consent/AiConsentPanel';
+import { LookupPage } from '@/features/lookup/LookupPage';
 
 
 export interface RouteMatch {
@@ -318,7 +319,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
                 {matchedRoute.title}
               </h1>
               {matchedRoute.routeId === 'status' && <AiConsentPanel />}
-              <Card role="region" aria-label="Thông báo trạng thái tính năng">
+              {matchedRoute.routeId !== 'lookup' && <Card role="region" aria-label="Thông báo trạng thái tính năng">
                 <CardHeader>
                   <CardTitle className="text-primary text-lg">Tính năng đang được xây dựng (chưa khả dụng) trong giai đoạn khởi tạo shell.</CardTitle>
                 </CardHeader>
@@ -337,7 +338,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
                     Dữ liệu bài học và tính năng tương tác thực tế sẽ được nạp sau khi tích hợp API backend.
                   </p>
                 </CardContent>
-              </Card>
+              </Card>}
             </article>
           ) : (
             <article className="flex flex-col gap-6 text-center py-8">
@@ -354,6 +355,8 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
               </div>
             </article>
           )}
+          {/* Keep the draft and operation identity during local route navigation. */}
+          <LookupPage active={matchedRoute?.routeId === 'lookup'} />
           </AiConsentProvider>
         </ErrorBoundary>
       </main>
