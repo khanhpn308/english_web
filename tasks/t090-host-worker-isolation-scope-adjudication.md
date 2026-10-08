@@ -10,7 +10,9 @@
 
 - T088
 
-**Ordering clarification:** T088 đã tích hợp. T089 PR #5 hiện là *unmerged candidate* nên không khai báo T089 là prerequisite `DONE` của T090: làm vậy gây deadlock vì PR #5 lại bị chặn bởi T090. Điều kiện thực thi là phải có một integration plan do host xác thực cho cặp candidate T089/T090 trước khi cập nhật `main`.
+## Dependency ordering clarification
+
+T088 đã tích hợp. T089 PR #5 hiện là *unmerged candidate* nên không khai báo T089 là prerequisite `DONE` của T090: làm vậy gây deadlock vì PR #5 lại bị chặn bởi T090. Điều kiện thực thi là phải có một integration plan do host xác thực cho cặp candidate T089/T090 trước khi cập nhật `main`.
 
 ## Context cần đọc
 
