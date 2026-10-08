@@ -17,15 +17,25 @@ sửa mã; phiên sửa lại dừng ở `IMPLEMENTED`, chờ một lệnh verif
 Sau `AUDIT_PASS`, lệnh `resume --integrate` vẫn phải được chủ động gọi để
 đi qua quy trình review và post-merge verification của host.
 
-**Quyết định vận hành ngày 08/10/2026:** Chủ repository chọn cho phép AGY
-Worker tự động thực thi các thao tác cần thiết khi coding, không hỏi quyền
-cho từng lệnh. `orchestrator.yaml` đã đặt `allow_process=true`; host
-chuyển cờ này thành `--dangerously-skip-permissions` cho AGY Worker.
-Đây là **auto-approval có rủi ro**, không phải cơ chế cách ly tiến trình.
-Không áp dụng quyền này cho Reviewer, Auditor hay Integrator. Kết quả
-kiểm thử chính thức và mọi commit/merge vẫn do host đảm nhiệm; kết quả
-Worker tự chạy không thể thay thế bằng chứng của host. Không tự sửa
-bằng chứng các run đã import trước đó.
+**Quyết định mới ngày 08/10/2026 (T090):** Chủ repository **rút lại**
+việc tự phê duyệt lệnh cho AGY Worker. T089 tuy đã merge vào `main`
+(commit `835d85a8`) nhưng được mở lại ở trạng thái
+`REOPENED_PENDING_T090`: chưa được nghiệm thu hoàn tất.
+
+`orchestrator.yaml` dùng `allow_process=false`. Nếu cấu hình Worker có
+`allow_process=true` hoặc `worker_access=full-access` thì host chặn trước
+lượt Worker. **Quan trọng:** `allow_process=false` và `--mode accept-edits`
+không chứng minh CLI không còn công cụ chạy lệnh. Vì vậy, trong giai đoạn
+T090 chưa có bằng chứng cách ly thực tế, `CliProvider` **từ chối tất cả
+WorkerResult không chỉ chặn cấu hình nguy hiểm**, trước cả subprocess đầu
+tiên. Đường kiểm chứng chính thức và vai trò AI chỉ đọc vẫn độc lập.
+Không có cơ chế bỏ qua gate qua prompt hoặc cờ cấu hình; phải triển khai
+và chứng minh một backend edit-only thực sự trước khi mở lại Worker.
+
+Đây là khóa an toàn tạm thời, **chưa phải là nghiệm thu T090**. Cần kiểm
+thử đối kháng tại CLI/OS thật trên worktree giả lập: lệnh shell, Git,
+subprocess và tool escalation phải bị từ chối trong khi sửa file hợp lệ
+vẫn thành công. Không cập nhật hoặc làm giả bằng chứng các run trước đó.
 
 `Pipeline.start/resume` và `Scheduler` vẫn giữ chế độ mặc định cũ dành
 cho caller nội bộ/kiểm thử để không ngầm thay đổi contract API hiện hữu;

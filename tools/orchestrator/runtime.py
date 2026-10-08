@@ -18,6 +18,7 @@ from tools.orchestrator.core import (
     AgentStallError,
     OrchestratorError,
     Role,
+    WorkerResult,
     atomic_json,
     digest,
     now,
@@ -354,9 +355,19 @@ class CliProvider:
         name: str,
         readonly: bool,
     ) -> Output:
-        # Process auto-approval is opt-in via Role.allow_process for AGY Worker.
-        # Only a Worker may receive this permission (Config.validate_roles).
-        # Host verification and merge authority remain independent.
+        # T090 fail-closed boundary: a CLI approval flag, prompt, or sandbox
+        # setting alone does NOT prove shell/process denial. Until an actual
+        # restricted edit-only tool broker is independently attested, never
+        # dispatch a mutable Worker through a shell-capable provider CLI.
+        # This check precedes even CLI capability probes/subprocess launch.
+        if issubclass(output, WorkerResult):
+            if not is_worker_code_only(role):
+                raise OrchestratorError(
+                    "T090 BLOCKED: unsafe Worker process/full-access permissions"
+                )
+            raise OrchestratorError(
+                "T090 BLOCKED: no independently verified edit-only Worker execution backend"
+            )
         version = execute([role.executable, "--version"], cwd, timeout=30)
         help_result = execute([role.executable, "--help"], cwd, timeout=30)
         probes = [version, help_result]
