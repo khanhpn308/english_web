@@ -527,8 +527,15 @@ def test_probe_timeout_fails_closed(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     from tools.orchestrator.runtime import ProcessResult
 
     # Simulate timeout on git_diff_check
-    def fake_execute(argv: list[str], cwd: Path, timeout: int | None = None) -> ProcessResult:
-        _ = timeout
+    def fake_execute(
+        argv: list[str],
+        cwd: Path,
+        *,
+        timeout: int | None = None,
+        output_limit: int = 4 * 1024 * 1024,
+    ) -> ProcessResult:
+        assert timeout == 30
+        assert output_limit == 64 * 1024
         return ProcessResult(
             command=tuple(argv),
             cwd=str(cwd),
