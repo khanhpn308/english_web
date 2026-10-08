@@ -80,6 +80,7 @@
 - [x] [T087](t087-concurrent-audit-preparation.md): `DONE` — concurrent executable verification and parallel read-only review fan-out integrated; R4 independent audit `PASS_FOR_INTEGRATION`, no unresolved HIGH/CRITICAL findings.
 - [x] [T088](t088-deterministic-evidence-bundle.md): Deterministic host evidence collection and versioned EvidenceBundle — `DONE`; authoritative host verification PASS: EvidenceBundle focused 21 passed, concurrent_audit 43 passed, parallel_review 25 passed, scheduler 48 passed, full orchestrator 398 passed; Ruff, Ruff format, Mypy and `git diff --check` PASS.
 - [x] [T089](t089-evidence-bundle-reviewer-probe-protocol.md): Evidence-aware semantic reviewer protocol and host-owned safe ProbeRequest/ProbeCatalog — `DONE`; depends on T088. Preserves T087 verification/reviewer overlap, forbids AI-generated arbitrary shell/argv, binds ProbeRequest/ProbeEvidence to the frozen candidate, and allows at most one bounded probe round per reviewer.
+- [ ] [T090](t090-host-worker-isolation-scope-adjudication.md): `SUPERSEDED_BY_OWNER_DECISION` — prior strict code-only enforcement requirement withdrawn; AGY auto-process authorized by owner. Eight T089 infrastructure paths explicitly approved for integration; host verification remains authoritative. Historical T090 acceptance criteria not claimed PASS.
 
 ## Checkpoints
 
