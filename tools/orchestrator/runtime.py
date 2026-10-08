@@ -18,7 +18,6 @@ from tools.orchestrator.core import (
     AgentStallError,
     OrchestratorError,
     Role,
-    WorkerResult,
     atomic_json,
     digest,
     now,
@@ -355,12 +354,9 @@ class CliProvider:
         name: str,
         readonly: bool,
     ) -> Output:
-        # The pipeline's mutable AI Worker uses WorkerResult. Protocol tests and
-        # prompt-engineer calls may exercise a different response model without
-        # granting that model the Worker role. The Pipeline independently blocks
-        # unsafe Worker roles before dispatch.
-        if not readonly and output is WorkerResult and not is_worker_code_only(role):
-            raise OrchestratorError("Worker code-only policy denies process-capable configuration")
+        # Process auto-approval is opt-in via Role.allow_process for AGY Worker.
+        # Only a Worker may receive this permission (Config.validate_roles).
+        # Host verification and merge authority remain independent.
         version = execute([role.executable, "--version"], cwd, timeout=30)
         help_result = execute([role.executable, "--help"], cwd, timeout=30)
         probes = [version, help_result]
