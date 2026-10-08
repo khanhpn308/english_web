@@ -53,6 +53,7 @@ def parallel_review_bundle() -> ReviewBundle:
             ReviewShard(
                 perspective=perspective,
                 findings=[ReviewFinding(action="Repair synthetic defect", evidence="feature.py:1")],
+                probe_request=None,
             )
             for perspective in reversed(ReviewPerspective)
         ],
@@ -303,6 +304,7 @@ def test_audit_invalid_status_and_false_pass_rejected() -> None:
         acceptance_criteria=[Criterion(criterion="Behavior", status="PASS", evidence="Fixture")],
         scope_violations=[],
         required_fixes=[],
+        reviewer_dispositions=[],
     )
     with pytest.raises(OrchestratorError, match="Contradictory"):
         audit.check(contract())
@@ -1646,7 +1648,7 @@ def test_concurrent_audit_collection_detached_inputs_and_failure_semantics(
         if failing and mode == "oserror":
             raise PermissionError("synthetic-private-os-error-sentinel")
         return ProcessResult(
-            command=command,
+            command=tuple(command),
             cwd=str(cwd),
             started_at="start",
             ended_at="end",
@@ -1706,7 +1708,7 @@ def test_concurrent_audit_transient_output_isolated_from_request_evidence(
         cache_dir.mkdir(parents=True, exist_ok=True)
         (cache_dir / "transient").write_text("transient pytest cache content")
         return ProcessResult(
-            command=command,
+            command=tuple(command),
             cwd=str(cwd),
             started_at="start",
             ended_at="end",
