@@ -203,3 +203,25 @@ own attestation. Do not infer successful isolation from a green portable CI.
 Phase-2 branch is investigative and documentation-only. There is no executable
 Worker enablement, no changed security threshold, and no permission to mark
 T090 DONE or T089 accepted.
+
+### Host-mediated edit primitive implemented on Phase-2 branch (08/10/2026)
+
+- New scoped module: tools/orchestrator/worker_sandbox.py.
+  Host-only ProposedTextEdit to AppliedTextEdit API validates an exact
+  host-owned allowlist, canonical relative path, non-symlink ancestors and
+  target, pinned SHA-256 preimage, text/size bound, rechecks source before
+  atomic publication, and returns before/after digests.
+- New synthetic test coverage: tests/orchestrator/test_worker_sandbox.py,
+  including valid modification/creation, stale source, noncanonical paths,
+  symlinks, prefix confusion, content limits and out-of-allowlist writes.
+- **Isolation status remains BLOCKED for actual Worker dispatch.** This module
+  is not connected to AGY/Codex and does not grant either provider tool access.
+  It does not, alone, protect against a concurrent local OS adversary. Live
+  provider command denial, tool-free invocation and OS-specific proof are still
+  missing; the existing blanket WorkerResult CLI refusal remains enabled.
+- Verification at this change is not yet claimed PASS. The host/CI must run
+  tests and all quality gates against the final candidate SHA. A green CI run
+  cannot substitute for independently observed real-provider isolation.
+- The initial phase-2 record above referred to a documentation-only
+  state; this subsequent commit adds the two scoped host code/test files
+  without changing task acceptance.
