@@ -2,9 +2,20 @@
 
 **Task ID:** `T089`  
 **Title:** Evidence-aware semantic reviewer protocol and host-owned safe probe execution  
-**Status:** `DONE`
+**Status:** `REOPENED_PENDING_T090`
 **Goal:** Hoàn thiện trust boundary (ranh giới tin cậy) giữa deterministic host/control plane (host/lớp điều khiển xác định bằng máy) và AI semantic reviewers/auditor (AI soát xét/kiểm toán ngữ nghĩa): AI chỉ được đọc candidate-bound evidence (bằng chứng gắn với đúng candidate), đưa ra semantic findings (phát hiện ngữ nghĩa) và tùy chọn `ProbeRequest` có kiểu; host sở hữu `ProbeCatalog`, quyết định probe nào hợp lệ, thực thi probe bằng Python/repository-owned commands, đóng gói `ProbeEvidence`, phát hiện stale candidate (candidate đã thay đổi), và tuyệt đối không thực thi arbitrary shell/argv (shell/đối số tùy ý) do model sinh ra.  
 **Level:** High
+
+## Current acceptance hold — 2026-10-08
+
+The owner reversed the temporary permission waiver **after** PR #5 had already
+been merged into `main` (merge commit `835d85a8dafa74657f06597bf8903134bdd721a3`).
+The implementation and original PASS evidence remain historical facts, but
+**T089 is not currently accepted as complete** until T090 demonstrates a
+real code-only Worker execution boundary and independent host verification.
+No original acceptance checks, run hashes, archived evidence or Git history are
+rewritten. The eight auxiliary infrastructure paths were owner-authorized at
+merge time; this note does not relabel earlier candidate scope evidence.
 
 ## Dependencies
 
