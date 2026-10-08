@@ -1546,7 +1546,14 @@ def test_agent_failure_is_finite_and_preserves_partial_work(repository: Path, mo
 
 
 @pytest.mark.parametrize("unsafe", ["none", "dirty", "wrong_exit", "output", "missing"])
-def test_run_recovers_known_gemini_trust_failure_only(repository: Path, unsafe: str) -> None:
+def test_run_recovers_known_gemini_trust_failure_only(
+    repository: Path, unsafe: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The fixture reproduces pre-policy Gemini history. Production dispatch
+    # remains covered by test_worker_configuration_rejects_non_code_only.
+    monkeypatch.setattr(
+        "tools.orchestrator.runtime.is_worker_code_only", lambda _role: True
+    )
     config = configuration(integrate=False)
     config.roles["worker"].provider = "gemini"
     agents = RecoveryAgents("trust")
@@ -1625,8 +1632,13 @@ def test_planning_drift_is_corrected_automatically(repository: Path) -> None:
     "unsafe", ["none", "dirty", "output", "timeout", "tampered", "same_provider"]
 )
 def test_corrected_agy_routing_retries_clean_failed_gemini_run(
-    repository: Path, unsafe: str
+    repository: Path, unsafe: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Preserve coverage of historical failover semantics without granting
+    # unsafe permissions to any production Worker.
+    monkeypatch.setattr(
+        "tools.orchestrator.runtime.is_worker_code_only", lambda _role: True
+    )
     config = configuration(integrate=False)
     config.roles["worker"].provider = "gemini"
     pipeline = Pipeline(repository, config, RecoveryAgents("trust"))
