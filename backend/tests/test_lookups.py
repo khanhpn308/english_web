@@ -628,27 +628,126 @@ async def test_storage_busy_and_bridge_error_variants(
 async def test_unrelated_history_sentinels_zero_effects(
     app_client: tuple[Any, AsyncClient, FakeBridge],
 ) -> None:
-    app, client, _bridge = app_client
+    app, client, bridge = app_client
+    sentinels = {
+        "term": "t008r4unrelatedlemma7e932bd4",
+        "meaning_en": "T008_R4_MEANING_EN_7e932bd4",
+        "meaning_vi": "T008_R4_MEANING_VI_7e932bd4",
+        "example_en": "T008_R4_EXAMPLE_EN_7e932bd4",
+        "example_vi": "T008_R4_EXAMPLE_VI_7e932bd4",
+        "source_id": "T008_R4_SOURCE_ID_7e932bd4",
+        "source_path": "T008_R4_SOURCE_7e932bd4.md",
+        "family_id": "T008_R4_FAMILY_7e932bd4",
+        "form_id": "T008_R4_FORM_7e932bd4",
+        "card_id": "T008_R4_CARD_7e932bd4",
+        "event_id": "T008_R4_HISTORY_7e932bd4",
+        "operation_id": "T008_R4_REVIEW_OPERATION_7e932bd4",
+        "attempt_id": "T008_R4_ATTEMPT_7e932bd4",
+        "question_id": "T008_R4_QUESTION_7e932bd4",
+    }
+    reviewed_at = "2025-01-01T00:00:00.000000Z"
+    next_due_at = "2025-01-03T17:00:00.000000Z"
     await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
         conn.exec_driver_sql(
             "INSERT INTO source_files (id, relative_path, note_date, status, revision, etag, "
             "content_hash, last_parsed_at, error_code, created_at, updated_at) "
-            "VALUES ('s1', 'path', '2025-01-01', 'VALID', 1, 'etag', 'hash', 0.0, NULL, 0.0, 0.0)"
+            "VALUES (?, ?, '2025-01-01', 'VALID', 1, 'etag', 'hash', ?, NULL, ?, ?)",
+            (
+                sentinels["source_id"],
+                sentinels["source_path"],
+                reviewed_at,
+                reviewed_at,
+                reviewed_at,
+            ),
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO word_families (id, root_lemma, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?)",
+            (sentinels["family_id"], sentinels["term"], reviewed_at, reviewed_at),
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO word_forms (id, family_id, lemma, normalized_lemma, part_of_speech, "
+            "meanings_en, meanings_vi, examples, ipa_status, cambridge_status, "
+            "verification_summary, revision, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, 'NOUN', ?, ?, ?, 'MISSING', "
+            "'MISSING', 'MISSING', 1, ?, ?)",
+            (
+                sentinels["form_id"],
+                sentinels["family_id"],
+                sentinels["term"],
+                sentinels["term"],
+                json.dumps([{"text": sentinels["meaning_en"]}]),
+                json.dumps([{"text": sentinels["meaning_vi"]}]),
+                json.dumps(
+                    [{"english": sentinels["example_en"], "vietnamese": sentinels["example_vi"]}]
+                ),
+                reviewed_at,
+                reviewed_at,
+            ),
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO word_form_sources (word_form_id, source_id, note_date, created_at) "
+            "VALUES (?, ?, '2025-01-01', ?)",
+            (sentinels["form_id"], sentinels["source_id"], reviewed_at),
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO operations (operation_id, kind, status, result_ref, response_status, "
+            "created_at, updated_at) VALUES (?, 'REVIEW', 'SUCCEEDED', ?, 200, ?, ?)",
+            (sentinels["operation_id"], sentinels["event_id"], reviewed_at, reviewed_at),
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO review_cards (card_id, word_form_id, box, due_at, queue_revision) "
+            "VALUES (?, ?, 2, ?, 1)",
+            (sentinels["card_id"], sentinels["form_id"], next_due_at),
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO review_events (id, card_id, source, rating, reviewed_at, next_due_at, "
+            "next_box, operation_id, attempt_id, question_id) "
+            "VALUES (?, ?, 'QUIZ', 'GOOD', ?, ?, 2, ?, ?, ?)",
+            (
+                sentinels["event_id"],
+                sentinels["card_id"],
+                reviewed_at,
+                next_due_at,
+                sentinels["operation_id"],
+                sentinels["attempt_id"],
+                sentinels["question_id"],
+            ),
         )
         conn.commit()
+        assert conn.exec_driver_sql("SELECT COUNT(*) FROM source_files").scalar_one() == 1
+        assert conn.exec_driver_sql("SELECT COUNT(*) FROM review_cards").scalar_one() == 1
+        assert conn.exec_driver_sql("SELECT COUNT(*) FROM review_events").scalar_one() == 1
 
     res = await client.post(
         "/api/v1/lookups", json={"term": "robust"}, headers={"Idempotency-Key": "zero-effect"}
     )
     assert res.status_code == 200, res.json()
+    assert bridge.preflights == bridge.dispatches == len(bridge.payloads) == 1
+    payload = bridge.payloads[0]
+    assert payload["model"] == MODEL
+    assert payload["messages"][0]["role"] == "user"
+    assert 'The lookup term is "robust".' in payload["messages"][0]["content"]
+    payload_text = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    for sentinel in sentinels.values():
+        assert sentinel not in payload_text
 
     await asyncio.wait_for(asyncio.shield(app.state.lookup_service.drain()), 5)
     with app.state.database.engine.connect() as conn:
         sources = conn.exec_driver_sql("SELECT COUNT(*) FROM source_files").scalar()
         assert sources == 1
         cards = conn.exec_driver_sql("SELECT COUNT(*) FROM review_cards").scalar()
-        assert cards == 0
+        # The one pre-existing history card remains; lookup creates no additional cards.
+        assert cards == 1
+        assert conn.exec_driver_sql("SELECT COUNT(*) FROM word_forms").scalar_one() == 1
+        assert conn.exec_driver_sql("SELECT COUNT(*) FROM review_events").scalar_one() == 1
+        assert (
+            conn.exec_driver_sql(
+                "SELECT COUNT(*) FROM word_forms WHERE normalized_lemma = ?", ("robust",)
+            ).scalar_one()
+            == 0
+        )
 
 
 @pytest.mark.anyio
