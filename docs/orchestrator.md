@@ -17,12 +17,15 @@ sửa mã; phiên sửa lại dừng ở `IMPLEMENTED`, chờ một lệnh verif
 Sau `AUDIT_PASS`, lệnh `resume --integrate` vẫn phải được chủ động gọi để
 đi qua quy trình review và post-merge verification của host.
 
-**Ranh giới quyền:** `allow_process=false` và `accept-edits` chỉ là
-kiểm tra cấu hình/chế độ CLI, **chưa chứng minh cô lập lệnh shell**. Vì các
-provider có thể có tool thực thi khác, chỉ triển khai Worker khi host đã
-chứng minh cơ chế quyền hạn thực sự hạn chế được lệnh. Bằng chứng này
-phải được xác minh độc lập trước khi cho phép merge production.
-Không thay đổi bằng chứng của những run đã import trước đó.
+**Quyết định vận hành ngày 08/10/2026:** Chủ repository chọn cho phép AGY
+Worker tự động thực thi các thao tác cần thiết khi coding, không hỏi quyền
+cho từng lệnh. `orchestrator.yaml` đã đặt `allow_process=true`; host
+chuyển cờ này thành `--dangerously-skip-permissions` cho AGY Worker.
+Đây là **auto-approval có rủi ro**, không phải cơ chế cách ly tiến trình.
+Không áp dụng quyền này cho Reviewer, Auditor hay Integrator. Kết quả
+kiểm thử chính thức và mọi commit/merge vẫn do host đảm nhiệm; kết quả
+Worker tự chạy không thể thay thế bằng chứng của host. Không tự sửa
+bằng chứng các run đã import trước đó.
 
 `Pipeline.start/resume` và `Scheduler` vẫn giữ chế độ mặc định cũ dành
 cho caller nội bộ/kiểm thử để không ngầm thay đổi contract API hiện hữu;
