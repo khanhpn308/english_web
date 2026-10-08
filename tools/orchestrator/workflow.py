@@ -89,16 +89,17 @@ Read AGENTS.md, AGENT.md, CONSTRAINTS.md, the task, dependency handoffs and rele
 Do not access credentials or remote Git. Never call application AI providers
 or real inference in tests.
 Do not manually open/copy user vocabulary into reasoning, prompts, reports or new test fixtures.
-The owner authorizes repository-configured verification and redacted security scanners with
-their existing read-only scopes. Execute those checks unchanged; do not invent an approval
-step merely because an inherited repository test/scanner reads local files. New fixtures must
-remain synthetic. Never modify user data, export learning content, expose secrets or narrow scans.
+Repository-configured verification and redacted security scanners are exclusively executed
+by the host, never by AI agents. Do not run shell, Git, Python, npm, pytest, Ruff, Mypy,
+test, build, lint, or verification commands. Only inspect host-sealed evidence. New fixtures
+must remain synthetic. Never modify user data, export learning content, expose secrets or narrow scans.
 Never weaken tests, quality thresholds or security. Return ONLY JSON matching the supplied schema.
 Only the orchestrator changes state, creates commits or integrates. Never commit, merge, rebase,
 switch branches, stash, reset, clean, delete worktrees, or modify the task contract/run artifacts.
 Report BLOCKED for missing dependency, scope extension, architecture/product ambiguity, unsafe
 migration lineage, missing credentials or any required destructive operation.
-Worker: edit only the exact allowed task files in this worktree; record RED/GREEN and checks;
+Worker: ONLY edit the exact allowed task files in this worktree; NEVER execute commands,
+invoke other agents, or claim RED/GREEN/PASS without host evidence. Report tests NOT_RUN;
 preserve this repository's required task-local bookkeeping/changelog. No unrelated task status.
 Prompt Engineer, Reviewer, Auditor, Integrator: inspect only; never modify source or bookkeeping.
 Auditor: review real diff and test evidence, test weakening, scope, migration/contract and failure
@@ -966,8 +967,12 @@ class Pipeline:
                 validate_contract(self.contract(directory, old), card, old)
         return selected
 
-    def retry(self, task: str, run_id: str | None = None) -> RunState:
-        return self.start(task, retry=True, previous_run_id=run_id)
+    def retry(
+        self, task: str, run_id: str | None = None, *, defer_verification: bool = False
+    ) -> RunState:
+        return self.start(
+            task, retry=True, previous_run_id=run_id, defer_verification=defer_verification
+        )
 
     def recover_candidate(self, task: str, run_id: str, expected_source_digest: str) -> RunState:
         from tools.orchestrator.recovery import recover_candidate
@@ -1003,6 +1008,7 @@ class Pipeline:
         dry_run: bool = False,
         retry: bool = False,
         previous_run_id: str | None = None,
+        defer_verification: bool = False,
     ) -> RunState:
         if not dry_run and not retry and self.task_worktrees(task):
             recorded = [
@@ -1012,7 +1018,7 @@ class Pipeline:
             owners = [s for s in recorded if Path(s.worktree_path) in self.task_worktrees(task)]
             latest = max(owners, key=lambda s: s.created_at) if owners else None
             if latest is not None and self.resumable(latest.state):
-                return self.resume(task, latest.run_id)
+                return self.resume(task, latest.run_id, defer_verification=defer_verification)
         run_id = re.sub(r"[^0-9]", "", now()) + "-" + uuid4().hex[:8]
         base = self.git.sha(f"refs/heads/{self.config.base_branch}")
         state = RunState(
@@ -1099,7 +1105,9 @@ class Pipeline:
                     "baseline",
                 )
                 self.move(directory, state, State.READY)
-                return self.drive(directory, state, card)
+                return self.drive(
+                    directory, state, card, defer_verification=defer_verification
+                )
             except (OrchestratorError, OSError, ValidationError) as error:
                 return self.fail(directory, state, error)
             except KeyboardInterrupt:
@@ -1119,7 +1127,9 @@ class Pipeline:
         print(f"ERROR {state.task_id}: {state.last_error}")
         return state
 
-    def resume(self, task: str, run_id: str | None = None) -> RunState:
+    def resume(
+        self, task: str, run_id: str | None = None, *, defer_verification: bool = False
+    ) -> RunState:
         directory = self.run_path(task, run_id)
         with (
             slot(self.locks),
@@ -1250,7 +1260,9 @@ class Pipeline:
                     if working_git.snapshot(state.base_sha) != state.audited_digest:
                         raise OrchestratorError("Source changed after audit; evidence stale")
                     self.scope(state, contract)
-                return self.drive(directory, state, card)
+                return self.drive(
+                    directory, state, card, defer_verification=defer_verification
+                )
             except (OrchestratorError, OSError, ValidationError) as error:
                 return self.fail(directory, state, error)
             except KeyboardInterrupt:
@@ -2310,7 +2322,9 @@ class Pipeline:
         state.verified_digest = before
         self.save(directory, state)
 
-    def drive(self, directory: Path, state: RunState, card: TaskCard) -> RunState:
+    def drive(
+        self, directory: Path, state: RunState, card: TaskCard, *, defer_verification: bool = False
+    ) -> RunState:
         context = task_context(card, state)
         if state.state == State.READY:
             if "skills" not in state.artifacts:
@@ -2376,6 +2390,7 @@ class Pipeline:
             if state.state in {State.PROMPT_READY, State.FIX_PROMPT_READY}:
                 fixing = state.state == State.FIX_PROMPT_READY
                 from tools.orchestrator.runtime import is_worker_code_only
+
                 if not is_worker_code_only(self.config.roles["worker"]):
                     state.last_error = "BLOCKED: Configuration cannot guarantee Worker code-only execution"
                     self.move(directory, state, State.BLOCKED)
@@ -2420,6 +2435,10 @@ class Pipeline:
                     raise OrchestratorError("Repository requires worker changelog before handoff")
                 self.move(directory, state, State.IMPLEMENTED)
             if state.state == State.IMPLEMENTED:
+                if defer_verification:
+                    # Worker handoff is complete; the host must explicitly request verification.
+                    self.report(directory, state)
+                    return state
                 self.move(directory, state, State.AUDIT_RUNNING)
                 # Reviewers see only frozen static inputs while detached verification runs.
                 bundle, checks_failed = self.concurrent_audit(
