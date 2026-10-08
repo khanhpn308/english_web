@@ -2290,25 +2290,31 @@ class Pipeline:
                 if path.is_file():
                     protected_resume[path] = digest(path.read_bytes())
 
-            raw_res = provider.run(
-                resume_prompt,
-                cwd=working,
-                role=role.model_copy(deep=True),
-                timeout=timeout,
-                output=ReviewShard,
-                artifacts=directory,
-                name=resume_name,
-                readonly=True,
-            )
-            res_shard = ReviewShard.model_validate(raw_res)
-            if res_shard.perspective != shard.perspective:
-                raise OrchestratorError("Resumed reviewer returned the wrong perspective")
-            if res_shard.probe_request is not None:
-                raise OrchestratorError(
-                    "Reviewer exceeded probe round limit: second probe request forbidden"
+            validation_error: Exception | None = None
+            res_shard: ReviewShard | None = None
+            try:
+                raw_res = provider.run(
+                    resume_prompt,
+                    cwd=working,
+                    role=role.model_copy(deep=True),
+                    timeout=timeout,
+                    output=ReviewShard,
+                    artifacts=directory,
+                    name=resume_name,
+                    readonly=True,
                 )
+                res_shard = ReviewShard.model_validate(raw_res)
+                if res_shard.perspective != shard.perspective:
+                    raise OrchestratorError("Resumed reviewer returned the wrong perspective")
+                if res_shard.probe_request is not None:
+                    raise OrchestratorError(
+                        "Reviewer exceeded probe round limit: second probe request forbidden"
+                    )
+            except Exception as error:
+                validation_error = error
 
-            # Validate memory/source integrity after resumed reviewer
+            # Always verify state, protected evidence, branch and candidate source,
+            # including when provider.run raises or returns invalid JSON.
             if state.model_dump(mode="json") != frozen_resume_state.model_dump(mode="json"):
                 for field in RunState.model_fields:
                     setattr(state, field, getattr(frozen_resume_state, field))
@@ -2322,7 +2328,9 @@ class Pipeline:
                 raise OrchestratorError("Resumed reviewer changed branch")
             if git.snapshot(state.base_sha) != snapshot:
                 raise OrchestratorError("Resumed reviewer modified repository source")
-
+            if validation_error is not None:
+                raise validation_error
+            assert res_shard is not None
             final_shards.append(res_shard)
 
         # Persist diagnostic artifacts from resumed reviewer invocations
