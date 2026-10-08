@@ -1,5 +1,33 @@
 # Công cụ điều phối phát triển cục bộ Level 1 và Level 2
 
+## Chế độ host verification tách biệt (T089 final remediation)
+
+Trong đường đi CLI, `run`, `resume`, `retry` và `schedule` kết thúc lượt
+Worker/Fix tại trạng thái `IMPLEMENTED` và **không tự chạy audit sau Worker**.
+Host chủ động chạy bước xác minh riêng bằng:
+
+```bash
+python -m tools.orchestrator verify-candidate T089 --run-id RUN_ID --no-integrate
+```
+
+Lệnh `verify-candidate` chỉ chấp nhận `IMPLEMENTED`, kiểm tra một chu kỳ
+candidate rồi dừng ở `AUDIT_PASS` hoặc `AUDIT_FAIL` (không tự lặp Worker Fix).
+Sau `AUDIT_FAIL`, host có thể `resume --no-integrate` để yêu cầu Worker
+sửa mã; phiên sửa lại dừng ở `IMPLEMENTED`, chờ một lệnh verify mới.
+Sau `AUDIT_PASS`, lệnh `resume --integrate` vẫn phải được chủ động gọi để
+đi qua quy trình review và post-merge verification của host.
+
+**Ranh giới quyền:** `allow_process=false` và `accept-edits` chỉ là
+kiểm tra cấu hình/chế độ CLI, **chưa chứng minh cô lập lệnh shell**. Vì các
+provider có thể có tool thực thi khác, chỉ triển khai Worker khi host đã
+chứng minh cơ chế quyền hạn thực sự hạn chế được lệnh. Bằng chứng này
+phải được xác minh độc lập trước khi cho phép merge production.
+Không thay đổi bằng chứng của những run đã import trước đó.
+
+`Pipeline.start/resume` và `Scheduler` vẫn giữ chế độ mặc định cũ dành
+cho caller nội bộ/kiểm thử để không ngầm thay đổi contract API hiện hữu;
+đường đi CLI sản xuất truyền `defer_verification=True` rõ ràng.
+
 ## Tra cứu nhanh: trường hợp và lệnh chạy
 
 Chạy tại thư mục gốc repository, với môi trường và CLI đã cài/xác thực:
@@ -16,8 +44,9 @@ Thay `T018` bằng task cần chạy; thay `RUN_ID` bằng `run_id` trong kết 
 | Chạy mọi task READY theo DAG, dừng mỗi Pipeline ở audit | `python -m tools.orchestrator schedule --no-integrate` |
 | Chạy theo DAG và cho phép tích hợp cục bộ qua Pipeline | `python -m tools.orchestrator schedule --integrate` |
 | Xem cấu hình, worktree và luồng dự kiến; chưa chạy model | `python -m tools.orchestrator run T018 --dry-run` |
-| Chạy triển khai → audit → sửa lỗi; chưa commit/merge vào main | `python -m tools.orchestrator run T018 --no-integrate` |
-| Chạy toàn bộ, cho phép commit và tích hợp vào main sau khi đạt kiểm tra | `python -m tools.orchestrator run T018 --integrate` |
+| Triển khai mã và dừng ở `IMPLEMENTED` trước host audit | `python -m tools.orchestrator run T018 --no-integrate` |
+| Host chủ động kiểm tra candidate, không tự chạy thêm Worker | `python -m tools.orchestrator verify-candidate T018 --run-id RUN_ID --no-integrate` |
+| Tạo run (chưa tự kiểm thử/tích hợp); thực hiện `verify-candidate` riêng, sau đó `resume --integrate` | `python -m tools.orchestrator run T018 --no-integrate` |
 | Xem trạng thái lần chạy mới nhất | `python -m tools.orchestrator status T018` |
 | Xem chính xác một lần chạy cũ | `python -m tools.orchestrator status T018 --run-id RUN_ID` |
 | Tiếp tục một run đang ở điểm ổn định, chưa tích hợp | `python -m tools.orchestrator resume T018 --run-id RUN_ID --no-integrate` |
