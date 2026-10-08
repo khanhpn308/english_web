@@ -1084,6 +1084,7 @@ def test_codex_worker_full_access_does_not_elevate_readonly(
     assert command[command.index("-a") + 1] == "never"
 
 
+@pytest.mark.parametrize("readonly", [False, True])
 @pytest.mark.parametrize(
     "provider,allow_process,full_access",
     [
@@ -1101,6 +1102,7 @@ def test_t090_worker_cli_fails_closed_before_any_process(
     provider: str,
     allow_process: bool,
     full_access: bool,
+    readonly: bool,
 ) -> None:
     from tools.orchestrator import runtime
     from tools.orchestrator.core import WorkerResult
@@ -1124,7 +1126,7 @@ def test_t090_worker_cli_fails_closed_before_any_process(
             output=WorkerResult,
             artifacts=tmp_path,
             name="blocked-worker",
-            readonly=False,
+            readonly=readonly,
         )
     assert not (tmp_path / "received.json").exists()
     assert not (tmp_path / "blocked-worker.log.json").exists()
