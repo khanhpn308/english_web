@@ -613,6 +613,49 @@ def test_worker_configuration_rejects_non_code_only(repository: Path) -> None:
 
 
 
+def test_explicit_host_verification_is_deferred_until_requested(repository: Path) -> None:
+    agents = FakeAgents()
+    pipeline = Pipeline(repository, configuration(integrate=False), agents)
+    state = pipeline.start("T100", defer_verification=True)
+    assert state.state == State.IMPLEMENTED
+    assert agents.calls == ["Plan", "WorkerResult"]
+    assert "audit_checks" not in state.artifacts
+
+    # A normal resume cannot silently run tests after a Worker handoff.
+    pending = pipeline.resume("T100", state.run_id, defer_verification=True)
+    assert pending.state == State.IMPLEMENTED
+    assert agents.calls == ["Plan", "WorkerResult"]
+
+    # Only the separately authorized host verification advances the state.
+    verified = pipeline.resume(
+        "T100", state.run_id, defer_verification=False, stop_after_audit=True
+    )
+    assert verified.state == State.AUDIT_PASS
+    assert verified.verified_digest == verified.audited_digest
+    assert agents.calls == ["Plan", "WorkerResult", "Audit"]
+
+
+def test_explicit_host_verification_stops_before_automatic_fix(repository: Path) -> None:
+    agents = FakeAgents(failures=1)
+    pipeline = Pipeline(repository, configuration(integrate=False), agents)
+    first = pipeline.start("T100", defer_verification=True)
+    assert first.state == State.IMPLEMENTED
+
+    audited = pipeline.resume(
+        "T100", first.run_id, defer_verification=False, stop_after_audit=True
+    )
+    assert audited.state == State.AUDIT_FAIL
+    assert agents.worker_calls == 1
+    assert "Fix" not in agents.calls
+
+    # The next host resume explicitly dispatches the Fix Worker, not tests.
+    fixed = pipeline.resume("T100", first.run_id, defer_verification=True)
+    assert fixed.state == State.IMPLEMENTED
+    assert agents.worker_calls == 2
+    assert agents.calls[-2:] == ["Fix", "WorkerResult"]
+    assert fixed.verified_digest == ""
+
+
 @pytest.mark.parametrize("failures", [0, 1])
 def test_real_git_pipeline_pass_and_fix(repository: Path, failures: int) -> None:
     agents = FakeAgents(failures=failures)
