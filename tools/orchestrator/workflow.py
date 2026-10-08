@@ -1128,7 +1128,12 @@ class Pipeline:
         return state
 
     def resume(
-        self, task: str, run_id: str | None = None, *, defer_verification: bool = False
+        self,
+        task: str,
+        run_id: str | None = None,
+        *,
+        defer_verification: bool = False,
+        stop_after_audit: bool = False,
     ) -> RunState:
         directory = self.run_path(task, run_id)
         with (
@@ -1261,7 +1266,8 @@ class Pipeline:
                         raise OrchestratorError("Source changed after audit; evidence stale")
                     self.scope(state, contract)
                 return self.drive(
-                    directory, state, card, defer_verification=defer_verification
+                    directory, state, card, defer_verification=defer_verification,
+                    stop_after_audit=stop_after_audit
                 )
             except (OrchestratorError, OSError, ValidationError) as error:
                 return self.fail(directory, state, error)
@@ -2323,7 +2329,12 @@ class Pipeline:
         self.save(directory, state)
 
     def drive(
-        self, directory: Path, state: RunState, card: TaskCard, *, defer_verification: bool = False
+        self, directory: Path,
+        state: RunState,
+        card: TaskCard,
+        *,
+        defer_verification: bool = False,
+        stop_after_audit: bool = False,
     ) -> RunState:
         context = task_context(card, state)
         if state.state == State.READY:
@@ -2361,6 +2372,9 @@ class Pipeline:
             contract = self.contract(directory, state)
             validate_contract(contract, card, state)
             if state.state == State.AUDIT_FAIL:
+                if stop_after_audit:
+                    self.report(directory, state)
+                    return state
                 if state.fix_cycle >= state.max_fix_cycles:
                     raise OrchestratorError(
                         "Maximum fix cycles reached; unresolved audit findings retained"
