@@ -1128,6 +1128,8 @@ def test_t090_worker_cli_fails_closed_before_any_process(
         )
     assert not (tmp_path / "received.json").exists()
     assert not (tmp_path / "blocked-worker.log.json").exists()
+    assert not (tmp_path / "blocked-worker.schema.json").exists()
+    assert not (tmp_path / "blocked-worker.response.json").exists()
 
 
 @pytest.mark.parametrize(
