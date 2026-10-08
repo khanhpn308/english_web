@@ -2435,7 +2435,8 @@ class Pipeline:
         self.save(directory, state)
 
     def drive(
-        self, directory: Path,
+        self,
+        directory: Path,
         state: RunState,
         card: TaskCard,
         *,
@@ -2518,7 +2519,10 @@ class Pipeline:
                 from tools.orchestrator.runtime import is_worker_code_only
 
                 if not is_worker_code_only(self.config.roles["worker"]):
-                    state.last_error = "BLOCKED: Configuration cannot guarantee Worker code-only execution"
+                    state.last_error = (
+                        "BLOCKED: Worker code-only configuration preflight rejected the "
+                        "provider permissions; host tool isolation must also be independently verified"
+                    )
                     self.move(directory, state, State.BLOCKED)
                     self.report(directory, state)
                     return state
@@ -2636,8 +2640,12 @@ class Pipeline:
                     ):
                         raise OrchestratorError("Host probe binding identity mismatch")
                     params = binding.get("validated_parameters")
-                    if not isinstance(params, dict):
-                        raise OrchestratorError("Host probe parameters malformed")
+                    if (
+                        not isinstance(params, dict)
+                        or not isinstance(binding.get("request_digest"), str)
+                        or not isinstance(binding.get("probe_id"), str)
+                    ):
+                        raise OrchestratorError("Host probe request binding malformed")
                     evidence = ProbeEvidence.model_validate(read_json(probe_path))
                     validate_probe_evidence(
                         evidence,
