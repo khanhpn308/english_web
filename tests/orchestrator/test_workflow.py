@@ -612,7 +612,6 @@ def test_worker_configuration_rejects_non_code_only(repository: Path) -> None:
     assert agents.calls == ["Plan"]
 
 
-
 def test_explicit_host_verification_is_deferred_until_requested(repository: Path) -> None:
     agents = FakeAgents()
     pipeline = Pipeline(repository, configuration(integrate=False), agents)
@@ -641,9 +640,7 @@ def test_explicit_host_verification_stops_before_automatic_fix(repository: Path)
     first = pipeline.start("T100", defer_verification=True)
     assert first.state == State.IMPLEMENTED
 
-    audited = pipeline.resume(
-        "T100", first.run_id, defer_verification=False, stop_after_audit=True
-    )
+    audited = pipeline.resume("T100", first.run_id, defer_verification=False, stop_after_audit=True)
     assert audited.state == State.AUDIT_FAIL
     assert agents.worker_calls == 1
     assert "Fix" not in agents.calls
