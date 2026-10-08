@@ -1,4 +1,8 @@
-<<<<<<< HEAD
+## 08/10/2026 - T023 merge conflict resolution (Asia/Bangkok)
+
+- Resolved only `backend/app/main.py`, `contracts/openapi.json`, `frontend/src/shared/api/generated.ts` and `docs/changelogs.md` in the existing merge. Retained T027 search service, cursor signing and routes alongside T023 source synchronization, watcher lifecycle and routes; combined the existing API definitions and preserved both changelog histories.
+- Verification deferred to the host as requested. Existing staged changes and task status remain untouched; no staging, commit or merge finalization performed.
+
 ## 07/10/2026 - T089-R3: verified external candidate import control plane (Asia/Bangkok)
 
 - Status: `IMPLEMENTATION_READY_FOR_HOST_VERIFICATION`. Implemented the host-authoritative verified external candidate import control plane (`import-candidate` CLI command and `Pipeline.import_candidate()`):
@@ -367,6 +371,35 @@
 - Verification: fan-out plus timeout compatibility 31 passed, 224 deselected (54.00s); exact focused command 25 passed, 230 deselected (33.97s); final extended run 317 passed, 4 failed (241.35s), exit 1; all four failures are the out-of-scope scheduler fake provider rejecting ReviewShard (full log `/tmp/t086-orchestrator-regression.log`). Ruff check/format (10 files), Mypy (6 source files) and diff-check pass. First extended run: 310 passed, 10 failed (261.34s); six allowed timeout expectations corrected, four scheduler SyntheticProvider failures require supporting the new ReviewShard output.
 - Status: `BLOCKED_FOR_SCOPE_EXTENSION` pending authorization to update only the fake-provider fixture in `tests/orchestrator/test_scheduler.py`. No assertion weakened or test skipped, no production fallback, no scheduler/runtime/config/dependency/product or T023/T084/T085 changes. Starting HEAD `da662a3dc5af7dd2b2c8f44dbaff08031b46fe0c`; no commit, merge, rebase, reset, clean or push. No real inference/network tests, wall-clock speed assertion, or T023 speedup claim. Documentation follows documentation-and-adrs.
 
+## 05/10/2026 - T023: Startup/watcher sync và source API - Audit Remediation (Asia/Bangkok)
+
+- Implemented `SourceWatcher` in `backend/app/adapters/watcher.py`: background thread polling/debouncing filesystem events with threadsafe shutdown, typed `on_error` callback invocation, error suppression, and event storm coalescing.
+- Integrated `SourceFileAdapter` (T021) into `SyncService` (`backend/app/application/sync.py`):
+  - F6: Strict filesystem safety and validation: enforces bounded source IDs, safe relative paths, symlink/reparse/junction rejections, hardlink refusal (`SECURITY_VIOLATION`), and read-only checks (`ACCESS_DENIED`) without feeding invalid content to downstream projections; floor constraints verified clean.
+  - F1: T022 write fencing & stale baseline protection: re-queries `source_write_journal` inside per-file writer transactions (`PREPARED`, `SOURCE_REPLACED`, `DEGRADED`); fences active source IDs and planned canonical forms from mutation and missing-state flagging; aborts/defers if source file content hash or revision drifted from baseline.
+  - F2: Comprehensive multi-source semantic conflict detection: detects conflicting semantic variants across ABA/AAB permutations and invalidates all participating sources (`AMBIGUOUS_CONTENT`) without arbitrary winner selection.
+  - F3: Single snapshot consistency for pagination: unifies snapshot token calculation and cursor row query within a single database transaction, eliminating concurrent mutation anomalies.
+  - F4: Truthful receipts and durable sync metadata: `finished_at` is preserved as null for in-flight/queued runs, non-terminal runs are never permanently cached in memory, initial `result_ref` is recorded on startup, and ledger failure recovery records status `UNKNOWN` if local effects were committed.
+  - F5: Canonical vocabulary verification provenance & SRS review card lifecycle: integrates `save_canonical_word_form` to preserve field-level verification status across syncs; recomputes `verification_summary`; avoids revision increment when content unchanged; preserves card review state on non-learning edits; resets card to box 0 once on learning edits; app-write watcher echo does not double reset.
+  - Cryptographic snapshot token in opaque cursors: HMAC-SHA256 pagination tokens bind to all source rows `(id, revision, content_hash, status)` to reliably detect concurrent source revisions and edits.
+  - Consistent numeric `sourceRevision`: guarantees valid integer revisions (falling back to database `COALESCE(MAX(revision), 0)`) across all sync runs, including empty/no-change runs.
+  - Normalized date parsing: converts legacy `DD-MM-YYYY.md` filenames to canonical ISO `YYYY-MM-DD` (`2026-09-29`) and rejects impossible dates (`2026-02-30`) with `422 VALIDATION_ERROR`.
+  - Exact opaque ID matching: replaced SQLite `LIKE` pattern with exact prefix and delimiter substring matching to prevent wildcard exploitation.
+- Hardened source HTTP routes in `backend/app/http/sources.py`:
+  - `GET /api/v1/sources`: cursor pagination, `status` and `noteDate` filters, strict unknown query parameter rejection (`400 INVALID_QUERY`), expired/tampered cursor rejection (`409 CURSOR_EXPIRED`), calendar date validation via `date.fromisoformat`, and session authentication.
+  - `POST /api/v1/sync-runs`: durable operation ledger integration with idempotency keys, replayed identical requests, key reused mismatch rejection (`422 IDEMPOTENCY_KEY_REUSED`), typed `409` conflict responses (`SyncRunConflictErrorResponse`) with retry envelope, typed 409 `IDEMPOTENCY_IN_FLIGHT` on unresolvable claims, and `202 ACCEPTED` responses.
+  - `GET /api/v1/sync-runs/{syncRunId}`: typed status inspection, regex-bounded opaque ID validation, and 404 for missing run IDs.
+- Updated `backend/app/main.py`: wired `SyncService` and `SourceWatcher` into FastAPI lifespan, performing durable source pre-registration, checking persistent `DEGRADED` journal state, launching background watcher with `on_error` degradation hook, and failing closed if storage is absent or degraded.
+- Exported and validated contract specifications:
+  - `contracts/openapi.json`: regenerated via `npm run export:contract`.
+  - `frontend/src/shared/api/generated.ts`: regenerated client types including `SyncRunConflictErrorResponse`.
+  - `npm run test:contract`: 5/5 contract tests pass.
+- Verified test suite:
+  - `backend/tests/test_source_sync.py`: 25/25 focused behavioral, boundary, write-fencing, and audit regression tests pass.
+  - Full dependency regression suite: 339 passed across `test_source_journal.py`, `test_source_files.py`, `test_operations.py`, `test_vocabulary_storage.py`, `test_search_index.py`, `test_srs.py`, and `test_ai_admission.py`.
+  - Portable gate checks: `npm run check:task:portable` passed 100% across all 8 gates (check-fast-active, frontend-coverage, portable-pytest, security-secrets, security-code, security-deps, architecture, coverage-check).
+  - Quality gates: `ruff check`, `ruff format --check`, and `mypy` all pass with 0 errors across all modified files.
+
 ## 05/10/2026 - T084 performance gate remediation: parallel portable-task runner & coverage synchronization (Asia/Bangkok)
 
 - `package.json`: updated `check:task:portable` to delegate to generic runner mode `bash .agent/scripts/run-gates.sh portable-task` rather than serializing all eight gates with `&&`. Full gates (`check:task`, `check:task:active`, `check:full`) and `test:python:portable` remain unchanged.
@@ -535,7 +568,6 @@
   `đ`/`Đ`, infix, POS và các trường hợp zero/single/multi-match.
 - Ghi rõ profile Windows 11/Python 3.12/SQLite và ranh giới bằng chứng: T042
   không tuyên bố kết quả hiệu năng; T065 sở hữu timing/p95.
-=======
 ## 03/10/2026 - T027: Sửa F1–F6 sau independent audit (Asia/Bangkok)
 
 - T026: thêm iterator candidate đầy đủ, bounded memory trong `search_index.py`, dùng chung matching/scoring với legacy `search()`; thêm dependency regression tests theo scope owner cấp.
@@ -548,7 +580,6 @@
 - Đã triển khai collection/detail read API trên production app factory, dùng T026 Vietnamese projection, allowlist filter/sort, source-validity filtering và cursor HMAC process-local.
 - Đã thêm hai common error mappings được owner cấp scope: `INVALID_QUERY` và `CURSOR_EXPIRED`.
 - Tập trung 5 test T027, contract generation hai lần deterministic và contract tests đều đạt; full backend suite còn các Windows-native fail-closed inherited tests trên Linux.
->>>>>>> feature/task-t027-search-api
 
 ## 02/10/2026 - T021: Tích hợp adapter source Windows sau xác nhận native PASS (Asia/Bangkok)
 
