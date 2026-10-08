@@ -360,7 +360,7 @@ class CliProvider:
         # restricted edit-only tool broker is independently attested, never
         # dispatch a mutable Worker through a shell-capable provider CLI.
         # This check precedes even CLI capability probes/subprocess launch.
-        if not readonly and output is WorkerResult:
+        if issubclass(output, WorkerResult):
             if not is_worker_code_only(role):
                 raise OrchestratorError(
                     "T090 BLOCKED: unsafe Worker process/full-access permissions"
