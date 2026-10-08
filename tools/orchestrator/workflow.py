@@ -1113,9 +1113,7 @@ class Pipeline:
                     "baseline",
                 )
                 self.move(directory, state, State.READY)
-                return self.drive(
-                    directory, state, card, defer_verification=defer_verification
-                )
+                return self.drive(directory, state, card, defer_verification=defer_verification)
             except (OrchestratorError, OSError, ValidationError) as error:
                 return self.fail(directory, state, error)
             except KeyboardInterrupt:
@@ -1274,8 +1272,11 @@ class Pipeline:
                         raise OrchestratorError("Source changed after audit; evidence stale")
                     self.scope(state, contract)
                 return self.drive(
-                    directory, state, card, defer_verification=defer_verification,
-                    stop_after_audit=stop_after_audit
+                    directory,
+                    state,
+                    card,
+                    defer_verification=defer_verification,
+                    stop_after_audit=stop_after_audit,
                 )
             except (OrchestratorError, OSError, ValidationError) as error:
                 return self.fail(directory, state, error)
@@ -2129,7 +2130,10 @@ class Pipeline:
             # Host runs probes in a private frozen workspace. Scratch artifacts are not
             # authoritative until independently checked and copied into the sealed run.
             with self.verification_workspace(
-                working, snapshot, state.base_sha, state.task_id,
+                working,
+                snapshot,
+                state.base_sha,
+                state.task_id,
                 f"{state.run_id}-probe-{shard.perspective}",
             ) as (probe_workspace, probe_git):
                 scratch_dir = probe_workspace.parent / "scratch_artifacts"
