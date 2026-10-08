@@ -2,9 +2,26 @@
 
 **Task ID:** `T090`  
 **Title:** Enforced code-only Worker boundary and auditable infrastructure ownership  
-**Status:** `SUPERSEDED_BY_OWNER_DECISION`  
+**Status:** `IN_PROGRESS`  
 **Goal:** Thiết lập ranh giới quyền thực thi có thể kiểm chứng: AI Worker được đọc/sửa đúng mã nguồn đã phê duyệt nhưng không được chạy shell, Git, Python, test, build hay subprocess (tiến trình con). Host độc quyền các thao tác tất định. Đồng thời xét duyệt hợp lệ tám file hạ tầng đã xuất hiện trên T089 PR #5 nhưng nằm ngoài allowlist gốc, **không chỉnh sửa hoặc hợp thức hóa hồi tố task card hay bằng chứng T089**.  
 **Level:** High
+
+## Owner decision reversal — 2026-10-08 (current authority)
+
+Owner explicitly **revoked** the subsequent AGY auto-process permission decision:
+T090 strict code-only isolation is mandatory again and T089 is reopened as
+`REOPENED_PENDING_T090`. The previous authorization to merge T089 is retained
+as a historical Git event (PR #5, merge commit `835d85a8dafa74657f06597bf8903134bdd721a3`),
+not a current acceptance decision. Do not rewrite, delete, reset or pretend to
+undo that merge. T089 completion must be re-adjudicated only after T090 security
+verification. No additional task should be automatically launched.
+
+**Immediate security policy:** `allow_process=false` and no
+`--dangerously-skip-permissions` for Worker; until a verifiable provider/OS
+restriction is available, Worker CLI dispatch must fail closed instead of
+relying on prompts, approval modes or settings alone. Re-enable only after
+independent synthetic denial/allowed-edit proof. Historical CI evidence is
+preserved but does not prove isolation.
 
 ## Owner decision — 2026-10-08 (supersedes code-only gate)
 
@@ -54,6 +71,8 @@ T088 đã tích hợp. T089 PR #5 hiện là *unmerged candidate* nên không kh
 - `docs/ci-host-verification.md`
 
 ### T090-specific isolation integration and regression coverage
+
+- `tasks/t089-evidence-bundle-reviewer-probe-protocol.md` — reopened status only, explicitly requested by owner
 
 - `tools/orchestrator/workflow.py`
 - `tests/orchestrator/test_workflow.py`
