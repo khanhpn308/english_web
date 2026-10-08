@@ -3,6 +3,8 @@ import './shell.css';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { AiConsentProvider } from '@/features/consent/AiConsentGate';
+import { AiConsentPanel } from '@/features/consent/AiConsentPanel';
 
 
 export interface RouteMatch {
@@ -309,11 +311,13 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
 
       <main id="main-content" className="flex-1 w-full max-w-[1200px] mx-auto p-4 sm:p-6 outline-none" tabIndex={-1} role="main">
         <ErrorBoundary>
+          <AiConsentProvider>
           {matchedRoute ? (
             <article className="flex flex-col gap-6">
               <h1 className="screen-view__title m-0 text-3xl font-bold text-foreground outline-none" tabIndex={-1}>
                 {matchedRoute.title}
               </h1>
+              {matchedRoute.routeId === 'status' && <AiConsentPanel />}
               <Card role="region" aria-label="Thông báo trạng thái tính năng">
                 <CardHeader>
                   <CardTitle className="text-primary text-lg">Tính năng đang được xây dựng (chưa khả dụng) trong giai đoạn khởi tạo shell.</CardTitle>
@@ -350,6 +354,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
               </div>
             </article>
           )}
+          </AiConsentProvider>
         </ErrorBoundary>
       </main>
     </div>
