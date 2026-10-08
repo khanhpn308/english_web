@@ -23,6 +23,8 @@ Thay `T018` bằng task cần chạy; thay `RUN_ID` bằng `run_id` trong kết 
 | Tiếp tục một run đang ở điểm ổn định, chưa tích hợp | `python -m tools.orchestrator resume T018 --run-id RUN_ID --no-integrate` |
 | Run đã AUDIT_PASS: tiếp tục để commit, kiểm tra và tích hợp | `python -m tools.orchestrator resume T018 --run-id RUN_ID --integrate` |
 | Thử lại sau khi sửa nguyên nhân lỗi, nếu run đủ điều kiện retry | `python -m tools.orchestrator retry T018 --run-id RUN_ID --no-integrate` |
+| Tạo run mới để audit lại candidate đã đóng băng từ FAILED/AUDIT_RUNNING | `python -m tools.orchestrator recover-candidate T089 --run-id SOURCE_RUN_ID --expected-source-digest SHA256 --no-integrate` |
+| Nhập candidate đã thẩm định từ ngoài vào run mới có thẩm quyền | `python -m tools.orchestrator import-candidate T089 --run-id SOURCE_RUN_ID --source-worktree PATH --expected-source-digest SHA256 --provenance-manifest PATH --expected-provenance-digest SHA256 --no-integrate` |
 | Lỗi cũ `agy lacks required capability: --print`: sau khi cập nhật bản sửa, tạo lần thử mới | `python -m tools.orchestrator run T021 --no-integrate` |
 | Chạy Worker GPT bằng tệp cấu hình riêng đã tạo | `python -m tools.orchestrator run T018 --config orchestrator.gpt.local.yaml --no-integrate` |
 | Khóa tích hợp đang bận: chạy lại sau khi task khác tích hợp xong | `python -m tools.orchestrator resume T018 --run-id RUN_ID --integrate` |
@@ -348,7 +350,158 @@ AI semantic/adversarial reasoning (T089+)
 ### Tính tương thích ngược và phạm vi hoãn lại
 - Artifact lịch sử `audit_checks` giữ nguyên format và metadata kết quả. Các trường identity, declaration digest và monotonic duration mới nằm trong EvidenceBundle, không thêm vào historical artifact.
 - T088 bổ sung artifact `evidence_bundle` song song bên cạnh `audit_checks`.
-- T088 không sửa đổi prompt hay schema của các AI reviewer; việc đưa EvidenceBundle vào giao thức reviewer và triển khai cơ chế `ProbeRequest` thuộc phạm vi của task tiếp theo (T089).
+
+## T089: Evidence-Aware Semantic Reviewer Protocol và Safe Host-Owned Probes
+
+Status: `DONE`. Authoritative host verification PASS: probes test suite 44 passed; core/evidence/workflow probe suite 27 passed; concurrent_audit 43 passed; parallel_review 25 passed; scheduler 48 passed; full orchestrator 447 passed; Ruff, Ruff format, Mypy and `git diff --check` PASS.
+
+T089 hoàn thiện trust boundary giữa deterministic control plane (host) và AI semantic reviewers/auditor:
+```text
+                   frozen candidate
+                         |
+              +----------+----------+
+              |                     |
+              v                     v
+     HOST verification        semantic reviewers
+              |                     |
+              |                findings and/or
+              |                 ProbeRequest
+              |                     |
+              +----------+----------+
+                         |
+                         v
+                  parent deterministic join
+                         |
+                         v
+                   EvidenceBundle
+                         |
+             validate ProbeRequest(s)
+                         |
+                         v
+                    ProbeCatalog
+               (host-owned registry)
+                         |
+                         v
+                  deterministic probe
+                         |
+                         v
+                    ProbeEvidence
+                         |
+             optional bounded reviewer resume
+                         |
+                         v
+                    ReviewBundle
+                         |
+                         v
+                 authoritative Auditor
+                         |
+                         v
+                   host final gate
+```
+
+### Nguyên tắc kiến trúc cốt lõi
+1. **AI yêu cầu quan sát có kiểu, host định đoạt cách thực thi:**
+   - AI có thể trả về `ReviewShard` chứa các phát hiện (`findings`) và tùy chọn một `probe_request: ProbeRequest | None`.
+   - AI tuyệt đối không thể gửi `command`, `argv`, `shell`, `executable`, `script`, `powershell`, `bash`, hay biến môi trường.
+   - Bất kỳ trường nào trong `FORBIDDEN_PROBE_OVERRIDE_KEYS` xuất hiện ở root model hoặc trong parameters dictionary đều khiến schema validation thất bại ngay lập tức (`extra="forbid"`).
+2. **Host-Owned ProbeCatalog:**
+   - Chỉ code repository phía host mới có quyền đăng ký hoặc quản lý `ProbeDefinition` trong `ProbeCatalog`.
+   - Model output không thể đăng ký thêm probe mới hay biến đổi logic của probe hiện có.
+   - Catalog ban đầu bao gồm 2 probe an toàn:
+     - `source_inspection`: tìm kiếm literal theo dòng thuần Python (không qua shell), giới hạn file 1 MiB, tối đa 50 dòng kết quả, kiểm tra path traversal và cấm các đường dẫn transient/ignored (`.git`, `node_modules`, `.venv`, `.pytest_cache`, v.v.).
+     - `git_diff_check`: thực thi lệnh cố định `["git", "diff", "--check"]`, không nhận tham số (`_validate_git_diff_check_params` cấm tham số).
+3. **Exact Candidate Binding & Stale Detection:**
+   - `ProbeRequest` và `ProbeEvidence` bắt buộc phải bind chính xác vào candidate identity (`task_id`, `base_sha`, `branch`, `source_digest`).
+   - Nếu source code thay đổi sau khi reviewer gửi request nhưng trước khi host thực thi, host lập tức fail closed (`STALE_PROBE_REQUEST`). Không bao giờ thực thi một probe trên source đã stale.
+4. **Preserve T087 Concurrency:**
+   - Initial reviewer fan-out diễn ra song song với luồng xác minh thực thi (`collect_verification`), bảo toàn tối ưu thời gian chạy của T087.
+   - Initial reviewers nhận `ReviewerContext` với `verification_status="PENDING"` và bị cấm đưa ra kết luận PASS/FAIL về kiểm tra thực thi.
+   - Sau khi các luồng join và `EvidenceBundle` được hoàn tất, nếu có reviewer yêu cầu probe hợp lệ, host thực thi probe và cho phép tối đa 1 lượt resume reviewer.
+5. **Bounded 1-Round Probe:**
+   - Mỗi reviewer perspective chỉ được thực hiện tối đa 1 vòng probe request.
+   - Reviewer resume nhận `ReviewerContext` với `round_index=2` và structured `ProbeEvidence`.
+   - Nếu reviewer cố tình yêu cầu probe lần 2 ở vòng resume, host lập tức fail closed với `OrchestratorError("Reviewer exceeded probe round limit: second probe request forbidden")`.
+6. **Deterministic Ordering:**
+   - Nếu nhiều reviewer cùng yêu cầu probe, việc thực thi probe và resume reviewer diễn ra xác định theo thứ tự canonical declaration của `ReviewPerspective` (`CORRECTNESS` -> `VERIFICATION` -> `SECURITY`).
+7. **Parent-Only Authority & Final Gate:**
+   - Reviewer threads và probe executors không có quyền ghi state hay đăng ký authoritative artifacts. Chỉ parent process mới đăng ký `ProbeEvidence` và `ReviewBundle`.
+   - Final Auditor nhận `EvidenceBundle.semantic_payload()` hoàn chỉnh, candidate identity, `ReviewBundle`, và toàn bộ `ProbeEvidence`.
+   - Auditor PASS không thể override lỗi kiểm tra cơ học (`verification_failed and audit.status == "PASS"` lập tức raise `OrchestratorError`).
+
+## T089-R2: Agent Liveness Watchdog và Bounded Final-Auditor Context
+
+Hạ tầng remediation giải quyết sự cố Auditor bị stall/treo trong T089 và thu gọn context prompt của final Auditor:
+
+### 1. Host-Owned Silence/Stall Watchdog (Khắc phục treo tiến trình AI)
+- **Tách biệt với timeout tổng**: `timeout_seconds` tiếp tục quản lý thời gian thực thi tối đa (nếu được cấu hình). Nếu `timeout_seconds = None`, không có deadline wall-clock tổng.
+- **Cấu hình theo Role**:
+  - `stall_timeout_seconds: StrictInt | None = None`: thời gian im lặng (không có output bytes trên stdout/stderr) trước khi vào cửa sổ xác nhận nghi vấn. Mặc định `None` để tương thích ngược hoàn toàn với các cấu hình/chạy cũ.
+  - `stall_confirm_seconds: StrictInt = 30`: thời gian trong cửa sổ xác nhận nghi ngờ stall. Nếu tiến trình phát sinh output mới trong thời gian này, nghi vấn bị hủy bỏ.
+  - `max_stall_retries: StrictInt = 1`: số lượt retry tối đa riêng biệt dành cho lỗi stall (mặc định cho phép tối đa 1 lần retry sau lần thử ban đầu).
+- **Quan sát tiến trình khách quan (Observable Progress)**:
+  - Host giám sát dung lượng file descriptor (`fstat(fd).st_size`) của stdout và stderr của subprocess.
+  - Bất kỳ byte tăng trưởng nào đều reset đồng hồ im lặng. Không dùng AI model hay heuristics cảm tính để xác định liveness.
+- **Xử lý tiến trình có kiểm soát (Process-Tree Termination)**:
+  - Khi stall được xác nhận, host gọi `_terminate_process_tree` thu dọn toàn bộ process group / process tree trên Linux/POSIX (`killpg`) và Windows (`taskkill /F /T`), không để sót tiến trình con mồ côi (orphan CLI/subprocess).
+  - Trả về `ProcessResult` với `stalled=True` và ghi nhận rõ ràng trong metadata (`normal exit`, `timed_out`, `oversized`, `stalled`).
+- **Định danh lần thử bất biến (Attempt Artifact Identity - R2B-001)**:
+  - Mỗi lần gọi provider (kể cả retry do validation hay do stall) đều nhận định danh duy nhất và bất biến:
+    - `invocation_base = f"{state.fix_cycle:02d}-{role_name}-{uuid4().hex[:8]}"`
+    - `attempt_name = f"{invocation_base}-a{attempt_index:02d}"` (ví dụ: `-a01`, `-a02`, v.v.).
+  - Mọi artifact phát sinh trong lần thử đều dùng đường dẫn bất biến theo `attempt_name`:
+    - Prompt: `<attempt_name>.prompt.md`
+    - Schema: `<attempt_name>.schema.json`
+    - Response: `<attempt_name>.response.json`
+    - Log: `<attempt_name>.log.json`
+    - Auditor context (dành riêng cho auditor): `<attempt_name>.auditor-context.json`
+    - Phản hồi bị từ chối (nếu có): `<attempt_name>.rejected.json`
+  - Không bao giờ ghi đè lên artifact của lần thử trước đã được đóng dấu (`sealed`).
+  - Sau khi mỗi attempt kết thúc: host kiểm tra toàn vẹn candidate source và protected artifacts của các attempt trước không bị suy chuyển, đóng dấu (`seal`) artifacts của attempt đó vào `state.artifact_digests` và danh sách bảo vệ, rồi mới tiến hành attempt tiếp theo.
+- **Ngân sách retry độc lập (Orthogonal Retry Budget - R2B-002)**:
+  - Duy trì hai bộ đếm độc lập:
+    - Ngân sách retry thẩm tra cấu trúc/schema lịch sử: `validation_retries <= 2` (bảo toàn hành vi lịch sử tối đa 3 lượt thử validation).
+    - Ngân sách retry stall: `stall_retries <= role.max_stall_retries` (mặc định 1, hỗ trợ cấu hình từ 0 đến 10).
+  - Lỗi stall được xác nhận **không** tiêu tốn ngân sách retry validation lịch sử.
+  - Phân loại stall hoàn toàn bằng kiểu (Typed Stall Classification - R2C-F01):
+    - `is_stall = isinstance(error, AgentStallError)`.
+    - Tuyệt đối không fallback theo chuỗi con, regex hoặc phân tích văn bản ngoại lệ (exception prose); văn bản từ model hoặc thông báo lỗi không thể tạo bằng chứng cơ học về stall.
+  - Đóng dấu toàn bộ artifact của attempt (Sealing Attempt Artifacts - R2C-F02):
+    - Sử dụng hàm đơn nhất `seal_attempt_artifacts` cho cả 3 trường hợp: retryable failed attempt, terminal confirmed stall, và successful attempt.
+    - Kiểm tra tập suffix cố định `KNOWN_ATTEMPT_ARTIFACT_SUFFIXES`: `.prompt.md`, `.auditor-context.json`, `.schema.json`, `.response.json`, `.log.json`, `.rejected.json`.
+    - Đối với mỗi tệp thông thường, không phải symlink (regular non-symlink file), tính SHA-256 digest, đăng ký vào `state.artifact_digests` và thêm vào `protected` tracking. Không quét/glob tệp tùy ý.
+    - Tuyệt đối không ghi đè hoặc làm biến đổi artifact đã đóng dấu trước đó.
+  - Khi cạn kiệt ngân sách retry stall (terminal confirmed stall):
+    - Host xác nhận candidate source và protected artifacts không đổi.
+    - Đóng dấu (`seal`) toàn bộ attempt artifacts hiện có (`.prompt.md`, `.auditor-context.json`, `.schema.json`, `.log.json`, `.response.json` nếu có) vào `state.artifact_digests`.
+    - Host bắt buộc gán `current_agent = None` và lưu `state.json` trước khi nâng lỗi `AgentStallError`.
+    - Pipeline chuyển sang trạng thái: `state = FAILED`, `blocked_from = <active stage>`, `current_agent = None`.
+
+### 2. Bounded Final-Auditor Context (AuditorContextV1)
+- **Ràng buộc ngữ cảnh chuẩn tắc (Authoritative Auditor Context Binding - R2B-003)**:
+  - Trước mỗi lần dispatch final Auditor, host lưu trữ tệp ngữ cảnh bất biến:
+    `<attempt_name>.auditor-context.json` chứa chính xác các byte của `serialize_auditor_context(context)`.
+  - Đăng ký SHA-256 của tệp này vào `state.artifact_digests` và protected artifact tracking.
+  - Nếu retry chỉ thay đổi prompt hướng dẫn mà ngữ cảnh không đổi, digest của context giữ nguyên nhưng prompt artifact phân biệt rõ ràng giữa các attempt.
+- **Thay thế prompt dư thừa bằng một cấu trúc dữ liệu chuẩn hóa**:
+  - `AuditorContextV1` mang đầy đủ thông tin ngữ nghĩa cần thiết:
+    - `schema_version`: 1
+    - `candidate_identity`: `task_id`, `base_sha`, `branch`, `source_digest`
+    - `contract`: `title`, `objective`, `allowed_paths`, `forbidden_paths`, `acceptance_criteria` (giữ nguyên thứ tự khai báo), `risk_level`, `stop_conditions`
+    - `worker_summary`: `status`, `changed_files`, `known_issues` (loại bỏ `commands_run` vì quyền thực thi thuộc về EvidenceBundle)
+    - `evidence_bundle`: `EvidenceBundle.semantic_payload()` chính xác 1 lần
+    - `review_bundle`: `ReviewBundle` đầy đủ chính xác 1 lần
+    - `probe_evidence`: danh sách kết quả probe của cycle hiện tại
+    - `artifact_digests`: bản đồ hash của các artifact phục vụ ràng buộc tính toàn vẹn
+- **Loại bỏ hoàn toàn thông tin dư thừa khỏi model prompt**:
+  - Không nhúng `TaskCard.context_text` hoặc bản sao thứ hai của `TaskCard`.
+  - Không nhúng raw `Plan` hay `worker_prompt`.
+  - Không nhúng `WorkerResult.commands_run` hay stdout/stderr kiểm tra thô.
+  - Không nhúng lặp lại `ReviewBundle` lần thứ hai ở cuối prompt.
+- **Giới hạn kích thước nghiêm ngặt (Context Size Guard)**:
+  - Giới hạn vận hành: `canonical AuditorContext JSON <= 64 KiB` (UTF-8 bytes).
+  - Tuần tự hóa tất định (deterministic serialization: sorted keys, compact separators `(",")`, `(":")`, ensure_ascii=False).
+  - Nếu payload bắt buộc vượt quá 64 KiB, host **FAIL CLOSED** ngay lập tức trước khi gọi provider, tiêu tốn **0 lượt gọi model (0 attempts consumed)**.
+  - Cung cấp chẩn đoán chi tiết dung lượng từng thành phần (`auditor_context_component_sizes`) mà không để lộ nội dung thô bí mật.
 
 ## Level 2: lập lịch DAG toàn repository (T079)
 
@@ -786,6 +939,128 @@ báo BLOCKED được đưa vào vòng Fix hiện có (mặc định tối đa b
 phạm vi, test và audit vẫn phải đạt trước tích hợp. Lỗi thật hết số lần thử trả
 FAILED cùng báo cáo cuối. Số lần gọi agent có thể tăng; giới hạn áp dụng cho từng
 lần gọi, tách khỏi số vòng sửa code. Không retry application AI.
+
+### Recover a frozen failed audit candidate
+
+T089 recovery remediation adds a host-only construction command. It accepts only
+historical `FAILED` runs with `blocked_from == AUDIT_RUNNING` and
+`current_agent is None`. The historical run remains failed. Its `state.json`, run
+artifacts, Git index/history and candidate-authoritative source must remain unchanged.
+Ignored transient toolchains/caches are outside the candidate digest and are not
+copied into recovery authority. `Git.snapshot` does not cover ignored/transient files.
+
+```bash
+python -m tools.orchestrator recover-candidate T089 \
+  --run-id SOURCE_RUN_ID \
+  --expected-source-digest SHA256 \
+  --no-integrate
+```
+
+After success, run the exact Bash command in the CLI's `recovery_handoff.next_step`.
+It executes from the trusted control-plane worktree, NOT from the recovered candidate
+worktree. The handoff distinguishes `control_plane_cwd` and `candidate_worktree`, while
+also preserving `cwd` (pointing to control plane), `branch`, `task_id`, `run_id` and
+fixed resume `argv`, preserving the integration flag and any custom config path as an
+absolute path. The equivalent manual sequence is below. Replace placeholders using the
+recovery output.
+
+```bash
+cd -- "/absolute/control/plane/from/recovery_handoff/control_plane_cwd"
+python -m tools.orchestrator resume T089 --run-id NEW_RUN_ID --no-integrate
+```
+
+The orchestrator implementation executes from the trusted host control plane
+(incorporating R2/R3 liveness watchdog, stall retry, bounded AuditorContextV1, and
+recovery compatibility logic). The recovered candidate worktree remains strictly candidate
+data at the historical frozen digest and does NOT gain R2/R3 infrastructure source files.
+The recovery-tool CLI refuses recovered-run resume if invoked from the candidate worktree
+or using candidate Python modules, printing the exact handoff command without invoking
+Reviewer/Auditor. The normal Pipeline operates on `state.worktree_path` for candidate
+Git/source operations and reviewer/auditor working directories.
+
+Both source arguments are required. `SHA256` must be the independently approved
+frozen candidate digest, using the existing `Git.snapshot(source.base_sha)` format.
+The host calculates and compares the actual digest. There is no caller-supplied
+worktree path, patch, shell command or provider call. `--config`, `--integrate` and
+`--no-integrate` select the normal configuration and later integration policy.
+Configuration must match the source run structurally except for `integrate` and host-owned
+Role liveness fields (`stall_timeout_seconds`, `stall_confirm_seconds`, `max_stall_retries`)
+via `recovery_config_compatible()`. Changes to provider, executable, model, reasoning,
+worker_access, allow_process, base_branch, paths, setup_commands, verification commands,
+global timeout_seconds, max_fix_cycles, or skills_root are strictly rejected. The recovered
+`RunState` persists the new recovery configuration so subsequent normal `resume()` calls
+succeed under unmodified configuration equality. Recovery itself performs neither review nor
+integration.
+
+The host checks recorded task/run/repository identity, registered worktree ownership,
+branch, historical base HEAD, task snapshot, contract, plan, every sealed artifact,
+and a successfully parsed `WorkerResult` with status `IMPLEMENTED`. Actual candidate
+changes must independently pass the frozen Contract, `Pipeline.scope()`, expected
+source digest and changelog rule. Worker changed-file claims are advisory and may
+predate owner/host remediation. A mismatched claim does not reject valid host evidence;
+a claim naming out-of-scope paths never authorizes actual source changes there.
+Optional skills must still validate against their recorded references and hashes.
+Source state, artifact bytes,
+index bytes, branch and candidate digest are checked again during construction.
+
+A new run uses `<worktree_root>/<task>-<new_run_id>` and
+`agent/<task>-<new_run_id>`, starting at the historical `base_sha` even when main has
+advanced. Shared T087 materialization applies the cached binary diff, applies the
+unstaged binary diff, and copies only non-ignored untracked candidate files with
+permissions. Exact snapshot equality is required before and after fresh configured
+setup commands. Source node_modules, virtual environments, caches and ignored
+outputs are not copied. This costs a fresh setup but prevents inherited toolchain
+state from becoming new verification evidence.
+
+Only validated `task_card`, `plan`, `contract`, `worker` and optional `skills` are
+carried as raw bytes. Historical audit checks, evidence/review bundles, audit and
+rejected audit reports, probes and integration artifacts remain in the source run.
+Fresh setup evidence and a hash-registered `recovery_origin` artifact record the new
+authority. Origin schema version 1 binds task ID, source run/state digest/base/branch/
+source digest, recovery run/branch/worktree/source digest, `worker_claim_matches`,
+`worker_changed_files_digest`, `recovered_changed_files_digest`, source/recovery
+fix cycles, immutable `source_config_digest`, `recovery_config_digest`, and boolean
+`liveness_config_upgraded`. Config digests hash UTF-8 JSON of the typed configuration
+with sorted keys and compact separators `(',', ':')`. Each file-list digest hashes UTF-8 JSON
+of the sorted list with default ASCII escaping and compact separators `(',', ':')`. Historical
+Worker bytes remain unchanged. Recovery preserves `fix_cycle=source.fix_cycle` and
+`max_fix_cycles=source.max_fix_cycles`, so it cannot replenish the bounded fix budget.
+No State enum or mandatory RunState field changes are required.
+
+Construction stays `PENDING` until validation and setup succeed. Success returns
+`IMPLEMENTED` with no current agent, blocked stage, last error or inherited audit
+authority. Normal `resume` then performs fresh verification, review and audit through
+the existing path. Rejected eligibility creates no new run. A construction error
+retains a `FAILED` new run and any partial worktree for inspection; interruption
+leaves non-resumable construction evidence rather than successful recovery authority.
+Recovery does not repair the historical run or replay its Worker.
+
+### Import an externally salvaged candidate (`import-candidate`)
+
+`import-candidate` provides a host-only control-plane command to import an externally salvaged candidate into a fresh authoritative run. It accepts a historical lineage run in `FAILED` state (including lineages failing from `FIX_RUNNING` and retaining `current_agent="worker"`). The historical run remains byte-identical and sealed.
+
+```bash
+python -m tools.orchestrator import-candidate TASK \
+  --run-id HISTORICAL_RUN_ID \
+  --source-worktree PATH \
+  --expected-source-digest SHA256 \
+  --provenance-manifest PATH \
+  --expected-provenance-digest SHA256 \
+  [--config PATH] \
+  [--integrate | --no-integrate]
+```
+
+#### Locked Architecture and Host Gates
+
+The control plane enforces:
+1. **Host candidate validation**: The external worktree must be a real Git worktree belonging to the same repository, with HEAD at historical `base_sha`, and `Git.snapshot(base_sha)` exactly matching `expected_source_digest`. Symlinks in worktree or ancestry are rejected.
+2. **Host semantic evidence validation**: Untrusted provenance JSON is decoded via strict parser (rejecting duplicate keys, trailing data, NaN/Infinity, invalid UTF-8). All 9 required v1 artifacts (`source-manifest.txt`, `scout-A/B/C.packet.json`, `adjudication-packet[.compact].json`, `heavy-judge.prompt.txt`, `heavy-judge.schema.json`, `heavy-judge.response.json`) must be present, match digest and size bounds (max 256 KiB single, 2 MiB combined).
+3. **Complete semantic coverage**: Exact set equality is required: `actual_changed_paths == source_manifest == union(Scout A/B/C reviewed_files)`. No changed file may bypass semantic review. Partial salvages (such as 6 of 9 paths) fail closed.
+4. **Zero-findings v1 policy**: Scout findings must be empty, Adjudication finding count must be 0 with empty findings, and Heavy Judge decision must be `PASS` with zero confirmed findings, dismissed findings, or evidence requests.
+5. **Copied evidence independence**: Accepted artifacts are copied into the new run directory under flat sealed filenames (`00-imported-*`). The authoritative run never depends on external `/tmp` files.
+6. **Mechanical reverification**: Materializes into a managed worktree, executes setup, and deterministically reverifies contract and config verification commands.
+7. **Atomic publication**: Only when BOTH mechanical and semantic gates pass is `AUDIT_PASS` granted with `audited_digest` and `verified_digest` bound to the candidate digest. Exactly zero AI calls occur during import.
+8. **Continuation via trusted control plane**: `resume --no-integrate` leaves the run at `AUDIT_PASS` with 0 AI calls. `resume --integrate` invokes Integrator and merges without re-running ReviewShard or Audit. CLI rejects resume execution from the candidate worktree, enforcing trusted control plane execution.
 
 ### Quy ước báo cáo Auditor và sửa JSON
 

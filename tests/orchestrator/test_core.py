@@ -8,6 +8,7 @@ import sys
 from contextlib import suppress
 from multiprocessing.connection import Connection as PipeConnection
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -740,11 +741,9 @@ def test_gemini_worker_is_headless_with_session_trust(
     commands: list[list[str]] = []
     original = runtime.execute
 
-    def capture(
-        command: list[str], cwd: Path, *, timeout: int | None = None, stdin: str | None = None
-    ) -> runtime.ProcessResult:
+    def capture(command: list[str], cwd: Path, **kwargs: Any) -> runtime.ProcessResult:
         commands.append(command)
-        return original(command, cwd, timeout=timeout, stdin=stdin)
+        return original(command, cwd, **kwargs)
 
     monkeypatch.setattr(runtime, "execute", capture)
     result = CliProvider().run(
@@ -1061,11 +1060,9 @@ def test_codex_worker_full_access_does_not_elevate_readonly(
     commands: list[list[str]] = []
     original = runtime.execute
 
-    def capture(
-        command: list[str], cwd: Path, *, timeout: int | None = None, stdin: str | None = None
-    ) -> runtime.ProcessResult:
+    def capture(command: list[str], cwd: Path, **kwargs: Any) -> runtime.ProcessResult:
         commands.append(command)
-        return original(command, cwd, timeout=timeout, stdin=stdin)
+        return original(command, cwd, **kwargs)
 
     monkeypatch.setattr(runtime, "execute", capture)
     CliProvider().run(
@@ -1194,6 +1191,7 @@ def test_audit_schema_explains_actionable_findings_and_positive_evidence() -> No
         "acceptance_criteria",
         "scope_violations",
         "required_fixes",
+        "reviewer_dispositions",
     }
 
 

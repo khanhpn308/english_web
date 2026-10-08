@@ -79,7 +79,7 @@
 - [x] [T086](t086-parallel-review-fanout.md): `DONE` — intra-task parallel read-only review fan-out integrated into main; three reviewer perspectives execute concurrently with deterministic fan-in and authoritative final Audit. Independent audit PASS_FOR_INTEGRATION; focused 25 PASS, scheduler 48 PASS, full orchestrator 321 PASS; scheduler/runtime/product semantics preserved.
 - [x] [T087](t087-concurrent-audit-preparation.md): `DONE` — concurrent executable verification and parallel read-only review fan-out integrated; R4 independent audit `PASS_FOR_INTEGRATION`, no unresolved HIGH/CRITICAL findings.
 - [x] [T088](t088-deterministic-evidence-bundle.md): Deterministic host evidence collection and versioned EvidenceBundle — `DONE`; authoritative host verification PASS: EvidenceBundle focused 21 passed, concurrent_audit 43 passed, parallel_review 25 passed, scheduler 48 passed, full orchestrator 398 passed; Ruff, Ruff format, Mypy and `git diff --check` PASS.
-- [ ] [T089](t089-evidence-bundle-reviewer-probe-protocol.md): Evidence-aware semantic reviewer protocol and host-owned safe ProbeRequest/ProbeCatalog — `IMPLEMENTATION_READY`; depends on T088. Preserves T087 verification/reviewer overlap, forbids AI-generated arbitrary shell/argv, binds ProbeRequest/ProbeEvidence to the frozen candidate, and allows at most one bounded probe round per reviewer.
+- [x] [T089](t089-evidence-bundle-reviewer-probe-protocol.md): Evidence-aware semantic reviewer protocol and host-owned safe ProbeRequest/ProbeCatalog — `DONE`; depends on T088. Preserves T087 verification/reviewer overlap, forbids AI-generated arbitrary shell/argv, binds ProbeRequest/ProbeEvidence to the frozen candidate, and allows at most one bounded probe round per reviewer.
 
 ## Checkpoints
 

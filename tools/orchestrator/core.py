@@ -38,6 +38,29 @@ class OrchestratorError(ValueError):
     """An actionable, content-free refusal or execution failure."""
 
 
+class AgentStallError(OrchestratorError):
+    """An AI provider subprocess failed to make observable byte progress."""
+
+
+KNOWN_ATTEMPT_ARTIFACT_SUFFIXES: tuple[str, ...] = (
+    ".prompt.md",
+    ".auditor-context.json",
+    ".integrator-context.json",
+    ".schema.json",
+    ".response.json",
+    ".log.json",
+    ".rejected.json",
+)
+
+
+class AuditorContextOversizedError(OrchestratorError):
+    """Auditor context exceeds the model-facing size budget."""
+
+
+class IntegratorContextOversizedError(OrchestratorError):
+    """Integrator context exceeds the model-facing size budget."""
+
+
 class Model(BaseModel):
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
@@ -112,6 +135,9 @@ class Role(Model):
     reasoning: Literal["low", "medium", "high", "xhigh"] | None = None
     worker_access: Literal["workspace-write", "full-access"] = "workspace-write"
     allow_process: StrictBool = False
+    stall_timeout_seconds: Annotated[StrictInt, Field(ge=1, le=86400)] | None = None
+    stall_confirm_seconds: Annotated[StrictInt, Field(ge=1, le=3600)] = 30
+    max_stall_retries: Annotated[StrictInt, Field(ge=0, le=10)] = 1
 
 
 class Paths(Model):
@@ -218,9 +244,120 @@ class ReviewFinding(Model):
         return value
 
 
+FORBIDDEN_PROBE_OVERRIDE_KEYS = frozenset(
+    {
+        "command",
+        "argv",
+        "shell",
+        "executable",
+        "script",
+        "powershell",
+        "bash",
+        "bash_fragment",
+        "environment_overrides",
+        "working_directory_override",
+        "env",
+        "cwd",
+    }
+)
+
+
+class ProbeParameters(Model):
+    """Closed model-facing parameter envelope for the initial T089 probe catalog."""
+
+    path: Nonempty | None
+    pattern: Annotated[str, Field(max_length=256)] | None
+
+    @model_validator(mode="before")
+    @classmethod
+    def historical_and_safety_normalization(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+
+        normalized = dict(value)
+
+        for key in normalized:
+            norm_key = str(key).lower().replace("-", "_").strip()
+            if norm_key in FORBIDDEN_PROBE_OVERRIDE_KEYS:
+                raise OrchestratorError(
+                    f"ProbeRequest contains forbidden execution override field: {key}"
+                )
+
+        # Preserve compatibility with historical/internal callers that used
+        # {} or omitted optional source-inspection pattern.
+        normalized.setdefault("path", None)
+        normalized.setdefault("pattern", None)
+        return normalized
+
+    def as_dict(self) -> dict[str, object]:
+        """Return the legacy host-validator representation without null placeholders."""
+        return self.model_dump(mode="python", exclude_none=True)
+
+
+class ProbeRequest(Model):
+    schema_version: Version
+    probe_id: Nonempty
+    perspective: ReviewPerspective
+    task_id: TaskId
+    base_sha: Sha
+    branch: Nonempty
+    source_digest: Sha
+    parameters: ProbeParameters
+    rationale: Nonempty
+
+    @model_validator(mode="before")
+    @classmethod
+    def historical_defaults(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+
+        normalized = dict(value)
+
+        # Keep historical persisted/programmatic requests readable while the
+        # model-facing JSON Schema requires these properties explicitly.
+        normalized.setdefault("schema_version", 1)
+        normalized.setdefault("parameters", {})
+        return normalized
+
+
+def probe_request_digest(request: ProbeRequest) -> str:
+    payload = json.dumps(
+        {
+            "schema_version": request.schema_version,
+            "probe_id": request.probe_id,
+            "perspective": str(request.perspective),
+            "task_id": request.task_id,
+            "base_sha": request.base_sha,
+            "branch": request.branch,
+            "source_digest": request.source_digest,
+            "parameters": request.parameters.as_dict(),
+            "rationale": request.rationale,
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return digest(payload)
+
+
 class ReviewShard(Model):
     perspective: ReviewPerspective
     findings: list[ReviewFinding]
+    probe_request: ProbeRequest | None
+
+    @model_validator(mode="before")
+    @classmethod
+    def historical_probe_request_default(cls, value: object) -> object:
+        if isinstance(value, dict) and "probe_request" not in value:
+            value = dict(value)
+            value["probe_request"] = None
+        return value
+
+    @model_validator(mode="after")
+    def validate_probe_perspective(self) -> "ReviewShard":
+        if self.probe_request is not None and self.probe_request.perspective != self.perspective:
+            raise OrchestratorError("ProbeRequest perspective differs from ReviewShard perspective")
+        return self
 
 
 class IdentifiedFinding(ReviewFinding):
@@ -310,7 +447,16 @@ class Audit(Model):
     required_fixes: list[str] = Field(
         description="Concrete required remediation for unresolved problems; return [] for PASS."
     )
-    reviewer_dispositions: list[ReviewDisposition] = Field(default_factory=list)
+    reviewer_dispositions: list[ReviewDisposition]
+
+    @model_validator(mode="before")
+    @classmethod
+    def historical_reviewer_dispositions_default(cls, value: object) -> object:
+        """Keep historical Audit JSON readable while requiring the field in model output schema."""
+        if isinstance(value, dict) and "reviewer_dispositions" not in value:
+            value = dict(value)
+            value["reviewer_dispositions"] = []
+        return value
 
     def check(self, contract: Contract, bundle: ReviewBundle | None = None) -> None:
         expected = (
@@ -341,6 +487,138 @@ class Audit(Model):
             raise OrchestratorError("Contradictory audit PASS")
         if self.status == "FAIL" and not (self.findings or self.required_fixes):
             raise OrchestratorError("Audit FAIL needs actionable findings")
+
+
+class AuditorCandidateIdentity(Model):
+    task_id: TaskId
+    base_sha: Sha
+    branch: Nonempty
+    source_digest: Sha
+
+
+class AuditorContract(Model):
+    title: Nonempty
+    objective: Nonempty
+    allowed_paths: list[str]
+    forbidden_paths: list[str] = Field(default_factory=list)
+    acceptance_criteria: list[Nonempty] = Field(min_length=1)
+    risk_level: Literal["low", "medium", "high", "critical"]
+    stop_conditions: str
+
+
+class AuditorWorkerSummary(Model):
+    status: Literal["IMPLEMENTED", "BLOCKED"]
+    changed_files: list[str]
+    known_issues: list[str] = Field(default_factory=list)
+
+
+class AuditorContextV1(Model):
+    schema_version: Version = 1
+    candidate_identity: AuditorCandidateIdentity
+    contract: AuditorContract
+    worker_summary: AuditorWorkerSummary
+    evidence_bundle: dict[str, object]
+    review_bundle: ReviewBundle
+    probe_evidence: list[dict[str, object]] = Field(default_factory=list)
+    artifact_digests: dict[str, str] = Field(default_factory=dict)
+
+    @property
+    def digest(self) -> str:
+        return auditor_context_digest(self)
+
+
+AuditorContext = AuditorContextV1
+
+AUDITOR_CONTEXT_MAX_BYTES: int = 64 * 1024
+
+
+def serialize_auditor_context(context: AuditorContextV1) -> str:
+    return json.dumps(
+        context.model_dump(mode="json"),
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+
+def auditor_context_digest(context: AuditorContextV1) -> str:
+    return digest(serialize_auditor_context(context).encode("utf-8"))
+
+
+def auditor_context_component_sizes(context: AuditorContextV1) -> dict[str, int]:
+    data = context.model_dump(mode="json")
+    sizes: dict[str, int] = {}
+    for key, value in sorted(data.items()):
+        raw = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        sizes[f"{key}_bytes"] = len(raw.encode("utf-8"))
+    sizes["total_bytes"] = len(serialize_auditor_context(context).encode("utf-8"))
+    return sizes
+
+
+def check_auditor_context_size(
+    context: AuditorContextV1, max_bytes: int = AUDITOR_CONTEXT_MAX_BYTES
+) -> int:
+    serialized = serialize_auditor_context(context).encode("utf-8")
+    if len(serialized) > max_bytes:
+        diag = auditor_context_component_sizes(context)
+        raise AuditorContextOversizedError(
+            f"Auditor context exceeds size limit: {len(serialized)} bytes > {max_bytes} bytes. "
+            f"Component diagnostics: {diag}"
+        )
+    return len(serialized)
+
+
+class IntegratorContextV1(Model):
+    schema_version: Version = 1
+    contract: AuditorContract
+    evidence_bundle: dict[str, object]
+    source_branch: Nonempty
+    target_branch: Nonempty
+    target_sha: Sha
+
+    @property
+    def digest(self) -> str:
+        return integrator_context_digest(self)
+
+
+IntegratorContext = IntegratorContextV1
+INTEGRATOR_CONTEXT_MAX_BYTES: int = 64 * 1024
+
+
+def serialize_integrator_context(context: IntegratorContextV1) -> str:
+    return json.dumps(
+        context.model_dump(mode="json"),
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+
+def integrator_context_digest(context: IntegratorContextV1) -> str:
+    return digest(serialize_integrator_context(context).encode("utf-8"))
+
+
+def integrator_context_component_sizes(context: IntegratorContextV1) -> dict[str, int]:
+    data = context.model_dump(mode="json")
+    sizes: dict[str, int] = {}
+    for key, value in sorted(data.items()):
+        raw = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        sizes[f"{key}_bytes"] = len(raw.encode("utf-8"))
+    sizes["total_bytes"] = len(serialize_integrator_context(context).encode("utf-8"))
+    return sizes
+
+
+def check_integrator_context_size(
+    context: IntegratorContextV1, max_bytes: int = INTEGRATOR_CONTEXT_MAX_BYTES
+) -> int:
+    serialized = serialize_integrator_context(context).encode("utf-8")
+    if len(serialized) > max_bytes:
+        diag = integrator_context_component_sizes(context)
+        raise IntegratorContextOversizedError(
+            f"Integrator context exceeds size limit: {len(serialized)} bytes > {max_bytes} bytes. "
+            f"Component diagnostics: {diag}"
+        )
+    return len(serialized)
 
 
 class IntegrationReview(Model):
@@ -437,6 +715,63 @@ class EvidenceArtifactRef(Model):
     def check_artifact_path(cls, value: str) -> str:
         safe_path(value)
         return value
+
+
+class ProbeResultClassification(StrEnum):
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    TIMED_OUT = "TIMED_OUT"
+    OVERSIZED = "OVERSIZED"
+    STALE_PROBE_REQUEST = "STALE_PROBE_REQUEST"
+    UNSUPPORTED = "UNSUPPORTED"
+    INVALID = "INVALID"
+    DENIED_BY_POLICY = "DENIED_BY_POLICY"
+    SETUP_ERROR = "SETUP_ERROR"
+
+
+class ProbeEvidence(Model):
+    schema_version: Version = 1
+    probe_id: Nonempty
+    request_id: Sha256
+    task_id: TaskId
+    base_sha: Sha
+    branch: Nonempty
+    source_digest: Sha
+    perspective: ReviewPerspective
+    executor_id: Nonempty
+    parameters: dict[str, object] = Field(default_factory=dict)
+    classification: ProbeResultClassification
+    result: dict[str, object] = Field(default_factory=dict)
+    artifacts: list[EvidenceArtifactRef] = Field(default_factory=list)
+    duration_ns: Nanoseconds | None = None
+    timed_out: StrictBool = False
+    oversized: StrictBool = False
+
+    @model_validator(mode="after")
+    def validate_integrity(self) -> "ProbeEvidence":
+        if self.timed_out and self.classification != ProbeResultClassification.TIMED_OUT:
+            raise OrchestratorError("Timed out probe evidence must have TIMED_OUT classification")
+        if self.oversized and self.classification != ProbeResultClassification.OVERSIZED:
+            raise OrchestratorError("Oversized probe evidence must have OVERSIZED classification")
+        return self
+
+
+class ReviewerContext(Model):
+    schema_version: Version = 1
+    perspective: ReviewPerspective
+    task_id: TaskId
+    base_sha: Sha
+    branch: Nonempty
+    source_digest: Sha
+    contract: Contract
+    worker_result: WorkerResult | None = None
+    verification_status: Literal["PENDING", "COMPLETED"] = "PENDING"
+    executable_evidence: dict[str, object] | None = None
+    evidence_bundle_payload: dict[str, object] | None = None
+    prior_request: ProbeRequest | None = None
+    probe_evidence: ProbeEvidence | None = None
+    request_classification: str | None = None
+    round_index: Annotated[StrictInt, Field(ge=1, le=2)] = 1
 
 
 class CandidateProvenance(Model):

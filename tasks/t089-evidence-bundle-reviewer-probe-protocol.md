@@ -2,7 +2,7 @@
 
 **Task ID:** `T089`  
 **Title:** Evidence-aware semantic reviewer protocol and host-owned safe probe execution  
-**Status:** `IMPLEMENTATION_READY`  
+**Status:** `DONE`
 **Goal:** Hoàn thiện trust boundary (ranh giới tin cậy) giữa deterministic host/control plane (host/lớp điều khiển xác định bằng máy) và AI semantic reviewers/auditor (AI soát xét/kiểm toán ngữ nghĩa): AI chỉ được đọc candidate-bound evidence (bằng chứng gắn với đúng candidate), đưa ra semantic findings (phát hiện ngữ nghĩa) và tùy chọn `ProbeRequest` có kiểu; host sở hữu `ProbeCatalog`, quyết định probe nào hợp lệ, thực thi probe bằng Python/repository-owned commands, đóng gói `ProbeEvidence`, phát hiện stale candidate (candidate đã thay đổi), và tuyệt đối không thực thi arbitrary shell/argv (shell/đối số tùy ý) do model sinh ra.  
 **Level:** High
 
@@ -461,44 +461,58 @@ Those are downstream tasks.
 
 ## Acceptance criteria
 
-- [ ] Strict reviewer input/context schema exists.
-- [ ] Initial reviewer fan-out remains compatible with T087 concurrent verification.
-- [ ] Initial reviewers cannot claim unfinished executable verification as authoritative evidence.
-- [ ] Final Auditor receives complete validated `EvidenceBundle.semantic_payload()`.
-- [ ] Strict versioned `ProbeRequest` schema exists.
-- [ ] `ProbeRequest` cannot carry shell/command/argv/executable override fields.
-- [ ] Unknown ProbeRequest fields fail closed.
-- [ ] Host-owned `ProbeCatalog` exists.
-- [ ] Probe definitions are repository-owned and cannot be registered/mutated by model output.
-- [ ] At least one pure source-inspection probe is implemented and behaviorally tested.
-- [ ] At least one predefined executable probe is implemented and behaviorally tested.
-- [ ] AI cannot choose executable/argv for the predefined executable probe.
-- [ ] Strict versioned `ProbeEvidence` schema exists.
-- [ ] ProbeEvidence is bound to exact frozen candidate identity.
-- [ ] Stale candidate between request and execution fails closed.
-- [ ] Probe artifact references are integrity-checkable.
-- [ ] Large/unbounded probe output is not embedded into model-facing payloads.
-- [ ] Probe timeout/output-limit behavior is fail-closed and behaviorally tested.
-- [ ] One-probe-round-per-reviewer limit is enforced.
-- [ ] Invalid/unsupported/denied probe request never falls back to improvised execution.
-- [ ] Parent remains sole authoritative artifact/state writer.
-- [ ] Reviewer/Auditor remain source read-only.
-- [ ] Probe execution cannot mutate authoritative task source.
-- [ ] Multiple probe requests/results fan in deterministically independent of completion order.
-- [ ] Reviewer resume uses explicit reconstructed structured context, not hidden session authority.
-- [ ] Auditor cannot override mechanical verification failure.
-- [ ] No direct arbitrary shell path from model output to subprocess exists.
-- [ ] T086 focused regression passes.
-- [ ] T087 focused regression passes.
-- [ ] T088 EvidenceBundle focused regression passes.
-- [ ] Scheduler regression passes.
-- [ ] Full orchestrator regression passes.
-- [ ] Ruff passes.
-- [ ] Ruff format passes.
-- [ ] Mypy passes.
-- [ ] `git diff --check` passes.
-- [ ] No product source changes.
-- [ ] No provider/model default changes.
+- [x] Strict reviewer input/context schema exists.
+- [x] Initial reviewer fan-out remains compatible with T087 concurrent verification.
+- [x] Initial reviewers cannot claim unfinished executable verification as authoritative evidence.
+- [x] Final Auditor receives complete validated `EvidenceBundle.semantic_payload()`.
+- [x] Strict versioned `ProbeRequest` schema exists.
+- [x] `ProbeRequest` cannot carry shell/command/argv/executable override fields.
+- [x] Unknown ProbeRequest fields fail closed.
+- [x] Host-owned `ProbeCatalog` exists.
+- [x] Probe definitions are repository-owned and cannot be registered/mutated by model output.
+- [x] At least one pure source-inspection probe is implemented and behaviorally tested.
+- [x] At least one predefined executable probe is implemented and behaviorally tested.
+- [x] AI cannot choose executable/argv for the predefined executable probe.
+- [x] Strict versioned `ProbeEvidence` schema exists.
+- [x] ProbeEvidence is bound to exact frozen candidate identity.
+- [x] Stale candidate between request and execution fails closed.
+- [x] Probe artifact references are integrity-checkable.
+- [x] Large/unbounded probe output is not embedded into model-facing payloads.
+- [x] Probe timeout/output-limit behavior is fail-closed and behaviorally tested.
+- [x] One-probe-round-per-reviewer limit is enforced.
+- [x] Invalid/unsupported/denied probe request never falls back to improvised execution.
+- [x] Parent remains sole authoritative artifact/state writer.
+- [x] Reviewer/Auditor remain source read-only.
+- [x] Probe execution cannot mutate authoritative task source.
+- [x] Multiple probe requests/results fan in deterministically independent of completion order.
+- [x] Reviewer resume uses explicit reconstructed structured context, not hidden session authority.
+- [x] Auditor cannot override mechanical verification failure.
+- [x] No direct arbitrary shell path from model output to subprocess exists.
+- [x] T086 focused regression passes.
+- [x] T087 focused regression passes.
+- [x] T088 EvidenceBundle focused regression passes.
+- [x] Scheduler regression passes.
+- [x] Full orchestrator regression passes.
+- [x] Ruff passes.
+- [x] Ruff format passes.
+- [x] Mypy passes.
+- [x] `git diff --check` passes.
+- [x] No product source changes.
+- [x] No provider/model default changes.
+
+## Verification results
+
+Authoritative host verification completed on 2026-10-06:
+- `python -m pytest tests/orchestrator/test_probes.py -q --no-cov`: 44 passed in 0.40s
+- `python -m pytest tests/orchestrator/test_core.py tests/orchestrator/test_evidence.py tests/orchestrator/test_workflow.py -q --no-cov -k "probe or reviewer_protocol or evidence_bundle"`: 59 passed in 27.27s
+- `python -m pytest tests/orchestrator/test_core.py tests/orchestrator/test_workflow.py -q --no-cov -k concurrent_audit`: 48 passed in 58.74s
+- `python -m pytest tests/orchestrator/test_core.py tests/orchestrator/test_workflow.py -q --no-cov -k parallel_review`: 30 passed in 14.73s
+- `python -m pytest tests/orchestrator/test_scheduler.py -q --no-cov`: 48 passed in 11.23s
+- `python -m pytest tests/orchestrator -q --no-cov`: 447 passed in 269.45s
+- `python -m ruff check tools/orchestrator tests/orchestrator`: PASS
+- `python -m ruff format --check tools/orchestrator tests/orchestrator`: PASS
+- `python -m mypy tools/orchestrator`: PASS
+- `git diff --check`: PASS
 
 ## Required behavioral security tests
 
