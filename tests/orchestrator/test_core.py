@@ -496,10 +496,18 @@ def test_posix_crashed_parent_keeps_lock_until_live_child_exits(tmp_path: Path) 
     child_pid = None
     try:
         deadline = time.monotonic() + 10
-        while not (tmp_path / "child.pid").exists() and time.monotonic() < deadline:
+        pid_text = ""
+        while time.monotonic() < deadline:
+            try:
+                pid_text = (tmp_path / "child.pid").read_text()
+            except FileNotFoundError:
+                pid_text = ""
+            if pid_text.isdecimal():
+                break
             time.sleep(0.02)
         assert (tmp_path / "child.pid").exists()
-        child_pid = int((tmp_path / "child.pid").read_text())
+        assert pid_text.isdecimal(), "Child did not finish writing a valid PID"
+        child_pid = int(pid_text)
         owner.kill()
         owner.join(10)
         assert owner.exitcode != 0
