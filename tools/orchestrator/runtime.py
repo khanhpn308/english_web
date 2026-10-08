@@ -538,4 +538,3 @@ def is_worker_code_only(role: Role) -> bool:
     if role.provider == "gemini":
         return False
     return role.provider in ("codex", "agy")
-
