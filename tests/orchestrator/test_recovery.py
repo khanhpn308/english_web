@@ -696,7 +696,25 @@ def test_cli_recovered_resume_trusts_control_plane_and_rejects_candidate_invocat
     assert isinstance(pipeline.provider, LocalAgents)
     if invocation == "control_plane":
         assert result == 0
-        assert '"state": "AUDIT_PASS"' in output
+        assert '"state": "IMPLEMENTED"' in output
+        assert pipeline.provider.calls == []
+
+        # Verification is an explicit host action, not a side effect of resume.
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "orchestrator",
+                "verify-candidate",
+                "T100",
+                "--run-id",
+                recovered.run_id,
+                "--no-integrate",
+            ],
+        )
+        assert cli.main() == 0
+        verified_output = capsys.readouterr().out
+        assert '"state": "AUDIT_PASS"' in verified_output
         assert set(pipeline.provider.calls) == {"ReviewShard", "Audit"}
     else:
         assert result == 2
