@@ -354,6 +354,8 @@ class CliProvider:
         name: str,
         readonly: bool,
     ) -> Output:
+        if not readonly and not is_worker_code_only(role):
+            raise OrchestratorError("Worker code-only policy denies process-capable configuration")
         version = execute([role.executable, "--version"], cwd, timeout=30)
         help_result = execute([role.executable, "--help"], cwd, timeout=30)
         probes = [version, help_result]
