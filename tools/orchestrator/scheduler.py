@@ -170,11 +170,11 @@ def resolve(
     )
 
 
-def dispatch(pipeline: Pipeline, task: str) -> Outcome:
+def dispatch(pipeline: Pipeline, task: str, *, defer_verification: bool = False) -> Outcome:
     """Use authoritative preflight and Pipeline; never reproduce its run semantics."""
     try:
         task_card(pipeline.repository, task)
-        state = pipeline.start(task)
+        state = pipeline.start(task, defer_verification=defer_verification)
         return Outcome(
             task_id=task, state=state.state, run_id=state.run_id, reason=state.last_error
         )
@@ -190,8 +190,9 @@ def dispatch(pipeline: Pipeline, task: str) -> Outcome:
 
 
 class Scheduler:
-    def __init__(self, pipeline: Pipeline) -> None:
+    def __init__(self, pipeline: Pipeline, *, defer_verification: bool = False) -> None:
         self.pipeline = pipeline
+        self.defer_verification = defer_verification
         self._revision: str | None = None
         self._tasks: dict[str, Metadata] = {}
 
@@ -229,7 +230,10 @@ class Scheduler:
                 if len(live) >= 3:
                     break
                 if task not in active and task not in deferred:
-                    live[executor.submit(dispatch, self.pipeline, task)] = task
+                    live[executor.submit(
+                        dispatch, self.pipeline, task,
+                        defer_verification=self.defer_verification
+                    )] = task
                     active.add(task)
             if not live:
                 if graph.ready:
