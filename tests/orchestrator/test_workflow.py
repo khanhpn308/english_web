@@ -1285,7 +1285,22 @@ def test_cli_retry_uses_explicit_run_id(repository: Path, monkeypatch: pytest.Mo
     ]
     retried = [state for state in states if state.run_id != old.run_id]
     assert len(retried) == 1 and retried[0].retry_of == old.run_id
-    assert retried[0].state == State.AUDIT_PASS
+    assert retried[0].state == State.IMPLEMENTED
+    assert "audit_checks" not in retried[0].artifacts
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "orchestrator",
+            "verify-candidate",
+            "T100",
+            "--run-id",
+            retried[0].run_id,
+            "--no-integrate",
+        ],
+    )
+    assert main() == 0
+    assert pipeline.status("T100", retried[0].run_id).state == State.AUDIT_PASS
 
 
 @pytest.mark.parametrize("legacy", [False, True])
