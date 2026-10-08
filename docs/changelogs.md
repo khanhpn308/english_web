@@ -1,3 +1,12 @@
+## 08/10/2026 - T090 phase-2 historical-scope audit and host-mediated edit primitive (Asia/Bangkok)
+
+- Status: IN_PROGRESS; Worker AGY/Codex dispatch remains BLOCKED; T089 remains REOPENED_PENDING_T090. No live provider isolation PASS and no new merge authorization claimed.
+- docs/ci-host-verification.md: attributed eight historical out-of-T089-allowlist PR #5 infrastructure paths to immutable pre-/post-PR blob identities, ownership and explicit owner-approved historical merge. Clarified that prior passing CI verifies repository checks, not Worker tool isolation.
+- tools/orchestrator/worker_sandbox.py: introduced a host-only exact-path, SHA-256-bound text edit primitive with checked preimage, content limit, path/symlink rejection and atomic file replacement. Does not grant or invoke AI tool privileges, and is not wired to a provider.
+- tests/orchestrator/test_worker_sandbox.py: synthetic success/denial fixtures for host editing. Real AGY/OS command-denial tests remain unperformed and must not be inferred from these tests.
+- tasks/t090-host-worker-isolation-scope-adjudication.md: documented the unverified provider boundary and next independent acceptance steps.
+- Intentionally untouched: historical T089 artifacts/hashes and Git history, product backend/frontend, policy thresholds, worker permission lock and global CLI settings. Host CI status to be recorded only after a real run.
+
 ## 07/10/2026 - T089-R3: verified external candidate import control plane (Asia/Bangkok)
 
 - Status: `IMPLEMENTATION_READY_FOR_HOST_VERIFICATION`. Implemented the host-authoritative verified external candidate import control plane (`import-candidate` CLI command and `Pipeline.import_candidate()`):
