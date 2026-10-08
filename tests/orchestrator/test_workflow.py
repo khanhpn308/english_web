@@ -152,7 +152,7 @@ class FakeAgents:
         name: str,
         readonly: bool,
     ) -> Output:
-        assert role.executable == "fake-codex"
+        assert role.executable in {"fake-codex", "fake-agy"}
         assert timeout == self.timeout
         assert artifacts.is_dir()
         assert name
@@ -1388,7 +1388,7 @@ def test_retry_legacy_planning_gate_uses_fresh_plan_and_preserves_evidence(
 def test_planning_respects_owner_configured_verification_authority(repository: Path) -> None:
     from tools.orchestrator.workflow import PLANNING_RULES, ROLE_RULES
 
-    assert "repository-configured verification" in ROLE_RULES
+    assert "official verification" in ROLE_RULES
     assert (
         "Do not access credentials, real provider inference, remote Git, "
         "or real user vocabulary data." not in ROLE_RULES
