@@ -2,9 +2,26 @@
 
 **Task ID:** `T090`  
 **Title:** Enforced code-only Worker boundary and auditable infrastructure ownership  
-**Status:** `TODO`  
+**Status:** `SUPERSEDED_BY_OWNER_DECISION`  
 **Goal:** Thiết lập ranh giới quyền thực thi có thể kiểm chứng: AI Worker được đọc/sửa đúng mã nguồn đã phê duyệt nhưng không được chạy shell, Git, Python, test, build hay subprocess (tiến trình con). Host độc quyền các thao tác tất định. Đồng thời xét duyệt hợp lệ tám file hạ tầng đã xuất hiện trên T089 PR #5 nhưng nằm ngoài allowlist gốc, **không chỉnh sửa hoặc hợp thức hóa hồi tố task card hay bằng chứng T089**.  
 **Level:** High
+
+## Owner decision — 2026-10-08 (supersedes code-only gate)
+
+The repository owner explicitly authorized AGY Worker `allow_process=true` to
+auto-approve commands instead of prompting for every invocation. The strict
+code-only process isolation requirement in this *unimplemented* T090 plan is
+superseded; do not launch an agent to implement that abandoned requirement.
+This is an intentional trust decision, **not evidence of OS/process isolation**.
+
+The owner also approved integration of T089 PR #5, including the eight
+historically out-of-T089-allowlist infrastructure files identified in this task.
+Record their attribution under this owner's scope decision; do not rewrite
+historical T089 run contracts, hashes or evidence. The host still runs the
+authoritative verification and integration gates; Worker output is never
+equivalent to host PASS. All merged code must independently pass CI at the
+actual merge candidate commit. The remaining optional sandbox hardening is
+not an integration blocker.
 
 ## Dependencies
 

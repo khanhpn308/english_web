@@ -1,0 +1,219 @@
+import os
+import sys
+import time
+from pathlib import Path
+
+import pytest
+from tools.orchestrator.core import (
+    AgentStallError,
+    Fix,
+    Role,
+    read_json,
+)
+from tools.orchestrator.runtime import (
+    CliProvider,
+    execute,
+)
+
+
+def test_runtime_timeout_none_does_not_create_wall_clock_deadline(tmp_path: Path) -> None:
+    cmd = [sys.executable, "-c", "import time; time.sleep(0.1); print('done')"]
+    result = execute(cmd, tmp_path, timeout=None)
+    assert result.exit_code == 0
+    assert result.timed_out is False
+    assert result.stalled is False
+    assert result.oversized is False
+    assert "done" in result.stdout
+
+
+def test_runtime_watchdog_disabled_retains_historical_behavior(tmp_path: Path) -> None:
+    cmd = [sys.executable, "-c", "import time; time.sleep(0.3); print('done')"]
+    result = execute(cmd, tmp_path, timeout=10, stall_timeout=None)
+    assert result.exit_code == 0
+    assert result.timed_out is False
+    assert result.stalled is False
+    assert "done" in result.stdout
+
+
+def test_runtime_silent_subprocess_triggers_confirmed_stall(tmp_path: Path) -> None:
+    cmd = [sys.executable, "-c", "import time; time.sleep(10)"]
+    start = time.monotonic()
+    result = execute(
+        cmd,
+        tmp_path,
+        timeout=10,
+        stall_timeout=0.15,
+        stall_confirm=0.15,
+    )
+    elapsed = time.monotonic() - start
+    assert elapsed < 5.0
+    assert result.stalled is True
+    assert result.timed_out is False
+    assert result.oversized is False
+    meta = result.metadata()
+    assert meta["stalled"] is True
+    assert meta["timed_out"] is False
+    assert meta["oversized"] is False
+
+
+def test_runtime_progressing_subprocess_resets_liveness(tmp_path: Path) -> None:
+    # Emits output every 0.1s for 4 iterations (0.4s total).
+    # stall_timeout is 0.2s, so progress resets the timer before stall can trigger.
+    script = (
+        "import time, sys\n"
+        "for i in range(4):\n"
+        "    time.sleep(0.1)\n"
+        "    print(f'tick {i}', flush=True)\n"
+    )
+    cmd = [sys.executable, "-c", script]
+    result = execute(
+        cmd,
+        tmp_path,
+        timeout=5,
+        stall_timeout=0.25,
+        stall_confirm=0.2,
+    )
+    assert result.exit_code == 0
+    assert result.stalled is False
+    assert result.timed_out is False
+    assert "tick 3" in result.stdout
+
+
+def test_runtime_suspected_stall_recovers_during_confirmation(tmp_path: Path) -> None:
+    # Stalls for 0.2s (triggering suspected stall at 0.15s), but emits progress
+    # before confirmation window (0.2s) expires at 0.35s.
+    script = "import time, sys\ntime.sleep(0.2)\nprint('recovered', flush=True)\ntime.sleep(0.05)\n"
+    cmd = [sys.executable, "-c", script]
+    result = execute(
+        cmd,
+        tmp_path,
+        timeout=5,
+        stall_timeout=0.15,
+        stall_confirm=0.25,
+    )
+    assert result.exit_code == 0
+    assert result.stalled is False
+    assert "recovered" in result.stdout
+
+
+def test_runtime_process_tree_termination_no_orphans(tmp_path: Path) -> None:
+    # Launch a parent process that spawns a long-lived child process, then sleeps.
+    # When confirmed stall triggers, both parent and child must be reaped.
+    pid_file = tmp_path / "child.pid"
+    script = (
+        "import subprocess, sys, time\n"
+        "proc = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n"
+        f"open(r'{pid_file}', 'w').write(str(proc.pid))\n"
+        "time.sleep(30)\n"
+    )
+    cmd = [sys.executable, "-c", script]
+    result = execute(
+        cmd,
+        tmp_path,
+        timeout=10,
+        stall_timeout=0.2,
+        stall_confirm=0.2,
+    )
+    assert result.stalled is True
+    assert pid_file.is_file()
+    child_pid = int(pid_file.read_text().strip())
+
+    # Verify child process was terminated
+    if os.name == "posix":
+        time.sleep(0.1)
+        try:
+            os.kill(child_pid, 0)
+            child_alive = True
+        except OSError:
+            child_alive = False
+        assert child_alive is False, f"Child process {child_pid} was orphaned"
+
+
+def test_runtime_process_result_diagnostics_distinction(tmp_path: Path) -> None:
+    # 1. Normal
+    normal_res = execute([sys.executable, "-c", "print('ok')"], tmp_path)
+    assert normal_res.exit_code == 0
+    assert normal_res.timed_out is False
+    assert normal_res.oversized is False
+    assert normal_res.stalled is False
+    assert normal_res.metadata()["stalled"] is False
+
+    # 2. Total timeout
+    timeout_res = execute(
+        [sys.executable, "-c", "import time; time.sleep(10)"],
+        tmp_path,
+        timeout=0.1,
+    )
+    assert timeout_res.timed_out is True
+    assert timeout_res.stalled is False
+    assert timeout_res.oversized is False
+    assert timeout_res.metadata()["timed_out"] is True
+    assert timeout_res.metadata()["stalled"] is False
+
+    # 3. Confirmed stall
+    stall_res = execute(
+        [sys.executable, "-c", "import time; time.sleep(10)"],
+        tmp_path,
+        stall_timeout=0.1,
+        stall_confirm=0.1,
+    )
+    assert stall_res.stalled is True
+    assert stall_res.timed_out is False
+    assert stall_res.oversized is False
+    assert stall_res.metadata()["stalled"] is True
+    assert stall_res.metadata()["timed_out"] is False
+
+
+def test_runtime_cliprovider_stalled_raises_agent_stall_error(tmp_path: Path) -> None:
+    fake_cli = tmp_path / "fake_cli"
+    fake_cli.write_text(f"""#!{sys.executable}
+import sys, time
+args = sys.argv[1:]
+if '--version' in args:
+    print('1.0.0')
+elif '--help' in args:
+    print(
+        '--input-format --output-format --json-schema --mode --model --effort '
+        '--disable-slash-commands'
+    )
+else:
+    time.sleep(10)
+""")
+    fake_cli.chmod(0o700)
+    role = Role(
+        provider="agy",
+        executable=str(fake_cli),
+        model="synthetic-test",
+        reasoning=None,
+        worker_access="workspace-write",
+        allow_process=False,
+        stall_timeout_seconds=1,
+        stall_confirm_seconds=1,
+        max_stall_retries=1,
+    )
+    provider = CliProvider()
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+
+    with pytest.raises(AgentStallError) as exc_info:
+        provider.run(
+            "test prompt",
+            cwd=tmp_path,
+            role=role,
+            timeout=10,
+            output=Fix,
+            artifacts=artifacts,
+            name="00-test-stall",
+            readonly=True,
+        )
+    assert "Agent process stalled" in str(exc_info.value)
+
+    # Check log was written and has stalled status
+    log_file = artifacts / "00-test-stall.log.json"
+    assert log_file.is_file()
+    log_data = read_json(log_file)
+    assert isinstance(log_data, dict)
+    execution = log_data.get("execution")
+    assert isinstance(execution, dict)
+    assert execution["stalled"] is True
+    assert execution["timed_out"] is False

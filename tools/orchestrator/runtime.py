@@ -7,14 +7,22 @@ import signal
 import subprocess
 import tempfile
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic, sleep
 from typing import BinaryIO, Protocol, TypeVar, cast
 
 from pydantic import BaseModel
-from tools.orchestrator.core import OrchestratorError, Role, atomic_json, digest, now, safe_path
+from tools.orchestrator.core import (
+    AgentStallError,
+    OrchestratorError,
+    Role,
+    atomic_json,
+    digest,
+    now,
+    safe_path,
+)
 
 OUTPUT_LIMIT = 4 * 1024 * 1024
 _HELD_LOCKS: set[int] = set()
@@ -31,6 +39,7 @@ class ProcessResult:
     stderr: str
     timed_out: bool = False
     oversized: bool = False
+    stalled: bool = False
 
     def metadata(self) -> dict[str, object]:
         # Raw provider/test text can contain source, prompts or credentials. Keep it in
@@ -43,6 +52,7 @@ class ProcessResult:
             "exit_code": self.exit_code,
             "timed_out": self.timed_out,
             "oversized": self.oversized,
+            "stalled": self.stalled,
             "stdout_bytes": len(self.stdout.encode()),
             "stderr_bytes": len(self.stderr.encode()),
             "stdout_digest": digest(self.stdout.encode()),
@@ -50,12 +60,38 @@ class ProcessResult:
         }
 
 
+class _StallExpired(Exception):
+    def __init__(self, command: list[str], timeout: int | float | None) -> None:
+        super().__init__(f"Process stalled: {command[0]}")
+        self.command = command
+        self.timeout = timeout
+
+
+def _terminate_process_tree(process: subprocess.Popen[bytes], cwd: Path) -> None:
+    with suppress(ProcessLookupError, OSError):
+        if os.name == "posix":
+            os.killpg(process.pid, signal.SIGKILL)
+        else:
+            execute(["taskkill", "/PID", str(process.pid), "/T", "/F"], cwd, timeout=10)
+            process.kill()
+    with suppress(Exception):
+        process.communicate()
+
+
 def execute(
-    command: list[str], cwd: Path, *, timeout: int | None = None, stdin: str | None = None
+    command: list[str],
+    cwd: Path,
+    *,
+    timeout: int | float | None = None,
+    stdin: str | None = None,
+    stall_timeout: int | float | None = None,
+    stall_confirm: int | float = 30,
+    output_limit: int = OUTPUT_LIMIT,
 ) -> ProcessResult:
     start = now()
     timed_out = False
     excessive = False
+    stalled = False
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
         try:
             process = subprocess.Popen(
@@ -71,34 +107,61 @@ def execute(
             raise OrchestratorError(f"Executable unavailable: {Path(command[0]).name}") from error
         deadline = monotonic() + timeout if timeout is not None else None
         first = True
+        last_progress = monotonic()
+        last_bytes = 0
+        suspected_at: float | None = None
         try:
             while True:
-                remaining = deadline - monotonic() if deadline is not None else None
+                now_mono = monotonic()
+                remaining = deadline - now_mono if deadline is not None else None
                 if timeout is not None and remaining is not None and remaining <= 0:
                     raise subprocess.TimeoutExpired(command, timeout)
+
+                if stall_timeout is not None:
+                    current_bytes = os.fstat(out.fileno()).st_size + os.fstat(err.fileno()).st_size
+                    if current_bytes > last_bytes:
+                        last_bytes = current_bytes
+                        last_progress = now_mono
+                        suspected_at = None
+                    else:
+                        silence = now_mono - last_progress
+                        if silence >= stall_timeout:
+                            if suspected_at is None:
+                                suspected_at = now_mono
+                            if now_mono - suspected_at >= stall_confirm:
+                                raise _StallExpired(command, stall_timeout)
+
+                poll_timeout = 0.05
+                if remaining is not None:
+                    poll_timeout = min(poll_timeout, max(0.0, remaining))
+                if stall_timeout is not None:
+                    if suspected_at is None:
+                        time_to_stall = max(0.0, stall_timeout - (now_mono - last_progress))
+                        poll_timeout = min(poll_timeout, time_to_stall)
+                    else:
+                        time_to_confirm = max(0.0, stall_confirm - (now_mono - suspected_at))
+                        poll_timeout = min(poll_timeout, time_to_confirm)
+
                 try:
                     process.communicate(
                         stdin.encode() if first and stdin is not None else None,
-                        timeout=min(0.1, remaining) if remaining is not None else 0.1,
+                        timeout=max(0.01, poll_timeout),
                     )
                     break
                 except subprocess.TimeoutExpired:
                     first = False
                     if (
                         max(os.fstat(out.fileno()).st_size, os.fstat(err.fileno()).st_size)
-                        > OUTPUT_LIMIT
+                        > output_limit
                     ):
                         excessive = True
                         raise
+        except _StallExpired:
+            _terminate_process_tree(process, cwd)
+            stalled = True
         except (subprocess.TimeoutExpired, KeyboardInterrupt) as error:
             interrupted = isinstance(error, KeyboardInterrupt)
-            if os.name == "posix":
-                os.killpg(process.pid, signal.SIGKILL)
-            else:
-                # taskkill /T is the native process-tree equivalent of killpg.
-                execute(["taskkill", "/PID", str(process.pid), "/T", "/F"], cwd, timeout=10)
-                process.kill()
-            process.communicate()
+            _terminate_process_tree(process, cwd)
             if interrupted:
                 raise KeyboardInterrupt from None
             timed_out = not excessive
@@ -114,10 +177,11 @@ def execute(
             start,
             now(),
             process.returncode,
-            out.read(OUTPUT_LIMIT).decode("utf-8", errors="replace"),
-            err.read(OUTPUT_LIMIT).decode("utf-8", errors="replace"),
+            out.read(output_limit).decode("utf-8", errors="replace"),
+            err.read(output_limit).decode("utf-8", errors="replace"),
             timed_out,
-            excessive or out_size > OUTPUT_LIMIT or err_size > OUTPUT_LIMIT,
+            excessive or out_size > output_limit or err_size > output_limit,
+            stalled,
         )
 
 
@@ -290,6 +354,9 @@ class CliProvider:
         name: str,
         readonly: bool,
     ) -> Output:
+        # Process auto-approval is opt-in via Role.allow_process for AGY Worker.
+        # Only a Worker may receive this permission (Config.validate_roles).
+        # Host verification and merge authority remain independent.
         version = execute([role.executable, "--version"], cwd, timeout=30)
         help_result = execute([role.executable, "--help"], cwd, timeout=30)
         probes = [version, help_result]
@@ -402,7 +469,14 @@ class CliProvider:
                 command.extend(["--model", role.model])
             if role.reasoning:
                 command.extend(["--effort", role.reasoning])
-        result = execute(command, cwd, timeout=timeout, stdin=prompt)
+        result = execute(
+            command,
+            cwd,
+            timeout=timeout,
+            stdin=prompt,
+            stall_timeout=role.stall_timeout_seconds,
+            stall_confirm=role.stall_confirm_seconds,
+        )
         atomic_json(
             artifacts / f"{name}.log.json",
             {
@@ -413,6 +487,8 @@ class CliProvider:
                 "execution": result.metadata(),
             },
         )
+        if result.stalled:
+            raise AgentStallError(f"Agent process stalled (exit {result.exit_code})")
         if result.exit_code or result.timed_out or result.oversized:
             raise OrchestratorError(
                 f"Agent process failed (exit {result.exit_code}, timeout={result.timed_out})"
@@ -453,3 +529,13 @@ class CliProvider:
             return output.model_validate_json(raw)
         except (OSError, ValueError, TypeError) as error:
             raise OrchestratorError("Agent returned malformed or schema-invalid JSON") from error
+
+
+def is_worker_code_only(role: Role) -> bool:
+    if role.allow_process:
+        return False
+    if role.worker_access == "full-access":
+        return False
+    if role.provider == "gemini":
+        return False
+    return role.provider in ("codex", "agy")

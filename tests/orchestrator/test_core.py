@@ -8,6 +8,7 @@ import sys
 from contextlib import suppress
 from multiprocessing.connection import Connection as PipeConnection
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -52,6 +53,7 @@ def parallel_review_bundle() -> ReviewBundle:
             ReviewShard(
                 perspective=perspective,
                 findings=[ReviewFinding(action="Repair synthetic defect", evidence="feature.py:1")],
+                probe_request=None,
             )
             for perspective in reversed(ReviewPerspective)
         ],
@@ -302,6 +304,7 @@ def test_audit_invalid_status_and_false_pass_rejected() -> None:
         acceptance_criteria=[Criterion(criterion="Behavior", status="PASS", evidence="Fixture")],
         scope_violations=[],
         required_fixes=[],
+        reviewer_dispositions=[],
     )
     with pytest.raises(OrchestratorError, match="Contradictory"):
         audit.check(contract())
@@ -740,11 +743,9 @@ def test_gemini_worker_is_headless_with_session_trust(
     commands: list[list[str]] = []
     original = runtime.execute
 
-    def capture(
-        command: list[str], cwd: Path, *, timeout: int | None = None, stdin: str | None = None
-    ) -> runtime.ProcessResult:
+    def capture(command: list[str], cwd: Path, **kwargs: Any) -> runtime.ProcessResult:
         commands.append(command)
-        return original(command, cwd, timeout=timeout, stdin=stdin)
+        return original(command, cwd, **kwargs)
 
     monkeypatch.setattr(runtime, "execute", capture)
     result = CliProvider().run(
@@ -1061,11 +1062,9 @@ def test_codex_worker_full_access_does_not_elevate_readonly(
     commands: list[list[str]] = []
     original = runtime.execute
 
-    def capture(
-        command: list[str], cwd: Path, *, timeout: int | None = None, stdin: str | None = None
-    ) -> runtime.ProcessResult:
+    def capture(command: list[str], cwd: Path, **kwargs: Any) -> runtime.ProcessResult:
         commands.append(command)
-        return original(command, cwd, timeout=timeout, stdin=stdin)
+        return original(command, cwd, **kwargs)
 
     monkeypatch.setattr(runtime, "execute", capture)
     CliProvider().run(
@@ -1083,6 +1082,25 @@ def test_codex_worker_full_access_does_not_elevate_readonly(
         "read-only" if readonly else "danger-full-access"
     )
     assert command[command.index("-a") + 1] == "never"
+
+
+def test_cliprovider_agy_worker_auto_process_opt_in(fake_agy: Path, tmp_path: Path) -> None:
+    from tools.orchestrator.core import WorkerResult
+
+    result = CliProvider().run(
+        "WORKER",
+        cwd=tmp_path,
+        role=Role(provider="agy", executable=str(fake_agy), allow_process=True),
+        timeout=5,
+        output=WorkerResult,
+        artifacts=tmp_path,
+        name="approved-worker",
+        readonly=False,
+    )
+    assert result.status == "IMPLEMENTED"
+    received = json.loads((tmp_path / "received.json").read_text())
+    assert "--dangerously-skip-permissions" in received["args"]
+    assert received["args"][received["args"].index("--mode") + 1] == "accept-edits"
 
 
 def test_agy_direct_worker_status_is_not_cli_envelope_error(fake_agy: Path, tmp_path: Path) -> None:
@@ -1194,6 +1212,7 @@ def test_audit_schema_explains_actionable_findings_and_positive_evidence() -> No
         "acceptance_criteria",
         "scope_violations",
         "required_fixes",
+        "reviewer_dispositions",
     }
 
 
@@ -1648,7 +1667,7 @@ def test_concurrent_audit_collection_detached_inputs_and_failure_semantics(
         if failing and mode == "oserror":
             raise PermissionError("synthetic-private-os-error-sentinel")
         return ProcessResult(
-            command=command,
+            command=tuple(command),
             cwd=str(cwd),
             started_at="start",
             ended_at="end",
@@ -1708,7 +1727,7 @@ def test_concurrent_audit_transient_output_isolated_from_request_evidence(
         cache_dir.mkdir(parents=True, exist_ok=True)
         (cache_dir / "transient").write_text("transient pytest cache content")
         return ProcessResult(
-            command=command,
+            command=tuple(command),
             cwd=str(cwd),
             started_at="start",
             ended_at="end",

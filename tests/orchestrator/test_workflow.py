@@ -10,15 +10,22 @@ from pathlib import Path
 from typing import Literal, TypeVar
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from tools.orchestrator.core import (
+    INTEGRATOR_CONTEXT_MAX_BYTES,
+    KNOWN_ATTEMPT_ARTIFACT_SUFFIXES,
     Audit,
+    AuditorContextV1,
+    AuditorContract,
     Config,
     Contract,
     Criterion,
     EvidenceBundle,
     Fix,
     IntegrationReview,
+    IntegratorContext,
+    IntegratorContextOversizedError,
+    IntegratorContextV1,
     OrchestratorError,
     Plan,
     ReviewBundle,
@@ -30,12 +37,20 @@ from tools.orchestrator.core import (
     State,
     WorkerResult,
     atomic_json,
+    check_integrator_context_size,
     digest,
+    integrator_context_component_sizes,
+    integrator_context_digest,
     read_json,
+    serialize_integrator_context,
     task_card,
 )
 from tools.orchestrator.runtime import CliProvider, Git, ProcessResult, execute, lock
-from tools.orchestrator.workflow import Pipeline, materialize_private_toolchain
+from tools.orchestrator.workflow import (
+    Pipeline,
+    build_integrator_prompt,
+    materialize_private_toolchain,
+)
 
 Output = TypeVar("Output", bound=BaseModel)
 
@@ -137,7 +152,7 @@ class FakeAgents:
         name: str,
         readonly: bool,
     ) -> Output:
-        assert role.executable == "fake-codex"
+        assert role.executable in {"fake-codex", "fake-agy"}
         assert timeout == self.timeout
         assert artifacts.is_dir()
         assert name
@@ -147,9 +162,11 @@ class FakeAgents:
             assert matched is not None
             perspective = ReviewPerspective(matched[1])
             self.reviewer_calls.append(perspective)
-            return output.model_validate(ReviewShard(perspective=perspective, findings=[]))
+            return output.model_validate(
+                ReviewShard(perspective=perspective, findings=[], probe_request=None)
+            )
         self.calls.append(output.__name__)
-        task_match = re.search(r'"task_id": "(T[0-9]{3})"', prompt)
+        task_match = re.search(r'"task_id"\s*:\s*"(T[0-9]{3})"', prompt)
         assert task_match is not None
         task_id = task_match[1]
         card = task_card(cwd, task_id)
@@ -205,11 +222,14 @@ class FakeAgents:
                 ],
                 scope_violations=[],
                 required_fixes=[] if passing else ["Restore good behavior"],
+                reviewer_dispositions=[],
             )
         elif output == Fix:
             result = Fix(fix_prompt="Restore good behavior; keep contract unchanged.")
         elif output == IntegrationReview:
-            matched = re.search(r"SOURCE_BRANCH: ([^\n]+)", prompt)
+            matched = re.search(r'"source_branch":\s*"([^"]+)"', prompt) or re.search(
+                r"SOURCE_BRANCH:\s*([^\n]+)", prompt
+            )
             assert matched is not None
             result = IntegrationReview(
                 status="READY", source_branch=matched[1], target_branch="main", findings=[]
@@ -242,7 +262,7 @@ class AuthorityProbePipeline(Pipeline):
         state: RunState,
         role_name: str,
         output: type[BaseModel],
-        context: str,
+        context: str | AuditorContextV1 | IntegratorContextV1,
         *,
         cwd: Path | None = None,
     ) -> BaseModel:
@@ -317,7 +337,28 @@ class CoordinatedReviewAgents(FakeAgents):
                 for shard in bundle.shards:
                     assert shard.findings[0].action in prompt
                     assert shard.findings[0].finding_id in prompt
-                assert '"results"' in prompt and '"summary"' in prompt
+                from tools.orchestrator.core import AuditorContextV1, EvidenceBundle
+
+                assert "AUDITOR_CONTEXT:" in prompt
+                payload = prompt.split("AUDITOR_CONTEXT:", 1)[1].lstrip()
+                context_data, consumed = json.JSONDecoder().raw_decode(payload)
+                trailing = payload[consumed:].strip()
+                assert not trailing or trailing.startswith(
+                    (
+                        "AUDIT REPORT CORRECTION",
+                        "Previous attempt failed validation/execution.",
+                        "Previous attempt stalled with no progress.",
+                    )
+                )
+                context = AuditorContextV1.model_validate(context_data)
+
+                saved = RunState.model_validate(read_json(artifacts / "state.json"))
+                evidence = EvidenceBundle.model_validate(
+                    read_json(artifacts / saved.artifacts["evidence_bundle"])
+                )
+
+                assert context.evidence_bundle == evidence.semantic_payload()
+                assert context.candidate_identity.source_digest == saved.verified_digest
                 data = result.model_dump()
                 data["reviewer_dispositions"] = [
                     {
@@ -410,6 +451,7 @@ class CoordinatedReviewAgents(FakeAgents):
                             action=f"Check synthetic {perspective}", evidence="feature.txt:1"
                         )
                     ],
+                    probe_request=None,
                 )
             )
         finally:
@@ -557,6 +599,58 @@ def test_no_agent_run_without_valid_config(tmp_path: Path) -> None:
 def test_interrupted_worker_never_replays() -> None:
     assert Pipeline.resumable(State.WORKER_RUNNING) is False
     assert Pipeline.resumable(State.AUDIT_PASS) is True
+
+
+def test_owner_authorized_agy_auto_process_allows_worker_handoff(repository: Path) -> None:
+    config = configuration(integrate=False)
+    config.roles["worker"] = Role(provider="agy", executable="fake-agy", allow_process=True)
+    agents = FakeAgents()
+    pipeline = Pipeline(repository, config, agents)
+    state = pipeline.start("T100", defer_verification=True)
+    assert state.state == State.IMPLEMENTED
+    assert agents.calls == ["Plan", "WorkerResult"]
+    assert "audit_checks" not in state.artifacts
+
+
+def test_explicit_host_verification_is_deferred_until_requested(repository: Path) -> None:
+    agents = FakeAgents()
+    pipeline = Pipeline(repository, configuration(integrate=False), agents)
+    state = pipeline.start("T100", defer_verification=True)
+    assert state.state == State.IMPLEMENTED
+    assert agents.calls == ["Plan", "WorkerResult"]
+    assert "audit_checks" not in state.artifacts
+
+    # A normal resume cannot silently run tests after a Worker handoff.
+    pending = pipeline.resume("T100", state.run_id, defer_verification=True)
+    assert pending.state == State.IMPLEMENTED
+    assert agents.calls == ["Plan", "WorkerResult"]
+
+    # Only the separately authorized host verification advances the state.
+    verified = pipeline.resume(
+        "T100", state.run_id, defer_verification=False, stop_after_audit=True
+    )
+    assert verified.state == State.AUDIT_PASS
+    assert verified.verified_digest == verified.audited_digest
+    assert agents.calls == ["Plan", "WorkerResult", "Audit"]
+
+
+def test_explicit_host_verification_stops_before_automatic_fix(repository: Path) -> None:
+    agents = FakeAgents(failures=1)
+    pipeline = Pipeline(repository, configuration(integrate=False), agents)
+    first = pipeline.start("T100", defer_verification=True)
+    assert first.state == State.IMPLEMENTED
+
+    audited = pipeline.resume("T100", first.run_id, defer_verification=False, stop_after_audit=True)
+    assert audited.state == State.AUDIT_FAIL
+    assert agents.worker_calls == 1
+    assert "Fix" not in agents.calls
+
+    # The next host resume explicitly dispatches the Fix Worker, not tests.
+    fixed = pipeline.resume("T100", first.run_id, defer_verification=True)
+    assert fixed.state == State.IMPLEMENTED
+    assert agents.worker_calls == 2
+    assert agents.calls[-2:] == ["Fix", "WorkerResult"]
+    assert fixed.verified_digest == ""
 
 
 @pytest.mark.parametrize("failures", [0, 1])
@@ -707,7 +801,7 @@ def test_source_change_between_checks_and_audit_blocks(repository: Path) -> None
             state: RunState,
             role_name: str,
             output: type[BaseModel],
-            context: str,
+            context: str | AuditorContextV1 | IntegratorContextV1,
             *,
             cwd: Path | None = None,
         ) -> BaseModel:
@@ -1191,7 +1285,22 @@ def test_cli_retry_uses_explicit_run_id(repository: Path, monkeypatch: pytest.Mo
     ]
     retried = [state for state in states if state.run_id != old.run_id]
     assert len(retried) == 1 and retried[0].retry_of == old.run_id
-    assert retried[0].state == State.AUDIT_PASS
+    assert retried[0].state == State.IMPLEMENTED
+    assert "audit_checks" not in retried[0].artifacts
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "orchestrator",
+            "verify-candidate",
+            "T100",
+            "--run-id",
+            retried[0].run_id,
+            "--no-integrate",
+        ],
+    )
+    assert main() == 0
+    assert pipeline.status("T100", retried[0].run_id).state == State.AUDIT_PASS
 
 
 @pytest.mark.parametrize("legacy", [False, True])
@@ -1279,7 +1388,7 @@ def test_retry_legacy_planning_gate_uses_fresh_plan_and_preserves_evidence(
 def test_planning_respects_owner_configured_verification_authority(repository: Path) -> None:
     from tools.orchestrator.workflow import PLANNING_RULES, ROLE_RULES
 
-    assert "repository-configured verification" in ROLE_RULES
+    assert "official verification" in ROLE_RULES
     assert (
         "Do not access credentials, real provider inference, remote Git, "
         "or real user vocabulary data." not in ROLE_RULES
@@ -1437,7 +1546,12 @@ def test_agent_failure_is_finite_and_preserves_partial_work(repository: Path, mo
 
 
 @pytest.mark.parametrize("unsafe", ["none", "dirty", "wrong_exit", "output", "missing"])
-def test_run_recovers_known_gemini_trust_failure_only(repository: Path, unsafe: str) -> None:
+def test_run_recovers_known_gemini_trust_failure_only(
+    repository: Path, unsafe: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The fixture reproduces pre-policy Gemini history. Production dispatch
+    # remains covered by test_worker_configuration_rejects_non_code_only.
+    monkeypatch.setattr("tools.orchestrator.runtime.is_worker_code_only", lambda _role: True)
     config = configuration(integrate=False)
     config.roles["worker"].provider = "gemini"
     agents = RecoveryAgents("trust")
@@ -1516,8 +1630,11 @@ def test_planning_drift_is_corrected_automatically(repository: Path) -> None:
     "unsafe", ["none", "dirty", "output", "timeout", "tampered", "same_provider"]
 )
 def test_corrected_agy_routing_retries_clean_failed_gemini_run(
-    repository: Path, unsafe: str
+    repository: Path, unsafe: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Preserve coverage of historical failover semantics without granting
+    # unsafe permissions to any production Worker.
+    monkeypatch.setattr("tools.orchestrator.runtime.is_worker_code_only", lambda _role: True)
     config = configuration(integrate=False)
     config.roles["worker"].provider = "gemini"
     pipeline = Pipeline(repository, config, RecoveryAgents("trust"))
@@ -2093,12 +2210,31 @@ class ConcurrentAuditAgents(FakeAgents):
                 self.audit_prompts.append(prompt)
                 saved = RunState.model_validate(read_json(artifacts / "state.json"))
                 assert saved.current_agent == "auditor"
-                checks = read_json(artifacts / saved.artifacts["audit_checks"])
+                from tools.orchestrator.core import AuditorContextV1, EvidenceBundle
+
                 bundle = ReviewBundle.model_validate(
                     read_json(artifacts / saved.artifacts["review_bundle"])
                 )
-                assert json.dumps(checks) in prompt
-                assert json.dumps(bundle.model_dump(mode="json")) in prompt
+                evidence = EvidenceBundle.model_validate(
+                    read_json(artifacts / saved.artifacts["evidence_bundle"])
+                )
+
+                assert "AUDITOR_CONTEXT:" in prompt
+                payload = prompt.split("AUDITOR_CONTEXT:", 1)[1].lstrip()
+                context_data, consumed = json.JSONDecoder().raw_decode(payload)
+                trailing = payload[consumed:].strip()
+                assert not trailing or trailing.startswith(
+                    (
+                        "AUDIT REPORT CORRECTION",
+                        "Previous attempt failed validation/execution.",
+                        "Previous attempt stalled with no progress.",
+                    )
+                )
+                context = AuditorContextV1.model_validate(context_data)
+
+                assert context.review_bundle == bundle
+                assert context.evidence_bundle == evidence.semantic_payload()
+                assert context.candidate_identity.source_digest == saved.verified_digest
                 result = super().run(
                     prompt,
                     cwd=cwd,
@@ -2157,6 +2293,7 @@ class ConcurrentAuditAgents(FakeAgents):
                 ReviewShard(
                     perspective=perspective,
                     findings=findings,
+                    probe_request=None,
                 )
             )
         self.reviewer_prompts.append(prompt)
@@ -2206,6 +2343,7 @@ class ConcurrentAuditAgents(FakeAgents):
                 ReviewShard(
                     perspective=perspective,
                     findings=findings,
+                    probe_request=None,
                 )
             )
         finally:
@@ -2228,10 +2366,12 @@ def concurrent_audit_pipeline(
     config.verification = [["python", "-m", "ruff", "check", "."], ["python", "-m", "mypy", "."]]
     pipeline = AuthorityProbePipeline(repository, config, agents)
     agents.pipeline = pipeline
-    collect = workflow.collect_verification
-    original_execute = workflow.execute
+    from tools.orchestrator.core import VerificationCollection, VerificationRequest
+    from tools.orchestrator.runtime import execute as original_execute
 
-    def collecting(request: workflow.VerificationRequest) -> workflow.VerificationCollection:
+    collect = workflow.collect_verification
+
+    def collecting(request: VerificationRequest) -> VerificationCollection:
         assert threading.get_ident() != pipeline.owner
         agents.enter(rendezvous=False)
         try:
@@ -2270,7 +2410,7 @@ def concurrent_audit_pipeline(
             "oversized",
         }
         return ProcessResult(
-            command=command,
+            command=tuple(command),
             cwd=str(cwd),
             started_at="start",
             ended_at="end",
@@ -2449,7 +2589,18 @@ def test_concurrent_audit_transient_boundary_and_stable_finding_ids(
         state.worktree_branch,
         [
             counterfactual,
-            *[shard for shard in bundle.shards if shard.perspective != counterfactual.perspective],
+            *[
+                ReviewShard(
+                    perspective=shard.perspective,
+                    findings=[
+                        ReviewFinding(action=item.action, evidence=item.evidence)
+                        for item in shard.findings
+                    ],
+                    probe_request=None,
+                )
+                for shard in bundle.shards
+                if shard.perspective != counterfactual.perspective
+            ],
         ],
     )
     shifted = next(
@@ -2503,9 +2654,10 @@ def test_concurrent_audit_toolchain_unsafe_backlink_fails_closed(
             return result
 
     agents = UnsafeBacklinkAgents("verification_first")
-    pipeline, agents = concurrent_audit_pipeline(
+    pipeline, returned_agents = concurrent_audit_pipeline(
         repository, monkeypatch, "verification_first", agents=agents
     )
+    assert returned_agents is agents
 
     state = pipeline.start("T100")
     assert state.state == State.FAILED
@@ -2566,9 +2718,10 @@ def test_concurrent_audit_toolchain_safe_shared_toolchains_work(
             return result
 
     agents = SafeToolchainAgents("verification_first")
-    pipeline, agents = concurrent_audit_pipeline(
+    pipeline, returned_agents = concurrent_audit_pipeline(
         repository, monkeypatch, "verification_first", agents=agents
     )
+    assert returned_agents is agents
 
     state = pipeline.start("T100")
     assert state.state == State.AUDIT_PASS, state.last_error
@@ -2769,9 +2922,10 @@ def test_concurrent_audit_private_toolchain_node_modules_root_alias(
             return result
 
     agents = RootAliasAgents("verification_first")
-    pipeline, agents = concurrent_audit_pipeline(
+    pipeline, returned_agents = concurrent_audit_pipeline(
         repository, monkeypatch, "verification_first", agents=agents
     )
+    assert returned_agents is agents
     state = pipeline.start("T100")
     assert state.state == State.FAILED
     assert "Unsafe toolchain root" in (state.last_error or "")
@@ -2821,17 +2975,20 @@ def test_concurrent_audit_private_toolchain_unreadable_directory_fails_closed(
             return result
 
     agents = UnreadableToolchainAgents("verification_first")
-    pipeline, agents = concurrent_audit_pipeline(
+    pipeline, returned_agents = concurrent_audit_pipeline(
         repository, monkeypatch, "verification_first", agents=agents
     )
+    assert returned_agents is agents
 
     real_scandir = os.scandir
 
-    def faulty_scandir(path: object = ".") -> object:
+    def faulty_scandir(
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int = ".",
+    ) -> object:
         path_str = str(path)
         if "secret_sub" in path_str:
             raise PermissionError("Simulated permission denied on toolchain inspection")
-        return real_scandir(path)  # type: ignore[arg-type]
+        return real_scandir(path)
 
     monkeypatch.setattr(os, "scandir", faulty_scandir)
 
@@ -2874,10 +3031,10 @@ def test_concurrent_audit_root_discovery_whitespace_sensitive_and_failure(
             working_root=test_tree,
         )
 
-    def faulty_run(*args: str, **kwargs: object) -> str:
+    def faulty_run(*args: str, preserve_newlines: bool = False) -> str:
         if args and args[0] == "worktree":
             raise OrchestratorError("Simulated git worktree list failure")
-        return git.run(*args, **kwargs)
+        return git.run(*args, preserve_newlines=preserve_newlines)
 
     monkeypatch.setattr(pipeline.git, "run", faulty_run)
     with pytest.raises(OrchestratorError, match="Failed to discover registered worktrees"):
@@ -3149,9 +3306,10 @@ def test_concurrent_audit_private_toolchain_external_regular_file_symlink_reprod
             return result
 
     agents = ExternalFileSymlinkAgents("verification_first")
-    pipeline, agents = concurrent_audit_pipeline(
+    pipeline, returned_agents = concurrent_audit_pipeline(
         repository, monkeypatch, "verification_first", agents=agents
     )
+    assert returned_agents is agents
 
     state = pipeline.start("T100")
     assert state.state == State.FAILED
@@ -3230,9 +3388,10 @@ def test_concurrent_audit_private_toolchain_external_directory_symlink_fails_clo
             return result
 
     agents = ExternalDirSymlinkAgents("verification_first")
-    pipeline, agents = concurrent_audit_pipeline(
+    pipeline, returned_agents = concurrent_audit_pipeline(
         repository, monkeypatch, "verification_first", agents=agents
     )
+    assert returned_agents is agents
 
     state = pipeline.start("T100")
     assert state.state == State.FAILED
@@ -3414,9 +3573,10 @@ def test_concurrent_audit_private_toolchain_venv_non_interpreter_external_symlin
             return result
 
     agents = VenvNonInterpAgents("verification_first")
-    pipeline, agents = concurrent_audit_pipeline(
+    pipeline, returned_agents = concurrent_audit_pipeline(
         repository, monkeypatch, "verification_first", agents=agents
     )
+    assert returned_agents is agents
 
     state = pipeline.start("T100")
     assert state.state == State.FAILED
@@ -3494,3 +3654,191 @@ def test_evidence_bundle_accessor_rejects_current_source_digest_mismatch(
     assert Git(worktree).snapshot(state.base_sha) != bundle.source_digest
     with pytest.raises(OrchestratorError, match="source_digest mismatch"):
         pipeline.evidence_bundle(directory, state)
+
+
+def synthetic_integrator_context(
+    *,
+    source_branch: str = "agent/T100-run1",
+    target_branch: str = "main",
+    target_sha: str = "a" * 40,
+    evidence_payload: dict[str, object] | None = None,
+) -> IntegratorContextV1:
+    contract = AuditorContract(
+        title="Synthetic Task",
+        objective="Verify integrator context behavior",
+        allowed_paths=["feature.txt"],
+        forbidden_paths=[],
+        acceptance_criteria=["Preserve good behavior"],
+        risk_level="medium",
+        stop_conditions="Stop on scope extension",
+    )
+    bundle = (
+        evidence_payload
+        if evidence_payload is not None
+        else {
+            "schema_version": 1,
+            "task_id": "T100",
+            "base_sha": "b" * 40,
+            "branch": source_branch,
+            "source_digest": "c" * 64,
+            "scope": {
+                "verdict": "PASS",
+                "allowed_paths": ["feature.txt"],
+                "actual_changed_paths": ["feature.txt"],
+            },
+            "verification": {"passed": True, "failed": False, "commands": []},
+        }
+    )
+    return IntegratorContextV1(
+        contract=contract,
+        evidence_bundle=bundle,
+        source_branch=source_branch,
+        target_branch=target_branch,
+        target_sha=target_sha,
+    )
+
+
+def test_integrator_context_v1_interface_and_properties() -> None:
+    ctx = synthetic_integrator_context()
+    assert ctx.schema_version == 1
+    assert ctx.source_branch == "agent/T100-run1"
+    assert ctx.target_branch == "main"
+    assert ctx.target_sha == "a" * 40
+    assert ctx.contract.title == "Synthetic Task"
+    assert IntegratorContext is IntegratorContextV1
+
+    # Deterministic serialization
+    raw_json = serialize_integrator_context(ctx)
+    data = json.loads(raw_json)
+    assert data["source_branch"] == "agent/T100-run1"
+    assert data["target_branch"] == "main"
+    assert data["schema_version"] == 1
+
+    # Digest property and standalone helper match
+    expected_digest = digest(raw_json.encode("utf-8"))
+    assert ctx.digest == expected_digest
+    assert integrator_context_digest(ctx) == expected_digest
+
+    # Component size breakdown
+    sizes = integrator_context_component_sizes(ctx)
+    assert "contract_bytes" in sizes
+    assert "evidence_bundle_bytes" in sizes
+    assert "schema_version_bytes" in sizes
+    assert "source_branch_bytes" in sizes
+    assert "target_branch_bytes" in sizes
+    assert "target_sha_bytes" in sizes
+    assert sizes["total_bytes"] == len(raw_json.encode("utf-8"))
+    assert sum(v for k, v in sizes.items() if k != "total_bytes") < sizes["total_bytes"]
+
+    # In-bounds size check returns length
+    assert check_integrator_context_size(ctx) == len(raw_json.encode("utf-8"))
+
+    # Extra fields forbidden
+    dumped = ctx.model_dump()
+    dumped["extra_field"] = "forbidden"
+    with pytest.raises(ValidationError):
+        IntegratorContextV1.model_validate(dumped)
+
+
+def test_integrator_context_v1_size_guard_and_diagnostics() -> None:
+    # 1. Fits under default 64 KiB limit
+    ctx_small = synthetic_integrator_context()
+    assert check_integrator_context_size(ctx_small) <= INTEGRATOR_CONTEXT_MAX_BYTES
+
+    # 2. Oversized payload raises IntegratorContextOversizedError
+    huge_data = "x" * (65 * 1024)
+    ctx_oversized = synthetic_integrator_context(evidence_payload={"huge": huge_data})
+    with pytest.raises(IntegratorContextOversizedError) as exc_info:
+        check_integrator_context_size(ctx_oversized)
+    err_msg = str(exc_info.value)
+    assert "Integrator context exceeds size limit" in err_msg
+    assert f"> {INTEGRATOR_CONTEXT_MAX_BYTES} bytes" in err_msg
+    assert "Component diagnostics:" in err_msg
+    assert "evidence_bundle_bytes" in err_msg
+
+    # Verify error hierarchy (both OrchestratorError and ValueError)
+    assert isinstance(exc_info.value, OrchestratorError)
+    assert isinstance(exc_info.value, ValueError)
+
+    # 3. Custom max_bytes parameter supported
+    with pytest.raises(IntegratorContextOversizedError) as custom_exc:
+        check_integrator_context_size(ctx_small, max_bytes=50)
+    assert "50 bytes" in str(custom_exc.value)
+
+
+def test_build_integrator_prompt_formatting() -> None:
+    ctx = synthetic_integrator_context()
+    skills = "## REQUIRED AGENT SKILLS\n- code-review-and-quality"
+    prompt = build_integrator_prompt(ctx, skills_text=skills)
+
+    assert "ROLE: integrator" in prompt
+    assert "OUTPUT SCHEMA:" in prompt
+    assert "IntegrationReview" in prompt or '"status"' in prompt
+    assert "code-review-and-quality" in prompt
+    assert "INTEGRATOR_CONTEXT:" in prompt
+    assert ctx.source_branch in prompt
+    assert ctx.target_branch in prompt
+    assert ctx.target_sha in prompt
+
+    # Valid JSON in INTEGRATOR_CONTEXT block
+    idx = prompt.index("INTEGRATOR_CONTEXT:")
+    context_part = prompt[idx + len("INTEGRATOR_CONTEXT:") :].strip()
+    parsed = json.loads(context_part)
+    assert parsed["source_branch"] == ctx.source_branch
+    assert parsed["target_sha"] == ctx.target_sha
+
+
+def test_integrator_context_attempt_artifact_sealing_and_protection(repository: Path) -> None:
+    # 1. Suffix registered in known attempt suffixes
+    assert ".integrator-context.json" in KNOWN_ATTEMPT_ARTIFACT_SUFFIXES
+
+    # 2. Run pipeline with integration enabled
+    agents = FakeAgents()
+    pipeline = Pipeline(repository, configuration(integrate=True), agents)
+    state = pipeline.start("T100")
+    assert state.state == State.DONE, state.last_error
+
+    directory = pipeline.run_path("T100", state.run_id)
+
+    # 3. Attempt artifact exists and is sealed
+    integrator_contexts = list(directory.glob("*-integrator-*.integrator-context.json"))
+    assert len(integrator_contexts) == 1
+    ctx_file = integrator_contexts[0]
+    assert ctx_file.is_file() and not ctx_file.is_symlink()
+
+    # 4. Registered in state.artifact_digests with matching digest
+    file_digest = digest(ctx_file.read_bytes())
+    assert ctx_file.name in state.artifact_digests
+    assert state.artifact_digests[ctx_file.name] == file_digest
+
+    # 5. Content deserializes to valid IntegratorContextV1
+    loaded = json.loads(ctx_file.read_text(encoding="utf-8"))
+    validated_ctx = IntegratorContextV1.model_validate(loaded)
+    assert validated_ctx.source_branch == state.worktree_branch
+    assert validated_ctx.target_branch == "main"
+    assert validated_ctx.target_sha is not None
+
+    # 6. Tampering with sealed context artifact fails validation
+    ctx_file.write_text('{"tampered": true}', encoding="utf-8")
+    with pytest.raises(OrchestratorError):
+        pipeline.check_artifacts(directory, state)
+
+
+def test_integrator_oversized_context_fails_closed_zero_attempts(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    agents = FakeAgents()
+    pipeline = Pipeline(repository, configuration(integrate=True), agents)
+
+    import tools.orchestrator.workflow as workflow
+
+    def constrained_integrator_limit(context: IntegratorContextV1) -> int:
+        return check_integrator_context_size(context, max_bytes=256)
+
+    monkeypatch.setattr(workflow, "check_integrator_context_size", constrained_integrator_limit)
+
+    state = pipeline.start("T100")
+    assert state.state == State.FAILED
+    assert "Integrator context exceeds size limit" in (state.last_error or "")
+    # Zero calls to IntegrationReview made
+    assert "IntegrationReview" not in agents.calls

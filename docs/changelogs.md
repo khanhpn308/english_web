@@ -1,3 +1,198 @@
+## 07/10/2026 - T089-R3: verified external candidate import control plane (Asia/Bangkok)
+
+- Status: `IMPLEMENTATION_READY_FOR_HOST_VERIFICATION`. Implemented the host-authoritative verified external candidate import control plane (`import-candidate` CLI command and `Pipeline.import_candidate()`):
+  - Architecture & Workflow:
+    - Added separate host-owned command `import-candidate` importing an externally salvaged candidate into a fresh orchestrator-owned authoritative run without invoking any AI providers.
+    - Historical lineage run remains strictly historical context: requires `FAILED` state (supporting failures originating from `FIX_RUNNING` and retaining `current_agent="worker"` without rewriting), base SHA match, contract validity, task card validity, and configuration compatibility. Fix budget (`fix_cycle` and `max_fix_cycles`) is preserved. Historical directory, state, and sealed artifacts remain byte-identical.
+    - External source worktree must be a real Git worktree belonging to the same repository, with HEAD at historical `base_sha` and `Git.snapshot(base_sha)` matching `expected_source_digest`. Symlinks in worktree or ancestry are rejected.
+    - Strict JSON decoding implemented (`strict_json_loads`) rejecting duplicate keys, trailing data, NaN, Infinity, -Infinity, and invalid UTF-8.
+    - Bounded evidence capture enforces host limits: max 16 artifacts, 256 KiB single artifact limit, 2 MiB combined artifact limit, 256 KiB provenance manifest limit.
+    - All 9 supported v1 artifacts (`source-manifest.txt`, `scout-A/B/C.packet.json`, `adjudication-packet[.compact].json`, `heavy-judge.prompt.txt`, `heavy-judge.schema.json`, `heavy-judge.response.json`) are captured, validated, and copied into the new run directory under flat sealed filenames (`00-imported-*`), guaranteeing independence from external `/tmp` evidence.
+    - Complete semantic coverage enforced: `actual_changed_paths == source_manifest == union(scout A/B/C reviewed_files)` exact set equality. Any missing or extra path fails closed. Real T089 salvage (6 of 9 paths) correctly rejected.
+    - Zero-findings v1 policy enforced: Scout findings empty, Adjudication finding count 0 with empty findings, Heavy Judge decision `PASS` with zero confirmed findings, dismissed findings, or evidence requests.
+    - Authoritative reverification: Materializes into managed worktree, executes configured setup commands, and deterministically executes contract and config verification commands via `Pipeline.reverify_candidate`.
+    - Atomic publication: Grants `AUDIT_PASS` with `audited_digest` and `verified_digest` atomically bound to the candidate digest only when BOTH mechanical and semantic gates pass.
+    - Continuation & Control Plane Guard: `resume --no-integrate` stays at `AUDIT_PASS` with 0 AI calls. `resume --integrate` proceeds through Integrator and merges without re-running ReviewShard or Audit. CLI rejects resume execution from the candidate worktree, enforcing trusted control-plane execution.
+  - Invariants Preserved:
+    - `recover_candidate` semantics and tests have zero regressions.
+    - Exactly 0 AI provider calls during import.
+    - Real salvage worktree and historical failed T089 worktree untouched.
+  - Verification & Tests:
+    - Added full test suite in `tests/orchestrator/test_recovery.py` with synthetic fixture builder covering the entire 12-area test matrix (success, historical lineage, external source, provenance manifest, strict JSON, semantic coverage, zero-findings v1, evidence association, mechanical verification, copied evidence independence, control-plane guard & continuation, CLI).
+  - Exact Files Modified:
+    - `tools/orchestrator/recovery.py`
+    - `tools/orchestrator/workflow.py`
+    - `tools/orchestrator/__main__.py`
+    - `tests/orchestrator/test_recovery.py`
+    - `docs/orchestrator.md`
+    - `docs/changelogs.md`
+
+## 07/10/2026 - T089-R3 R5: separate trusted control plane from recovered candidate (Asia/Bangkok)
+
+- Status: `PASS_FOR_FINAL_HOST_REVIEW`. Corrected trust model architecture to enforce execution from trusted host control plane while keeping recovered candidate purely as frozen candidate data:
+  - Problem Remedied:
+    - Recovery previously generated a handoff that cd'd into the recovered candidate worktree and ran `python -m tools.orchestrator resume ...`.
+    - The CLI resume guard previously required `cwd` and loaded `__main__.py` to belong to the candidate worktree.
+    - Because the candidate worktree is materialized exactly from historical frozen candidate source (which predates R2/R3 infrastructure remediation), running Python modules from the candidate bypassed trusted R2/R3 control-plane implementation (liveness watchdog, AgentStallError handling, bounded AuditorContextV1, attempt artifact sealing, stall retry, and recovery compatibility).
+  - Implementation & Architecture:
+    - `tools/orchestrator/recovery.py`: Added canonical helper `control_plane_root()` deriving the absolute resolved control-plane root from the loaded `tools.orchestrator` package.
+    - Updated `RecoveryHandoff` model to distinguish `control_plane_cwd` (pointing to control plane) and `candidate_worktree` (pointing to candidate worktree), while retaining `cwd` (pointing to control plane) for backward compatibility.
+    - Updated `recovery_handoff()` so `next_step` executes from `control_plane_cwd` (`cd -- <control_plane_cwd> && python -m tools.orchestrator resume ...`).
+    - `tools/orchestrator/__main__.py`: Inverted CLI resume guard. Explicitly rejects execution from candidate worktree or using candidate Python modules (`control_plane == candidate_root or Path.cwd().resolve() == candidate_root`). Accepts resume when invoked from the trusted control plane even though `Path.cwd() != state.worktree_path`.
+    - Preserved candidate identity: the candidate worktree remains strictly candidate data at the exact historical digest (`Git.snapshot(base_sha) == expected_source_digest`), with zero R2/R3 infrastructure source files injected.
+    - The normal Pipeline continues operating on `state.worktree_path` for candidate Git operations, source operations, reviewer `cwd`, and Auditor `cwd`.
+  - Invariants Preserved:
+    - Frozen candidate identity, recovery source eligibility, `recovery_config_compatible()`, source/recovery config digests, liveness upgrade detection, normal resume config equality, typed `AgentStallError` classification, watchdog implementation, retry budgets, attempt artifact sealing, `AuditorContextV1`, 64 KiB context guard, fix-cycle preservation, historical source immutability.
+    - Zero real provider/model/network calls.
+    - Historical T089 runs and worktrees unmodified.
+  - Regressions Added:
+    - Added `test_end_to_end_control_plane_and_candidate_separation_regression` in `tests/orchestrator/test_recovery.py` demonstrating two distinct roots without monkeypatching `__file__`, verifying all 9 invariant points and subprocess-level rejection of candidate worktree invocation.
+    - Updated CLI test to verify control-plane execution acceptance and rejection of candidate cwd/module invocation.
+  - Exact Files Modified:
+    - `tools/orchestrator/__main__.py`
+    - `tools/orchestrator/recovery.py`
+    - `tests/orchestrator/test_recovery.py`
+    - `docs/orchestrator.md`
+    - `docs/changelogs.md`
+
+## 07/10/2026 - T089-R3 R3: liveness-only recovery configuration upgrade (Asia/Bangkok)
+
+- Status: `PASS_FOR_HOST_VERIFICATION`. Narrowly scoped infrastructure compatibility remediation enabling recovery-time upgrade for host-owned Role liveness parameters:
+  - Problem Remedied:
+    - T089-R2 added opt-in watchdog parameters on `Role` (`stall_timeout_seconds`, `stall_confirm_seconds`, `max_stall_retries`) with historical runs defaulting `stall_timeout_seconds = None`.
+    - Recovery previously enforced exact configuration identity (excluding only `integrate`), preventing historical runs from recovering with the watchdog enabled.
+  - Implementation & Invariants:
+    - `tools/orchestrator/recovery.py`: Implemented typed helper `recovery_config_compatible(source_config, recovery_config)` excluding only `integrate` and the three Role liveness fields (`stall_timeout_seconds`, `stall_confirm_seconds`, `max_stall_retries`).
+    - Recovery strictly fails-closed against changes to provider, executable, model, reasoning, worker_access, allow_process, base_branch, paths, setup_commands, verification commands, global timeout_seconds, max_fix_cycles, skills_root, or role definitions.
+    - Recovered `RunState` persists the new recovery configuration with upgraded watchdog parameters, ensuring subsequent normal `resume()` calls succeed under unmodified configuration equality. Normal `resume()` configuration equality was not weakened.
+    - Extended `RecoveryOrigin` with deterministic SHA-256 digests (`source_config_digest`, `recovery_config_digest`) computed over sorted compact JSON and boolean `liveness_config_upgraded` via `is_liveness_config_upgraded()`.
+  - Invariants Preserved:
+    - All R2 invariants preserved: typed `AgentStallError` classification, liveness observation, stall confirmation, process-tree termination, orthogonal retry budgets, immutable attempt naming, `seal_attempt_artifacts` over `KNOWN_ATTEMPT_ARTIFACT_SUFFIXES`, terminal stall `current_agent = None`, bounded `AuditorContextV1` serialization, and attempt context artifact binding.
+    - Historical source run, state, config, worktree, and sealed artifacts remain byte-identical.
+    - 0 AI provider calls during recovery.
+  - Exact Files Modified:
+    - `tools/orchestrator/recovery.py`
+    - `tests/orchestrator/test_recovery.py`
+    - `docs/orchestrator.md`
+    - `docs/changelogs.md`
+
+## 07/10/2026 - T089-R3: unified recovery control plane reconciliation (Asia/Bangkok)
+
+- Status: `IMPLEMENTATION_READY_FOR_HOST_VERIFICATION`. Ported T089-R host-authoritative `recover-candidate` control plane onto approved T089-R2 target baseline while strictly preserving all R2 invariants:
+  - Preserved R2 Invariants:
+    - Runtime liveness watchdog progress tracking and typed `AgentStallError` classification (no prose matching).
+    - Independent stall retry budget (`Role.max_stall_retries`) and validation retry budget.
+    - Immutable per-attempt artifact identity (`-a01`, `-a02`, ...) and `seal_attempt_artifacts` over `KNOWN_ATTEMPT_ARTIFACT_SUFFIXES`.
+    - Authoritative bounded `AuditorContextV1` serialization, 64 KiB context guard, and attempt context artifact binding.
+    - `current_agent = None` cleanup on terminal stall.
+  - Recovery Behavior Ported:
+    - CLI supports `recover-candidate TNNN --run-id SOURCE_RUN_ID --expected-source-digest SHA256`.
+    - Host-authoritative eligibility validation: historical run must be `FAILED` from `AUDIT_RUNNING` with `current_agent is None`, registered worktree, unchanged base SHA, validated sealed artifacts, contract/task/worker handoffs, and matching expected source snapshot. Historical source run, artifacts, index, and worktree remain untouched.
+    - Construction creates a fresh managed run and worktree at historical `base_sha`, materializes candidate via extracted 3-layer Git reproducer (`materialize_candidate`), executes clean configured setup commands, and binds immutable `RecoveryOrigin` (schema version 1) with advisory claim comparison digests.
+    - Carries only validated pre-audit handoffs (`task_card`, `plan`, `contract`, `worker`, optional `skills`); historical audit, review, probe, and attempt artifacts are excluded.
+    - Preserves `fix_cycle`, `max_fix_cycles`, task, contract, and candidate identity.
+    - Transitions recovered run to `state = IMPLEMENTED, current_agent = None` invoking zero AI providers.
+    - Exposes `recovery_handoff` in CLI output with cwd, branch, identity, and exact command ensuring recovered run is audited in candidate worktree.
+  - Exact Files Modified:
+    - `tools/orchestrator/__main__.py`
+    - `tools/orchestrator/recovery.py`
+    - `tools/orchestrator/workflow.py`
+    - `tests/orchestrator/test_recovery.py`
+    - `docs/orchestrator.md`
+    - `docs/changelogs.md`
+
+## 07/10/2026 - T089-R2D: typed stall classification and complete attempt artifact sealing (Asia/Bangkok)
+
+- Remediation of final adversarial review findings for T089-R2:
+  - R2C-F01 (Typed Stall Classification):
+    - `tools/orchestrator/workflow.py`: Refactored stall classification in `Pipeline.invoke()` to strictly typed `is_stall = isinstance(error, AgentStallError)`. Removed all exception string/prose parsing fallback ("Agent process stalled" substring check). Enforced host-only liveness trust boundary where arbitrary model/error text cannot manufacture mechanical stall evidence or consume stall retries.
+    - Added adversarial regressions proving non-AgentStallError containing "Agent process stalled" (both raw `OrchestratorError` and provider/validation error paths) is NOT classified as a stall, consumes 0 stall retries, and validation errors correctly consume validation retries.
+  - R2C-F02 (Seal All Existing Attempt Artifacts):
+    - `tools/orchestrator/core.py`, `tools/orchestrator/workflow.py`: Defined canonical `KNOWN_ATTEMPT_ARTIFACT_SUFFIXES` (`.prompt.md`, `.auditor-context.json`, `.schema.json`, `.response.json`, `.log.json`, `.rejected.json`).
+    - Implemented single host-owned helper `seal_attempt_artifacts` (and `Pipeline._seal_attempt_artifacts`) used uniformly across: (1) terminal confirmed stall, (2) retryable failed attempts, and (3) successful attempts.
+    - Inspects only the known fixed suffix set without arbitrary file globbing. For every existing regular non-symlink file, calculates digest, registers in `state.artifact_digests`, and adds to protected tracking. Forbids mutating or overwriting previously sealed artifacts.
+    - Added regression coverage verifying that on terminal stall, prompt, auditor context (when applicable), schema (when present), log, and synthetic response (when present) are all sealed into `state.artifact_digests` matching exact bytes, with `state.current_agent = None` persisted to disk.
+  - Verification:
+    - 15 passed in focused workflow suite (`pytest tests/orchestrator/test_workflow.py -k "stall or attempt or auditor_context"`).
+    - 8 passed in `pytest tests/orchestrator/test_runtime.py`.
+    - 145 passed in `pytest tests/orchestrator/test_core.py`.
+    - 188 passed in `pytest tests/orchestrator/test_workflow.py`.
+    - 479 passed in full `pytest tests/orchestrator`.
+    - `python scripts/check_constraints.py floor`: clean.
+    - Ruff check, Ruff format, Mypy, and `git diff --check` all passed.
+
+## 07/10/2026 - T089-R2B: attempt artifact identity, orthogonal retry budget, and authoritative auditor context binding (Asia/Bangkok)
+
+- Remediation of independent semantic review findings for T089-R2:
+  - R2B-001 (Attempt Artifact Identity):
+    - `tools/orchestrator/workflow.py`: Every provider invocation attempt receives a unique immutable identity `<invocation_base>-a<attempt_index>` (`<fix-cycle>-<role>-<uuid>-a01`, `-a02`, ...).
+    - Dedicated immutable per-attempt artifact paths for prompt (`<attempt_name>.prompt.md`), schema (`<attempt_name>.schema.json`), response (`<attempt_name>.response.json`), log (`<attempt_name>.log.json`), auditor context (`<attempt_name>.auditor-context.json`), and rejected responses (`<attempt_name>.rejected.json`).
+    - Sealed prior-attempt artifacts are never overwritten. After each attempt ends, candidate source and protected artifacts are verified unchanged before sealing into `state.artifact_digests` and protected tracking.
+    - Terminal confirmed stall reliably sets `state.current_agent = None` and persists `state.json` before raising `AgentStallError`.
+  - R2B-002 (Orthogonal Retry Budget):
+    - `tools/orchestrator/workflow.py`: Maintained independent counters and state machine logic for validation/execution retries (`validation_retries <= 2`, preserving historical 3 validation attempts) and stall retries (`stall_retries <= role.max_stall_retries`, configurable on `Role` from 0 to 10).
+    - Confirmed stall attempts do not consume the historical validation retry allowance.
+  - R2B-003 (Authoritative AuditorContext Binding):
+    - `tools/orchestrator/workflow.py`: Dispatches final Auditor with a canonical immutable context artifact `<attempt_name>.auditor-context.json` containing exact UTF-8 bytes of `serialize_auditor_context(context)` and registered SHA-256 in `state.artifact_digests` and protected file tracking.
+    - Preserved immutable context and distinct prompt artifacts across retries.
+  - Tests:
+    - `tests/orchestrator/test_core.py`: Added `test_auditor_context_binding_digests_and_persistence` verifying identical context produces identical digest, changed mandatory fields produce changed digest, persisted bytes match `serialize_auditor_context(context)`, and digest matches bytes.
+    - `tests/orchestrator/test_workflow.py`: Updated `StallSimulationAgents` to write distinct per-attempt metadata; added regression tests for stall recovery with differing attempt artifacts without aliasing, stall not consuming validation retry allowance, configured `max_stall_retries` matching role contract (0 and 3), and auditor canonical context artifact binding and retry evidence.
+
+## 07/10/2026 - T089-R2: agent liveness watchdog and bounded final-auditor context (Asia/Bangkok)
+
+- Infrastructure remediation on top of frozen T089 candidate:
+  - Addressed observed final-Auditor stall/hang incident by introducing an opt-in host-owned silence/stall watchdog and replacing redundant final-Auditor prompt construction with a bounded canonical typed context.
+- Objective A: Provider Stall / Liveness Watchdog:
+  - `tools/orchestrator/core.py`: Added `stall_timeout_seconds: StrictInt | None = None`, `stall_confirm_seconds: StrictInt = 30`, and `max_stall_retries: StrictInt = 1` to `Role`. Added `AgentStallError` inheriting `OrchestratorError`. Default `None` ensures full backward compatibility for historical configs and runs.
+  - `tools/orchestrator/runtime.py`: Added `stalled: bool = False` to `ProcessResult` and exposed in `metadata()`. Implemented progress tracking via `os.fstat(fd).st_size` byte growth on stdout/stderr. Silence beyond `stall_timeout_seconds` triggers confirmation window `stall_confirm_seconds`; output growth cancels suspicion, while confirmed stall terminates entire process tree (`_terminate_process_tree`) across POSIX/Windows without leaving orphan subprocesses. `CliProvider.run` passes role stall settings and raises `AgentStallError` on confirmed stall.
+  - `tools/orchestrator/workflow.py`: `Pipeline.invoke()` tracks stall retries separately bounded by `role.max_stall_retries` (default 1 retry). When stall retry budget is exhausted: verifies source and protected artifacts are unchanged, seals `{name}.log.json` into `state.artifact_digests`, sets `current_agent = None`, and raises `AgentStallError` persisting `state = FAILED`, `blocked_from = <active stage>`, `current_agent = None`.
+- Objective B: Bounded Final Auditor Context:
+  - `tools/orchestrator/core.py`: Added `AuditorCandidateIdentity`, `AuditorContract`, `AuditorWorkerSummary`, and canonical `AuditorContextV1` (aliased as `AuditorContext`). Defined `AUDITOR_CONTEXT_MAX_BYTES = 64 * 1024` (64 KiB operational budget). Added deterministic serialization `serialize_auditor_context()` (sorted keys, compact separators), `auditor_context_digest()`, component size breakdown `auditor_context_component_sizes()`, and `check_auditor_context_size()` which fails closed with `AuditorContextOversizedError` consuming 0 provider attempts.
+  - `tools/orchestrator/workflow.py`: Implemented `build_auditor_prompt()`, structuring final Auditor prompt with stable role rules, output schema, required skills, and one serialized `AuditorContextV1`. Explicitly excluded raw Plan, `TaskCard.context_text`, duplicate TaskCard, `WorkerResult.commands_run`, raw verification output, and duplicate ReviewBundle.
+- Tests:
+  - `tests/orchestrator/test_runtime.py`: Added 8 tests covering `timeout=None` without deadline, watchdog disabled backward compatibility, silent subprocess confirmed stall, progressing output liveness reset, suspected stall recovery during confirmation, process-tree termination with orphan reaper verification, diagnostic metadata distinction, and CliProvider stall exception.
+  - `tests/orchestrator/test_core.py`: Added tests for Role stall watchdog configuration defaults and parsing, ProcessResult stalled diagnostic metadata, AuditorContextV1 construction and canonical fields, deterministic serialization and digest, 64 KiB size guard boundary and diagnostics, and Audit JSON Schema validity.
+  - `tests/orchestrator/test_workflow.py`: Added tests for stall single retry recovery, terminal stall retry exhaustion (`current_agent=None`, sealed log evidence, candidate unchanged), Auditor bounded prompt construction, and oversized context fail-closed consuming zero provider calls.
+
+## 06/10/2026 - T089: evidence-aware reviewer protocol and safe probe execution (Asia/Bangkok)
+
+- Control plane / host safe probe execution and reviewer protocol:
+  - Enforced trust boundary: AI semantic reviewers and auditor are strictly read-only and restricted to candidate-bound evidence. Host owns the `ProbeCatalog` and command execution; arbitrary model-supplied shell/argv/commands are strictly forbidden (`extra="forbid"`, forbidden override keys check, safe path containment).
+  - Preserved T087 concurrent verification: initial reviewer fan-out runs concurrently with verification (`verification_status="PENDING"`). Initial reviewers cannot claim unfinished verification as authoritative evidence.
+  - Final Auditor receives complete validated `EvidenceBundle.semantic_payload()` alongside `ReviewBundle` and accepted `ProbeEvidence`. Mechanical verification failures cannot be overridden by an Auditor PASS (fails closed).
+- `tools/orchestrator/core.py`:
+  - Added strict Pydantic models: `ProbeRequest` (`probe_id`, `target_path`, `query`, `candidate_digest`, `params`, optional `rationale`), `ProbeEvidence` (bound to frozen candidate identity, `source_digest`, `status`, `classification`, structured results/summary, byte limit, runtime monotonic duration), `ReviewerContext` (structured context schema for round-1 and resumed round-2 reviewers).
+  - Updated `ReviewShard` to carry optional `probe_request: ProbeRequest | None = None`.
+  - Added `FORBIDDEN_PROBE_OVERRIDE_KEYS = frozenset({"command", "argv", "cmd", "shell", "executable", ...})` and `probe_request_digest()`.
+- `tools/orchestrator/probes.py`:
+  - Implemented repository-owned `ProbeCatalog` and `ProbeDefinition` with safe immutable registry.
+  - Built default probes: `source_inspection` (pure Python bounded file reading and regex/string search within allowlist) and `git_diff_check` (predefined non-configurable executable probe running `git diff --check`).
+  - Implemented `execute_probe`: verifies frozen candidate identity, detects stale candidate changes (fails closed), enforces strict output size limits (`max_output_bytes`), execution timeouts, path containment, and prevents mutation of authoritative task sources.
+- `tools/orchestrator/workflow.py`:
+  - Wired structured `ReviewerContext` into `_review_phase()`.
+  - Added bounded 1-round reviewer probing: reviewers requesting probes are resumed exactly once with structured `ProbeEvidence`. Attempted second probe rounds are rejected.
+  - Deterministic fan-in: multiple reviewer probe requests/results fan in canonically (`CORRECTNESS` -> `VERIFICATION` -> `SECURITY`) independent of completion order.
+  - Parent remains sole authoritative state/artifact writer (`probe_<perspective>` and `review_bundle` persisted by parent).
+  - Wired complete `EvidenceBundle.semantic_payload()` and accepted probe artifacts into final Auditor prompt and context.
+  - Enforced mechanical verification failure check: if mechanical verification failed, Auditor PASS is rejected and run fails closed.
+- `tests/orchestrator/test_probes.py`:
+  - Added 44 comprehensive unit and adversarial security tests covering: schema validation, forbidden override keys (`command`, `argv`, etc.), path traversal, external absolute paths, shell metacharacter payloads, catalog immutability, execution of `source_inspection` and `git_diff_check`, candidate tampering, stale candidate detection, output size limits, timeouts, authoritative source immutability, out-of-order completion canonical ordering, and second-round rejection.
+- `tests/orchestrator/test_workflow.py`:
+  - Added 5 end-to-end integration tests: `test_reviewer_probe_execution_and_resume_flow`, `test_reviewer_second_probe_round_rejected`, `test_reviewer_probe_stale_candidate_fails_closed`, `test_auditor_cannot_override_mechanical_verification_failure`, and `test_multiple_reviewers_request_probes_canonical_ordering`.
+- `docs/orchestrator.md`:
+  - Documented evidence-aware reviewer protocol, `ReviewerContext`, `ProbeRequest`, `ProbeEvidence`, `ProbeCatalog`, and fail-closed security invariants.
+- Verification:
+  - 44 tests in `test_probes.py` pass.
+  - 59 tests in focused probe/reviewer/evidence suite pass.
+  - 48 tests in concurrent_audit pass.
+  - 30 tests in parallel_review pass.
+  - 48 tests in scheduler pass.
+  - 447 tests in full orchestrator pass.
+  - Ruff check, Ruff format, Mypy, and `git diff --check` all pass.
+  - Canonical T089 status advanced to DONE.
+  - No product source or provider/model defaults changed.
+
 ## 06/10/2026 - T088 authoritative host verification closeout
 
 - EvidenceBundle focused regression: 21 passed, 311 deselected.

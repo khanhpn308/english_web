@@ -57,7 +57,7 @@ def sample_verification_collection(
     *,
     identity: FrozenEvidenceIdentity | None = None,
 ) -> VerificationCollection:
-    raw_results = (
+    raw_results: tuple[dict[str, object], ...] = (
         {
             "command_index": 0,
             "command": ["python", "-m", "ruff", "check", "."],
@@ -603,6 +603,8 @@ def test_deterministic_evidence_duration_uses_monotonic_clock_with_backward_wall
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import time
+
     import tools.orchestrator.workflow as workflow
     from tools.orchestrator.core import VerificationRequest
     from tools.orchestrator.runtime import ProcessResult
@@ -610,7 +612,7 @@ def test_deterministic_evidence_duration_uses_monotonic_clock_with_backward_wall
     commands = (("git", "diff", "--check"),)
     identity = FrozenEvidenceIdentity.freeze("T088", "a" * 64, "feature/test", "a" * 64, commands)
     ticks = iter((10_000, 10_750))
-    monkeypatch.setattr(workflow.time, "monotonic_ns", lambda: next(ticks))
+    monkeypatch.setattr(time, "monotonic_ns", lambda: next(ticks))
 
     def execute(command: list[str], cwd: Path, *, timeout: int | None = None) -> ProcessResult:
         assert timeout is None
@@ -629,7 +631,10 @@ def test_deterministic_evidence_duration_uses_monotonic_clock_with_backward_wall
         VerificationRequest(tmp_path, commands, None, identity)
     )
     evidence = collect_verification_evidence(collection)
-    assert collection.results[0]["ended_at"] < collection.results[0]["started_at"]
+    started_at = collection.results[0]["started_at"]
+    ended_at = collection.results[0]["ended_at"]
+    assert isinstance(started_at, str) and isinstance(ended_at, str)
+    assert ended_at < started_at
     assert evidence.commands[0].duration_ns == 750
     assert evidence.passed
 
@@ -657,22 +662,31 @@ def test_evidence_bundle_artifact_frozen_identity_and_audit_checks_source_associ
     (repo / "initial.txt").write_text("candidate B\n")
     identity_b = frozen_identity(repo, base_sha, branch)
     collection_b = sample_verification_collection(identity=identity_b)
-    kwargs = {
-        "worktree": repo,
-        "task_id": "T088",
-        "base_sha": base_sha,
-        "branch": branch,
-        "allowed_paths": ["initial.txt"],
-        "verification_collection": collection_b,
-        "artifacts_dir": tmp_path,
-    }
     with pytest.raises(OrchestratorError, match="Artifact frozen identity mismatch"):
-        build_evidence_bundle(**kwargs, artifact_refs=[ref_a])
+        build_evidence_bundle(
+            worktree=repo,
+            task_id="T088",
+            base_sha=base_sha,
+            branch=branch,
+            allowed_paths=["initial.txt"],
+            verification_collection=collection_b,
+            artifacts_dir=tmp_path,
+            artifact_refs=[ref_a],
+        )
     rebound_ref = create_artifact_ref(
         "audit_checks", checks.name, tmp_path, "test_execution_record", identity=identity_b
     )
     with pytest.raises(OrchestratorError, match="audit_checks frozen source mismatch"):
-        build_evidence_bundle(**kwargs, artifact_refs=[rebound_ref])
+        build_evidence_bundle(
+            worktree=repo,
+            task_id="T088",
+            base_sha=base_sha,
+            branch=branch,
+            allowed_paths=["initial.txt"],
+            verification_collection=collection_b,
+            artifacts_dir=tmp_path,
+            artifact_refs=[rebound_ref],
+        )
 
 
 def test_evidence_bundle_validates_historical_audit_checks_without_rewriting(

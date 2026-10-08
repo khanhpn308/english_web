@@ -80,7 +80,11 @@ class SyntheticProvider:
             assert readonly
             matched = re.search(r"REVIEW_PERSPECTIVE: ([^\n]+)", prompt)
             assert matched is not None
-            result = ReviewShard(perspective=ReviewPerspective(matched[1]), findings=[])
+            result = ReviewShard(
+                perspective=ReviewPerspective(matched[1]),
+                findings=[],
+                probe_request=None,
+            )
         elif output == Audit:
             assert readonly
             result = Audit(
@@ -95,12 +99,20 @@ class SyntheticProvider:
                 ],
                 scope_violations=[],
                 required_fixes=[],
+                reviewer_dispositions=[],
             )
         elif output == IntegrationReview:
-            matched = re.search(r"SOURCE_BRANCH: ([^\n]+)", prompt)
-            assert matched is not None and readonly
+            assert readonly and "INTEGRATOR_CONTEXT:" in prompt
+            from tools.orchestrator.core import IntegratorContextV1
+
+            ctx = IntegratorContextV1.model_validate_json(
+                prompt.split("INTEGRATOR_CONTEXT:", 1)[1].strip()
+            )
             result = IntegrationReview(
-                status="READY", source_branch=matched[1], target_branch="main", findings=[]
+                status="READY",
+                source_branch=ctx.source_branch,
+                target_branch=ctx.target_branch,
+                findings=[],
             )
         else:
             raise AssertionError("Unexpected synthetic role")
