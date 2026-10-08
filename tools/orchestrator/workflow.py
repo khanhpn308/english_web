@@ -32,6 +32,7 @@ from tools.orchestrator.core import (
     IntegratorContextV1,
     OrchestratorError,
     Plan,
+    ProbeEvidence,
     ProbeResultClassification,
     RetryOrigin,
     ReviewBundle,
@@ -2477,6 +2478,12 @@ class Pipeline:
                         "Maximum fix cycles reached; unresolved audit findings retained"
                     )
                 state.fix_cycle += 1
+                state.verified_digest = ""
+                state.artifacts.pop("audit_checks", None)
+                state.artifacts.pop("evidence_bundle", None)
+                for perspective in ReviewPerspective:
+                    state.artifacts.pop(f"probe_{perspective}", None)
+                    state.artifacts.pop(f"probe_binding_{perspective}", None)
                 self.save(directory, state)
                 previous = {
                     key: read_json(directory / state.artifacts[key]) for key in ("worker", "audit")
@@ -2566,12 +2573,79 @@ class Pipeline:
                     if "evidence_bundle" in state.artifacts
                     else None
                 )
-                probe_keys = sorted(k for k in state.artifacts if k.startswith("probe_"))
-                probe_evidence_payloads: list[dict[str, object]] = [
-                    item
-                    for k in probe_keys
-                    if isinstance((item := read_json(directory / state.artifacts[k])), dict)
-                ]
+                # Reject stale or unbound probes; never include a probe_binding artifact
+                # as if it were model-facing ProbeEvidence.
+                source_digest = Git(Path(state.worktree_path)).snapshot(state.base_sha)
+                probe_evidence_payloads: list[dict[str, object]] = []
+                for perspective in ReviewPerspective:
+                    probe_key = f"probe_{perspective}"
+                    binding_key = f"probe_binding_{perspective}"
+                    has_probe = probe_key in state.artifacts
+                    has_binding = binding_key in state.artifacts
+                    if not has_probe and not has_binding:
+                        continue
+                    if has_probe != has_binding:
+                        raise OrchestratorError(
+                            f"Missing host probe binding or evidence for {perspective}"
+                        )
+                    binding_file = state.artifacts[binding_key]
+                    probe_file = state.artifacts[probe_key]
+                    if not binding_file.startswith(f"{state.fix_cycle:02d}-probe_binding-"):
+                        raise OrchestratorError("Stale probe binding cycle")
+                    if not probe_file.startswith(f"{state.fix_cycle:02d}-probe_"):
+                        raise OrchestratorError("Stale probe evidence cycle")
+                    binding_path = directory / binding_file
+                    probe_path = directory / probe_file
+                    if (
+                        binding_path.is_symlink()
+                        or not binding_path.is_file()
+                        or probe_path.is_symlink()
+                        or not probe_path.is_file()
+                    ):
+                        raise OrchestratorError("Unsafe or missing host probe evidence")
+                    binding_bytes = binding_path.read_bytes()
+                    probe_bytes = probe_path.read_bytes()
+                    binding_digest = state.artifact_digests.get(binding_file)
+                    probe_digest = state.artifact_digests.get(probe_file)
+                    if (
+                        not binding_digest
+                        or digest(binding_bytes) != binding_digest
+                        or not probe_digest
+                        or digest(probe_bytes) != probe_digest
+                    ):
+                        raise OrchestratorError("Host probe evidence digest mismatch")
+                    binding = read_json(binding_path)
+                    if not isinstance(binding, dict) or (
+                        binding.get("schema_version") != 1
+                        or binding.get("cycle") != state.fix_cycle
+                        or binding.get("task_id") != state.task_id
+                        or binding.get("base_sha") != state.base_sha
+                        or binding.get("branch") != state.worktree_branch
+                        or binding.get("source_digest") != source_digest
+                        or binding.get("perspective") != perspective.value
+                        or binding.get("evidence_artifact") != probe_file
+                        or binding.get("evidence_digest") != probe_digest
+                    ):
+                        raise OrchestratorError("Host probe binding identity mismatch")
+                    params = binding.get("validated_parameters")
+                    if not isinstance(params, dict):
+                        raise OrchestratorError("Host probe parameters malformed")
+                    evidence = ProbeEvidence.model_validate(read_json(probe_path))
+                    validate_probe_evidence(
+                        evidence,
+                        expected_task_id=state.task_id,
+                        expected_base_sha=state.base_sha,
+                        expected_branch=state.worktree_branch,
+                        expected_source_digest=source_digest,
+                        expected_req_digest=binding["request_digest"],
+                        expected_probe_id=binding["probe_id"],
+                        expected_perspective=perspective,
+                        expected_parameters=params,
+                        artifacts_dir=directory,
+                        artifact_filename=probe_file,
+                        expected_digest=probe_digest,
+                    )
+                    probe_evidence_payloads.append(evidence.model_dump(mode="json"))
                 worker_obj = WorkerResult.model_validate(
                     read_json(directory / state.artifacts["worker"])
                 )
