@@ -87,7 +87,7 @@ def main() -> int:
         if args.command == "schedule":
             if args.task is not None or args.run_id is not None:
                 raise OrchestratorError("Schedule accepts neither a task nor --run-id")
-            report = Scheduler(pipeline).run(dry_run=args.dry_run)
+            report = Scheduler(pipeline, defer_verification=True).run(dry_run=args.dry_run)
             print(json.dumps(report.model_dump(mode="json"), indent=2))
             return 2 if not args.dry_run and report.graph.blocked else 0
         if args.dry_run and args.command != "run":
