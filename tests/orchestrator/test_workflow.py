@@ -601,15 +601,15 @@ def test_interrupted_worker_never_replays() -> None:
     assert Pipeline.resumable(State.AUDIT_PASS) is True
 
 
-def test_worker_configuration_rejects_non_code_only(repository: Path) -> None:
-    config = configuration()
+def test_owner_authorized_agy_auto_process_allows_worker_handoff(repository: Path) -> None:
+    config = configuration(integrate=False)
     config.roles["worker"] = Role(provider="agy", executable="fake-agy", allow_process=True)
     agents = FakeAgents()
     pipeline = Pipeline(repository, config, agents)
-    state = pipeline.start("T100")
-    assert state.state == State.BLOCKED
-    assert "Worker code-only" in (state.last_error or "")
-    assert agents.calls == ["Plan"]
+    state = pipeline.start("T100", defer_verification=True)
+    assert state.state == State.IMPLEMENTED
+    assert agents.calls == ["Plan", "WorkerResult"]
+    assert "audit_checks" not in state.artifacts
 
 
 def test_explicit_host_verification_is_deferred_until_requested(repository: Path) -> None:
