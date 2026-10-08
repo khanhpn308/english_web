@@ -102,7 +102,7 @@ class BridgeAdapter(BridgePort):
 
         except (httpx.RequestError, httpx.TimeoutException) as e:
             raise BridgeUnavailableError("Proxy connection failed or timed out") from e
-        except json.JSONDecodeError as e:
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
             raise BridgeInvalidResponseError("Malformed JSON response") from e
 
     async def dispatch_chat(self, payload: dict[str, Any], deadline: float) -> dict[str, Any]:
@@ -134,5 +134,5 @@ class BridgeAdapter(BridgePort):
 
         except (httpx.RequestError, httpx.TimeoutException) as e:
             raise BridgeUnavailableError("Proxy connection failed or timed out") from e
-        except json.JSONDecodeError as e:
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
             raise BridgeInvalidResponseError("Malformed JSON response") from e

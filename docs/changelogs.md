@@ -1,3 +1,10 @@
+## 09/10/2026 - T008 merge conflict resolution (Asia/Bangkok)
+
+- Reconciled only `backend/app/main.py`, `contracts/openapi.json`, `frontend/src/shared/api/generated.ts` and this changelog. Preserved T018 consent, T027 search/cursor initialization, T023 recovery/startup sync/watcher routes and T008 lookup/admission/deadline behavior. Shutdown calls watcher stop and drains retained lookup workers before database closure.
+- Kept the existing and incoming API schemas, paths, response mappings and TypeScript definitions, including required-nullable `AI_CONSENT.currentPolicyVersion`. Kept both changelog histories without rewriting historical claims; removed identical entries and ordered dated entries newest first.
+- Source-level consistency review only. Tests, builds, generators, audits and other executable verification remain deferred by the owner. All other staged T008 changes and the unmerged index remain untouched; no commit or task DONE status. Host staging/finalization and `INTEGRATED_UNVERIFIED` recording remain pending.
+- Read-only lifecycle review found no merge-specific issue. Two inherited T023 concerns remain for host follow-up: a concurrent watcher failure can be overwritten by startup readiness, and watcher stop can return after its five-second join while the worker is still alive. Their existing behavior remains outside this reconciliation scope.
+
 ## 08/10/2026 - T023 merge conflict resolution (Asia/Bangkok)
 
 - Resolved only `backend/app/main.py`, `contracts/openapi.json`, `frontend/src/shared/api/generated.ts` and `docs/changelogs.md` in the existing merge. Retained T027 search service, cursor signing and routes alongside T023 source synchronization, watcher lifecycle and routes; combined the existing API definitions and preserved both changelog histories.
@@ -550,6 +557,50 @@
 - Final task-local verification: 331 passed (journal 66, adapter 86, operations 15, vocabulary 18, search 26, SRS 60, admission 60); scoped Ruff/format/Mypy, single-head Alembic heads/history and diff check all exit 0. Frozen 13 Python files were unchanged after verification.
 - State is `READY_FOR_T022_AUDIT`, not DONE; CP10 remains unchecked. Native Windows evidence and full integration/coverage/security gates are deferred per owner instructions. Temps without a durable authenticated handle are retained; startup recovery runs before source writers. MAIN_DRIFT is reported, with no integration or commit performed.
 
+## 03/10/2026 - T027: Sửa F1–F6 sau independent audit (Asia/Bangkok)
+
+- T026: thêm iterator candidate đầy đủ, bounded memory trong `search_index.py`, dùng chung matching/scoring với legacy `search()`; thêm dependency regression tests theo scope owner cấp.
+- T027: bỏ candidate cap và full-population cache, chọn page bằng heap pageSize+1; fingerprint gồm source relationships và stored projection version. Khôi phục detail `partOfSpeech`, kiểm tra canonical cursor encoding, giới hạn content filters và ngày ASCII hợp lệ.
+- Owner xác nhận projection không tương thích ở trang đầu trả `503 CONFIGURATION_REQUIRED`; cursor cũ trả `409 CURSOR_EXPIRED`. OpenAPI/DTO được tạo bằng tooling T017; 49 API + 32 T026 + 11 session tests, 5 contract tests, scoped Ruff/format và Mypy đều đạt. Source/generated hashes giữ nguyên qua verification cuối; independent re-audit còn pending.
+- Không sửa repository/normalization/models/session/migrations/tooling; không commit, không tích hợp T008/main.
+
+## 03/10/2026 - T008: Round-4 correctness remediation (Asia/Bangkok)
+
+- Under `tasks/t008-r4-shared-remediation.md`, retain service-owned claim/admission/parse/completion/render workers, classify cancellation durably, drain them before database shutdown, and preserve atomic preview/SUCCEEDED commits. Request deadlines cover blocked body receive and final HTTP serialization; late work cannot create a new success. Preserve predeadline success on replay after a lost response.
+- Correct the canonical consent schema to required string-or-null, regenerate OpenAPI/TypeScript, reject lone surrogate input before fingerprinting, and classify invalid bridge UTF-8 at the adapter as 502 BRIDGE_INVALID_RESPONSE. Bound real concurrency rendezvous/task/future waits, including cancellation-resistant drain evidence.
+- Add RED/GREEN proofs and adversarial cases in `backend/tests/test_lookups.py`; shared operation-test changes only add synchronization bounds. Keep terminal-write failures visible and deny further AI admission. Preserve immutable payload, Cambridge URL, idempotency and preview-only behavior.
+- Update the parent card and todo status to `IMPLEMENTATION_COMPLETE_ENVIRONMENT_VERIFICATION_PENDING`. Pre-freeze lookup 82 tests pass; mypy/Ruff/format/TS and contract 9 pass; pinned secrets/code/dependency scans report zero findings. Final verification is recorded after source freeze in the remediation report and `/tmp/t008-r4-final-results.json`.
+- Native Windows Python is unavailable despite Windows PowerShell access; genuine Windows filesystem/ACL evidence remains pending. No task/integration completion, independent audit verdict, commit or push. T027, main, audited worktree, migrations, lockfiles, frontend UI, and historical audit records remain untouched.
+
+## 03/10/2026 - T008: Hoàn thành Remediation Round 3 (Asia/Bangkok)
+
+- Khắc phục R3-B01 (Ledger-owned commit-boundary eligibility protocol): Kiểm tra điều kiện hoàn tất (eligibility) tại chính ranh giới DBAPI commit thông qua SQLAlchemy event listener `commit` trên connection giao dịch. Nếu deadline hết hạn hoặc coroutine bị hủy ngay trước commit, transaction bị hủy bỏ và rollback hoàn toàn: zero preview, zero SUCCEEDED receipt. Bổ sung kiểm thử tất định dừng chính xác tại ranh giới commit.
+- Khắc phục R3-B02 (End-to-end request deadline + cancellation lifecycle): Đặt `RequestBudgetMiddleware` chạy ngoài cùng trước khi `SessionGuard` đệm request body để ghi nhận `request_start_time` chuẩn xác. Bọc provider dispatch trong phạm vi hard timeout `asyncio.timeout(remaining)`. Bắt `(asyncio.CancelledError, GeneratorExit)` xuyên suốt các chặng để ghi nhận trạng thái bền vững `TIMEOUT` / 503 / `FAILED` (hoặc `UNKNOWN` nếu provider đã dispatch), tuyệt đối không để sót operation ở trạng thái `PENDING`.
+- Khắc phục R3-B03 (Admission payload race): Thực hiện `deepcopy` payload đầu vào ngay trước bất kỳ await hay preflight nào trong `AiAdmissionCoordinator.dispatch()`, đảm bảo caller không thể inject `route`, `provider`, `fallbackModel` qua race condition. Bổ sung kiểm thử đa luồng có rào chắn tất định.
+- Khắc phục R3-B04 (Strict Cambridge URL validation): Xây dựng bộ kiểm tra URL fail-closed loại bỏ triệt để encoding không hợp lệ, non-UTF-8 bytes (`%ff`), percent lồng nhau (`%25...`), encoded slash/backslash (`%2f`, `%5c`), traversal (`%2e%2e`), port, userinfo, controls (NUL, BEL, DEL), query và fragment. URL sai chuẩn trả về 502 `BRIDGE_INVALID_RESPONSE`, operation `FAILED`, zero preview.
+- Khắc phục R3-B05 (Term normalization & boundaries): Chuẩn hóa Unicode NFC, strip & collapse khoảng trắng, từ chối ký tự điều khiển (Cc, C0/C1) trước khi kiểm tra độ dài 1-80 ký tự. Từ được chuẩn hóa được dùng làm định danh yêu cầu và idempotency fingerprint.
+- Khắc phục R3-B06 (Consent error details contract): Cập nhật `scripts/export_contract.py` bổ sung discriminated variant `AI_CONSENT` vào `ErrorDetails` với `consentState` và `currentPolicyVersion`. Ánh xạ lỗi 403 `AI_CONSENT_REQUIRED` trả về chi tiết `AI_CONSENT` thay vì `RETRY`. Regenerate OpenAPI và TypeScript types đồng bộ.
+- Khắc phục R3-B07 (Scope authorization): Ghi nhận phân loại và cấp phép phạm vi sửa đổi bắt buộc đối với `backend/app/application/ai_admission.py`, `backend/app/vocabulary/repository.py`, `scripts/export_contract.py`, `scripts/tests/test_contract.py`.
+- Khắc phục R3-B08 (Deterministic concurrency): Loại bỏ hoàn toàn sleep và unbounded wait trong toàn bộ test concurrency. Sử dụng timeout có rào chắn và khối `finally` dọn dẹp tài nguyên tin cậy.
+- Kiểm tra toàn diện: 41 test trong `test_lookups.py` PASS 100%, 104 test phụ thuộc PASS, `npm run test:contract` PASS 7/7, `python -m mypy backend` PASS (51 files), `python -m ruff check .` và `ruff format --check .` PASS 100%, `npm run typecheck` PASS.
+
+## 03/10/2026 - T008: Hoàn thành Remediation Round 2 (Asia/Bangkok)
+
+- Khắc phục Blocker 01 (Privacy-safe failure diagnostics): Loại bỏ hoàn toàn in ấn ngoại lệ thô (`repr(e)`, `traceback.print_exc()`) trong `LookupService`. Bổ sung kiểm thử `test_privacy_safe_failure_diagnostics` xác thực các sentinel nhạy cảm (`BEARER_SECRET_SENTINEL`, `LEARNING_CONTENT_SENTINEL`, `PROVIDER_SECRET_SENTINEL`) không bị rò rỉ ra stdout, stderr, HTTP response, hoặc cơ sở dữ liệu.
+- Khắc phục Blocker 02 (End-to-end deadline & no late commit): Thiết lập deadline monotonic cố định từ lúc bắt đầu thao tác lookup. Kiểm tra tính hợp lệ của deadline xuyên suốt các chặng claim, admission, provider dispatch, parsing, validation, và tại chặng commit transaction bằng SQLAlchemy `before_cursor_execute` event listener ngay trước câu lệnh `UPDATE operations SET status='SUCCEEDED'`. Khi deadline hết hạn hoặc coroutine bị hủy (`task.cancel()`), toàn bộ transaction rollback hoàn toàn (0 preview, 0 SUCCEEDED receipt). Chuẩn hóa timeout map sang HTTP 503 `BRIDGE_UNAVAILABLE` với `error_category="TIMEOUT"` và `response_status=503` theo ADR-0005. Bổ sung 5 kiểm thử boundary/cancellation toàn diện.
+- Khắc phục Blocker 04 (Cambridge URL validation): Thắt chặt kiểm tra URL Cambridge với schema `https`, host `dictionary.cambridge.org`, không port, không userinfo, không ký tự điều khiển/DEL/backslash/path traversal (`..`, `%2e`, `%2f`, double-encoding). Các hostile URL trả về lỗi 502 `BRIDGE_INVALID_RESPONSE` (operation `FAILED`, 0 preview). URL hợp lệ giữ nguyên trạng thái `UNVERIFIED`; URL không cung cấp (`None`) được gán nhãn `MISSING`.
+- Khắc phục Blocker 05 (Contract ErrorDetails RETRY): Cập nhật `scripts/export_contract.py` bổ sung discriminated union variant `RETRY` vào `ErrorDetails`. Regenerate `contracts/openapi.json` và `frontend/src/shared/api/generated.ts` hoàn toàn tất định (deterministic SHA-256).
+- Khắc phục Blocker 06 (Ruff I001 & format): Chuẩn hóa thứ tự import theo đúng chuẩn `I001` và wrap các dòng dài trong toàn bộ codebase sửa đổi. `ruff check .` và `ruff format --check .` đều PASS 100%.
+- Khắc phục Blocker 07 (Deterministic concurrency test): Thay thế cơ chế delay bằng explicit `asyncio.Event` (`entered_dispatch`, `release_dispatch`) trong `FakeBridge` để giữ request A in-flight một cách tất định, không dựa vào `sleep()`.
+- Toàn bộ các cổng chất lượng (`check:fast`, `architecture:check`, `test:contract`, `typecheck`, `security:secrets`, `security:code`, `security:deps`, `coverage:check` changed 92.29% / total 92.92%) và 917 backend unit/integration tests đều PASS. Trạng thái task: `READY_FOR_T008_REAUDIT`.
+
+## 03/10/2026 - T008: Hoàn thành Remediation Round 1 (Asia/Bangkok)
+
+- Khắc phục Blocker 04: Thêm strict validation để lọc và từ chối các đường dẫn Cambridge Dictionary chứa path traversal (`..`, `%2e`) hoặc không khớp đúng prefix. Các hostile URL sẽ được map thành `None` thay vì lưu vào DB, đảm bảo an toàn.
+- Khắc phục test mock issue: Sửa đổi `FakeBridge` trong test suite để parse và wrap lỗi `JSONDecodeError` thành `BridgeInvalidResponseError`, giúp mock trả về mã lỗi 502 chính xác thay vì bubble error gây ra 503 không mong muốn.
+- Loại bỏ các type ignore/noqa không hợp lệ (Blocker 06) bằng cách cấu hình lại test mock object (`FakeBridge.delay`) thay vì ghi đè phương thức trực tiếp.
+- `npm run check:full` PASS hoàn toàn với độ phủ mã lệnh (coverage) đạt 100% changed (yêu cầu 80%) và 89.28% total (vượt baseline 86.70%).
+
 ## 02/10/2026 - T022: Incomplete source journal candidate blocked on integration scope (Asia/Bangkok)
 
 - Added the linear `0007_source_journal` migration after the discovered `0006_ai_admission` head, with immutable journal evidence, deterministic state-transition guards and history-preserving downgrade refusal.
@@ -568,12 +619,6 @@
   `đ`/`Đ`, infix, POS và các trường hợp zero/single/multi-match.
 - Ghi rõ profile Windows 11/Python 3.12/SQLite và ranh giới bằng chứng: T042
   không tuyên bố kết quả hiệu năng; T065 sở hữu timing/p95.
-## 03/10/2026 - T027: Sửa F1–F6 sau independent audit (Asia/Bangkok)
-
-- T026: thêm iterator candidate đầy đủ, bounded memory trong `search_index.py`, dùng chung matching/scoring với legacy `search()`; thêm dependency regression tests theo scope owner cấp.
-- T027: bỏ candidate cap và full-population cache, chọn page bằng heap pageSize+1; fingerprint gồm source relationships và stored projection version. Khôi phục detail `partOfSpeech`, kiểm tra canonical cursor encoding, giới hạn content filters và ngày ASCII hợp lệ.
-- Owner xác nhận projection không tương thích ở trang đầu trả `503 CONFIGURATION_REQUIRED`; cursor cũ trả `409 CURSOR_EXPIRED`. OpenAPI/DTO được tạo bằng tooling T017; 49 API + 32 T026 + 11 session tests, 5 contract tests, scoped Ruff/format và Mypy đều đạt. Source/generated hashes giữ nguyên qua verification cuối; independent re-audit còn pending.
-- Không sửa repository/normalization/models/session/migrations/tooling; không commit, không tích hợp T008/main.
 
 ## 02/10/2026 - T027: Search/detail API với cursor và filters (Asia/Bangkok)
 
@@ -725,6 +770,7 @@
 
 - Portable source tests rerun in the T021 worktree: 78 passed; T020 dependency tests: 24 passed; Ruff and Mypy passed with zero errors.
 - Windows-native suite remains 11 fail-closed failures on the Linux host because genuine `win32`, NTFS reparse/junction and ACL evidence is unavailable. The implementation is committed on its task branch for preservation; it is not merged into `main`, because doing so would make the repository test gate fail.
+
 ## 02/10/2026 - T075: Khắc phục hạ tầng kiểm thử Design System & Test Oracle (Remediation Round 3) (Asia/Bangkok)
 
 - **Mục tiêu & Bối cảnh:** Giải quyết 3 blocking findings từ Independent Re-Audit #3 đối với hạ tầng test `frontend/tests/design-system.test.tsx` mà không làm thay đổi bất kỳ code production hay hành vi nào đã được thẩm định PASS.
@@ -893,6 +939,34 @@
 - **Kiểm tra cuối:** Sau SOURCE FREEZE, nguyên `check:task` đạt: 619 test Python (86 orchestrator), frontend coverage tests và 40 test architecture; coverage thay đổi100%, tổng92,12%; Gitleaks/Semgrep/OSV không có finding. Ruff/Mypy/formatter đạt, manifest/lock không đổi. Giữ nguyên lệnh/phạm vi test/scanner; không skip hoặc giảm threshold. Bốn case bổ sung xác minh input legacy sai vẫn bị từ chối và resume legacy giữ nguyên artifact.
 - **Khôi phục/phạm vi:** T059 run `202610011631074539710000-7d6c660f` đã đủ điều kiện retry theo cơ chế mới; đối chiếu chỉ đọc, JSON/run/worktree cũ nguyên vẹn, không gọi model hoặc chạy task thật. T072 DONE; không thay status task/checkpoint sản phẩm hay viết lại bằng chứng lịch sử T071.
 - **Tích hợp:** Người dùng yêu cầu hoàn tất rồi commit/merge main. Stage đúng bốn file code/test cùng năm file tài liệu/bookkeeping; scan secrets, ff-only main sạch dưới khóa tích hợp, không push. Chỉ bookkeeping đổi sau test; source hash và metadata kiểm tra được lưu trong runtime ignored. Áp dụng documentation-and-adrs theo AGENT.md.
+
+## 02/10/2026 - T008: Hoàn thiện Lookup API với Atomic Preview và Provider Validation (Asia/Bangkok)
+
+- Loại bỏ INSERT preview trùng lặp trong LookupService, sử dụng trực tiếp VocabularyRepository.create_preview() với scope external_connection được cấp quyền. Đảm bảo atomic commit của T019 preview và T016 operation receipt trong cùng một transaction.
+- Chuyển toàn bộ database/blocking operations khỏi async event loop bằng run_in_threadpool().
+- Bổ sung validation kiểm tra string rỗng/whitespace-only (min_length=1, không chỉ khoảng trắng) bằng Pydantic model cho các trường từ Provider.
+- Bổ sung test coverage cho: session_idempotency_key không leak vào payload; missing session trả 401; concurrent duplicate requests trả 409; test bridge error variants (502, 503); và test sentinel history đảm bảo zero effects lên các tables khác.
+- Aggregate coverage changed 98.43%, total 98.11%. Ruff format, Mypy, test contract, architecture/security gates PASS hoàn toàn.
+- Đã sẵn sàng cho T008 Audit theo đúng uỷ quyền và baseline.
+
+## 02/10/2026 - T008: Candidate lookup chưa hoàn tất — BLOCKED_FOR_SCOPE_EXTENSION (Asia/Bangkok)
+
+- Bổ sung `POST /api/v1/lookups` qua app factory production: chuẩn hóa/kiểm tra term và `Idempotency-Key`, claim `LOOKUP` durable operation, admission T016, prompt `lookup-v1`, strict provider validation, preview T019 gắn session và receipt atomically.
+- Replay cùng intent trả lại preview đã lưu không dispatch lần hai; changed-body, in-flight/unknown, consent/policy, malformed provider response và timeout dùng typed error envelope redacted. Lookup không ghi canonical word form, source Markdown, card hoặc SRS.
+- Regenerate OpenAPI/TypeScript DTO qua T017 generator; focused lookup 15 tests và dependency suites đạt. Native Windows tests vẫn pending fail-closed trên host Linux; không đánh dấu DONE hoặc READY_FOR_T008_AUDIT.
+- Final self-review phát hiện candidate đang lặp lại INSERT preview của T019 trong lookup service để giữ atomic receipt. `VocabularyRepository.create_preview()` tự mở transaction, chưa hỗ trợ transaction của ledger. Cần owner mở scope tối thiểu cho `backend/app/vocabulary/repository.py` trước khi sửa; file này chưa bị thay đổi. Approval hiện có chỉ bao gồm common error-message mappings trong `backend/app/http/errors.py`.
+- Còn phải hoàn thiện kiểm thử sentinel lịch sử/secret, lost-response/concurrent replay, session/policy/storage errors, provider hostile-content validation và chuyển SQLite blocking work khỏi async event loop. Candidate giữ nguyên để kiểm tra, chưa commit/push.
+
+## 02/10/2026 - Remediation kiến trúc UI và kế hoạch task shadcn/ui (Asia/Bangkok)
+
+- **Mục tiêu & Bối cảnh:** Thiết lập shadcn/ui làm canonical UI component foundation cho toàn bộ feature UI tương lai theo chỉ định của chủ repository; bảo toàn 100% hành vi và bằng chứng của T004 (AppShell routing, landmarks, accessibility, ErrorBoundary, 404).
+- **Tạo task cards mới:**
+  - `tasks/t075-shadcn-ui-foundation.md`: Tích hợp shadcn/ui, Tailwind CSS v4, path alias `@/*`, `components.json`, semantic theme tokens, `cn()` utility và minimal primitives vào ứng dụng Vite hiện tại; không cài `add --all` hay registry bên thứ ba.
+  - `tasks/t076-app-shell-shadcn-migration.md`: Migrate AppShell sang shadcn/ui và semantic tokens; giữ nguyên toàn bộ hành vi routing/landmarks/a11y/keyboard/heading focus/ErrorBoundary và có bộ test chứng minh tương đương hành vi với T004.
+- **Cập nhật kiến trúc UI (`docs/ui-architecture.md`):** Thêm mục *Canonical design system (shadcn/ui)* với 12 quy tắc bắt buộc: primitives tại `frontend/src/components/ui/`, feature composition tại `frontend/src/features/...`, sử dụng semantic tokens, accessibility là trách nhiệm ứng dụng, cấm registry bên thứ ba khi chưa được duyệt, tra cứu official docs mới nhất.
+- **Cập nhật dependency graph downstream:** Cập nhật 14 task cards (`t018-consent-ui.md`, `t009-lookup-ui-vertical-slice.md`, `t010-error-handling-recovery.md`, `t025-save-ui-audio.md`, `t028-search-ui.md`, `t030-edit-ui.md`, `t033-review-ui.md`, `t036-quiz-ui.md`, `t038-dashboard-ui.md`, `t050-quiz-runner-ui.md`, `t051-quiz-result-feedback-ui.md`, `t060-status-ui.md`, `t043-accessibility-evidence.md`, `t064-ui-performance-harness.md`) theo mô hình `T004 -> T075 -> T076 -> feature UI tasks`.
+- **Trạng thái sẵn sàng:** T018 ở trạng thái `BLOCKED_BY_T075_T076`; task sẵn sàng tiếp theo trên nhánh UI là T075.
+- **Kế hoạch & Checkpoint:** Cập nhật `docs/task-plan.md` và `tasks/todo.md` với checkpoint `CP06A` (sau T075, T076), cập nhật Mermaid diagram, adjacency list và danh sách Gemini model allocation. Không thay đổi code implementation trong session planning này.
 
 ## 01/10/2026 - T072: Bỏ human_gates theo yêu cầu chủ repository (Asia/Bangkok)
 
@@ -1115,21 +1189,6 @@
 - **Evidence:** prerequisite files match their source byte for byte; Mypy, focused Ruff/format, 10 prerequisite tests, whitespace and zero-finding secret scan pass. Reviewed semantic source files match `7f4b320`; canonical contract generation is byte-identical across two runs.
 - **Integration:** resolve changelog/task-index conflicts by retaining CP05 history and T052/T062/T007 completion plus T015 semantic completion. Candidate verification and main promotion remain gated; T016 and CP06 are pending. Earlier entries below describe their historical source snapshots, including former tooling blockers.
 
-## 30/09/2026 - T015 resumed semantic remediation and verification
-
-- **Files:** additional changes only in `backend/app/application/consent.py`, `backend/app/http/consent.py`, `backend/migrations/versions/0003_consent.py`, `backend/tests/test_consent.py`; canonically regenerated OpenAPI/DTO; T015 card and todo. Inherited implementation/quality fixes and the previous session's history are preserved; inherited `main.py` is untouched.
-- **Change/purpose:** normalize complete structured policy definitions before hashing; reject duplicate registry keys and corrupt singleton/event/receipt evidence; require exactly-one-row CAS over revision/state/identity/time. Preserve committed historical receipts after ambiguous completion while denying AI capability. Store calendar-valid RFC3339 UTC event/choice times, enforce migration shape/registry checks, and correct startup storage error taxonomy plus GET's generated 422/503 schema.
-- **Verification:** missing/corrupt evidence, canonical ordering, ambiguous completion, duplicate JSON/BLOB identities and startup storage taxonomy received RED-to-GREEN regressions. Added 47 cases to the inherited 90: consent 137, operations 14, full Python 279, frontend 38 and contract five all exit 0. Mypy, focused format, Ruff, TypeScript, build, floor and three security scans exit 0. Independent physical SQLite connections overlap deterministic writer transactions; stale grants lose. All consent paths have zero bridge/provider/socket/transport attempts. Two exports are byte-identical. Changed executable coverage 94.30%; measured combined 89.81%, unchanged thresholds.
-- **Inherited failures:** check:fast/check:task exit 1 on the same untouched T007 format failures; coverage:check exit 1 because unchanged T053 tooling requires coverage for generated.ts. No aggregate PASS or tool/threshold modification. T062 architecture command is absent. Isolated fresh/0002-to-0003 migration verification has one head; no real database rebuild and no 0004 consent migration.
-- **Handoff:** T015 acceptance DONE; workspace IMPLEMENTATION_DONE_BASELINE_BLOCKED. Detailed ownership, invariant matrix and exact source-frozen outcomes are in the T015 card. T016 and CP06 remain pending; no dispatch admission or bridge/provider calls were introduced. Not staged or committed; authorization not provided.
-
-## 30/09/2026 - T015 final semantic remediation
-
-- **Files:** the five T015 handwritten files (`backend/app/application/consent.py`, `backend/app/http/consent.py`, `backend/app/main.py`, `backend/migrations/versions/0003_consent.py`, `backend/tests/test_consent.py`); generated OpenAPI/DTO; T015 card and todo. Quality-fix base preserved; no other worktree or owner source edited.
-- **Change/purpose:** enforce complete typed v1 READY policy, server canonical digest, durable immutable first-seen policy identities/conflicts, policy-sensitive opaque ETag and RFC3339 choice time. Grant/revoke calculate revisions inside T014's completion writer transaction; state/event/successful receipt commit atomically. Replay remains historical after withdrawal, key reuse preserves 422, revoke stays offline, validation rejects malformed requests without permission/history side effects. Missing/corrupt evidence and actual storage failures fail closed; event snapshots/history resist UPDATE/DELETE/REPLACE.
-- **Verification:** RED tests reproduced semantic defects and reviewer findings before fixes. Final consent 90 PASS, operations 14 PASS, full Python 232 PASS, frontend 38 PASS, contract 5 PASS, two exports byte-identical; Mypy, Ruff lint/focused format, TypeScript, build, floor, whitespace and pinned secret/code/dependency scans PASS. Changed executable coverage 93.99%; combined measured coverage 89.56% exceeds the unchanged baseline. Exact commands/outcomes and SQLite two-engine/trigger evidence are recorded in the T015 card.
-- **Remaining blockers:** repository formatter still fails only on byte-for-byte inherited T007 bridge files (`BASELINE_T007_FORMAT_BLOCKER`). Existing T053 coverage checker wrongly requests executable coverage for generated.ts; its FAIL is preserved, source/thresholds untouched. T015 semantic acceptance is DONE; whole workspace is IMPLEMENTATION_DONE_BASELINE_BLOCKED / NOT_READY_TO_COMMIT. Unreleased/current 0003 was completed in place with one head; no claim of upgrade compatibility for an old deployed 0003 database.
-- **Handoff:** T016 is dependency-ready assuming T007 DONE; it remains TODO and no dispatch/provider work was added. No real credential/provider call, merge/rebase/pull, commit or push. Documentation follows the repository-required documentation-and-adrs skill.
 ## 01/10/2026 - T019 Schema vocabulary, source links và preview
 
 - **Files:** `backend/migrations/versions/0004_vocabulary.py`, `backend/app/vocabulary/models.py`, `backend/app/vocabulary/repository.py`, `backend/tests/test_vocabulary_storage.py`, `tasks/t019-vocabulary-schema.md`, `tasks/todo.md`, `docs/changelogs.md`.
@@ -1151,10 +1210,27 @@
   - Pending external tools: Gitleaks/Semgrep/Lighthouse ghi nhận `SETUP_PENDING`/`SETUP_FAILED` do môi trường chưa cài đặt nhị phân.
 - **Untouched:** Toàn bộ frontend, bridge adapter, consent API, operation ledger, parser, search projection và SRS logic bên ngoài T019 được bảo toàn nguyên vẹn.
 
+## 30/09/2026 - T015 resumed semantic remediation and verification
+
+- **Files:** additional changes only in `backend/app/application/consent.py`, `backend/app/http/consent.py`, `backend/migrations/versions/0003_consent.py`, `backend/tests/test_consent.py`; canonically regenerated OpenAPI/DTO; T015 card and todo. Inherited implementation/quality fixes and the previous session's history are preserved; inherited `main.py` is untouched.
+- **Change/purpose:** normalize complete structured policy definitions before hashing; reject duplicate registry keys and corrupt singleton/event/receipt evidence; require exactly-one-row CAS over revision/state/identity/time. Preserve committed historical receipts after ambiguous completion while denying AI capability. Store calendar-valid RFC3339 UTC event/choice times, enforce migration shape/registry checks, and correct startup storage error taxonomy plus GET's generated 422/503 schema.
+- **Verification:** missing/corrupt evidence, canonical ordering, ambiguous completion, duplicate JSON/BLOB identities and startup storage taxonomy received RED-to-GREEN regressions. Added 47 cases to the inherited 90: consent 137, operations 14, full Python 279, frontend 38 and contract five all exit 0. Mypy, focused format, Ruff, TypeScript, build, floor and three security scans exit 0. Independent physical SQLite connections overlap deterministic writer transactions; stale grants lose. All consent paths have zero bridge/provider/socket/transport attempts. Two exports are byte-identical. Changed executable coverage 94.30%; measured combined 89.81%, unchanged thresholds.
+- **Inherited failures:** check:fast/check:task exit 1 on the same untouched T007 format failures; coverage:check exit 1 because unchanged T053 tooling requires coverage for generated.ts. No aggregate PASS or tool/threshold modification. T062 architecture command is absent. Isolated fresh/0002-to-0003 migration verification has one head; no real database rebuild and no 0004 consent migration.
+- **Handoff:** T015 acceptance DONE; workspace IMPLEMENTATION_DONE_BASELINE_BLOCKED. Detailed ownership, invariant matrix and exact source-frozen outcomes are in the T015 card. T016 and CP06 remain pending; no dispatch admission or bridge/provider calls were introduced. Not staged or committed; authorization not provided.
+
+## 30/09/2026 - T015 final semantic remediation
+
+- **Files:** the five T015 handwritten files (`backend/app/application/consent.py`, `backend/app/http/consent.py`, `backend/app/main.py`, `backend/migrations/versions/0003_consent.py`, `backend/tests/test_consent.py`); generated OpenAPI/DTO; T015 card and todo. Quality-fix base preserved; no other worktree or owner source edited.
+- **Change/purpose:** enforce complete typed v1 READY policy, server canonical digest, durable immutable first-seen policy identities/conflicts, policy-sensitive opaque ETag and RFC3339 choice time. Grant/revoke calculate revisions inside T014's completion writer transaction; state/event/successful receipt commit atomically. Replay remains historical after withdrawal, key reuse preserves 422, revoke stays offline, validation rejects malformed requests without permission/history side effects. Missing/corrupt evidence and actual storage failures fail closed; event snapshots/history resist UPDATE/DELETE/REPLACE.
+- **Verification:** RED tests reproduced semantic defects and reviewer findings before fixes. Final consent 90 PASS, operations 14 PASS, full Python 232 PASS, frontend 38 PASS, contract 5 PASS, two exports byte-identical; Mypy, Ruff lint/focused format, TypeScript, build, floor, whitespace and pinned secret/code/dependency scans PASS. Changed executable coverage 93.99%; combined measured coverage 89.56% exceeds the unchanged baseline. Exact commands/outcomes and SQLite two-engine/trigger evidence are recorded in the T015 card.
+- **Remaining blockers:** repository formatter still fails only on byte-for-byte inherited T007 bridge files (`BASELINE_T007_FORMAT_BLOCKER`). Existing T053 coverage checker wrongly requests executable coverage for generated.ts; its FAIL is preserved, source/thresholds untouched. T015 semantic acceptance is DONE; whole workspace is IMPLEMENTATION_DONE_BASELINE_BLOCKED / NOT_READY_TO_COMMIT. Unreleased/current 0003 was completed in place with one head; no claim of upgrade compatibility for an old deployed 0003 database.
+- **Handoff:** T016 is dependency-ready assuming T007 DONE; it remains TODO and no dispatch/provider work was added. No real credential/provider call, merge/rebase/pull, commit or push. Documentation follows the repository-required documentation-and-adrs skill.
+
 ## 30/09/2026 - T052 Browser Harness
 
 - **Files:** `frontend/tests/e2e/harness.spec.ts`, `frontend/tests/support/test_server.py`, `frontend/tests/support/fake_bridge.py`, `playwright.config.ts`, `package.json`, `package-lock.json`, `tasks/t052-browser-test-harness.md`.
 - **Mục đích:** Cung cấp môi trường kiểm thử E2E và Accessibility UI an toàn, cô lập hoàn toàn khỏi hệ thống dữ liệu thực và Google inference, sẵn sàng cho các nhiệm vụ phát triển React components phía trên.
+
 ## 30/09/2026 - T062 resumed architecture-gate verification
 
 - **Files:** Preserved interrupted `.dependency-cruiser.cjs`, `pyproject.toml`, `package.json`, generated npm/dev Python locks and `scripts/tests/test_architecture_gate.py` without implementation edits; updated T062 card, todo and this changelog using the repository-required documentation-and-adrs skill.
@@ -1187,17 +1263,6 @@
 - **Boundaries:** 4,194,303 and 4,194,304 bytes pass the size gate and fail synthetic JSON parsing; 4,194,305 bytes fail specifically on size. Unsafe no-key models 200 sends exactly one request, no Authorization and no chat. Approved sequence is no-key models 401, keyed models 200, then caller dispatch.
 - **Untouched:** `bridge_port.py`, fixture JSON, shared `tasks/todo.md`, all pre-existing parallel consent/migration/tests and contract/client changes. No staging, commit, push or real inference.
 - **Downstream PENDING:** Installed Windows/Antigravity profile, LAN isolation, protected real-key provisioning/rotation (T040), final consent/policy and operation admission (T016). A fully mimicking local listener remains the accepted ADR-0002 impersonation risk.
-
-## 30/09/2026 - T066 Trusted browser bootstrap page
-
-- **Khu vực:** `frontend/bootstrap.html`, `frontend/src/bootstrap.ts`, `vite.config.ts`
-- **Thay đổi:** 
-  1. Thêm Vite multi-page build cho phép sinh ra HTML và JS cô lập hoàn toàn cho `bootstrap.html`.
-  2. Implement `bootstrap.ts` đọc `#token=...`, xóa URL fragment ngay lập tức qua `history.replaceState`.
-  3. Gửi `POST /bootstrap/exchange`, bắt thành công HTTP 204 rồi chuyển hướng `location.replace("/")`.
-  4. Unit test sử dụng mock dependencies (`BootstrapDependencies`) để đảm bảo không rò rỉ token, chứng minh trình tự gửi (clearing happens before fetching) và handle các mã lỗi 401, 403, 500, network error an toàn mà không in log token.
-- **Mục đích:** Khởi tạo session an toàn trước khi vào app chính. Tránh token bị leak vào React application state, log hay analytics.
-- **Pending Downstream:** T052, T057. (Chưa có real browser E2E, thuộc phạm vi T052).
 
 ## 30/09/2026 - T066 Trusted browser bootstrap page
 

@@ -85,3 +85,129 @@ def test_required_nullable_fields():
         required_fields = op_schema.get("required", [])
         assert "operationId" in required_fields
         assert "status" in required_fields
+
+
+def test_error_details_supports_retry():
+    openapi_sorted = build_contract()
+    error_details = openapi_sorted["components"]["schemas"].get("ErrorDetails", {})
+    any_of = error_details.get("anyOf", [])
+
+    # 1. RETRY exists in shared ErrorDetails schema
+    retry_variants = [
+        v for v in any_of if v.get("properties", {}).get("kind", {}).get("enum") == ["RETRY"]
+    ]
+    assert len(retry_variants) == 1, "RETRY variant must exist in ErrorDetails schema"
+    retry_schema = retry_variants[0]
+    assert retry_schema["required"] == ["kind"]
+    props = retry_schema["properties"]
+    assert "operationId" in props
+    assert "retryAfterSeconds" in props
+    assert "operationKind" in props
+
+    # 2. Runtime 409 RETRY conforms to OpenAPI ErrorResponse
+    runtime_409_retry = {
+        "error": {
+            "code": "IDEMPOTENCY_IN_FLIGHT",
+            "message": "Operation already in flight",
+            "details": {
+                "kind": "RETRY",
+                "operationId": "op_test_123",
+            },
+            "requestId": "req_test_456",
+        }
+    }
+    err_obj = runtime_409_retry["error"]
+    assert "code" in err_obj and isinstance(err_obj["code"], str)
+    assert "message" in err_obj and isinstance(err_obj["message"], str)
+    assert "requestId" in err_obj and isinstance(err_obj["requestId"], str)
+    assert err_obj["details"]["kind"] == "RETRY"
+    assert isinstance(err_obj["details"]["operationId"], str)
+
+    # 3. Generated TypeScript ErrorResponse.details permits RETRY
+    ts_content = Path("frontend/src/shared/api/generated.ts").read_text()
+    assert 'kind: "RETRY";' in ts_content
+    assert "operationId?: string;" in ts_content
+
+
+def test_error_details_supports_ai_consent():
+    openapi_sorted = build_contract()
+    error_details = openapi_sorted["components"]["schemas"].get("ErrorDetails", {})
+    any_of = error_details.get("anyOf", [])
+
+    # 1. AI_CONSENT exists in shared ErrorDetails schema
+    consent_variants = [
+        v for v in any_of if v.get("properties", {}).get("kind", {}).get("enum") == ["AI_CONSENT"]
+    ]
+    assert len(consent_variants) == 1, "AI_CONSENT variant must exist in ErrorDetails schema"
+    consent_schema = consent_variants[0]
+    assert "kind" in consent_schema["required"]
+    assert "consentState" in consent_schema["required"]
+    props = consent_schema["properties"]
+    assert "consentState" in props
+    assert props["consentState"]["enum"] == ["NOT_GRANTED", "GRANTED", "REVOKED", "STALE"]
+    assert "currentPolicyVersion" in props
+    assert props["currentPolicyVersion"]["anyOf"] == [{"type": "string"}, {"type": "null"}]
+    assert "currentPolicyVersion" in consent_schema["required"]
+
+    # 2. Runtime 403 AI_CONSENT conforms to OpenAPI ErrorResponse
+    runtime_403_consent = {
+        "error": {
+            "code": "AI_CONSENT_REQUIRED",
+            "message": "AI consent required",
+            "details": {
+                "kind": "AI_CONSENT",
+                "consentState": "REVOKED",
+                "currentPolicyVersion": "policy-v1",
+            },
+            "requestId": "req_test_789",
+        }
+    }
+    err_obj = runtime_403_consent["error"]
+    assert err_obj["code"] == "AI_CONSENT_REQUIRED"
+    assert err_obj["details"]["kind"] == "AI_CONSENT"
+    assert err_obj["details"]["consentState"] == "REVOKED"
+    assert err_obj["details"]["currentPolicyVersion"] == "policy-v1"
+
+    # 3. Generated TypeScript ErrorResponse.details permits AI_CONSENT
+    ts_content = Path("frontend/src/shared/api/generated.ts").read_text()
+    assert 'kind: "AI_CONSENT";' in ts_content
+    assert 'consentState: "NOT_GRANTED" | "GRANTED" | "REVOKED" | "STALE";' in ts_content
+
+
+def test_r4_consent_required_nullable_json_schema():
+    schema = build_contract()["components"]["schemas"]["ErrorDetails"]
+    # AJV implements a legacy OpenAPI nullable extension. Remove that annotation
+    # when evaluating actual OpenAPI 3.1 JSON Schema semantics, where it has no effect.
+    script = r"""
+const Ajv = require('@redocly/ajv/dist/2020').default;
+const fs = require('fs');
+const schema = JSON.parse(fs.readFileSync(0, 'utf8'));
+function annotations(value) {
+  if (value && typeof value === 'object') {
+    delete value.nullable;
+    for (const v of Object.values(value)) annotations(v);
+  }
+}
+annotations(schema);
+const validate = new Ajv({strict: false}).compile(schema);
+const base = {kind: 'AI_CONSENT', consentState: 'REVOKED'};
+process.stdout.write(JSON.stringify([
+  validate(base), validate({...base, currentPolicyVersion:null}),
+  validate({...base, currentPolicyVersion:'policy-v1'})
+]));
+"""
+    result = subprocess.run(
+        ["node", "-e", script],
+        input=json.dumps(schema),
+        text=True,
+        capture_output=True,
+        check=True,
+        timeout=10,
+    )
+    assert json.loads(result.stdout) == [False, True, True]
+
+
+def test_r4_consent_typescript_property_required_nullable():
+    ts = Path("frontend/src/shared/api/generated.ts").read_text()
+    assert "currentPolicyVersion: string | null;" in ts
+    assert "currentPolicyVersion?:" not in ts

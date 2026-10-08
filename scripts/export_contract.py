@@ -28,9 +28,7 @@ def build_contract() -> dict:
 
     openapi.setdefault("components", {}).setdefault("schemas", {})
 
-    # ONLY project currently implemented error detail variants.
-    # The previous variants (CONFLICT, RETRY, RESTORE, etc.) are UNSUPPORTED at runtime
-    # and fabricating them masks missing implementation.
+    # Project implemented error detail variants.
     error_details_schema = {
         "type": "object",
         "discriminator": {"propertyName": "kind"},
@@ -53,7 +51,31 @@ def build_contract() -> dict:
                     },
                 },
                 "required": ["kind", "fields"],
-            }
+            },
+            {
+                "type": "object",
+                "properties": {
+                    "kind": {"type": "string", "enum": ["RETRY"]},
+                    "retryAfterSeconds": {"type": "integer"},
+                    "operationId": {"type": "string"},
+                    "operationKind": {"type": "string"},
+                },
+                "required": ["kind"],
+            },
+            {
+                "type": "object",
+                "properties": {
+                    "kind": {"type": "string", "enum": ["AI_CONSENT"]},
+                    "consentState": {
+                        "type": "string",
+                        "enum": ["NOT_GRANTED", "GRANTED", "REVOKED", "STALE"],
+                    },
+                    "currentPolicyVersion": {
+                        "anyOf": [{"type": "string"}, {"type": "null"}],
+                    },
+                },
+                "required": ["kind", "consentState", "currentPolicyVersion"],
+            },
         ],
     }
 

@@ -1,0 +1,6 @@
+lookup-v1
+Return one JSON object with a non-empty "forms" array. Each form must contain:
+"lemma", "partOfSpeech", "meaningsEn", "meaningsVi", and "examples".
+Each meaning has "text"; each example has "english" and "vietnamese".
+Use null for unavailable "ipaUs" or "cambridgeUrl". Do not add fields.
+The lookup term is {{term_json}}.

@@ -29,7 +29,7 @@
 - [x] [T081](t081-app-shell-shadcn-migration.md): AppShell shadcn/ui & semantic design-system migration — DONE: AppShell migrated to canonical shadcn Button/Card and Tailwind v4 semantic tokens; 9 routes, landmarks, ErrorBoundary, 404 preserved; 27 unit tests (including jsdom mounted interaction coverage for brand and 404 recovery navigation handlers; changed-code coverage 100%), 48 focused E2E tests across 4 viewports (mounted ErrorBoundary fixture recovery, brand/404 navigation with h1 focus, 200% effective layout reflow at 640px, CDP visual scaling), 8 axe-core a11y tests pass; 11 Windows-native tests fail-closed on Linux (inherited baseline); zero security findings.
 - [ ] [T018](t018-consent-ui.md): Consent dialog và Status panel (BLOCKED_BY_T080_T081)
 - [x] [T019](t019-vocabulary-schema.md): Schema vocabulary, source links và preview
-- [ ] [T008](t008-lookup-api-vertical-slice.md): POST lookup trả preview đã validate
+- [ ] [T008](t008-lookup-api-vertical-slice.md): POST lookup trả preview đã validate (IMPLEMENTATION_COMPLETE_ENVIRONMENT_VERIFICATION_PENDING; Round-4 authorization: tasks/t008-r4-shared-remediation.md)
 - [ ] [T009](t009-lookup-ui-vertical-slice.md): Lookup UI gọi API thật qua client
 - [ ] [T010](t010-error-handling-recovery.md): Typed UI recovery cho common error codes
 - [ ] [T011](t011-observability-instrumentation.md): Local JSON logs, correlation và span boundary

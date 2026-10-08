@@ -1,22 +1,28 @@
 """FastAPI application factory and ASGI entrypoint (T003)."""
 
+import asyncio
 import re
 import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from secrets import token_bytes
+from time import monotonic
 
+from backend.app.adapters.bridge import BridgeAdapter
 from backend.app.adapters.source_files import SourceFileAdapter, SourceFileError
 from backend.app.adapters.watcher import SourceWatcher
+from backend.app.application.ai_admission import AiAdmissionCoordinator
 from backend.app.application.consent import ConsentService
 from backend.app.application.operations import OperationLedger
 from backend.app.application.source_recovery import SourceRecovery
 from backend.app.application.source_write import SourceWriteCoordinator
 from backend.app.application.sync import SyncService
+from backend.app.enrichment.lookup import LookupService
 from backend.app.http.bootstrap import router as bootstrap_router
 from backend.app.http.errors import error_response
 from backend.app.http.health import router as health_router
+from backend.app.http.lookups import router as lookups_router
 from backend.app.http.operations import router as operations_router
 from backend.app.http.search import router as search_router
 from backend.app.http.session import SessionGuard, SessionStore
@@ -24,6 +30,7 @@ from backend.app.http.sources import router as sources_router
 from backend.app.persistence.database import Database, StorageError
 from backend.app.platform.config import AppSettings
 from backend.app.vocabulary.models import SourceFile
+from backend.app.vocabulary.repository import VocabularyRepository
 from backend.app.vocabulary.search_service import SearchService
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -33,6 +40,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 STATIC_ROOT = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 _SHELL_ROUTES = {"", "lookup", "search", "review", "quiz/new", "status"}
@@ -53,6 +61,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.search_service = None
     app.state.sync_service = None
     app.state.watcher = None
+    app.state.lookup_service = None
     app.state.sessions.activate()
     try:
         if database is not None:
@@ -67,6 +76,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 app.state.consent_service = ConsentService(ledger)
                 app.state.search_service = SearchService(
                     database.engine, signing_key=app.state.cursor_signing_key
+                )
+                admission_coordinator = AiAdmissionCoordinator(
+                    app.state.consent_service,
+                    BridgeAdapter(api_key=None),
+                    lambda: app.state.active_ai_policy,
+                )
+                app.state.lookup_service = LookupService(
+                    ledger,
+                    admission_coordinator,
+                    VocabularyRepository(database.engine),
                 )
 
                 markdown_root = app.state.markdown_root
@@ -204,19 +223,70 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 app.state.ready = False
         yield
     finally:
-        if getattr(app.state, "watcher", None) is not None:
-            await run_in_threadpool(app.state.watcher.stop)
-            app.state.watcher = None
-        app.state.sessions.invalidate()
-        app.state.ready = False
-        app.state.storage_info = None
-        app.state.operation_ledger = None
-        app.state.consent_service = None
-        app.state.search_service = None
-        app.state.sync_service = None
-        if database is not None:
-            await run_in_threadpool(database.close)
-        app.state.database = None
+        try:
+            if getattr(app.state, "watcher", None) is not None:
+                await run_in_threadpool(app.state.watcher.stop)
+                app.state.watcher = None
+        finally:
+            try:
+                lookup_service = app.state.lookup_service
+                if lookup_service is not None:
+                    await lookup_service.drain()
+            finally:
+                app.state.sessions.invalidate()
+                app.state.ready = False
+                app.state.storage_info = None
+                app.state.operation_ledger = None
+                app.state.consent_service = None
+                app.state.search_service = None
+                app.state.sync_service = None
+                app.state.lookup_service = None
+                if database is not None:
+                    await run_in_threadpool(database.close)
+                app.state.database = None
+
+
+class RequestBudgetMiddleware:
+    """Record request arrival time before SessionGuard body buffering or parsing (T008)."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            app = scope.get("app")
+            clock = None
+            if app is not None and hasattr(app, "state"):
+                if getattr(app.state, "lookup_service", None) is not None:
+                    clock = getattr(app.state.lookup_service, "clock", None)
+                if clock is None:
+                    clock = getattr(app.state, "clock", None)
+            if clock is None:
+                clock = monotonic
+            scope.setdefault("state", {})["request_start_time"] = clock()
+        if (
+            scope["type"] == "http"
+            and scope.get("method") == "POST"
+            and scope.get("path") == "/api/v1/lookups"
+        ):
+            from backend.app.enrichment import lookup as lookup_module
+
+            budget_clock = clock or monotonic
+            deadline = scope["state"]["request_start_time"] + lookup_module.LOOKUP_DEADLINE_SECONDS
+
+            async def bounded_receive() -> Message:
+                remaining = deadline - budget_clock()
+                if remaining <= 0:
+                    raise TimeoutError("Lookup request body deadline exhausted")
+                async with asyncio.timeout(remaining):
+                    return await receive()
+
+            try:
+                await self.app(scope, bounded_receive, send)
+            except TimeoutError:
+                await error_response(503, "BRIDGE_UNAVAILABLE")(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
 
 
 def create_app(
@@ -245,12 +315,14 @@ def create_app(
     app.state.cursor_signing_key = token_bytes(32)
     app.state.sync_service = None
     app.state.watcher = None
+    app.state.lookup_service = None
     app.state.active_ai_policy = None
     app.state.sessions = SessionStore()
 
     # FastAPI middleware runs before route handlers, including the generated OpenAPI route.
     # Source: https://fastapi.tiangolo.com/tutorial/middleware/
     app.add_middleware(SessionGuard, settings=app_settings, sessions=app.state.sessions)
+    app.add_middleware(RequestBudgetMiddleware)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -276,6 +348,7 @@ def create_app(
     app.include_router(operations_router)
     app.include_router(search_router)
     app.include_router(sources_router)
+    app.include_router(lookups_router)
 
     from backend.app.http.consent import router as consent_router
 
