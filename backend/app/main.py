@@ -14,7 +14,7 @@ from backend.app.adapters.source_files import SourceFileAdapter, SourceFileError
 from backend.app.adapters.watcher import SourceWatcher
 from backend.app.application.ai_admission import AiAdmissionCoordinator
 from backend.app.application.consent import ConsentService
-from backend.app.application.operations import OperationLedger
+from backend.app.application.operations import OperationConflict, OperationLedger
 from backend.app.application.source_recovery import SourceRecovery
 from backend.app.application.source_write import SourceWriteCoordinator
 from backend.app.application.sync import SyncService
@@ -24,11 +24,13 @@ from backend.app.http.errors import error_response
 from backend.app.http.health import router as health_router
 from backend.app.http.lookups import router as lookups_router
 from backend.app.http.operations import router as operations_router
+from backend.app.http.review import router as review_router
 from backend.app.http.search import router as search_router
 from backend.app.http.session import SessionGuard, SessionStore
 from backend.app.http.sources import router as sources_router
 from backend.app.persistence.database import Database, StorageError
 from backend.app.platform.config import AppSettings
+from backend.app.review.queue import ReviewService
 from backend.app.vocabulary.models import SourceFile
 from backend.app.vocabulary.repository import VocabularyRepository
 from backend.app.vocabulary.search_service import SearchService
@@ -59,6 +61,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.operation_ledger = None
     app.state.consent_service = None
     app.state.search_service = None
+    app.state.review_service = None
     app.state.sync_service = None
     app.state.watcher = None
     app.state.lookup_service = None
@@ -76,6 +79,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 app.state.consent_service = ConsentService(ledger)
                 app.state.search_service = SearchService(
                     database.engine, signing_key=app.state.cursor_signing_key
+                )
+                app.state.review_service = ReviewService(
+                    database.engine,
+                    signing_key=app.state.cursor_signing_key,
+                    ledger=ledger,
+                    conflict_type=OperationConflict,
                 )
                 admission_coordinator = AiAdmissionCoordinator(
                     app.state.consent_service,
@@ -239,6 +248,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 app.state.operation_ledger = None
                 app.state.consent_service = None
                 app.state.search_service = None
+                app.state.review_service = None
                 app.state.sync_service = None
                 app.state.lookup_service = None
                 if database is not None:
@@ -312,6 +322,7 @@ def create_app(
     app.state.operation_ledger = None
     app.state.consent_service = None
     app.state.search_service = None
+    app.state.review_service = None
     app.state.cursor_signing_key = token_bytes(32)
     app.state.sync_service = None
     app.state.watcher = None
@@ -347,6 +358,7 @@ def create_app(
     app.include_router(bootstrap_router)
     app.include_router(operations_router)
     app.include_router(search_router)
+    app.include_router(review_router)
     app.include_router(sources_router)
     app.include_router(lookups_router)
 
