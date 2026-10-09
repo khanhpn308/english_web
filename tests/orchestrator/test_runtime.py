@@ -891,8 +891,9 @@ def test_t090_image_admission_requires_complete_host_pinned_policy(tmp_path: Pat
     signing_key = tmp_path / "synthetic-test-only-private-key.pem"
     public_key = tmp_path / "synthetic-test-only-public-key.pem"
     signature = tmp_path / "external-approval.sig"
-    if os.name != "posix" or shutil.which("openssl") is None:
-        pytest.skip("Linux OpenSSL Ed25519 approval verification required")
+    assert os.name == "posix" and shutil.which("openssl") is not None, (
+        "T090 signed-approval test requires trusted POSIX OpenSSL"
+    )
     subprocess.run(
         ["openssl", "genpkey", "-algorithm", "Ed25519", "-out", str(signing_key)],
         check=True,
