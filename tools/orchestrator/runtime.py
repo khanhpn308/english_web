@@ -135,6 +135,10 @@ class DockerVerificationSandbox:
                             raise OrchestratorError(
                                 "T090 SANDBOX_BLOCKED: workspace symlink escapes sandbox"
                             )
+                    elif stat.S_ISREG(mode) and path.lstat().st_nlink > 1:
+                        raise OrchestratorError(
+                            "T090 SANDBOX_BLOCKED: linked source may alias host files"
+                        )
                     elif not stat.S_ISREG(mode) and not stat.S_ISDIR(mode):
                         raise OrchestratorError(
                             "T090 SANDBOX_BLOCKED: workspace has a special file"
