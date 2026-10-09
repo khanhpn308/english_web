@@ -2552,11 +2552,19 @@ class Pipeline:
                 fixing = state.state == State.FIX_PROMPT_READY
                 from tools.orchestrator.runtime import is_worker_code_only
 
-                if not is_worker_code_only(self.config.roles["worker"]):
+                worker_role = self.config.roles["worker"]
+                if not is_worker_code_only(worker_role):
                     state.last_error = (
                         "T090 BLOCKED: Worker process/full-access configuration is "
                         "not permitted under the reinstated code-only policy"
                     )
+                    self.move(directory, state, State.BLOCKED)
+                    self.report(directory, state)
+                    return state
+                if worker_role.worker_backend == "host-http-edit" and not os.environ.get(
+                    worker_role.host_edit_api_key_env or ""
+                ):
+                    state.last_error = "T090 BLOCKED: host-edit provider credential is missing"
                     self.move(directory, state, State.BLOCKED)
                     self.report(directory, state)
                     return state
@@ -2589,6 +2597,11 @@ class Pipeline:
                 )
                 self.contract(directory, state)
                 self.artifact(directory, state, "worker", result)
+                if result.status == "BLOCKED":
+                    state.last_error = "T090 BLOCKED: Worker refused to implement candidate"
+                    self.move(directory, state, State.BLOCKED)
+                    self.report(directory, state)
+                    return state
                 changed = self.scope(state, contract)
                 if sorted(result.changed_files) != changed or (
                     not changed and result.status == "IMPLEMENTED"
