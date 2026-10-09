@@ -344,3 +344,12 @@ Trusted Host MUST freeze the source earlier, independently derive and persist it
 The v1 digest covers relative paths, regular file contents, file mode and symlink targets; unsafe special files, hardlinks, absolute/out-of-tree links and changes detected during reading are rejected.
 
 Important limitation: the R5 API does not yet integrate with authoritative Git.snapshot evidence in the two legacy callsites; neither live path has been migrated to Docker, and trust in an arbitrary caller-chosen digest alone would be insufficient. A prior Host freeze and external evidence anchoring remain mandatory. Further live adversarial testing and CI on the exact R5 SHA are required. Image policy remains approved=false, PR Draft and main untouched.
+
+### R6 phase A — deterministic digest and frozen Git evidence crosswalk (2026-10-09)
+
+Implementation on draft PR #9 includes deterministic `folders.sort()` before recursive hashing, plus an explicit frozen-source binding that compares the authoritative checkout's `Git.snapshot(base_sha)` to the cloned verification workspace before and after computing the Docker content-tree digest. Tests cover reversed directory creation, empty directory rename, changed authoritative checkout and tampered clone.
+
+**Do not confuse this binding with production admission:** the new helper is not invoked by either live verification entrypoint. `collect_verification()` still uses host `execute()` on the verification clone; `Pipeline.verify()` still executes host commands for setup, baseline and integration. Both must be migrated together, without any fallback to Host if image approval or Git evidence is unavailable.
+
+**Blockers for R6 phase B:** trusted image currently `approved=false`, base apt snapshot and wheel hashes not complete, image/OSV provenance not signed, `.venv` and `node_modules` materialization may exceed 256 MiB tmpfs, `npm ci` setup must move to trusted preprovisioning, Bridge hidden tools remain unverified. Preserve user-approved path scope; changing lockfiles, orchestrator.yaml or run-gates script requires explicit owner approval. Audit fail-closed behavior before changing production.
+

@@ -1,3 +1,11 @@
+## 09/10/2026 - T090 R6 phase A: canonical tree digest and Git crosswalk
+
+- Canonicalized directory traversal in `_docker_source_digest` to eliminate filesystem enumeration order from tree SHA-256; tests cover reordered directory creation, symlink targets, empty directories and path changes.
+- Added `FrozenVerificationSourceBinding` and `freeze_verification_source_binding`: Host compares the frozen authoritative Git snapshot to both source checkout and detached verification clone, captures the Docker tree digest, then rechecks Git and Docker tree stability.
+- Negative regressions reject changed authoritative source or modified verification clone; the binding is currently a staged primitive, not yet wired to `collect_verification()` or `Pipeline.verify()`.
+- The new code does not change `approved: false`, does not enable untrusted verification, and does not change the AI Bridge/provider configuration. T089 remains reopened pending T090.
+- Remaining R6 release gates: independently approved immutable image provenance/dependencies, preprovisioned trusted toolchain, moving both legacy execution paths to Docker without fallback, and semantic Bridge no-hidden-tool audit.
+
 ## 09/10/2026 - T090 R5 source sealing and container pre-exec attestation
 
 - Candidate DockerVerificationSandbox now requires a separately supplied and previously frozen SHA-256 source-tree digest; missing or mismatched evidence blocks execution.
