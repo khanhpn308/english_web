@@ -1,6 +1,5 @@
 """Strict local HTTP boundary for the authoritative consent singleton."""
 
-from secrets import token_urlsafe
 from typing import Annotated, Literal
 
 from backend.app.application.consent import (
@@ -12,6 +11,7 @@ from backend.app.application.consent import (
     choice_time,
 )
 from backend.app.http.errors import error_response
+from backend.app.platform.telemetry import request_id
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, Response
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
@@ -75,7 +75,7 @@ def rejection(result: ConsentRejected) -> JSONResponse:
     payload: dict[str, object] = {
         "code": code,
         "message": "Consent request could not be applied",
-        "requestId": f"req_{token_urlsafe(12)}",
+        "requestId": request_id(),
     }
     if result.operation_id is not None:
         payload["details"] = {"kind": "RETRY", "operationId": result.operation_id}

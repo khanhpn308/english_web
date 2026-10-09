@@ -13,6 +13,7 @@ from backend.app.http.errors import error_response
 from backend.app.http.lookups import IdempotencyKey, _session_fingerprint
 from backend.app.http.search import WordFormDetail
 from backend.app.http.session import COOKIE_NAME
+from backend.app.platform.telemetry import request_id
 from fastapi import APIRouter, Header, Path, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from sqlalchemy.exc import SQLAlchemyError
@@ -153,14 +154,12 @@ def _failure(error: OperationConflict, operation_kind: str = "SAVE") -> JSONResp
     if error.code in _SAVE_MESSAGES:
         # Established source routes also author their additional typed envelopes
         # locally. T024 does not mutate the shared error taxonomy.
-        from secrets import token_urlsafe
-
         message = _SAVE_MESSAGES[error.code]
         if operation_kind == "EDIT" and error.code == "CROSS_RESOURCE_MISMATCH":
             message = "Source does not contain the selected word form"
         body: dict[str, Any] = {
             "code": error.code, "message": message,
-            "requestId": f"req_{token_urlsafe(12)}",
+            "requestId": request_id(),
         }
         if details is not None:
             body["details"] = details

@@ -2,7 +2,6 @@
 
 import re
 from datetime import UTC, date, datetime
-from secrets import token_urlsafe
 from typing import Annotated, Any, Literal
 
 from backend.app.application.operations import OperationConflict
@@ -16,6 +15,7 @@ from backend.app.review.queue import (
     ReviewService,
 )
 from backend.app.review.srs import Rating
+from backend.app.platform.telemetry import request_id
 from fastapi import APIRouter, Body, Header, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy.exc import SQLAlchemyError
@@ -186,7 +186,7 @@ def _rejection(error: OperationConflict | ReviewRejected) -> JSONResponse:
     if error.code in messages:
         payload: dict[str, object] = {
             "code": error.code, "message": messages[error.code],
-            "requestId": f"req_{token_urlsafe(12)}",
+            "requestId": request_id(),
         }
         if details is not None:
             payload["details"] = details
