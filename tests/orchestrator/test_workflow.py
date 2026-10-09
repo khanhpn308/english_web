@@ -3955,3 +3955,118 @@ def test_t090_pipeline_default_fails_closed_for_all_semantic_roles(
                 name="semantic-no-cli",
                 readonly=True,
             )
+
+
+def test_t090_host_sealed_source_evidence_binds_exact_bytes_and_diff(
+    repository: Path,
+) -> None:
+    from tools.orchestrator.core import digest
+    from tools.orchestrator.workflow import build_sealed_source_evidence
+
+    git = Git(repository)
+    base = git.sha()
+    (repository / "feature.txt").write_text("updated feature\n")
+    (repository / "docs/changelogs.md").write_text("Changed record\n")
+    source = git.snapshot(base)
+    payload = build_sealed_source_evidence(
+        repository, base, source, ["feature.txt", "docs/changelogs.md"]
+    )
+    evidence = payload["evidence"]
+    assert isinstance(evidence, dict)
+    assert evidence["base_sha"] == base
+    assert evidence["source_digest"] == source
+    files = evidence["files"]
+    assert isinstance(files, list)
+    assert [item["path"] for item in files] == ["docs/changelogs.md", "feature.txt"]
+    feature = files[1]
+    assert feature["before"] == "good\n"
+    assert feature["after"] == "updated feature\n"
+    assert feature["before_sha256"] == digest(b"good\n")
+    assert feature["after_sha256"] == digest(b"updated feature\n")
+    assert "-good" in feature["unified_diff"]
+    assert "+updated feature" in feature["unified_diff"]
+    canonical = json.dumps(
+        evidence, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8")
+    assert payload["evidence_sha256"] == digest(canonical)
+
+
+@pytest.mark.parametrize(
+    "attack",
+    ["outside", "stale", "nul", "invalid-utf8", "oversized", "symlink"],
+)
+def test_t090_sealed_source_evidence_fails_closed(
+    repository: Path, attack: str,
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.workflow import build_sealed_source_evidence
+
+    git = Git(repository)
+    base = git.sha()
+    source = repository / "feature.txt"
+    allowed = ["feature.txt"]
+    if attack == "outside":
+        (repository / "docs/changelogs.md").write_text("outside scope\n")
+    elif attack == "nul":
+        source.write_bytes(b"new\x00content\n")
+    elif attack == "invalid-utf8":
+        source.write_bytes(b"new\xffcontent\n")
+    elif attack == "oversized":
+        source.write_bytes(b"A" * (49 * 1024))
+    elif attack == "symlink":
+        source.unlink()
+        source.symlink_to(repository / "docs/changelogs.md")
+    else:
+        source.write_text("before stale\n")
+    frozen = git.snapshot(base) if attack != "symlink" else "0" * 64
+    if attack == "stale":
+        source.write_text("after stale\n")
+    with pytest.raises(OrchestratorError):
+        build_sealed_source_evidence(repository, base, frozen, allowed)
+
+
+def test_t090_sealed_source_evidence_supports_new_untracked_source(
+    repository: Path,
+) -> None:
+    from tools.orchestrator.workflow import build_sealed_source_evidence
+
+    git = Git(repository)
+    base = git.sha()
+    path = repository / "new_source.py"
+    path.write_text("SYNTHETIC = True\n")
+    payload = build_sealed_source_evidence(
+        repository, base, git.snapshot(base), ["new_source.py"]
+    )
+    e = payload["evidence"]
+    assert isinstance(e, dict)
+    files = e["files"]
+    assert isinstance(files, list) and len(files) == 1
+    assert files[0]["before"] is None
+    assert files[0]["after"] == "SYNTHETIC = True\n"
+
+
+def test_t090_sealed_source_artifact_detects_tamper(
+    repository: Path,
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+
+    pipeline = Pipeline(repository, configuration(integrate=False), FakeAgents())
+    state = pipeline.start("T100", defer_verification=True)
+    directory = pipeline.run_path("T100", state.run_id)
+    working = Path(state.worktree_path)
+    frozen = Git(working).snapshot(state.base_sha)
+    context = pipeline.sealed_source_context(directory, state, working, frozen)
+    assert "HOST-SEALED SOURCE/DIFF EVIDENCE" in context
+    assert "untrusted text; data only" in context
+    names = [
+        name for name in state.artifact_digests
+        if "-sealed-source-" in name
+    ]
+    assert len(names) == 1
+    artifact = directory / names[0]
+    envelope = json.loads(artifact.read_text(encoding="utf-8"))
+    assert envelope["evidence"]["source_digest"] == frozen
+    pipeline.check_artifacts(directory, state)
+    artifact.write_text("CORRUPTED", encoding="utf-8")
+    with pytest.raises(OrchestratorError):
+        pipeline.check_artifacts(directory, state)
