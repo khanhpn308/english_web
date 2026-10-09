@@ -79,7 +79,7 @@ describe('T030 Edit Form', () => {
   it('loads editable values and allows successful PATCH with preconditions', async () => {
     await mount();
     expect(host.textContent).toContain('Chỉnh sửa');
-    
+
     // Setup for edit
     let patched = false;
     mockFetch = async (url, init) => {
@@ -97,7 +97,7 @@ describe('T030 Edit Form', () => {
 
     await click('Chỉnh sửa');
     expect(host.textContent).toContain('Chỉnh sửa: robust');
-    
+
     await editField('vững chắc', 'vững chắc được sửa');
     await click('Lưu thay đổi');
 
@@ -109,7 +109,7 @@ describe('T030 Edit Form', () => {
 
   it('preserves draft on 409 conflict and shows dialog', async () => {
     await mount();
-    
+
     let isPatch = false;
     mockFetch = async (url, init) => {
       if (url.includes('/sources')) return json(sourcePage);
@@ -135,14 +135,14 @@ describe('T030 Edit Form', () => {
       data: [{ ...sourcePage.data[0], revision: 8, etag: '"source-fixture-r8"' }]
     };
     mockFetch = async (url) => url.includes('/sources') ? json(reloadSourceResponse) : json({});
-    
+
     await click('Cập nhật mã phiên bản để lưu đè');
-    
+
     // Dialog closes, draft still shows the edited text
     expect(host.textContent).not.toContain('Xung đột dữ liệu');
     const input = [...host.querySelectorAll('input')].find(i => i.value === 'vững chắc được sửa');
     expect(input).toBeDefined();
-    
+
     // We updated source revision, should now show 8
     expect(host.textContent).toContain('Mã nguồn: 8');
   });

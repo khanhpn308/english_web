@@ -34,7 +34,7 @@ export function EditWordForm({ wordForm, sourceId, noteDate, onCancel, onSuccess
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<{ message: string; fields?: { field: string; reason: string }[] } | null>(null);
-  
+
   const [conflictRevision, setConflictRevision] = useState<number | undefined>();
   const [showConflict, setShowConflict] = useState(false);
   const [idempotencyKey] = useState(() => crypto.randomUUID());
@@ -208,8 +208,8 @@ export function EditWordForm({ wordForm, sourceId, noteDate, onCancel, onSuccess
           </div>
         </form>
 
-        <RevisionConflictDialog 
-          open={showConflict} 
+        <RevisionConflictDialog
+          open={showConflict}
           serverRevision={conflictRevision}
           onCancel={() => setShowConflict(false)}
           onDiscardDraft={onCancel}
