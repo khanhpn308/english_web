@@ -1,3 +1,10 @@
+## 09/10/2026 - T090 staged dual-runtime candidate and offline scanner routing
+
+- Resolved R1 image/clone correction as separate changes: pinned Python Docker entrypoint; verification clone now uses --no-local and tests forbid Git object alternates.
+- Added candidate-only Dockerfile, unapproved image policy, and isolated GitHub Actions build/smoke workflow. Image provenance, hash-complete wheels, Debian package snapshot, OSV archive digests and adversarial isolation are NOT attested.
+- Added T090_OSV_OFFLINE opt-in to keep vulnerability scans offline within future isolated images, preserving the prior host CI behavior; synthetic negative/positive command routing tests added.
+- Existing collect_verification and Pipeline.verify remain untouched/unisolated; no AGY configuration updates, no main merge, no T089 reacceptance. Full CI on final SHA required.
+
 ## 09/10/2026 - T090 Docker sandbox broker candidate
 
 - Added non-active Docker verification executor with fixed non-root, no-network, readonly-root policy, capped CPU/memory/PIDs/time, pinned local image and host-only disposable mount rules.

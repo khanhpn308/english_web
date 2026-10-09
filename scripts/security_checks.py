@@ -406,6 +406,8 @@ def run_dependencies(repo: Path, report_dir: Path, *, runner: Runner = run_comma
         for kind, path in lockfiles
     ]
     command = [binary, "scan", "source", "--format=json", *arguments]
+    if os.environ.get("T090_OSV_OFFLINE") == "1":
+        command.insert(1, "--offline")
     result = runner(command, repo)
     if result.returncode not in {0, 1}:
         raise SetupFailure("osv-scanner execution failed")

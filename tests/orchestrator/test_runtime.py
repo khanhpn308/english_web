@@ -1,6 +1,8 @@
 import os
+import subprocess
 import sys
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -608,3 +610,37 @@ def test_t090_docker_sandbox_rejects_unapproved_command_before_host_execution(
     policy = DockerVerificationPolicy("example.com/t090@sha256:" + "a" * 64, root)
     with pytest.raises(OrchestratorError):
         DockerVerificationSandbox(policy).run(command, workspace)
+
+
+
+def test_t090_osv_offline_gate_is_opt_in_and_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scripts import security_checks
+
+    (tmp_path / "package-lock.json").write_text("{}")
+    (tmp_path / "requirements.lock").write_text("fixture==1.0\n")
+    (tmp_path / "requirements-dev.lock").write_text("fixture==1.0\n")
+    calls: list[list[str]] = []
+
+    def synthetic_scan(argv: Sequence[str], _cwd: Path) -> subprocess.CompletedProcess[str]:
+        calls.append(list(argv))
+        if "--version" in argv:
+            return subprocess.CompletedProcess(
+                list(argv), 0, "osv-scanner version: 2.6.0\n", ""
+            )
+        return subprocess.CompletedProcess(list(argv), 0, '{"results":[]}', "")
+
+    monkeypatch.setenv("T090_OSV_OFFLINE", "1")
+    result = security_checks.run_dependencies(
+        tmp_path, tmp_path / "reports-offline", runner=synthetic_scan
+    )
+    assert result.exit_code == security_checks.EXIT_CLEAN
+    assert calls[1][1:4] == ["--offline", "scan", "source"]
+
+    monkeypatch.delenv("T090_OSV_OFFLINE")
+    calls.clear()
+    security_checks.run_dependencies(
+        tmp_path, tmp_path / "reports-online", runner=synthetic_scan
+    )
+    assert "--offline" not in calls[1]
