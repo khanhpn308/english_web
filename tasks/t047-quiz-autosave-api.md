@@ -2,7 +2,7 @@
 
 **Task ID:** `T047`  
 **Title:** Quiz answer draft API với revision  
-**Status:** `TODO`  
+**Status:** `DONE` (coding merged; final acceptance `PENDING`)
 **Goal:** PUT answer lưu bền vững và GET attempt phục hồi đúng draft sau reload/offline.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
