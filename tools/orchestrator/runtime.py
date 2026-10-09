@@ -378,6 +378,7 @@ class DockerVerificationSandbox:
             "--env=TMPDIR=/tmp",
             "--env=PYTHONDONTWRITEBYTECODE=1",
             "--env=CI=true",
+            "--env=T090_SANDBOX_LIMITED=1",
             "--env=PATH=/workspace/node_modules/.bin:/node_modules/.bin:/usr/local/bin:/usr/bin:/bin",
             self.policy.image,
             "-I",

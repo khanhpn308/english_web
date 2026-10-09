@@ -503,6 +503,7 @@ def test_t090_docker_sandbox_host_constructs_fixed_arguments(
                 "--cpus",
                 "--user",
                 "--workdir=/workspace",
+                "--env=T090_SANDBOX_LIMITED=1",
             ):
                 assert flag in command
             assert command[-7:-5] == ["-I", "-c"]
