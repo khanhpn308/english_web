@@ -146,6 +146,7 @@ def apply_host_text_edit(
         if temp_path is not None:
             temp_path.unlink(missing_ok=True)
 
+
 # Tool-free model API: the model receives text and produces JSON; it never
 # receives a terminal, filesystem, function-call, subagent or MCP tool.
 
@@ -172,7 +173,9 @@ class TextOnlyTransport(Protocol):
 
 
 class _RejectRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req: Request, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
+    def redirect_request(
+        self, req: Request, fp: Any, code: int, msg: str, headers: Any, newurl: str
+    ) -> None:
         raise HostEditRejected("Model transport HTTP redirect is forbidden")
 
 
@@ -265,7 +268,9 @@ class LoopbackChatTransport:
             raise HostEditRejected("Invalid tool-free model response envelope") from None
 
 
-def _read_allowlisted_source(root: Path, allowed: Collection[str]) -> dict[str, dict[str, str | None]]:
+def _read_allowlisted_source(
+    root: Path, allowed: Collection[str]
+) -> dict[str, dict[str, str | None]]:
     """Host materializes only explicitly authorized UTF-8 files into prompt."""
     result: dict[str, dict[str, str | None]] = {}
     total = 0
@@ -349,9 +354,7 @@ def run_host_mediated_worker(
         seen.add(path)
         if source[path]["sha256"] != edit.expected_sha256:
             raise HostEditRejected("Model edit does not match host-pinned preimage")
-        proposals.append(
-            ProposedTextEdit(path, edit.expected_sha256, edit.replacement)
-        )
+        proposals.append(ProposedTextEdit(path, edit.expected_sha256, edit.replacement))
     # Preflight every edit before writing any path. Host worktrees must be
     # exclusively owned during application; per-file atomic replacement is
     # not a cross-file transaction in the face of an OS-level concurrent writer.
