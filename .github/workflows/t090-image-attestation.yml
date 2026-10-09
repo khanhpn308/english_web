@@ -288,6 +288,14 @@ jobs:
               )
           )
           frozen_digest = broker.source_digest(workspace)
+          # Instrument only the CI probe. Production broker commands never
+          # inherit this diagnostic switch or Host environment variables.
+          original_argv = broker._argv
+          def diagnostic_argv(*args):
+              argv = original_argv(*args)
+              argv.insert(argv.index(broker.policy.image), "--env=T090_SANDBOX_DIAGNOSTIC=1")
+              return argv
+          broker._argv = diagnostic_argv
           result = broker.run(
               ["npm", "run", "check:task:portable"],
               workspace,
@@ -296,7 +304,7 @@ jobs:
           print("T090_FULL_PORTABLE_DOCKER_EXIT:", result.exit_code, flush=True)
           print("T090_FULL_PORTABLE_DOCKER_TIMEOUT:", result.timed_out, flush=True)
           print("T090_FULL_PORTABLE_DOCKER_OVERSIZED:", result.oversized, flush=True)
-          print("T090_FULL_PORTABLE_OUTPUT_TAIL:", result.stdout[-3500:], flush=True)
+          print("T090_FULL_PORTABLE_OUTPUT_TAIL:", result.stdout[-10500:], flush=True)
           print("T090_FULL_PORTABLE_ERROR_TAIL:", result.stderr[-1500:], flush=True)
           assert result.exit_code == 0
           assert not result.timed_out and not result.oversized

@@ -4,7 +4,14 @@ set -uo pipefail
 
 MODE="${1:-fast}"
 
-ROOT="$(git rev-parse --show-toplevel)"
+ROOT="$(git rev-parse --show-toplevel)" || {
+    echo "T090 SANDBOX_BLOCKED: verification requires a Git working tree" >&2
+    exit 2
+}
+if [[ -z "$ROOT" || "$ROOT" == "/" ]]; then
+    echo "T090 SANDBOX_BLOCKED: invalid verification repository root" >&2
+    exit 2
+fi
 cd "$ROOT"
 
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
@@ -63,6 +70,16 @@ wait_phase() {
         echo
         echo "Phase failed; stopping later phases."
         print_summary
+        # CI-only synthetic probe: source and logs are inside an isolated
+        # container without mounted Host secrets. Disabled for ordinary runs.
+        if [[ "${T090_SANDBOX_DIAGNOSTIC:-0}" == "1" ]]; then
+            for gate in "${GATES[@]}"; do
+                if [[ "${STATUS[$gate]:-}" == "FAIL" ]]; then
+                    echo "[T090-DIAGNOSTIC] $gate (last 30 log lines)"
+                    tail -n 30 "$LOG_DIR/$gate.log" || true
+                fi
+            done
+        fi
         exit 1
     fi
 }
