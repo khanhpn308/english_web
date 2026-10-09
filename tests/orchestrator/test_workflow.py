@@ -3883,7 +3883,7 @@ def test_host_mediated_worker_respects_implemented_handoff_without_cli(
                 "path": path,
                 "expected_sha256": source[path]["sha256"],
                 "replacement": (
-                    "good\n"
+                    "good\n\n"
                     if path == "feature.txt"
                     else "New synthetic entry\nHistorical entry\n"
                 ),
@@ -3910,7 +3910,7 @@ def test_host_mediated_worker_respects_implemented_handoff_without_cli(
         pipeline.run_path("T100", state.run_id) / state.artifacts["worker"]
     )["commands_run"] == []
     working = Path(state.worktree_path)
-    assert (working / "feature.txt").read_text() == "good\n"
+    assert (working / "feature.txt").read_text() == "good\n\n"
     assert (working / "docs/changelogs.md").read_text().startswith("New synthetic entry")
 
 
