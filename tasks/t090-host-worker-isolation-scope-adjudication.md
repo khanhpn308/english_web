@@ -242,3 +242,11 @@ T090 DONE or T089 accepted.
 - tests/orchestrator/test_worker_sandbox.py and test_workflow.py add synthetic adversarial edit, no-tool request and Pipeline handoff checks. Documentation explains the opt-in settings and the live attestation requirement.
 - **Not accepted:** No test has been performed against the real AGY CLI or the deployed local completion bridge, and Reviewer/Auditor CLI tool-denial remains unverified. Model API compatibility, actual denied tool calls and OS-exclusive workspace boundary need live synthetic tests. No T090 DONE/T089 PASS or PR merge authorization is implied.
 - Await final candidate CI results; do not count the earlier R2 PASS as passing for these new implementation changes.
+
+### Host-mediated CI R1 failure and remediation (09/10/2026)
+
+- Frozen R1 source: c28d1d63f1050162cd634e6852e98e09e7ab277a; GitHub Actions run https://github.com/khanhpn308/english_web/actions/runs/37870991359; historical FAILURE preserved.
+- Host Phase A: frontend coverage, all three security gates, architecture PASS; fast gate FAILED on Ruff formatting in four files; portable pytest 1346 PASS / 2 FAIL. Coverage-check was not reached.
+- Both regressions were the inherited transient automatic Worker recovery tests, worker_blocked and worker_empty. The initial host route treated all BLOCKED WorkerResult outputs as terminal, incorrectly changing legacy fake/CLI recovery behavior.
+- Scope-limited remediation: terminal BLOCKED handling now applies only to host-http-edit backend; legacy CLI/model provider recovery contract remains unchanged. Four Ruff formatting files normalized exactly from host logs, with no functional relaxation.
+- Repeat full portable CI on the next frozen candidate. Do not merge or claim T090 acceptance without live endpoint/OS proof; default CLI Worker remains fail-closed.
