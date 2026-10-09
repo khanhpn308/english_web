@@ -397,9 +397,7 @@ def test_t090_changed_path_allowlist_must_include_both_rename_ends(
 
 
 @pytest.mark.parametrize("invalid", ["cwd", "artifacts", "name"])
-def test_t090_secure_provider_rejects_invalid_host_context(
-    tmp_path: Path, invalid: str
-) -> None:
+def test_t090_secure_provider_rejects_invalid_host_context(tmp_path: Path, invalid: str) -> None:
     from tools.orchestrator.core import Fix, OrchestratorError
     from tools.orchestrator.runtime import SecureProvider
 
