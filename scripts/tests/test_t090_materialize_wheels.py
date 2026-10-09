@@ -19,10 +19,7 @@ def wheel(directory: Path, name: str, version: str, *, tag: str = "py3-none-any"
 
 def test_read_pins_requires_exact_unique_versions_and_supports_extras(tmp_path: Path) -> None:
     lock = tmp_path / "requirements.lock"
-    lock.write_text(
-        "# frozen\ncoverage[toml]==7.16.2\n"
-        "demo_name==1.0.0  # version reason\n"
-    )
+    lock.write_text("# frozen\ncoverage[toml]==7.16.2\ndemo_name==1.0.0  # version reason\n")
     assert candidate.read_pins(lock) == {"coverage": "7.16.2", "demo-name": "1.0.0"}
     for raw, message in (
         ("", "Empty"),
@@ -142,9 +139,7 @@ def test_wheel_cli_fails_closed_on_missing_semgrep_and_wheel_download_error(
     assert "Cannot admit binary-only" in (out / "semgrep" / "BLOCKED.txt").read_text()
 
 
-def test_wheel_cli_denies_other_platforms(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_wheel_cli_denies_other_platforms(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         sys, "argv", ["wheel-materializer", "--root", str(tmp_path), "--output", str(tmp_path)]
     )
