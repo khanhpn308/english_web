@@ -1,3 +1,11 @@
+## 09/10/2026 - T090 R6-B candidate admission and tooling; enforcement blocked
+
+- Added independent Host-pinned image approval manifest parser. Unapproved, missing, Git-checkout-local or mismatched policies fail closed; manifest includes locked-input, base-image, offline database, provenance and SBOM digest fields.
+- Added a standalone `collect_verification_admitted()` route that validates Git binding plus admitted image and dispatches commands only via DockerVerificationSandbox. It has no Host fallback; the legacy callsites remain unmigrated.
+- The candidate image CI now probes offline Ruff, MyPy and npm scripts inside the live Docker sandbox. This is NOT a full project `npm run check:task:portable` gate.
+- No signed provenance has been verified, no approved image exists, and the default `image-policy.json` remains `approved=false`. Source binding and image policy metadata cannot substitute for a trusted external publisher attestation.
+- R6-B3 production enforcement NOT DONE. Both `collect_verification()` and `Pipeline.verify()` still have Host execution paths and must not be accepted as isolated; system settings, lockfiles and run-gates remain unchanged pending explicit owner scope approval.
+
 ## 09/10/2026 - T090 R6 phase A: canonical tree digest and Git crosswalk
 
 - Canonicalized directory traversal in `_docker_source_digest` to eliminate filesystem enumeration order from tree SHA-256; tests cover reordered directory creation, symlink targets, empty directories and path changes.

@@ -353,3 +353,13 @@ Implementation on draft PR #9 includes deterministic `folders.sort()` before rec
 
 **Blockers for R6 phase B:** trusted image currently `approved=false`, base apt snapshot and wheel hashes not complete, image/OSV provenance not signed, `.venv` and `node_modules` materialization may exceed 256 MiB tmpfs, `npm ci` setup must move to trusted preprovisioning, Bridge hidden tools remain unverified. Preserve user-approved path scope; changing lockfiles, orchestrator.yaml or run-gates script requires explicit owner approval. Audit fail-closed behavior before changing production.
 
+### R6-B provisional work and hard security gate (2026-10-09)
+
+R6-B1 candidate: `admit_verification_image()` requires an independently controlled, SHA-256-pinned external Host policy document (repo-local policies are not trusted), matching pinned image manifest identity, pinned base images, local dependency lock SHA-256, OSV archive identifiers and provenance/SBOM identifiers. This parser checks declaration completeness and external anchoring; **it does not cryptographically verify the image publisher's signature** or materialize an approved image. User's candidate policy remains `approved: false`.
+
+R6-B2 diagnostic CI: live Docker broker executes minimal offline Ruff, MyPy and npm probes against synthetic data. Full `npm run check:task:portable` (and scanner databases/large outputs/Playwright prerequisites) have **not** been demonstrated in the image.
+
+R6-B3 candidate: `collect_verification_admitted()` binds to `FrozenVerificationSourceBinding` and admitted image before dispatch; it only uses `DockerVerificationSandbox`, never Host fallback. **Critical release blocker**: active legacy `collect_verification()` and `Pipeline.verify()` have not been migrated. Those callsites retain Host execution and must be removed before security acceptance.
+
+Release scope approval is required if modifying `orchestrator.yaml`, `.agent/scripts/run-gates.sh`, `requirements-dev.lock` or `package-lock.json`. A genuinely approved, independently verified image digest/provenance must be provisioned by a trusted operator. Do not flip `approved` to true to pass CI. Do not merge PR #9, enable Worker CLI, or declare T089 accepted.
+
