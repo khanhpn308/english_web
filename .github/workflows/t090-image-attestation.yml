@@ -251,7 +251,14 @@ jobs:
           trap 'docker rm -f t090-full-gate-registry >/dev/null 2>&1 || true' EXIT
           docker tag t090-verifier:candidate localhost:5001/t090-verifier:probe
           docker push localhost:5001/t090-verifier:probe
-          image_ref="$(docker image inspect --format '{{index .RepoDigests 0}}' localhost:5001/t090-verifier:probe)"
+          image_ref="$(docker image inspect --format '{{json .RepoDigests}}' localhost:5001/t090-verifier:probe | python3 -c '
+          import json, sys
+          entries = json.load(sys.stdin)
+          candidates = [x for x in entries if x.startswith("localhost:5001/t090-verifier@sha256:")]
+          if len(candidates) != 1:
+              raise SystemExit("T090: unique registry digest unavailable")
+          print(candidates[0])
+          ')"
           [[ "$image_ref" == localhost:5001/t090-verifier@sha256:* ]]
           python3 -m pip install --disable-pip-version-check -r requirements-dev.lock
           T090_GATE_IMAGE="$image_ref" python3 - <<'PY'
