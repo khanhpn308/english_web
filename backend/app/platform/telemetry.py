@@ -1,8 +1,4 @@
-"""Local-only T011 telemetry. No HTTP hooks, exporters, or auto-instrumentation.
-
-App registration is blocked on the existing HTTP error-ID and bridge transport
-scope extensions. This module does not patch either boundary or global logging.
-"""
+"""Local-only T011 telemetry, without exporters or global logging handlers."""
 
 import json
 import math
@@ -40,12 +36,45 @@ _SPAN_NAMES = frozenset({
 _OPERATIONS = frozenset({"lookup", "quiz", "review", "search", "sync", "save", "feedback"})
 _SOURCE_STATUSES = frozenset({"VALID", "INVALID", "MISSING"})
 # Only reviewed route templates, never a request path/query or arbitrary URL.
-# HTTP ownership/correlation is intentionally deferred; extend with its integration.
-_ROUTES = frozenset({"GET /api/v1/health", "unmatched"})
+_ROUTES = frozenset({
+    "GET /api/v1/health", "POST /bootstrap/exchange", "GET /bootstrap",
+    "GET /api/v1/ai-consent", "PUT /api/v1/ai-consent", "DELETE /api/v1/ai-consent",
+    "GET /api/v1/operations/{operation_id}", "POST /api/v1/lookups",
+    "GET /api/v1/word-forms", "GET /api/v1/word-forms/{wordFormId}",
+    "POST /api/v1/word-forms", "PATCH /api/v1/word-forms/{wordFormId}",
+    "GET /api/v1/review-queue", "POST /api/v1/cards/{cardId}/reviews", "GET /api/v1/sources",
+    "POST /api/v1/sync-runs", "GET /api/v1/sync-runs/{syncRunId}",
+    "POST /api/v1/quiz-attempts", "GET /api/v1/quiz-attempts/{attemptId}",
+    "PUT /api/v1/quiz-attempts/{attemptId}/answers/{questionId}", "unmatched",
+})
 _REQUEST_ID = re.compile(
     r"(?:req_[0-9a-f]{32}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\Z", re.ASCII
 )
 _VERSION = re.compile(r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\Z", re.ASCII)
+
+
+# This stores only a bounded diagnostic ID, never an app or mutable request object.
+_http_request_id: ContextVar[str | None] = ContextVar("http_request_id", default=None)
+
+
+def validated_request_id(value: str | None) -> str:
+    if type(value) is str and len(value) <= 36 and _REQUEST_ID.fullmatch(value):
+        return value
+    return f"req_{uuid4().hex}"
+
+
+def request_id() -> str:
+    """Authoritative HTTP ID; direct non-HTTP error construction gets a fresh ID."""
+    return _http_request_id.get() or validated_request_id(None)
+
+
+@contextmanager
+def request_context(identifier: str) -> Iterator[None]:
+    token = _http_request_id.set(validated_request_id(identifier))
+    try:
+        yield
+    finally:
+        _http_request_id.reset(token)
 
 
 def _category(value: object, choices: frozenset[str], default: str | None = None) -> str | None:

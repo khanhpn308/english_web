@@ -1,7 +1,6 @@
 """Creation and offline immutable attempt reads. Drafts/submission belong to T047/T048."""
 
 import asyncio
-from secrets import token_urlsafe
 from typing import Annotated, Any, Literal
 
 from backend.app.application.create_quiz import (
@@ -14,6 +13,7 @@ from backend.app.application.operations import OperationConflict
 from backend.app.assessment.questions import QuizAttempt
 from backend.app.assessment.repository import QuizPersistenceError
 from backend.app.http.errors import error_response
+from backend.app.platform.telemetry import request_id
 from fastapi import APIRouter, Header, Path, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.exc import SQLAlchemyError
@@ -82,7 +82,7 @@ def _restore_error(attempt_id: str) -> JSONResponse:
             "error": {
                 "code": "QUIZ_RESTORE_REQUIRED",
                 "message": "Quiz snapshot requires restoration",
-                "requestId": f"req_{token_urlsafe(12)}",
+                "requestId": request_id(),
                 "details": {
                     "kind": "RESTORE",
                     "attemptId": attempt_id,

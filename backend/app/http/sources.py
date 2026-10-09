@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import re
-from secrets import token_urlsafe
 from typing import Annotated, Literal
 
 from backend.app.application.operations import OperationConflict, OperationLedger
 from backend.app.application.sync import CursorExpiredError, SyncReason, SyncService
 from backend.app.http.errors import error_response
+from backend.app.platform.telemetry import request_id
 from fastapi import APIRouter, Header, Query, Request
 from pydantic import BaseModel, ConfigDict
 from starlette.responses import JSONResponse
@@ -109,7 +109,7 @@ def _internal_error_response() -> JSONResponse:
             "error": {
                 "code": "INTERNAL_ERROR",
                 "message": "Internal server error",
-                "requestId": f"req_{token_urlsafe(12)}",
+                "requestId": request_id(),
             }
         },
         status_code=500,
@@ -145,7 +145,7 @@ def get_sources(
                 "error": {
                     "code": "INVALID_QUERY",
                     "message": "Syntax or query shape invalid",
-                    "requestId": f"req_{token_urlsafe(12)}",
+                    "requestId": request_id(),
                 }
             },
             status_code=400,
@@ -196,7 +196,7 @@ def get_sources(
                 "error": {
                     "code": "CURSOR_EXPIRED",
                     "message": "Cursor is invalid, tampered, or expired due to source changes",
-                    "requestId": f"req_{token_urlsafe(12)}",
+                    "requestId": request_id(),
                 }
             },
             status_code=409,
@@ -263,7 +263,7 @@ def create_sync_run(
                     "error": {
                         "code": "IDEMPOTENCY_KEY_REUSED",
                         "message": "Idempotency key reused with different request payload",
-                        "requestId": f"req_{token_urlsafe(12)}",
+                        "requestId": request_id(),
                     }
                 },
                 status_code=422,
@@ -275,7 +275,7 @@ def create_sync_run(
                         "code": "IDEMPOTENCY_IN_FLIGHT",
                         "message": "Operation already in flight",
                         "details": {"kind": "RETRY", "operationId": e.operation_id},
-                        "requestId": f"req_{token_urlsafe(12)}",
+                        "requestId": request_id(),
                     }
                 },
                 status_code=409,
@@ -292,7 +292,7 @@ def create_sync_run(
                     "error": {
                         "code": error_code,
                         "message": msg,
-                        "requestId": f"req_{token_urlsafe(12)}",
+                        "requestId": request_id(),
                     }
                 },
                 status_code=status_code,
@@ -320,7 +320,7 @@ def create_sync_run(
                     "code": "IDEMPOTENCY_IN_FLIGHT",
                     "message": "Operation already in flight",
                     "details": {"kind": "RETRY", "operationId": claim.operation.operation_id},
-                    "requestId": f"req_{token_urlsafe(12)}",
+                    "requestId": request_id(),
                 }
             },
             status_code=409,
@@ -355,7 +355,7 @@ def get_sync_run(
                 "error": {
                     "code": "INVALID_QUERY",
                     "message": "Syntax or query shape invalid",
-                    "requestId": f"req_{token_urlsafe(12)}",
+                    "requestId": request_id(),
                 }
             },
             status_code=400,

@@ -1,8 +1,8 @@
 """Redacted, contract-shaped HTTP errors."""
 
-from secrets import token_urlsafe
 from typing import Any
 
+from backend.app.platform.telemetry import request_id
 from starlette.responses import JSONResponse
 
 _MESSAGES = {
@@ -36,7 +36,7 @@ def error_response(
     error: dict[str, Any] = {
         "code": code,
         "message": _MESSAGES[code],
-        "requestId": f"req_{token_urlsafe(12)}",
+        "requestId": request_id(),
     }
     if details is not None:
         error["details"] = details

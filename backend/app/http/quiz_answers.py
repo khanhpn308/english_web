@@ -1,6 +1,5 @@
 """PUT local drafts. Production SessionGuard owns authentication and Origin checks."""
 
-from secrets import token_urlsafe
 from typing import Annotated, Any
 
 from backend.app.application.operations import OperationConflict
@@ -9,6 +8,7 @@ from backend.app.assessment.questions import Answer, answer_etag
 from backend.app.assessment.repository import QuizPersistenceError
 from backend.app.http.errors import error_response
 from backend.app.http.quiz import AttemptId, IdempotencyKey, QuizErrorResponse
+from backend.app.platform.telemetry import request_id
 from fastapi import APIRouter, Header, Request
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.responses import JSONResponse
@@ -34,7 +34,7 @@ def _error(status: int, code: str, attempt_id: str, identity: str | None = None)
         details = {"kind": "RETRY", "operationId": identity}
     if code in _LOCAL_MESSAGES:
         error: dict[str, Any] = {
-            "code": code, "message": _LOCAL_MESSAGES[code], "requestId": f"req_{token_urlsafe(12)}"
+            "code": code, "message": _LOCAL_MESSAGES[code], "requestId": request_id()
         }
         if details is not None:
             error["details"] = details

@@ -34,9 +34,11 @@ from backend.app.http.review import router as review_router
 from backend.app.http.search import router as search_router
 from backend.app.http.session import SessionGuard, SessionStore
 from backend.app.http.sources import router as sources_router
+from backend.app.http.telemetry import RouteSpanMiddleware, TelemetryFastAPI
 from backend.app.http.word_forms import router as word_forms_router
 from backend.app.persistence.database import Database, StorageError
 from backend.app.platform.config import AppSettings
+from backend.app.platform.telemetry import LocalJsonSink, Telemetry, default_log_directory
 from backend.app.review.queue import ReviewService
 from backend.app.vocabulary.models import SourceFile
 from backend.app.vocabulary.repository import VocabularyRepository
@@ -57,7 +59,7 @@ _DETAIL_ROUTES = re.compile(r"(?:word-forms/[^/]+|quiz/[^/]+(?:/result)?)\Z")
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Keep readiness false until storage checks and migrations finish."""
     settings: AppSettings = app.state.settings
     database = Database(settings.storage_path) if settings.storage_path is not None else None
@@ -284,6 +286,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     app.state.database = None
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Delegate all learning lifecycle work; diagnostics never mask its failures."""
+    telemetry: Telemetry = app.state.telemetry
+    try:
+        async with _application_lifespan(app):
+            try:
+                telemetry.emit("app_started")
+            except Exception:
+                telemetry.span_retention_failed = True
+            yield
+    finally:
+        try:
+            telemetry.emit("app_shutdown")
+        except Exception:
+            telemetry.span_retention_failed = True
+        finally:
+            try:
+                if telemetry.sink is not None:
+                    telemetry.sink.close()
+            except Exception:
+                telemetry.span_retention_failed = True
+
+
 class RequestBudgetMiddleware:
     """Start AI budgets before SessionGuard body buffering or parsing (T008/T035)."""
 
@@ -383,12 +409,19 @@ def create_app(
     """Create and configure a FastAPI application instance."""
     app_settings = settings or AppSettings()
 
-    app = FastAPI(
+    app = TelemetryFastAPI(
         title="Vocabulary Learning App",
         version=app_settings.app_version,
         lifespan=lifespan,
     )
 
+    try:
+        log_directory = default_log_directory()
+        sink = LocalJsonSink(log_directory) if log_directory is not None else None
+        app.state.telemetry = Telemetry(sink=sink, version=app_settings.app_version)
+    except Exception:
+        app.state.telemetry = Telemetry(version=app_settings.app_version)
+        app.state.telemetry.span_retention_failed = True
     app.state.settings = app_settings
     app.state.markdown_root = markdown_root
     app.state.ready = False
@@ -412,6 +445,7 @@ def create_app(
 
     # FastAPI middleware runs before route handlers, including the generated OpenAPI route.
     # Source: https://fastapi.tiangolo.com/tutorial/middleware/
+    app.add_middleware(RouteSpanMiddleware, telemetry=app.state.telemetry)
     app.add_middleware(SessionGuard, settings=app_settings, sessions=app.state.sessions)
     app.add_middleware(RequestBudgetMiddleware)
 

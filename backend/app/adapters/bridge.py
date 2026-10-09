@@ -16,6 +16,25 @@ MAX_RESPONSE_BYTES = 4_194_304
 BRIDGE_BASE_URL = "http://127.0.0.1:8045/v1"
 
 
+class _TraceIsolatingTransport(httpx.AsyncBaseTransport):
+    """Last app-owned boundary, after HTTPX auth and request event hooks.
+
+    The wrapped transport is the existing injected fake or the HTTPX network
+    transport. No downstream proxy-generated headers or logs are controlled here.
+    """
+
+    def __init__(self, transport: httpx.AsyncBaseTransport) -> None:
+        self.transport = transport
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        for name in ("x-request-id", "traceparent", "tracestate", "baggage"):
+            request.headers.pop(name, None)
+        return await self.transport.handle_async_request(request)
+
+    async def aclose(self) -> None:
+        await self.transport.aclose()
+
+
 class BridgeAdapter(BridgePort):
     def __init__(
         self,
@@ -37,7 +56,12 @@ class BridgeAdapter(BridgePort):
     def _get_client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
             base_url=self._base_url,
-            transport=self._transport,
+            transport=_TraceIsolatingTransport(
+                self._transport if self._transport is not None else httpx.AsyncHTTPTransport(
+                    trust_env=False,
+                    limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+                )
+            ),
             trust_env=False,
             follow_redirects=False,
             # Each outbound stage supplies its own remaining operation budget.

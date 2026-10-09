@@ -1,20 +1,25 @@
-"""Source-authored T011 platform regressions; Host owns execution.
-
-HTTP integration and injected outbound-header enforcement require the scope
-extensions described in the handoff. These tests do not claim those guarantees.
-"""
+"""Source-authored T011 platform and production-boundary regressions; Host executes."""
 
 import asyncio
 import errno
 import json
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
 from unittest.mock import patch
 
+import httpx
 import pytest
+from backend.app.adapters.bridge import BridgeAdapter
+from backend.app.application.operations import OperationConflict
+from backend.app.application.save_answer import SaveAnswerService
+from backend.app.http.session import COOKIE_NAME
+from backend.app.main import create_app
+from backend.app.platform.config import AppSettings
 from backend.app.platform.telemetry import (
     MAX_LOG_BYTES,
     MAX_LOG_FILES,
@@ -23,7 +28,11 @@ from backend.app.platform.telemetry import (
     SpanAttributes,
     Telemetry,
     default_log_directory,
+    request_id,
 )
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
+from starlette.types import Message
 
 SENTINELS = (
     "SYNTHETIC_KEY_DO_NOT_DISCLOSE",
@@ -365,3 +374,334 @@ def test_restrictive_posix_permissions_and_symlink_refusal(tmp_path: Path) -> No
     (linked / "telemetry.jsonl").symlink_to(target)
     Telemetry(sink=LocalJsonSink(linked)).emit("app_started")
     assert target.read_text(encoding="utf-8") == "SYNTHETIC_LEARNING"
+
+
+BASE = "http://127.0.0.1:8000"
+SAFE_ID = "req_" + "c" * 32
+
+
+def telemetry_app(tmp_path: Path) -> FastAPI:
+    # Production create_app and every production middleware remain in the stack.
+    with patch("backend.app.main.default_log_directory", return_value=tmp_path / "logs"):
+        return create_app(AppSettings(storage_path=None))
+
+
+def authenticate(app: FastAPI, client: TestClient) -> None:
+    token = app.state.sessions.issue_bootstrap_token()
+    response = client.post(
+        "/bootstrap/exchange", json={"token": token}, headers={"Origin": BASE},
+    )
+    assert response.status_code == 204
+
+
+@pytest.mark.parametrize("incoming", [SAFE_ID, "6eec59ab-279a-4b48-83d3-5c47f508aa11"])
+def test_production_http_echo_and_correlated_root_child(tmp_path: Path, incoming: str) -> None:
+    app = telemetry_app(tmp_path)
+    with TestClient(app, base_url=BASE) as client:
+        response = client.get("/api/v1/health", headers={"X-Request-ID": incoming})
+        assert response.status_code == 200
+        assert response.headers["X-Request-ID"] == incoming
+        assert response.headers["Cache-Control"] == "no-store"
+        spans = [s for s in app.state.telemetry.spans() if s.request_id == incoming]
+        root = next(s for s in spans if s.name == "http_request")
+        child = next(s for s in spans if s.name == "route_handler")
+        assert child.parent_span_id == root.span_id
+        assert child.trace_id == root.trace_id
+        event = next(r for r in records(tmp_path / "logs") if r.get("requestId") == incoming)
+        assert event["traceId"] == root.trace_id
+        assert event["spanId"] == root.span_id
+        assert event["route"] == "GET /api/v1/health"
+    assert [r["event"] for r in records(tmp_path / "logs") if "requestId" not in r] == [
+        "app_started", "app_shutdown",
+    ]
+    assert not app.state.sessions.valid_session("SYNTHETIC_SESSION_TOKEN")
+
+
+@pytest.mark.parametrize("incoming", [None, "unsafe", "x" * 1000, "unsafe\t", SENTINELS[0]])
+def test_production_http_replaces_invalid_ids(tmp_path: Path, incoming: str | None) -> None:
+    app = telemetry_app(tmp_path)
+    with TestClient(app, base_url=BASE) as client:
+        headers = {} if incoming is None else {"X-Request-ID": incoming}
+        headers["Cookie"] = f"{COOKIE_NAME}=SYNTHETIC_SESSION_TOKEN"
+        headers["Authorization"] = SENTINELS[0]
+        response = client.get("/api/v1/health", headers=headers)
+        effective = response.headers["X-Request-ID"]
+        assert effective != incoming
+        assert len(effective) == 36 and effective.startswith("req_")
+        assert any(r.get("requestId") == effective for r in records(tmp_path / "logs"))
+        output = json.dumps(records(tmp_path / "logs"))
+        assert "SYNTHETIC_SESSION_TOKEN" not in output
+        assert SENTINELS[0] not in output
+
+
+def test_duplicate_ids_and_early_session_origin_body_rejections(tmp_path: Path) -> None:
+    app = telemetry_app(tmp_path)
+    with TestClient(app, base_url=BASE) as client:
+        duplicate = client.get("/api/v1/health", headers=[
+            ("X-Request-ID", SAFE_ID), ("X-Request-ID", "req_" + "d" * 32),
+        ])
+        assert duplicate.headers["X-Request-ID"] not in {SAFE_ID, "req_" + "d" * 32}
+        denied = client.get("/api/v1/sources", headers={"X-Request-ID": SAFE_ID})
+        assert denied.status_code == 401
+        assert denied.json()["error"]["code"] == "SESSION_REQUIRED"
+        origin = client.get("/api/v1/health", headers={
+            "Origin": "https://hostile.invalid", "X-Request-ID": SAFE_ID,
+        })
+        assert origin.status_code == 403
+        authenticate(app, client)
+        oversized = client.post("/api/v1/quiz-attempts", content="{}", headers={
+            "Origin": BASE, "Content-Type": "application/json",
+            "Content-Length": "1048577", "X-Request-ID": SAFE_ID,
+        })
+        assert oversized.status_code == 413
+        for response in (denied, origin, oversized):
+            assert response.json()["error"]["requestId"] == response.headers["X-Request-ID"]
+            assert response.headers["X-Request-ID"] == SAFE_ID
+            assert response.headers["Cache-Control"] == "no-store"
+            assert response.headers["X-Content-Type-Options"] == "nosniff"
+    events = records(tmp_path / "logs")
+    assert sum(r["event"] == "security_boundary_rejected" for r in events) == 3
+
+
+def test_validation_and_quiz_answer_local_error_correlation(tmp_path: Path) -> None:
+    app = telemetry_app(tmp_path)
+    with TestClient(app, base_url=BASE) as client:
+        authenticate(app, client)
+        headers = {"Origin": BASE, "X-Request-ID": SAFE_ID}
+        invalid = client.put("/api/v1/quiz-attempts/attempt/answers/question", json={},
+                             headers=headers)
+        assert invalid.status_code == 422
+        assert invalid.json()["error"]["requestId"] == invalid.headers["X-Request-ID"] == SAFE_ID
+        app.state.answer_service = object.__new__(SaveAnswerService)
+        app.state.ready = True
+        with patch.object(SaveAnswerService, "save", side_effect=OperationConflict(
+            409, "REVISION_CONFLICT",
+        )):
+            conflict = client.put("/api/v1/quiz-attempts/attempt/answers/question", json={
+                "answer": SENTINELS[2], "draftRevision": 0,
+            }, headers={
+                **headers, "Idempotency-Key": "synthetic-intent",
+                "If-Match": '"qa-v1-' + "0" * 64 + '"',
+            })
+        assert conflict.status_code == 409
+        assert conflict.json()["error"] == {
+            "code": "REVISION_CONFLICT", "message": "Answer revision conflict",
+            "requestId": SAFE_ID,
+        }
+        assert conflict.headers["X-Request-ID"] == SAFE_ID
+        assert conflict.headers["Cache-Control"] == "no-store"
+    assert all(s not in json.dumps(records(tmp_path / "logs")) + json.dumps([
+        asdict(span) for span in app.state.telemetry.spans()
+    ]) for s in SENTINELS)
+
+
+@pytest.mark.anyio
+async def test_production_concurrent_requests_and_exception_cleanup(tmp_path: Path) -> None:
+    app = telemetry_app(tmp_path)
+    barrier = asyncio.Event()
+    entered = 0
+
+    @app.get("/api/v1/synthetic-context")
+    async def context_route(request: Request) -> dict[str, str]:
+        nonlocal entered
+        entered += 1
+        if entered == 2:
+            barrier.set()
+        await barrier.wait()
+        with request.app.state.telemetry.span("sqlite") as child:
+            await asyncio.sleep(0)
+            assert child.request_id == request_id()
+            return {"id": request_id(), "trace": child.trace_id}
+
+    @app.get("/api/v1/synthetic-failure")
+    async def failing_route() -> None:
+        raise RuntimeError(" ".join(SENTINELS))
+
+    async with app.router.lifespan_context(app):
+        cookie = app.state.sessions.exchange(app.state.sessions.issue_bootstrap_token())
+        assert cookie is not None
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url=BASE,
+            cookies={COOKIE_NAME: cookie},
+        ) as client:
+            ids = ["req_" + "a" * 32, "req_" + "b" * 32]
+            responses = await asyncio.gather(*[
+                client.get("/api/v1/synthetic-context", headers={"X-Request-ID": identifier})
+                for identifier in ids
+            ])
+            assert [r.json()["id"] for r in responses] == ids
+            assert len({r.json()["trace"] for r in responses}) == 2
+            assert app.state.telemetry.current_context() is None
+            assert request_id() not in ids
+            with pytest.raises(RuntimeError) as caught:
+                await client.get("/api/v1/synthetic-failure", headers={"X-Request-ID": SAFE_ID})
+            assert str(caught.value) == " ".join(SENTINELS)
+            assert app.state.telemetry.current_context() is None
+            assert request_id() != SAFE_ID
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app, raise_app_exceptions=False), base_url=BASE,
+            cookies={COOKIE_NAME: cookie},
+        ) as client:
+            response = await client.get(
+                "/api/v1/synthetic-failure", headers={"X-Request-ID": SAFE_ID},
+            )
+            assert response.status_code == 500
+            assert response.headers["X-Request-ID"] == SAFE_ID
+            assert all(s not in response.text for s in SENTINELS)
+    serialized = json.dumps(records(tmp_path / "logs")) + json.dumps([
+        asdict(span) for span in app.state.telemetry.spans()
+    ])
+    assert all(s not in serialized for s in (*SENTINELS, cookie))
+
+
+def test_failing_sink_preserves_route_exception_and_success(tmp_path: Path) -> None:
+    app = telemetry_app(tmp_path)
+    original = RuntimeError(" ".join(SENTINELS))
+
+    @app.get("/api/v1/synthetic-failure")
+    def failure() -> None:
+        raise original
+
+    with TestClient(app, base_url=BASE) as client:
+        authenticate(app, client)
+        with patch("backend.app.platform.telemetry.os.open", side_effect=PermissionError(
+            SENTINELS[0],
+        )):
+            with pytest.raises(RuntimeError) as caught:
+                client.get("/api/v1/synthetic-failure", headers={"X-Request-ID": SAFE_ID})
+            assert caught.value is original
+            assert client.get("/api/v1/health").status_code == 200
+        assert app.state.telemetry.sink.failed
+
+
+@pytest.mark.anyio
+async def test_bridge_strips_headers_after_injection_in_all_stages(tmp_path: Path) -> None:
+    captured: list[httpx.Request] = []
+    telemetry = Telemetry(sink=LocalJsonSink(tmp_path / "bridge-logs"))
+
+    def fake_bridge(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        assert request.url.host == "127.0.0.1" and request.url.port == 8045
+        assert not any(h in request.headers for h in (
+            "x-request-id", "traceparent", "tracestate", "baggage",
+        ))
+        if len(captured) == 1:
+            assert "authorization" not in request.headers
+            return httpx.Response(401)
+        assert request.headers["Authorization"] == f"Bearer {SENTINELS[0]}"
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": []})
+        assert json.loads(request.content)["messages"][0]["content"] == SENTINELS[1]
+        return httpx.Response(200, json={"choices": []})
+
+    async def inject(request: httpx.Request) -> None:
+        for name in ("X-Request-ID", "TraceParent", "TraceState", "BaGgAgE"):
+            request.headers[name] = SENTINELS[2]
+
+    adapter = BridgeAdapter(
+        SENTINELS[0], transport=httpx.MockTransport(fake_bridge), clock=lambda: 0,
+    )
+    original_client = adapter._get_client
+
+    def instrumented_client() -> httpx.AsyncClient:
+        client = original_client()
+        client.headers["X-Request-ID"] = SAFE_ID
+        client.event_hooks["request"].append(inject)
+        return client
+
+    with patch.object(adapter, "_get_client", side_effect=instrumented_client):
+        with telemetry.span("http_request", request_id=SAFE_ID) as root:
+            with telemetry.span("bridge_call") as child:
+                await adapter.preflight(30)
+                result = await adapter.dispatch_chat({
+                    "messages": [{"role": "user", "content": SENTINELS[1]}],
+                }, 30)
+                assert result == {"choices": []}
+                assert child.trace_id == root.trace_id
+                assert child.parent_span_id == root.span_id
+    assert [r.method for r in captured] == ["GET", "GET", "POST"]
+    assert all(s not in json.dumps([asdict(span) for span in telemetry.spans()]) for s in SENTINELS)
+
+
+def test_factory_preserves_routers_and_has_no_duplicate_telemetry(tmp_path: Path) -> None:
+    first = telemetry_app(tmp_path / "first")
+    second = telemetry_app(tmp_path / "second")
+    assert first.state.telemetry is not second.state.telemetry
+    required = {
+        "/api/v1/health", "/bootstrap/exchange", "/api/v1/ai-consent",
+        "/api/v1/operations/{operation_id}", "/api/v1/sources", "/api/v1/sync-runs",
+        "/api/v1/review-queue", "/api/v1/lookups", "/api/v1/quiz-attempts",
+        "/api/v1/quiz-attempts/{attemptId}/answers/{questionId}",
+    }
+    assert required <= {getattr(route, "path", None) for route in first.routes}
+    assert [m.cls.__name__ for m in first.user_middleware] == [
+        "RequestBudgetMiddleware", "SessionGuard", "RouteSpanMiddleware",
+    ]
+    with TestClient(first, base_url=BASE) as client:
+        client.get("/api/v1/health")
+        client.get("/api/v1/health")
+    events = records(tmp_path / "first" / "logs")
+    assert sum(r["event"] == "http_request_completed" for r in events) == 2
+    assert sum(r["event"] == "app_started" for r in events) == 1
+    assert sum(r["event"] == "app_shutdown" for r in events) == 1
+
+
+@pytest.mark.anyio
+async def test_body_timeout_response_keeps_authoritative_correlation(tmp_path: Path) -> None:
+    app = telemetry_app(tmp_path)
+    messages: list[Message] = []
+
+    async def receive() -> Message:
+        raise TimeoutError("SYNTHETIC_BODY_TIMEOUT")
+
+    async def send(message: Message) -> None:
+        messages.append(message)
+
+    async with app.router.lifespan_context(app):
+        cookie = app.state.sessions.exchange(app.state.sessions.issue_bootstrap_token())
+        assert cookie is not None
+        await app({
+            "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1",
+            "method": "POST", "scheme": "http", "path": "/api/v1/quiz-attempts",
+            "raw_path": b"/api/v1/quiz-attempts", "query_string": b"",
+            "root_path": "", "server": ("127.0.0.1", 8000), "client": ("127.0.0.1", 1234),
+            "headers": [
+                (b"host", b"127.0.0.1:8000"), (b"origin", BASE.encode()),
+                (b"content-type", b"application/json"), (b"x-request-id", SAFE_ID.encode()),
+                (b"cookie", f"{COOKIE_NAME}={cookie}".encode()),
+            ],
+        }, receive, send)
+        start = next(m for m in messages if m["type"] == "http.response.start")
+        body = b"".join(m.get("body", b"") for m in messages if m["type"] == "http.response.body")
+        assert start["status"] == 503
+        assert dict(start["headers"])[b"x-request-id"] == SAFE_ID.encode()
+        assert dict(start["headers"])[b"cache-control"] == b"no-store"
+        assert json.loads(body)["error"]["requestId"] == SAFE_ID
+        assert app.state.telemetry.current_context() is None
+        assert request_id() != SAFE_ID
+
+
+@pytest.mark.anyio
+async def test_lifecycle_diagnostic_failures_do_not_mask_application_failure(
+    tmp_path: Path,
+) -> None:
+    app = telemetry_app(tmp_path)
+    original = RuntimeError("SYNTHETIC_LIFECYCLE_FAILURE")
+
+    @asynccontextmanager
+    async def failing_lifecycle(_app: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            raise original
+
+    with (
+        patch("backend.app.main._application_lifespan", failing_lifecycle),
+        patch.object(app.state.telemetry, "emit", side_effect=OSError(SENTINELS[0])),
+        patch.object(app.state.telemetry.sink, "close", side_effect=OSError(SENTINELS[1])),
+    ):
+        with pytest.raises(RuntimeError) as caught:
+            async with app.router.lifespan_context(app):
+                pass
+    assert caught.value is original
+    assert app.state.telemetry.span_retention_failed is True

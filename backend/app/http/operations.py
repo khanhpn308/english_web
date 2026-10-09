@@ -1,9 +1,8 @@
 """Redacted operation status read endpoint (T014)."""
 
-from secrets import token_urlsafe
-
 from backend.app.application.operations import OperationLedger, OperationStatus
 from backend.app.http.errors import error_response
+from backend.app.platform.telemetry import request_id
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.exc import SQLAlchemyError
@@ -37,7 +36,7 @@ def get_operation(request: Request, operation_id: str) -> OperationView | JSONRe
                 "error": {
                     "code": "INVALID_QUERY",
                     "message": "Syntax or query shape invalid",
-                    "requestId": f"req_{token_urlsafe(12)}",
+                    "requestId": request_id(),
                 }
             },
             status_code=400,
@@ -53,7 +52,7 @@ def get_operation(request: Request, operation_id: str) -> OperationView | JSONRe
                 "error": {
                     "code": "STORAGE_BUSY",
                     "message": "Storage unavailable",
-                    "requestId": f"req_{token_urlsafe(12)}",
+                    "requestId": request_id(),
                 }
             },
             status_code=503,
