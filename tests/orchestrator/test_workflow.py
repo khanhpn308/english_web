@@ -4109,3 +4109,67 @@ def test_t090_secure_auditor_receives_sealed_evidence_without_file_tools(
     assert result.fix_prompt == "KEEP_SAFE"
     assert len(calls) == 1
     pipeline.check_artifacts(directory, state)
+
+
+def test_t090_parallel_review_receives_sealed_source_evidence(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.core import digest
+    from tools.orchestrator.runtime import SecureProvider
+
+    config = configuration(integrate=False)
+    pipeline = Pipeline(repository, config, FakeAgents())
+    state = pipeline.start("T100", defer_verification=True)
+    directory = pipeline.run_path("T100", state.run_id)
+    snapshot = Git(Path(state.worktree_path)).snapshot(state.base_sha)
+    checks_name = "t090-synthetic-checks.json"
+    raw_checks = json.dumps({"source_digest": snapshot}).encode()
+    (directory / checks_name).write_bytes(raw_checks)
+    state.artifacts["audit_checks"] = checks_name
+    state.artifact_digests[checks_name] = digest(raw_checks)
+    pipeline.save(directory, state)
+    config.roles["auditor"] = config.roles["auditor"].model_copy(
+        update={
+            "analysis_backend": "host-http-text",
+            "model": "gemini-3.8-flash-high",
+            "host_text_endpoint": "http://127.0.0.1:8045/v1/chat/completions",
+            "host_text_api_key_env": "T090_TEST_ONLY_KEY",
+        }
+    )
+    pipeline.provider = SecureProvider()
+    seen: list[str] = []
+
+    def review(
+        _self: SecureProvider,
+        prompt: str,
+        *,
+        cwd: Path,
+        role: Role,
+        timeout: int | None,
+        output: type[Output],
+        artifacts: Path,
+        name: str,
+        readonly: bool,
+    ) -> Output:
+        assert readonly
+        assert output is ReviewShard
+        assert "HOST-SEALED SOURCE/DIFF EVIDENCE" in prompt
+        assert "New synthetic entry" in prompt
+        assert "Historical entry" in prompt
+        assert "test_behavior():" not in prompt
+        matched = re.search(r"REVIEW_PERSPECTIVE: ([^\n]+)", prompt)
+        assert matched is not None
+        seen.append(matched[1])
+        return output.model_validate(
+            ReviewShard(
+                perspective=ReviewPerspective(matched[1]),
+                findings=[],
+                probe_request=None,
+            )
+        )
+
+    monkeypatch.setattr(SecureProvider, "run", review)
+    bundle = pipeline.parallel_review(directory, state, "Frozen synthetic context")
+    assert len(seen) == len(ReviewPerspective)
+    assert bundle.source_digest == snapshot
+    pipeline.check_artifacts(directory, state)
