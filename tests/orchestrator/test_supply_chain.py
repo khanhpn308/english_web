@@ -131,6 +131,7 @@ def test_t090_supply_chain_rejects_wrong_attested_image(
             }
         ]
         return subprocess.CompletedProcess(argv, 0, json.dumps(forged), "")
+
     monkeypatch.setattr("scripts.t090_supply_chain.subprocess.run", forged_run)
     with pytest.raises(SupplyChainBlocked, match="subject mismatch"):
         verify_registry_attestations(
