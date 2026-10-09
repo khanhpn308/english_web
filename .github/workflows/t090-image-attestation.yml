@@ -208,4 +208,34 @@ jobs:
           assert injected == ["docker_run"]
           assert hashlib.sha256(source.read_bytes()).hexdigest() == before
           print("T090_CONTAINER_PRE_EXEC_ATTESTATION_BLOCKED_TAMPER: PASS")
+
+          # R6-B2 candidate toolchain evidence. Synthetic, NOT the full portable
+          # application gate, which must be independently demonstrated.
+          import json
+          (workspace / "t090_toolchain.py").write_text(
+              "from typing import Final\nVERSION: Final[int] = 22\n"
+          )
+          (workspace / "package.json").write_text(json.dumps({
+              "private": True,
+              "scripts": {
+                  "t090:toolchain-probe":
+                      "node -e \"require('vitest/package.json'); console.log('T090_NODE_DEPENDENCY_PASS')\""
+              },
+          }))
+          toolchain_digest = broker.source_digest(workspace)
+          commands = [
+              ["python", "-m", "ruff", "check", "t090_toolchain.py"],
+              ["python", "-m", "mypy", "t090_toolchain.py"],
+              ["npm", "run", "t090:toolchain-probe"],
+          ]
+          for command in commands:
+              result = broker.run(
+                  command,
+                  workspace,
+                  expected_source_digest=toolchain_digest,
+              )
+              if result.exit_code or result.timed_out or result.oversized:
+                  print("TOOLCHAIN_FAIL:", command, result.stdout[-800:], result.stderr[-800:])
+                  raise AssertionError(f"Offline toolchain probe failed: {command[0]}")
+          print("T090_B2_CANDIDATE_RUFF_MYPY_NPM_OFFLINE_PASS; NOT FULL_PORTABLE_GATE")
           PY
