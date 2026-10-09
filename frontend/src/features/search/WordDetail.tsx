@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import type { components } from '@/shared/api/generated';
 import { LocalLink, ReadRecovery, isObject, isVerification, isWordForm, useLocalRead, verificationLabels, type Navigate } from './SearchPage';
+import { EditWordForm } from './EditWordForm';
+import { Button } from '@/components/ui/button';
 
 type Detail = components['schemas']['WordFormDetail'];
 const sourceLabels = { VALID: 'Nguồn hợp lệ', INVALID: 'Nguồn không hợp lệ', MISSING: 'Nguồn không còn tồn tại' } satisfies Record<Detail['sourceRefs'][number]['status'], string>;
@@ -23,6 +25,8 @@ function isDetail(value: unknown): value is Detail {
 export function WordDetail({ wordFormId, path, onNavigate }: { wordFormId: string; path: string; onNavigate: Navigate }) {
   useEffect(() => { document.querySelector<HTMLHeadingElement>('#main-content h1')?.focus(); }, []);
   const [retry, setRetry] = useState(0);
+  const [editingSource, setEditingSource] = useState<{ sourceId: string; noteDate: string } | null>(null);
+
   let decodedId: string | null;
   try { decodedId = decodeURIComponent(wordFormId); } catch { decodedId = null; }
   const view = useLocalRead<Detail>(decodedId ? `/api/v1/word-forms/${encodeURIComponent(decodedId)}` : null, retry, isDetail);
@@ -31,6 +35,21 @@ export function WordDetail({ wordFormId, path, onNavigate }: { wordFormId: strin
   const back = returnTo && /^\/search(?:\?[^#]*)?$/.test(returnTo) ? returnTo : '/search';
   const form = view.data;
   const activeSource = form?.sourceRefs.some(source => source.status === 'VALID');
+
+  if (editingSource && form) {
+    return <EditWordForm
+      wordForm={form}
+      sourceId={editingSource.sourceId}
+      noteDate={editingSource.noteDate}
+      onCancel={() => setEditingSource(null)}
+      onSuccess={() => {
+        setEditingSource(null);
+        setRetry(r => r + 1);
+        // Toast could be added here, or focus announcer
+      }}
+    />;
+  }
+
   return <section aria-label="Dạng từ đã lưu" className="space-y-4 min-w-0 break-words">
     <LocalLink href={back} onNavigate={onNavigate}>Quay lại kết quả tìm kiếm</LocalLink>
     {!decodedId && <p role="alert">Địa chỉ dạng từ không hợp lệ.</p>}
@@ -49,8 +68,9 @@ export function WordDetail({ wordFormId, path, onNavigate }: { wordFormId: strin
       <section aria-labelledby="source-heading" className="space-y-2">
         <h2 id="source-heading" className="text-xl font-semibold">Nguồn và ngày ghi chú</h2>
         {!activeSource && <p role="alert">Không có nguồn hợp lệ. Nội dung học hiện tại không khả dụng cho đến khi nguồn được khôi phục.</p>}
-        {form.sourceRefs.length ? <ul className="space-y-2">{form.sourceRefs.map(source => <li key={`${source.sourceId}:${source.noteDate}`}>
-          <time dateTime={source.noteDate}>{source.noteDate}</time> · {sourceLabels[source.status]}
+        {form.sourceRefs.length ? <ul className="space-y-2">{form.sourceRefs.map(source => <li key={`${source.sourceId}:${source.noteDate}`} className="flex items-center gap-2">
+          <span><time dateTime={source.noteDate}>{source.noteDate}</time> · {sourceLabels[source.status]}</span>
+          {source.status === 'VALID' && <Button variant="outline" size="sm" onClick={() => setEditingSource({ sourceId: source.sourceId, noteDate: source.noteDate })}>Chỉnh sửa</Button>}
         </li>)}</ul> : <p>Không có nguồn được liên kết.</p>}
       </section>
       {activeSource && <>
