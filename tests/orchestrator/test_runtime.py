@@ -474,21 +474,31 @@ def test_t090_docker_sandbox_host_constructs_fixed_arguments(
         if "inspect" in command:
             assert timeout == 20
             return ProcessResult(
-                tuple(command), str(cwd), "start", "end", 0,
-                "sha256:" + "b" * 64 + "\n", "",
+                tuple(command),
+                str(cwd),
+                "start",
+                "end",
+                0,
+                "sha256:" + "b" * 64 + "\n",
+                "",
             )
         if "run" in command:
             assert timeout == 45
             for flag in (
-                "--pull=never", "--network=none", "--read-only",
-                "--cap-drop=ALL", "--security-opt=no-new-privileges",
-                "--pids-limit", "--memory", "--memory-swap",
-                "--cpus", "--user", "--workdir=/workspace",
+                "--pull=never",
+                "--network=none",
+                "--read-only",
+                "--cap-drop=ALL",
+                "--security-opt=no-new-privileges",
+                "--pids-limit",
+                "--memory",
+                "--memory-swap",
+                "--cpus",
+                "--user",
+                "--workdir=/workspace",
             ):
                 assert flag in command
-            assert command[-7:-4] == [
-                "python3", "-I", "-c",
-            ]
+            assert command[-7:-4] == ["python3", "-I", "-c"]
             assert command[-3:] == ["python", "-m", "pytest"]
             assert "copytree('/source', '/workspace'" in command[-4]
             mount = command[command.index("--mount") + 1]
@@ -545,7 +555,9 @@ def test_t090_docker_sandbox_blocks_missing_pinned_image(
 ) -> None:
     from tools.orchestrator.core import OrchestratorError
     from tools.orchestrator.runtime import (
-        DockerVerificationPolicy, DockerVerificationSandbox, ProcessResult,
+        DockerVerificationPolicy,
+        DockerVerificationSandbox,
+        ProcessResult,
     )
 
     root = tmp_path / "verification"
