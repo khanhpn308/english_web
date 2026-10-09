@@ -2,6 +2,7 @@
 import hashlib
 import json
 import subprocess
+from typing import Any
 from pathlib import Path
 
 import pytest
@@ -17,14 +18,14 @@ from scripts.t090_supply_chain import (
 def test_t090_supply_chain_candidate_lock_does_not_claim_version_pin_is_hash(tmp_path: Path) -> None:
     requirements = tmp_path / "requirements.lock"
     npm = tmp_path / "package-lock.json"
-    requirements.write_text("pytest==9.1.1\\n")
+    requirements.write_text("pytest==9.1.1\n")
     npm.write_text('{"packages": {"": {}, "node_modules/demo": {"integrity": "sha512-abc"}}}')
     evidence = inspect_candidate_locks(requirements, npm)
     assert evidence == {
         "python_artifact_hashes_pinned": False,
         "npm_package_integrities_present": True,
     }
-    requirements.write_text("pytest==9.1.1 --hash=sha256:" + "a" * 64 + "\\n")
+    requirements.write_text("pytest==9.1.1 --hash=sha256:" + "a" * 64 + "\n")
     assert inspect_candidate_locks(requirements, npm)["python_artifact_hashes_pinned"]
 
 
@@ -60,8 +61,8 @@ def test_t090_supply_chain_attestation_requires_pinned_gh_and_2_predicates(
     gh.write_text("synthetic-gh-binary")
     gh_pin = hashlib.sha256(gh.read_bytes()).hexdigest()
     image = "ghcr.io/khanhpn308/english_web/t090-verifier@sha256:" + "a" * 64
-    source = "b" * 40
-    source_sha = "b" * 64
+    source = "b" * 64
+    source_sha = "b" * 40
     commands: list[list[str]] = []
 
     def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -82,7 +83,7 @@ def test_t090_supply_chain_attestation_requires_pinned_gh_and_2_predicates(
         return subprocess.CompletedProcess(argv, 0, json.dumps(result), "")
 
     monkeypatch.setattr("scripts.t090_supply_chain.subprocess.run", fake_run)
-    args = {
+    args: dict[str, Any] = {
         "image_reference": image,
         "repository": "khanhpn308/english_web",
         "signer_workflow": "khanhpn308/english_web/.github/workflows/t090-image-attestation.yml",
@@ -127,7 +128,7 @@ def test_t090_supply_chain_rejects_wrong_attested_image(
             image_reference="ghcr.io/khanhpn308/english_web/t090-verifier@sha256:" + "a" * 64,
             repository="khanhpn308/english_web",
             signer_workflow="khanhpn308/english_web/.github/workflows/t090-image-attestation.yml",
-            source_sha="b" * 64,
+            source_sha="b" * 40,
             source_ref="refs/heads/feature/t090-provider-isolation-adjudication",
             gh_executable=gh,
             expected_gh_sha256=hashlib.sha256(gh.read_bytes()).hexdigest(),

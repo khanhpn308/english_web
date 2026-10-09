@@ -13,8 +13,8 @@ import stat
 import subprocess
 from pathlib import Path
 
-_SHA = re.compile(r"[0-9a-f]{64}\\Z")
-_IMAGE = re.compile(r"ghcr\\.io/[a-z0-9._/-]+@sha256:([0-9a-f]{64})\\Z")
+_SHA = re.compile(r"[0-9a-f]{64}\Z")
+_IMAGE = re.compile(r"ghcr\\.io/[a-z0-9._/-]+@sha256:([0-9a-f]{64})\Z")
 _PREDICATES = (
     "https://slsa.dev/provenance/v1",
     "https://spdx.dev/Document/v2.3",
@@ -72,8 +72,8 @@ def python_lock_is_hash_complete(path: Path) -> bool:
     if current or not requirements:
         return False
     return all(
-        re.match(r"^[a-zA-Z0-9_.-]+(?:\\[[a-zA-Z0-9_,.-]+\\])?==[a-zA-Z0-9_.!+ -]+", req)
-        and re.search(r"--hash=sha256:[0-9a-f]{64}(?:\\s|$)", req)
+        re.match(r"^[a-zA-Z0-9_.-]+(?:\[[a-zA-Z0-9_,.-]+\])?==[a-zA-Z0-9_.!+ -]+", req)
+        and re.search(r"--hash=sha256:[0-9a-f]{64}(?:\s|$)", req)
         for req in requirements
     )
 
@@ -142,7 +142,7 @@ def verify_registry_attestations(
     match = _IMAGE.fullmatch(image_reference)
     if (
         match is None
-        or not _SHA.fullmatch(source_sha)
+        or not re.fullmatch(r"[0-9a-f]{40}", source_sha)
         or not re.fullmatch(r"[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+", repository)
         or not signer_workflow.startswith(repository + "/.github/workflows/")
         or not source_ref.startswith("refs/")
