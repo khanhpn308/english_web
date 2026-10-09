@@ -222,6 +222,74 @@ def verify_registry_attestations(
     return statements[0], statements[1]
 
 
+
+def require_production_build_inputs(
+    *,
+    requirements: Path,
+    npm: Path,
+    base_pins: Path,
+    osv_pins: Path,
+    os_package_snapshot: Path | None,
+) -> None:
+    """Host admission prerequisite; candidate declarations are never approval.
+
+    This checks basic immutable-input completeness only. A successful return
+    is NOT publisher, OCI, SBOM or independent signature verification.
+    """
+    if not python_lock_is_hash_complete(requirements):
+        raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: Python wheel hashes incomplete")
+    if not npm_lock_has_integrities(npm):
+        raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: npm integrities incomplete")
+    if os_package_snapshot is None:
+        raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: OS package snapshot missing")
+    try:
+        base = json.loads(_trusted_file(base_pins))
+        osv = json.loads(_trusted_file(osv_pins))
+        snapshot = json.loads(_trusted_file(os_package_snapshot))
+    except (ValueError, UnicodeError, TypeError) as error:
+        raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: input evidence malformed") from error
+    if (
+        not isinstance(base, dict)
+        or base.get("approval") != "independently-approved"
+        or base.get("platform") != "linux/amd64"
+        or not all(
+            isinstance(base.get(name), str)
+            and re.fullmatch(r"[a-z0-9._/-]+@sha256:[0-9a-f]{64}", base[name])
+            for name in ("python", "node")
+        )
+    ):
+        raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: unapproved base images")
+    if (
+        not isinstance(osv, dict)
+        or osv.get("approved") is not True
+        or not isinstance(osv.get("archive_sha256"), dict)
+        or not all(
+            isinstance(osv["archive_sha256"].get(name), str)
+            and _SHA.fullmatch(osv["archive_sha256"][name])
+            for name in ("npm", "PyPI")
+        )
+    ):
+        raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: OSV archives unapproved")
+    if (
+        not isinstance(snapshot, dict)
+        or snapshot.get("approved") is not True
+        or not isinstance(snapshot.get("snapshot_sha256"), str)
+        or not _SHA.fullmatch(snapshot["snapshot_sha256"])
+        or not isinstance(snapshot.get("packages"), dict)
+        or not snapshot["packages"]
+        or not all(
+            isinstance(name, str)
+            and isinstance(record, dict)
+            and isinstance(record.get("version"), str)
+            and record["version"]
+            and isinstance(record.get("artifact_sha256"), str)
+            and _SHA.fullmatch(record["artifact_sha256"])
+            for name, record in snapshot["packages"].items()
+        )
+    ):
+        raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: OS package snapshot incomplete")
+
+
 def inspect_candidate_locks(requirements: Path, npm: Path) -> dict[str, bool]:
     """Diagnostic only: this report is NEVER approval evidence."""
     return {
