@@ -68,13 +68,20 @@ RUN curl --fail --location --silent --show-error \
     && chmod 0755 /usr/local/bin/osv-scanner
 
 # Offline DB download happens during trusted image BUILD, never during Worker tests.
-# Exact ZIP digests must be approved and pinned before the image is trusted.
+# These observed candidate hashes MUST be checked before any downloaded DB is used.
+# Candidate pins are not an independent operator approval.
+ARG OSV_NPM_SHA256
+ARG OSV_PYPI_SHA256
 RUN for ecosystem in npm PyPI; do \
       mkdir -p "/opt/osv-db/osv-scanner/$ecosystem"; \
       curl --fail --location --silent --show-error \
         "https://osv-vulnerabilities.storage.googleapis.com/$ecosystem/all.zip" \
         --output "/opt/osv-db/osv-scanner/$ecosystem/all.zip"; \
     done \
+    && test -n "$OSV_NPM_SHA256" \
+    && test -n "$OSV_PYPI_SHA256" \
+    && printf '%s  %s\n' "$OSV_NPM_SHA256" /opt/osv-db/osv-scanner/npm/all.zip | sha256sum -c - \
+    && printf '%s  %s\n' "$OSV_PYPI_SHA256" /opt/osv-db/osv-scanner/PyPI/all.zip | sha256sum -c - \
     && sha256sum /opt/osv-db/osv-scanner/npm/all.zip \
                  /opt/osv-db/osv-scanner/PyPI/all.zip \
         > /opt/osv-db/archive.sha256

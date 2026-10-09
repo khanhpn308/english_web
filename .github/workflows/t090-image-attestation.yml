@@ -77,6 +77,26 @@ jobs:
           echo "T090_NODE_BASE=$T090_NODE_BASE" >> "$GITHUB_ENV"
           printf 'Pinned Python base: %s\nPinned Node base: %s\n' "$T090_PYTHON_BASE" "$T090_NODE_BASE"
 
+      - name: Check and expose pinned candidate OSV archive SHA-256 values
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "$RUNNER_TEMP/t090-osv-pins.txt"
+          import json, re
+          with open('infra/verification/osv-db-pins.json', encoding='utf-8') as stream:
+              pins = json.load(stream)
+          assert pins['schema_version'] == 1
+          assert pins['scope'] == 'candidate-only'
+          for ecosystem in ('npm', 'PyPI'):
+              digest = pins['archive_sha256'][ecosystem]
+              assert re.fullmatch(r'[a-f0-9]{64}', digest)
+              print(digest)
+          PY
+          mapfile -t osv_pins < "$RUNNER_TEMP/t090-osv-pins.txt"
+          [[ "${#osv_pins[@]}" -eq 2 ]]
+          echo "T090_OSV_NPM_SHA256=${osv_pins[0]}" >> "$GITHUB_ENV"
+          echo "T090_OSV_PYPI_SHA256=${osv_pins[1]}" >> "$GITHUB_ENV"
+
       - name: Build with only allowlisted trusted inputs
         shell: bash
         run: |
@@ -88,6 +108,8 @@ jobs:
           docker build --progress=plain --pull=false \
             --build-arg "PYTHON_BASE_IMAGE=$T090_PYTHON_BASE" \
             --build-arg "NODE_BASE_IMAGE=$T090_NODE_BASE" \
+            --build-arg "OSV_NPM_SHA256=$T090_OSV_NPM_SHA256" \
+            --build-arg "OSV_PYPI_SHA256=$T090_OSV_PYPI_SHA256" \
             -t t090-verifier:candidate \
             "$context"
           docker image inspect --format='Candidate local image ID: {{.Id}}' t090-verifier:candidate
@@ -422,6 +444,7 @@ jobs:
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
         with:
           image: t090-verifier:candidate
+          syft-version: v1.54.1
           format: spdx-json
           output-file: t090-candidate.spdx.json
           artifact-name: t090-candidate-image-sbom.spdx.json

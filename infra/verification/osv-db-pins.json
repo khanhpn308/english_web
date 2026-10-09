@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "scope": "candidate-only",
+  "source_ci_run_id": 37961597747,
+  "source_commit": "4e5102a59f6d9936d8b4f202a28f0612b9e9246e",
+  "archive_sha256": {
+    "npm": "bf0f7a94be4f062ca0fa1453a13364e00fc756132a81140389ebc4893a03a8d5",
+    "PyPI": "52add114b6c83e9efe976a7c9b704062c9f29b96f6afde76b34dc2e7eea77440"
+  },
+  "approved": false,
+  "warning": "These are observed immutable ZIP bytes from candidate CI, not independently authorized OSV releases."
+}

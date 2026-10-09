@@ -1,3 +1,10 @@
+## 09/10/2026 - T090 R6-B1.2 pinned offline vulnerability databases
+
+- Recorded exact offline npm and PyPI OSV ZIP SHA-256 values from completed same-SHA candidate run 37961597747, whose signed provenance/SBOM verification PASSED. Source evidence is preserved as GitHub Actions artifact `t090-supply-chain-candidate-37961597747`.
+- Added candidate `infra/verification/osv-db-pins.json` and Dockerfile `sha256sum -c` validation of BOTH downloads before any scanners are allowed to use them. Pin mismatch fails Docker build closed; never silently refreshes database data.
+- Pinned Syft scanner version to `v1.54.1` and its GitHub Action to immutable commit. Python/Node bases remain digest-pinned.
+- **Still blocked:** Debian apt snapshot/package hashes; SHA-256 hashes for Python wheels and semgrep transitive wheels; independent Host/offline approval of OSV ZIP identities, GH binary trust root and publisher/image approval. Candidate image approval remains false. New exact-SHA CI mandatory.
+
 ## 09/10/2026 - T090 R6-B1.2 candidate supply-chain evidence wiring
 
 - Added non-production GHCR OCI publication by digest, SPDX SBOM generation via pinned Anchore action, GitHub OIDC/Sigstore provenance and SBOM attestation generation via pinned `actions/attest`, followed by `gh attestation verify` with workflow identity, source commit/ref and subject digest checks.
