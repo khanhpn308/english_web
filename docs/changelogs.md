@@ -1,3 +1,9 @@
+## 09/10/2026 - T090 semantic route CI R1 format repair
+
+- Preserved FAILED CI R1 run 37879047094 on 608018e0: check-fast-active stopped at one Ruff format blank line in runtime.py; other six Phase A gates PASS.
+- Removed the extra blank line; strengthened SecureProvider mutable dispatch to deny all CLI fallback, and added its regression test. Intermediate R2 tested an older SHA and cannot authorize final acceptance.
+- T090 remains IN_PROGRESS; no live semantic endpoint identity, host evidence materialization, OS test-execution isolation, main merge or T089 re-acceptance claimed.
+
 ## 09/10/2026 - T090 tool-free semantic role routing candidate
 
 - Restricted production default Pipeline to SecureProvider: unverified read-only agent CLI calls now stop before execution, including concurrent reviewer provider.run calls, planning, Auditor and Integrator. CLI WorkerResult remains blocked as before.
