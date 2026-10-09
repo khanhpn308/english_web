@@ -79,8 +79,8 @@ from tools.orchestrator.probes import (
 from tools.orchestrator.runtime import (
     AgentProvider,
     Git,
-    SecureProvider,
     LockBusy,
+    SecureProvider,
     execute,
     lock,
     slot,
