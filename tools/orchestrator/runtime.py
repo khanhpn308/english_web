@@ -153,7 +153,7 @@ class DockerVerificationSandbox:
             raise OrchestratorError("T090 SANDBOX_BLOCKED: setup requires trusted preprovisioning")
         uid = os.geteuid()
         gid = os.getegid()
-        if any(character in str(workspace) for character in ",\\n\\r"):
+        if any(character in str(workspace) for character in ",\n\r"):
             raise OrchestratorError("T090 SANDBOX_BLOCKED: invalid Docker mount source")
         return [
             "/usr/bin/docker",
@@ -213,7 +213,7 @@ class DockerVerificationSandbox:
                 timeout=20,
             )
             if inspect.exit_code or not re.fullmatch(
-                r"sha256:[a-f0-9]{64}\\s*", inspect.stdout
+                r"sha256:[a-f0-9]{64}\s*", inspect.stdout
             ):
                 raise OrchestratorError("T090 SANDBOX_BLOCKED: pinned local image unavailable")
             name = f"t090-verify-{uuid4().hex}"
