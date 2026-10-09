@@ -217,3 +217,137 @@ else:
     assert isinstance(execution, dict)
     assert execution["stalled"] is True
     assert execution["timed_out"] is False
+
+
+def test_t090_secure_provider_denies_unattested_readonly_cli(
+    tmp_path: Path,
+) -> None:
+    from tools.orchestrator.core import Fix, OrchestratorError, Plan, ReviewShard
+    from tools.orchestrator.runtime import SecureProvider
+
+    role = Role(provider="codex", executable=str(tmp_path / "not-installed-cli"))
+    provider = SecureProvider()
+    for response_type in (Plan, ReviewShard, Fix):
+        with pytest.raises(OrchestratorError, match="T090 BLOCKED"):
+            provider.run(
+                "Synthetic evidence only",
+                cwd=tmp_path,
+                role=role,
+                timeout=1,
+                output=response_type,
+                artifacts=tmp_path,
+                name="readonly-no-cli",
+                readonly=True,
+            )
+    assert not (tmp_path / "not-installed-cli").exists()
+
+
+def test_t090_secure_provider_calls_only_tool_free_transport(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.core import Fix
+    from tools.orchestrator.runtime import SecureProvider
+    from tools.orchestrator.worker_sandbox import LoopbackChatTransport
+
+    monkeypatch.setenv("T090_TEST_ONLY_KEY", "synthetic")
+    role = Role(
+        provider="agy",
+        executable=str(tmp_path / "not-installed-agy"),
+        model="gemini-3.8-flash-high",
+        analysis_backend="host-http-text",
+        host_text_endpoint="http://127.0.0.1:8045/v1/chat/completions",
+        host_text_api_key_env="T090_TEST_ONLY_KEY",
+    )
+    calls: list[str] = []
+
+    def complete(
+        self: LoopbackChatTransport, prompt: str, *, model: str, timeout: int | None
+    ) -> str:
+        calls.append(prompt)
+        assert model == role.model
+        assert timeout == 7
+        return '{"fix_prompt":"Apply the minimal scoped correction."}'
+
+    monkeypatch.setattr(LoopbackChatTransport, "complete", complete)
+    result = SecureProvider().run(
+        "Host-owned evidence payload",
+        cwd=tmp_path,
+        role=role,
+        timeout=7,
+        output=Fix,
+        artifacts=tmp_path,
+        name="readonly-http",
+        readonly=True,
+    )
+    assert result.fix_prompt == "Apply the minimal scoped correction."
+    assert calls == ["Host-owned evidence payload"]
+    assert not (tmp_path / "not-installed-agy").exists()
+
+
+def test_t090_secure_provider_rejects_invalid_semantic_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.core import Fix, OrchestratorError
+    from tools.orchestrator.runtime import SecureProvider
+    from tools.orchestrator.worker_sandbox import LoopbackChatTransport
+
+    role = Role(
+        provider="agy",
+        executable="not-used",
+        model="gemini-3.8-flash-high",
+        analysis_backend="host-http-text",
+        host_text_endpoint="http://127.0.0.1:8045/v1/chat/completions",
+        host_text_api_key_env="T090_TEST_KEY",
+    )
+    monkeypatch.setattr(
+        LoopbackChatTransport,
+        "complete",
+        lambda self, prompt, *, model, timeout: '{"commands_run":[["sh","-c","touch bad"]]}',
+    )
+    with pytest.raises(OrchestratorError, match="schema invalid"):
+        SecureProvider().run(
+            "untrusted test",
+            cwd=tmp_path,
+            role=role,
+            timeout=1,
+            output=Fix,
+            artifacts=tmp_path,
+            name="invalid-output",
+            readonly=True,
+        )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"analysis_backend": "cli"},
+        {"allow_process": True},
+        {"worker_access": "full-access"},
+        {"provider": "gemini"},
+    ],
+)
+def test_t090_semantic_provider_fails_closed_on_unsafe_role(
+    tmp_path: Path, changes: dict[str, object]
+) -> None:
+    from tools.orchestrator.core import Fix, OrchestratorError
+    from tools.orchestrator.runtime import SecureProvider
+
+    role = Role(
+        provider="agy",
+        executable="not-used",
+        model="gemini-3.8-flash-high",
+        analysis_backend="host-http-text",
+        host_text_endpoint="http://127.0.0.1:8045/v1/chat/completions",
+        host_text_api_key_env="T090_TEST_KEY",
+    ).model_copy(update=changes)
+    with pytest.raises(OrchestratorError, match="T090 BLOCKED"):
+        SecureProvider().run(
+            "untrusted test",
+            cwd=tmp_path,
+            role=role,
+            timeout=1,
+            output=Fix,
+            artifacts=tmp_path,
+            name="unsafe-role",
+            readonly=True,
+        )
