@@ -271,3 +271,8 @@ T090 DONE or T089 accepted.
 - Immutable CI R1: https://github.com/khanhpn308/english_web/actions/runs/37879047094 on `608018e0d427194615939accae1e1df8165e15b1` = FAILURE. The host artifact `11593138594` reports check-fast-active Ruff format at runtime.py:545 (one extra blank line); frontend coverage, portable pytest, secrets, code security, dependency security and architecture PASS. Coverage phase not executed.
 - Removed only the excess runtime.py blank line. A subsequent intermediate R2 from `c2924785774c17978782445da02d312e4d6a8f7f` was launched before this formatting fix and cannot certify the corrected SHA.
 - SecureProvider now rejects even mutable CLI fallback independently of the WorkerResult schema; explicit regression test added. All future PASS/FAIL claims require an independent host run on final SHA. No semantic role was enabled or silently switched from Codex to Gemini.
+
+### Semantic tool-free CI R3 isolated Ruff fix (09/10/2026)
+
+- Immutable host CI R3: https://github.com/khanhpn308/english_web/actions/runs/37879458653 on `a8c6dc27443fea41f41249fd6c359087aa73410d` = FAIL. Host artifact `11593633554` reports one Ruff format blank-line defect in `tests/orchestrator/test_runtime.py:302`; frontend coverage, portable pytest, secrets, code security, dependencies and architecture all PASS. Dependent coverage gate not reached.
+- Corrected exactly the test-format blank line, preserving all model/tool security logic. Full R4 verification on a new frozen SHA is mandatory; no prior CI result has been rewritten or counted as PASS for the new source.
