@@ -351,3 +351,23 @@ def test_t090_semantic_provider_fails_closed_on_unsafe_role(
             name="unsafe-role",
             readonly=True,
         )
+
+
+def test_t090_secure_provider_rejects_mutable_cli_for_any_schema(
+    tmp_path: Path,
+) -> None:
+    from tools.orchestrator.core import Fix, OrchestratorError
+    from tools.orchestrator.runtime import SecureProvider
+
+    with pytest.raises(OrchestratorError, match="mutable CLI execution is forbidden"):
+        SecureProvider().run(
+            "Do not run shell",
+            cwd=tmp_path,
+            role=Role(provider="codex", executable=str(tmp_path / "shell-capable")),
+            timeout=1,
+            output=Fix,
+            artifacts=tmp_path,
+            name="mutable-invalid-schema",
+            readonly=False,
+        )
+    assert not (tmp_path / "shell-capable").exists()
