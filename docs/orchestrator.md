@@ -43,6 +43,49 @@ workspace access, revalidate preimages, and retain failed partial candidate
 for host adjudication. Neither a text-only prompt nor SHA checks alone prove
 resistance against a concurrent local process with filesystem privileges.
 
+### T090 Docker Host Verification Sandbox — implementation candidate (NOT ACTIVE)
+
+The WSL2 owner performed a real isolated Docker smoke test (non-root,
+no host bind mounts, no network, read-only root, ephemeral /tmp) with
+cgroup v2 limits: memory.max=268435456, cpu.max=50000 100000 and pids.max=64.
+It passed this **basic smoke**, not adversarial resource or workload tests.
+
+`tools/orchestrator/runtime.py` contains an independent, host-owned
+`DockerVerificationPolicy` and `DockerVerificationSandbox` prototype.
+The policy requires a fully qualified, host-selected `@sha256:` image
+reference, non-root Linux host, finite deadline, explicit CPU/RAM/PID bounds
+and a workspace nested under the trusted disposable verification root.
+It rejects symlink escapes, special files, hardlinks, unpinned/missing images
+and unsupported verification commands before executing any model-generated
+code. The fixed Docker command uses an empty client config, local Unix
+socket, `--pull=never`, `--network=none`, `--read-only`,
+`--cap-drop=ALL`, `no-new-privileges`, no Docker socket or HOME mount,
+an allowlisted disposable workspace mount and a disposable `/tmp`.
+The Docker client is invoked without inherited environment variables.
+A host-generated container name is removed after dispatch/timeout.
+
+**This implementation is deliberately NOT yet connected** to either
+`collect_verification()` or `Pipeline.verify()`. Those remain unisolated
+and must be classified as **BLOCKED FOR SECURITY ACCEPTANCE**; passing
+portable CI or synthetic broker tests does not change their status.
+Before activation, the owner must authorize a new image-build file outside
+the existing T090 allowlist, validate the complete Python 3.12 + Node 22
+runner, prove lockfile integrity for `requirements-dev.lock` and
+`package-lock.json`, and approve an immutable image digest with
+independent provenance. Existing `npm ci` setup cannot run against
+candidate-owned scripts with network access; preprovision dependencies
+in a trusted image. `git clone --shared` Git alternates and existing
+toolchain copying require separate examination before bind-mounting
+verification clones.
+
+The final enforcement phase must route **both** explicit detached
+`collect_verification()` and `Pipeline.verify()` (including setup,
+baseline and integration) through the accepted sandbox or fail closed.
+It must have live negative tests for HOME/Windows/Bridge access, unexpected
+Unix sockets, hardlink and symlink escapes, child processes, CPU/RAM/PID,
+timeout cleanup and source/provenance integrity. No fallback to an unsafe
+host subprocess is permitted in production.
+
 ### T090 host-sealed source and diff evidence (tool-free semantic roles)
 
 For an opt-in `host-http-text` Reviewer/Auditor/Integrator, the host constructs
