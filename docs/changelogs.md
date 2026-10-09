@@ -1,3 +1,10 @@
+## 09/10/2026 - T090 host-sealed source/diff context
+
+- Added host-only changed-path evidence extraction with exact allowlist, two-sided SHA256, unified diff, frozen snapshot binding, checked baseline Git mode, and hard fail-closed text/size/symlink limits. Persisted digest-sealed run artifact.
+- Routed this bounded evidence into tool-free concurrent/resumed Reviewer and final Auditor/Integrator prompts; no AI filesystem/terminal/Git access.
+- Added regressions for valid diff, untracked files, tamper, forbidden path, stale candidate, binary/encoding, oversized and symlink, plus Auditor prompt inclusion. Historical R6 PASS applies only to pre-change source; new CI required.
+- Bridge hidden-tool attestation, unchanged-context expansion, host code-execution OS isolation and final acceptance remain pending. PR Draft; main unchanged.
+
 ## 09/10/2026 - T090 Bridge identity and semantic-role prompt correction
 
 - Owner observed local Antigravity Tools Windows listener on IPv4 127.0.0.1:8045, recorded process executable SHA-256 as runtime identity evidence only (not provider tool-isolation attestation).
