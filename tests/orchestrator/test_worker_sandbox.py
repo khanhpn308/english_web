@@ -6,6 +6,7 @@ from typing import Any
 from pathlib import Path
 
 import pytest
+from tools.orchestrator.core import Config, OrchestratorError, Role
 from tools.orchestrator.worker_sandbox import (
     HostEditRejected,
     LoopbackChatTransport,
@@ -412,3 +413,44 @@ def test_transport_rejects_any_model_tool_call(
     monkeypatch.setattr(client, "_opener", FakeOpener())
     with pytest.raises(HostEditRejected, match="tool-free"):
         client.complete("task", model="gemini-3.8-flash-high", timeout=5)
+
+def _host_roles() -> dict[str, Role]:
+    roles = {
+        name: Role(provider="codex", executable="synthetic-codex")
+        for name in ("prompt_engineer", "worker", "auditor", "integrator")
+    }
+    roles["worker"] = Role(
+        provider="agy",
+        executable="agy",
+        model="gemini-3.8-flash-high",
+        allow_process=False,
+        worker_access="workspace-write",
+        worker_backend="host-http-edit",
+        host_edit_endpoint="http://127.0.0.1:8045/v1/chat/completions",
+        host_edit_api_key_env="SAFE_TEST_KEY",
+    )
+    return roles
+
+
+def test_host_edit_backend_must_be_explicitly_and_safely_configured() -> None:
+    roles = _host_roles()
+    Config(roles=roles, verification=[["python", "-m", "pytest"]]).validate_roles()
+    for changes in (
+        {"allow_process": True},
+        {"worker_access": "full-access"},
+        {"host_edit_endpoint": "http://192.168.1.2:8045/v1/chat/completions"},
+        {"host_edit_api_key_env": None},
+        {"model": None},
+    ):
+        bad_roles = {**roles, "worker": roles["worker"].model_copy(update=changes)}
+        with pytest.raises((OrchestratorError, HostEditRejected)):
+            Config(
+                roles=bad_roles, verification=[["python", "-m", "pytest"]]
+            ).validate_roles()
+
+
+def test_host_edit_transport_rejected_for_nonworker_roles() -> None:
+    roles = _host_roles()
+    roles["auditor"] = roles["worker"]
+    with pytest.raises(OrchestratorError, match="belongs to Worker"):
+        Config(roles=roles, verification=[["python", "-m", "pytest"]]).validate_roles()
