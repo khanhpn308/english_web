@@ -14,6 +14,7 @@ from backend.app.adapters.source_files import SourceFileAdapter, SourceFileError
 from backend.app.adapters.watcher import SourceWatcher
 from backend.app.application.ai_admission import AiAdmissionCoordinator
 from backend.app.application.consent import ConsentService
+from backend.app.application.edit_word_form import EditWordFormService
 from backend.app.application.operations import OperationConflict, OperationLedger
 from backend.app.application.save_word_family import SaveWordFamilyService
 from backend.app.application.source_recovery import SourceRecovery
@@ -68,6 +69,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.watcher = None
     app.state.lookup_service = None
     app.state.save_word_family_service = None
+    app.state.edit_word_form_service = None
     app.state.sessions.activate()
     try:
         if database is not None:
@@ -153,6 +155,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         app.state.ready = False
                     else:
                         app.state.save_word_family_service = SaveWordFamilyService(ledger, coordinator)
+                        app.state.edit_word_form_service = EditWordFormService(ledger, coordinator)
                         sync_service = SyncService(
                             database.engine, markdown_root, operation_ledger=ledger
                         )
@@ -256,6 +259,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 app.state.sync_service = None
                 app.state.lookup_service = None
                 app.state.save_word_family_service = None
+                app.state.edit_word_form_service = None
                 if database is not None:
                     await run_in_threadpool(database.close)
                 app.state.database = None
@@ -333,6 +337,7 @@ def create_app(
     app.state.watcher = None
     app.state.lookup_service = None
     app.state.save_word_family_service = None
+    app.state.edit_word_form_service = None
     app.state.active_ai_policy = None
     app.state.sessions = SessionStore()
 
