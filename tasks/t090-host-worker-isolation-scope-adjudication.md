@@ -301,3 +301,9 @@ T090 DONE or T089 accepted.
 
 - Immutable CI R1 on `4777d90308677883114e9377603002225c3562c7` failed `check-fast-active`: Ruff identified three formatting-only differences in `workflow.py` and `test_workflow.py`. Portable pytest and six other Phase A gates passed. CI artifact preserved in run `37882294933`.
 - Applied those three exact Ruff suggested changes on the current candidate. Intermediate R2/R3 are not evidence for this updated SHA. Fresh full CI required. No security behavior relaxed.
+### Independent source-scope audit: rename-path closing (2026-10-09)
+
+- WSL2 owner confirmed Ruff lint/format, production mypy and 11 focused sealed-source pytest cases PASS on `717c0011b4bd3e562dbbae76a137ccbf1418ba29`. Full CI R5 on this older SHA was still running at last review.
+- Independent reproducible Git test showed default `git diff --name-only` can collapse a detected rename into the destination only, omitting a deleted origin file. This could let an allowlist containing only the destination miss deletion of an unapproved source. The finding affects the shared Git.paths() scope boundary, not just prompt evidence.
+- Updated the host Git paths query to include `--no-renames` for both changed and staged sets. Added synthetic tests validating both rename ends are enumerated; host-sealed evidence fails closed when deletion origin is outside allowed_paths and correctly serializes both origin and destination when both explicitly permitted.
+- This is a scope-hardening change; older CI reports do not cover it. T090 IN_PROGRESS, PR #9 Draft, no main merge.
