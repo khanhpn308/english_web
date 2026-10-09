@@ -2,7 +2,7 @@
 
 **Task ID:** `T065`  
 **Title:** Search browser timing trên100k fixture  
-**Status:** `TODO`  
+**Status:** `DONE` (coding merged; Windows acceptance `PENDING`)
 **Goal:** Chứng minh p95≤1s request→render và AC-07 query≤1000ms bằng benchmark Windows profile.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
