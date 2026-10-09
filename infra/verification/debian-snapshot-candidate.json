@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "scope": "T090 candidate-only Debian snapshot, not production authorization",
+  "approved": false,
+  "platform": "linux/amd64",
+  "snapshot_timestamp": "20261008T000000Z",
+  "trusted_keys": "/usr/share/keyrings/debian-archive-keyring.gpg",
+  "signed_release_sha256": [
+    {
+      "sha256": "06c6077cec20354132a9d201625dd9f0a5196d3d4f80738d6a153ed547051c85",
+      "apt_path": "/var/lib/apt/lists/snapshot.debian.org_archive_debian_20261008T000000Z_dists_bookworm-updates_InRelease"
+    },
+    {
+      "sha256": "77737fa4b34f2693e982cc9ee35736816c35a7778fc2d326cc1bbf5b301fe1aa",
+      "apt_path": "/var/lib/apt/lists/snapshot.debian.org_archive_debian_20261008T000000Z_dists_bookworm_InRelease"
+    },
+    {
+      "sha256": "c04f6c6ba0712d7ab5c953ee90e73d591746406b79e82b0e5d92274312a04d2c",
+      "apt_path": "/var/lib/apt/lists/snapshot.debian.org_archive_debian-security_20261008T000000Z_dists_bookworm-security_InRelease"
+    }
+  ],
+  "source_ci_run_id": 37968648735,
+  "base_image": "python@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258",
+  "limitations": [
+    "InRelease and Packages integrity verified by APT Debian signing key, package-archive SHA via signed Packages indexes; no independent production operator approval",
+    "Playwright browser copied from signed immutable OCI snapshot, but its upstream publisher is not independently approved"
+  ]
+}

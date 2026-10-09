@@ -1,3 +1,10 @@
+## 10/10/2026 — T090 pinned signed Debian snapshot and immutable Chromium candidate
+
+- Date-locked Debian package repositories (bookworm, bookworm-updates and bookworm-security) to `20261008T000000Z`. APT authenticates original `InRelease` Debian signatures against base-image Debian keyring and checks three explicit SHA-256 pins for signed Release metadata before installing system packages. Their hash-linked `Packages` metadata verifies each `.deb` archive during APT download, with no moving Debian mirrors.
+- Playwright native libraries install from the same verified date-locked Debian snapshot. Chromium headless-shell bytes are **copied from an exact digest-locked, previously signed candidate OCI image**, rather than downloaded from a moving Playwright CDN; browser revision must match the pinned npm `playwright-core/browsers.json`.
+- Exact 3 InRelease digests were captured from pinned Python base image at CI #37968648735. Both candidate and Debian records remain `approved:false` and have no independent owner supply-chain signature. Do NOT infer publisher or production approval from signed Debian Releases, CI OIDC statements or self-authored pins.
+- Still blocked: out-of-repository production approver key/policy, completed live Host/Worker isolation routing, approval of upstream OSV/Playwright publisher identities and independent audit. PR #9 stays Draft; release admission MUST fail closed.
+
 ## 10/10/2026 — T090 R6-B1.2 binary-only Python/Semgrep offline installs
 
 - Recorded `55` dev and `66` Semgrep wheel SHA-256 values from candidate materializer CI #37968072442, including an offline `pip --require-hashes --no-index` install and dependency check per environment.

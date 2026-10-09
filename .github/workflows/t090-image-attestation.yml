@@ -175,6 +175,7 @@ jobs:
           cp package.json package-lock.json requirements-dev.lock "$context/"
           cp infra/verification/requirements-dev-hashed.lock "$context/"
           cp infra/verification/semgrep-hashed.lock "$context/"
+          cp infra/verification/debian-inrelease.sha256 "$context/"
           mkdir -p "$context/wheels/dev" "$context/wheels/semgrep"
           # Only exact listed, hash-verified binary wheels enter the image build.
           # Dependency installation inside Docker uses --no-index.

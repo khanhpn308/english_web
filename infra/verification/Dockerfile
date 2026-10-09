@@ -26,9 +26,31 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers \
     PATH=/opt/toolchain/node_modules/.bin:/usr/local/bin:/usr/bin:/bin
 
-# Candidate-only package install. Apt snapshot/version provenance is NOT yet locked.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash ca-certificates curl git libstdc++6 \
+# Debian snapshot is date-locked. APT must authenticate the signed Debian
+# InRelease metadata using its pinned base-image archive keyring; additional
+# SHA-256 pins fix the exact signed Release bytes and package index chain.
+# Candidate-only: this is NOT independent operator release approval.
+COPY debian-inrelease.sha256 /opt/locks/debian-inrelease.sha256
+RUN printf '%s\\n' \
+      'Types: deb' \
+      'URIs: https://snapshot.debian.org/archive/debian/20261008T000000Z/' \
+      'Suites: bookworm bookworm-updates' \
+      'Components: main' \
+      'Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg' \
+      'Check-Valid-Until: no' \
+      '' \
+      'Types: deb' \
+      'URIs: https://snapshot.debian.org/archive/debian-security/20261008T000000Z/' \
+      'Suites: bookworm-security' \
+      'Components: main' \
+      'Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg' \
+      'Check-Valid-Until: no' \
+      > /etc/apt/sources.list.d/debian.sources \
+    && rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*.list \
+    && apt-get update \
+    && sha256sum --check /opt/locks/debian-inrelease.sha256 \
+    && apt-get install -y --no-install-recommends \
+      bash ca-certificates curl git libstdc++6 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=node_toolchain /usr/local/bin/node /usr/local/bin/node
@@ -43,13 +65,15 @@ COPY package.json package-lock.json /opt/toolchain/
 RUN npm ci --ignore-scripts --no-audit --no-fund \
     && ln -s /opt/toolchain/node_modules /node_modules
 
-# Provision the exact Playwright browser for the locked npm package at image
-# build time only. Never download browser binaries from untrusted code.
-RUN node /opt/toolchain/node_modules/playwright/cli.js install \
-      --with-deps --only-shell chromium \
-    && test -d /opt/playwright-browsers \
-    && chmod -R a+rX /opt/playwright-browsers \
+# Playwright native OS dependencies use the same signed, byte-locked Debian
+# snapshot. Browser binaries come from the signed immutable OCI snapshot,
+# never a mutable CDN download during this Docker build.
+RUN node /opt/toolchain/node_modules/playwright/cli.js install-deps chromium \
+    && sha256sum --check /opt/locks/debian-inrelease.sha256 \
     && rm -rf /var/lib/apt/lists/*
+COPY --from=osv_snapshot /opt/playwright-browsers /opt/playwright-browsers
+RUN node -e 'const b=require("/opt/toolchain/node_modules/playwright-core/browsers.json").browsers.find(x=>x.name==="chromium-headless-shell"); if(!b) process.exit(3); const p="/opt/playwright-browsers/chromium_headless_shell-"+b.revision; if(!require("fs").existsSync(p))process.exit(4);' \
+    && chmod -R a+rX /opt/playwright-browsers
 
 # Byte-verified Linux/Python 3.12 candidate wheel locks; never resolve an
 # unpinned dependency or build from a Python sdist during image construction.
