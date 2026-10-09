@@ -261,7 +261,7 @@ def test_t090_secure_provider_calls_only_tool_free_transport(
     calls: list[str] = []
 
     def complete(
-        self: LoopbackChatTransport, prompt: str, *, model: str, timeout: int | None
+        _self: LoopbackChatTransport, prompt: str, *, model: str, timeout: int | None
     ) -> str:
         calls.append(prompt)
         assert model == role.model
@@ -299,11 +299,14 @@ def test_t090_secure_provider_rejects_invalid_semantic_output(
         host_text_endpoint="http://127.0.0.1:8045/v1/chat/completions",
         host_text_api_key_env="T090_TEST_KEY",
     )
-    monkeypatch.setattr(
-        LoopbackChatTransport,
-        "complete",
-        lambda self, prompt, *, model, timeout: '{"commands_run":[["sh","-c","touch bad"]]}',
-    )
+    def malformed(
+        _self: LoopbackChatTransport, _prompt: str, *, model: str, timeout: int | None
+    ) -> str:
+        assert model == "gemini-3.8-flash-high"
+        assert timeout == 1
+        return '{"commands_run":[["sh","-c","touch bad"]]}'
+
+    monkeypatch.setattr(LoopbackChatTransport, "complete", malformed)
     with pytest.raises(OrchestratorError, match="schema invalid"):
         SecureProvider().run(
             "untrusted test",
