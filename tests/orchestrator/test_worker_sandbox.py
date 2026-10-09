@@ -507,3 +507,48 @@ def test_t090_rejects_hidden_host_text_options_in_cli_role() -> None:
     )
     with pytest.raises(OrchestratorError, match="requires host-http-text"):
         Config(roles=roles, verification=[["python", "-m", "pytest"]]).validate_roles()
+
+
+def test_t090_semantic_transport_has_role_schema_not_worker_edit_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SAFE_TEST_KEY", "synthetic-only")
+    client = LoopbackChatTransport(
+        "http://127.0.0.1:8045/v1/chat/completions",
+        api_key_env="SAFE_TEST_KEY",
+        response_contract="semantic-json",
+    )
+
+    class Response:
+        status = 200
+
+        def __enter__(self) -> "Response":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def read(self, amount: int) -> bytes:
+            assert amount == 4 * 1024 * 1024 + 1
+            return json.dumps({
+                "choices": [{
+                    "message": {"role": "assistant", "content": '{"fix_prompt":"KEEP_SAFE"}'},
+                    "finish_reason": "stop",
+                }]
+            }).encode()
+
+    class Opener:
+        def open(self, request: Any, timeout: int) -> Response:
+            assert timeout == 5
+            payload = json.loads(request.data)
+            assert payload["tools"] == []
+            assert payload["tool_choice"] == "none"
+            assert "WorkerEditResponse" not in payload["messages"][0]["content"]
+            assert "role output schema" in payload["messages"][0]["content"]
+            assert "Fix" in payload["messages"][1]["content"]
+            return Response()
+
+    monkeypatch.setattr(client, "_opener", Opener())
+    assert client.complete(
+        "Fix output schema", model="gemini-3.8-flash-high", timeout=5
+    ) == '{"fix_prompt":"KEEP_SAFE"}'
