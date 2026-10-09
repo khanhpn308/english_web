@@ -257,7 +257,14 @@ class DockerVerificationSandbox:
                     resolved,
                     timeout=20,
                 )
-                if cleanup.timed_out or cleanup.oversized:
+                if (
+                    cleanup.timed_out
+                    or cleanup.oversized
+                    or (
+                        cleanup.exit_code != 0
+                        and "No such container" not in cleanup.stderr
+                    )
+                ):
                     raise OrchestratorError("T090 SANDBOX_BLOCKED: cleanup not confirmed")
             return result
 
