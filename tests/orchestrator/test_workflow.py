@@ -4176,3 +4176,40 @@ def test_t090_parallel_review_receives_sealed_source_evidence(
     assert len(seen) == len(ReviewPerspective)
     assert bundle.source_digest == snapshot
     pipeline.check_artifacts(directory, state)
+
+
+def test_t090_sealed_source_rename_cannot_hide_deleted_path(
+    repository: Path,
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.workflow import build_sealed_source_evidence
+
+    git = Git(repository)
+    base = git.sha()
+    git.run("mv", "feature.txt", "renamed_feature.txt")
+    source = git.snapshot(base)
+    assert git.paths(base) == ["feature.txt", "renamed_feature.txt"]
+
+    with pytest.raises(OrchestratorError, match="outside contract"):
+        build_sealed_source_evidence(
+            repository,
+            base,
+            source,
+            ["renamed_feature.txt"],
+        )
+
+    payload = build_sealed_source_evidence(
+        repository,
+        base,
+        source,
+        ["feature.txt", "renamed_feature.txt"],
+    )
+    evidence = payload["evidence"]
+    assert isinstance(evidence, dict)
+    files = evidence["files"]
+    assert isinstance(files, list)
+    assert [item["path"] for item in files] == ["feature.txt", "renamed_feature.txt"]
+    assert files[0]["before"] == "good\n"
+    assert files[0]["after"] is None
+    assert files[1]["before"] is None
+    assert files[1]["after"] == "good\n"
