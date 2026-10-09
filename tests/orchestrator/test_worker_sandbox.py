@@ -457,3 +457,53 @@ def test_host_edit_transport_rejected_for_nonworker_roles() -> None:
     roles["auditor"] = roles["worker"]
     with pytest.raises(OrchestratorError, match="belongs to Worker"):
         Config(roles=roles, verification=[["python", "-m", "pytest"]]).validate_roles()
+
+
+def test_t090_semantic_roles_require_explicit_tool_free_endpoint() -> None:
+    roles = _host_roles()
+    analyst = Role(
+        provider="agy",
+        executable="not-used-for-semantic-http",
+        model="gemini-3.8-flash-high",
+        analysis_backend="host-http-text",
+        host_text_endpoint="http://127.0.0.1:8045/v1/chat/completions",
+        host_text_api_key_env="T090_TEST_ONLY_KEY",
+    )
+    for name in ("prompt_engineer", "auditor", "integrator"):
+        roles[name] = analyst
+    Config(roles=roles, verification=[["python", "-m", "pytest"]]).validate_roles()
+
+    for changes in (
+        {"model": None},
+        {"host_text_endpoint": None},
+        {"host_text_api_key_env": None},
+        {"host_text_endpoint": "http://192.168.1.2:8045/v1/chat/completions"},
+        {"allow_process": True},
+        {"worker_access": "full-access"},
+    ):
+        failed = dict(roles)
+        failed["auditor"] = analyst.model_copy(update=changes)
+        with pytest.raises((OrchestratorError, HostEditRejected)):
+            Config(roles=failed, verification=[["python", "-m", "pytest"]]).validate_roles()
+
+
+def test_t090_rejects_tool_free_analyst_backend_on_worker() -> None:
+    roles = _host_roles()
+    roles["worker"] = roles["worker"].model_copy(
+        update={
+            "analysis_backend": "host-http-text",
+            "host_text_endpoint": "http://127.0.0.1:8045/v1/chat/completions",
+            "host_text_api_key_env": "T090_TEST_ONLY_KEY",
+        }
+    )
+    with pytest.raises(OrchestratorError, match="belongs to read-only"):
+        Config(roles=roles, verification=[["python", "-m", "pytest"]]).validate_roles()
+
+
+def test_t090_rejects_hidden_host_text_options_in_cli_role() -> None:
+    roles = _host_roles()
+    roles["auditor"] = roles["auditor"].model_copy(
+        update={"host_text_endpoint": "http://127.0.0.1:8045/v1/chat/completions"}
+    )
+    with pytest.raises(OrchestratorError, match="requires host-http-text"):
+        Config(roles=roles, verification=[["python", "-m", "pytest"]]).validate_roles()
