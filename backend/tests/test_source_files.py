@@ -22,6 +22,7 @@ import os
 import shutil
 import stat
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -299,6 +300,40 @@ def test_absent_source_file_fails_closed(tmp_path: Path) -> None:
         adapter.replace_source_content(source.id, _make_valid_markdown(), "hash")
     assert exc_info.value.code == "SOURCE_NOT_FOUND"
     assert not (root / "29-09-2026.md").exists()
+
+
+def test_explicit_conditional_creation_and_competing_creator(tmp_path: Path) -> None:
+    root = tmp_path / "creation"
+    root.mkdir()
+    source = replace(
+        _make_source_file(), status="MISSING", revision=0, error_code="CREATION_PENDING",
+    )
+    adapter = SourceFileAdapter(root, allowlist={source.id: source})
+    content = _make_valid_markdown()
+    staged = adapter.prepare_staged_create(source.id, content)
+    receipt = staged.commit()
+    assert receipt.new_content_hash == hashlib.sha256(content.encode()).hexdigest()
+    assert (root / source.relative_path).read_text(encoding="utf-8") == content
+    with pytest.raises(SourceFileError) as error:
+        adapter.prepare_staged_create(source.id, content)
+    assert error.value.code == "REVISION_CONFLICT"
+
+
+def test_conditional_publication_never_overwrites_racing_destination(tmp_path: Path) -> None:
+    root = tmp_path / "race"
+    root.mkdir()
+    source = replace(
+        _make_source_file(), status="MISSING", revision=0, error_code="CREATION_PENDING",
+    )
+    adapter = SourceFileAdapter(root, allowlist={source.id: source})
+    staged = adapter.prepare_staged_create(source.id, _make_valid_markdown())
+    target = root / source.relative_path
+    target.write_text("competing creator", encoding="utf-8")
+    with pytest.raises(SourceFileError) as error:
+        staged.commit()
+    assert error.value.code == "REVISION_CONFLICT"
+    assert target.read_text(encoding="utf-8") == "competing creator"
+    assert list(root.glob("*.tmp")) == []
 
 
 def test_corrupt_current_markdown_rejected(tmp_path: Path) -> None:
@@ -2415,3 +2450,107 @@ def test_restart_cleanup_accepts_only_adapter_owned_staged_identity(
         assert not temp.exists()
         restarted.cleanup_abandoned_temp(handle)
     assert canonical.read_bytes() == original.encode()
+
+
+@pytest.mark.parametrize("tamper", ["root", "symlink", "temp", "ownership", "access"])
+def test_conditional_creation_rechecks_boundary_and_never_writes_outside_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tamper: str,
+) -> None:
+    from dataclasses import replace
+
+    root, outside = tmp_path / "create-root", tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    sentinel = outside / "retained.md"
+    sentinel.write_bytes(b"outside sentinel")
+    source = replace(_make_source_file(), status="MISSING", revision=0,
+                     error_code="CREATION_PENDING")
+    adapter = SourceFileAdapter(root, {source.id: source})
+    staged = adapter.prepare_staged_create(source.id, _make_valid_markdown())
+    temp = root / staged.recovery_handle.relative_path
+    if tamper == "root":
+        root.rename(tmp_path / "retained-root")
+        root.symlink_to(outside, target_is_directory=True)
+    elif tamper == "symlink":
+        (root / source.relative_path).symlink_to(sentinel)
+    elif tamper == "temp":
+        temp.unlink()
+        temp.symlink_to(sentinel)
+    elif tamper == "ownership":
+        monkeypatch.setattr("backend.app.adapters.source_files._check_windows_ownership",
+                            lambda _path: False)
+    else:
+        monkeypatch.setattr("backend.app.adapters.source_files.os.access", lambda *_args: False)
+    with pytest.raises(SourceFileError):
+        staged.commit()
+    assert sentinel.read_bytes() == b"outside sentinel"
+    assert sorted(p.name for p in outside.iterdir()) == ["retained.md"]
+    if tamper in {"ownership", "access"}:
+        assert not temp.exists()
+        assert not (root / source.relative_path).exists()
+
+
+@pytest.mark.parametrize("path", ["../29-09-2026.md", "nested/29-09-2026.md", "C:/notes.md"])
+def test_conditional_creation_accepts_only_canonical_path(tmp_path: Path, path: str) -> None:
+    from dataclasses import replace
+
+    root = tmp_path / "create-path"
+    root.mkdir()
+    source = replace(_make_source_file(), relative_path=path, status="MISSING", revision=0,
+                     error_code="CREATION_PENDING")
+    adapter = SourceFileAdapter(root)
+    with pytest.raises(SourceFileError):
+        adapter.register_source(source)
+        adapter.prepare_staged_create(source.id, _make_valid_markdown())
+    assert list(root.iterdir()) == []
+
+
+def test_creation_requires_reservation_and_cleans_failed_staging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataclasses import replace
+
+    root = tmp_path / "create-failure"
+    root.mkdir()
+    source = _make_source_file()
+    adapter = SourceFileAdapter(root, {source.id: source})
+    with pytest.raises(SourceFileError, match="SOURCE_NOT_WRITABLE"):
+        adapter.prepare_staged_create(source.id, _make_valid_markdown())
+    adapter.register_source(replace(source, status="MISSING", revision=0,
+                                    error_code="CREATION_PENDING"))
+
+    def fail(_descriptor: int) -> None:
+        raise OSError("synthetic fsync denial")
+
+    monkeypatch.setattr("backend.app.adapters.source_files.os.fsync", fail)
+    with pytest.raises(SourceFileError, match="IO_ERROR") as error:
+        adapter.prepare_staged_create(source.id, _make_valid_markdown())
+    assert "synthetic fsync denial" not in str(error.value)
+    assert list(root.iterdir()) == []
+
+
+def test_conditional_create_unsupported_publication_has_no_replace_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataclasses import replace
+
+    root = tmp_path / "create-unsupported"
+    root.mkdir()
+    source = replace(_make_source_file(), status="MISSING", revision=0,
+                     error_code="CREATION_PENDING")
+    adapter = SourceFileAdapter(root, {source.id: source})
+    staged = adapter.prepare_staged_create(source.id, _make_valid_markdown())
+
+    def fail(*_args: Any, **_kwargs: Any) -> None:
+        raise OSError("Unsupported filesystem")
+
+    def forbidden(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("Conditional creation used overwrite fallback")
+
+    monkeypatch.setattr("backend.app.adapters.source_files.os.link", fail)
+    monkeypatch.setattr("backend.app.adapters.source_files.os.replace", forbidden)
+    if sys.platform == "win32":
+        monkeypatch.setattr(ctypes, "WinDLL", fail)
+    with pytest.raises(SourceFileError, match="IO_ERROR"):
+        staged.commit()
+    assert list(root.iterdir()) == []

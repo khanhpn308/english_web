@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import sys
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -209,6 +210,37 @@ def test_prepared_replace_projection_receipt_commit_is_durable(fixture: Fixture)
         assert row == (2, fixture.new_hash)
         assert fixture.projection_calls == 1
         assert fixture.reset_calls == 1
+
+
+@pytest.mark.parametrize("point", ["AFTER_PREPARED", "AFTER_TEMP_FSYNC", "AFTER_ATOMIC_REPLACE"])
+def test_creation_restart_never_fabricates_success(fixture: Fixture, point: str) -> None:
+    claim = fixture.ledger.claim(
+        kind="SAVE", key="create-crash", method="POST", path="/api/v1/word-forms",
+        body={"noteDate": "2026-09-30"}, preconditions={"If-None-Match": "*"},
+    )
+
+    def crash(at: str) -> None:
+        if at == point:
+            raise InjectedCrash(at)
+
+    with pytest.raises(InjectedCrash):
+        fixture.coordinator.create(
+            operation_id=claim.operation.operation_id,
+            note_date="2026-09-30", new_content=md("new").replace("29-09", "30-09"),
+            operation_ledger=fixture.ledger, fault=crash,
+        )
+    fixture.ledger.recover_pending()
+    recovered = SourceRecovery(fixture.coordinator).reconcile(operation_ledger=fixture.ledger)
+    record = next(r for r in recovered if r.operation_id == claim.operation.operation_id)
+    expected = "COMMITTED" if point == "AFTER_ATOMIC_REPLACE" else "ABORTED"
+    assert record.state == expected
+    operation = fixture.ledger.get(record.operation_id)
+    assert operation is not None
+    assert operation.status == ("SUCCEEDED" if expected == "COMMITTED" else "FAILED")
+    source_row = fixture.coordinator.repository.get_source_file(record.source_id)
+    assert source_row is not None
+    assert source_row.revision == (1 if expected == "COMMITTED" else 0)
+    assert SourceRecovery(fixture.coordinator).reconcile(operation_ledger=fixture.ledger) == []
 
 
 def test_failure_before_prepared_commit_leaves_no_journal_or_filesystem_effect(
@@ -910,6 +942,65 @@ def test_real_external_h3_preserves_history_and_blocks_writes(real_fixture: Real
         recovery.assert_writable(fx.source.id)
     assert (fx.root / fx.source.relative_path).read_text() == external
     fx.assert_effects(committed=False)
+
+
+@pytest.mark.parametrize("competing", [False, True])
+def test_creation_recovery_requires_publication_identity_not_only_matching_hash(
+    fixture: Fixture, competing: bool,
+) -> None:
+    fx = fixture
+    content = md("new").replace("29-09", "30-09")
+    claim = fx.ledger.claim(
+        kind="SAVE", key="create-publication", method="POST", path="/api/v1/word-forms",
+        body={"noteDate": "2026-09-30"}, preconditions={"If-None-Match": "*"},
+    )
+
+    def crash(at: str) -> None:
+        if at == "AFTER_TEMP_FSYNC":
+            raise InjectedCrash(at)
+
+    with pytest.raises(InjectedCrash):
+        fx.coordinator.create(
+            operation_id=claim.operation.operation_id, note_date="2026-09-30",
+            new_content=content, operation_ledger=fx.ledger, fault=crash,
+        )
+    journal = fx.coordinator.get(claim.operation.operation_id)
+    assert journal is not None and journal.temp_path is not None
+    reservation = fx.coordinator.repository.get_source_file(journal.source_id)
+    assert reservation is not None
+    temp, target = fx.root / journal.temp_path, fx.root / reservation.relative_path
+    if competing:
+        target.write_bytes(content.encode())
+    else:
+        # Exact POSIX interruption after linkat, before temp unlink. No persistence
+        # is mocked: the recorded staged inode becomes the real published inode.
+        if sys.platform == "win32":
+            temp.rename(target)
+        else:
+            os.link(temp, target)
+    restarted = SourceWriteCoordinator(
+        fx.database.engine, SourceFileAdapter(fx.root, {reservation.id: reservation}),
+    )
+    fx.ledger.recover_pending()
+    result = SourceRecovery(restarted).reconcile(operation_ledger=fx.ledger)[0]
+    operation = fx.ledger.get(claim.operation.operation_id)
+    assert operation is not None
+    assert target.read_bytes() == content.encode()
+    if competing:
+        assert result.state == "DEGRADED" and operation.status == "UNKNOWN"
+        assert temp.exists()
+        assert restarted.repository.get_source_file(reservation.id) == reservation
+    else:
+        assert result.state == "COMMITTED" and operation.status == "SUCCEEDED"
+        assert not temp.exists() and target.stat().st_nlink == 1
+        source_row = restarted.repository.get_source_file(reservation.id)
+        assert source_row is not None and source_row.revision == 1
+        replay = restarted.create(
+            operation_id=claim.operation.operation_id, note_date="2026-09-30",
+            new_content=content, operation_ledger=fx.ledger,
+        )
+        assert replay == result
+    assert SourceRecovery(restarted).reconcile(operation_ledger=fx.ledger) == []
 
 
 @pytest.mark.parametrize("restarted_unknown", [False, True], ids=["normal", "UNKNOWN"])

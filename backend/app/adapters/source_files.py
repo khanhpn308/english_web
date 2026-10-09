@@ -43,7 +43,10 @@ import stat
 import sys
 import tempfile
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path, PurePosixPath
 from typing import Any, Final
 
@@ -460,7 +463,7 @@ class StagedWrite:
         expected_content_hash: str,
         new_content_hash: str,
         new_bytes: bytes,
-        initial_target_stat: tuple[int, int],
+        initial_target_stat: tuple[int, int] | None,
         initial_temp_stat: tuple[int, int],
         target_dir_stat: tuple[int, int],
         intermediate_dirs: list[tuple[Path, tuple[int, int]]],
@@ -516,12 +519,17 @@ class StagedWrite:
                     self.source_id,
                 )
 
-            if current_source.status != "VALID":
+            if current_source.status != "VALID" and self._initial_target_stat is not None:
                 raise SourceFileError(
                     "SOURCE_NOT_WRITABLE",
                     "Source status cannot be modified",
                     self.source_id,
                 )
+            if self._initial_target_stat is None and (
+                current_source.status != "MISSING" or current_source.revision != 0
+                or current_source.error_code != "CREATION_PENDING"
+            ):
+                raise SourceFileError("SOURCE_NOT_WRITABLE", "Creation reservation is unavailable")
 
             if (
                 current_source.relative_path != self._source.relative_path
@@ -584,6 +592,10 @@ class StagedWrite:
                         "Intermediate directory ownership verification failed",
                         self.source_id,
                     )
+
+            if self._initial_target_stat is None:
+                self._adapter.assert_creation_absent(current_source)
+                return self._publish_create()
 
             # 4. Re-check target file state and identity
             try:
@@ -734,6 +746,8 @@ class StagedWrite:
                 bytes_written=len(temp_disk_bytes),
                 replaced_at=replaced_at,
             )
+        except OSError:
+            raise SourceFileError("IO_ERROR", "Staged publication failed", self.source_id) from None
         finally:
             if not self._committed:
                 self.cleanup()
@@ -767,6 +781,66 @@ class StagedWrite:
                 temp_path=self._temp_path,
                 initial_temp_stat=self._initial_temp_stat,
             )
+
+    def _publish_create(self) -> ReplacementReceipt:
+        """Publish authenticated bytes without an overwrite-capable primitive."""
+        handle = self.recovery_handle
+        temp_st = os.stat(self._temp_path, follow_symlinks=False)
+        if (
+            (temp_st.st_dev, temp_st.st_ino) != (handle.device, handle.inode)
+            or not stat.S_ISREG(temp_st.st_mode)
+            or _is_reparse_or_link(self._temp_path, temp_st)
+            or temp_st.st_nlink != 1
+            or temp_st.st_size != self.bytes_written
+            or not _check_windows_ownership(self._temp_path)
+        ):
+            raise SourceSecurityError("SECURITY_VIOLATION", "Staged creation identity changed")
+        if self._temp_path.read_bytes() != self._new_bytes:
+            raise SourceConflictError("REVISION_CONFLICT", "Staged creation content changed")
+        published_at = time.time()
+        try:
+            if sys.platform == "win32":
+                # MOVEFILE_WRITE_THROUGH, deliberately WITHOUT REPLACE_EXISTING.
+                kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+                move = kernel.MoveFileExW
+                move.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
+                move.restype = ctypes.c_int
+                if not move(str(self._temp_path), str(self._target_path), 0x8):
+                    error = ctypes.get_last_error()
+                    if error in {80, 183}:
+                        raise FileExistsError
+                    raise OSError(error, "Conditional publication failed")
+            else:
+                # linkat is atomic and fails with EEXIST. A pinned directory prevents
+                # ancestor substitution from redirecting publication outside the root.
+                with self._adapter._creation_directory(self._target_dir_stat) as directory:
+                    os.link(
+                        self._temp_path.name,
+                        self._target_path.name,
+                        src_dir_fd=directory,
+                        dst_dir_fd=directory,
+                        follow_symlinks=False,
+                    )
+                    os.fsync(directory)
+                    os.unlink(self._temp_path.name, dir_fd=directory)
+                    os.fsync(directory)
+        except FileExistsError:
+            raise SourceConflictError(
+                "REVISION_CONFLICT", "Creation destination appeared"
+            ) from None
+        except (OSError, NotImplementedError):
+            # Unsupported hard links/directory durability fail closed; no replace fallback.
+            raise SourceFileError("IO_ERROR", "Conditional publication failed") from None
+        self._adapter._recheck_root()
+        self._committed = True
+        return ReplacementReceipt(
+            self.source_id,
+            self.relative_path,
+            self.expected_content_hash,
+            self.new_content_hash,
+            self.bytes_written,
+            published_at,
+        )
 
 
 class SourceFileAdapter:
@@ -860,9 +934,172 @@ class SourceFileAdapter:
     def get_source(self, source_id: str) -> SourceFile | None:
         return self._sources.get(source_id)
 
+    def creation_path(self, note_date: str) -> str:
+        """Only backend calendar dates produce new destination paths."""
+        parsed = date.fromisoformat(note_date)
+        if parsed.isoformat() != note_date:
+            raise SourceValidationError("INVALID_SOURCE_PATH", "Invalid note date")
+        path = f"{parsed.day:02d}-{parsed.month:02d}-{parsed.year:04d}.md"
+        validate_relative_path(path)
+        return path
+
+    @contextmanager
+    def _creation_directory(self, identity: tuple[int, int]) -> Iterator[int]:
+        self._recheck_root()
+        if not os.access(self._root_path, os.R_OK | os.W_OK | os.X_OK) or (
+            not _check_windows_ownership(self._root_path)
+        ):
+            raise SourceAccessError("ACCESS_DENIED", "Source root ownership is unavailable")
+        descriptor = os.open(self._root_path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            opened = os.fstat(descriptor)
+            if (opened.st_dev, opened.st_ino) != identity:
+                raise SourceSecurityError("SECURITY_VIOLATION", "Source root identity changed")
+            yield descriptor
+        finally:
+            os.close(descriptor)
+
+    def assert_creation_absent(self, source: SourceFile) -> None:
+        self._recheck_root()
+        if source.relative_path != self.creation_path(source.note_date):
+            raise SourceSecurityError("INVALID_SOURCE_PATH", "Creation path is not canonical")
+        if not os.access(self._root_path, os.R_OK | os.W_OK | os.X_OK) or (
+            not _check_windows_ownership(self._root_path)
+        ):
+            raise SourceAccessError("ACCESS_DENIED", "Source root ownership is unavailable")
+        _, identity, _ = self._resolve_and_inspect_path(source, allow_missing=True)
+        if identity is not None:
+            raise SourceConflictError("REVISION_CONFLICT", "Creation destination exists")
+
+    def creation_destination_absent(self, source: SourceFile) -> bool:
+        """Inspect absence without rejecting the authenticated two-link crash window."""
+        self._recheck_root()
+        if source.relative_path != self.creation_path(source.note_date):
+            raise SourceSecurityError("INVALID_SOURCE_PATH", "Creation path is not canonical")
+        try:
+            os.stat(self._root_path / source.relative_path, follow_symlinks=False)
+        except FileNotFoundError:
+            return True
+        except OSError:
+            raise SourceAccessError(
+                "ACCESS_DENIED", "Creation destination is unavailable"
+            ) from None
+        return False
+
+    def prepare_staged_create(self, source_id: str, new_content: str) -> StagedWrite:
+        source = self.get_source(source_id)
+        if source is None:
+            raise SourceFileError("SOURCE_NOT_FOUND", "Creation source is not registered")
+        if (
+            source.status != "MISSING" or source.revision != 0
+            or source.error_code != "CREATION_PENDING"
+        ):
+            raise SourceFileError(
+                "SOURCE_NOT_WRITABLE", "Creation requires an explicit reservation"
+            )
+        self.assert_creation_absent(source)
+        target = self._root_path / source.relative_path
+        try:
+            raw = new_content.encode("utf-8")
+        except UnicodeEncodeError:
+            raise SourceValidationError("INVALID_ENCODING", "Invalid source encoding") from None
+        if len(raw) > MAX_SOURCE_SIZE_BYTES:
+            raise SourceValidationError("PAYLOAD_TOO_LARGE", "Source size exceeds limit")
+        if not parse_markdown(new_content, filename=target.name).is_valid:
+            raise SourceValidationError("INVALID_REPLACEMENT_MARKDOWN", "Invalid source content")
+        temp_path: Path | None = None
+        identity: tuple[int, int] | None = None
+        handed_off = False
+        try:
+            if sys.platform == "win32":
+                descriptor, name = tempfile.mkstemp(
+                    dir=self._root_path, prefix=f".{target.name}.tmp_", suffix=".tmp"
+                )
+                temp_path = Path(name)
+            else:
+                from secrets import token_hex
+
+                temp_path = self._root_path / f".{target.name}.tmp_{token_hex(16)}.tmp"
+                with self._creation_directory(self._root_identity) as directory:
+                    descriptor = os.open(
+                        temp_path.name,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                        0o600,
+                        dir_fd=directory,
+                    )
+            with os.fdopen(descriptor, "wb") as stream:
+                opened = os.fstat(stream.fileno())
+                identity = (opened.st_dev, opened.st_ino)
+                stream.write(raw)
+                stream.flush()
+                os.fsync(stream.fileno())
+            self._recheck_root()
+            if sys.platform != "win32":
+                with self._creation_directory(self._root_identity) as directory:
+                    os.fsync(directory)
+            handed_off = True
+            return StagedWrite(
+                self, source, target, temp_path, hashlib.sha256(b"").hexdigest(),
+                hashlib.sha256(raw).hexdigest(), raw, None, identity, self._root_identity, []
+            )
+        except OSError:
+            raise SourceFileError("IO_ERROR", "Creation staging failed") from None
+        finally:
+            if not handed_off and temp_path is not None and identity is not None:
+                _safe_cleanup_temp(
+                    root_path=self._root_path,
+                    expected_root_id=self._root_identity,
+                    intermediate_dirs=[],
+                    target_dir=self._root_path,
+                    target_dir_stat=self._root_identity,
+                    temp_path=temp_path,
+                    initial_temp_stat=identity,
+                )
+
+    def reconcile_creation_temp(self, handle: StagedTempHandle) -> None:
+        """Finish the POSIX link/unlink crash window using persisted inode evidence."""
+        try:
+            self._reconcile_creation_temp(handle)
+        except OSError:
+            raise SourceFileError("IO_ERROR", "Creation evidence is unavailable") from None
+
+    def _reconcile_creation_temp(self, handle: StagedTempHandle) -> None:
+        source = self.get_source(handle.source_id)
+        if source is None or source.relative_path != self.creation_path(source.note_date):
+            raise SourceSecurityError("SECURITY_VIOLATION", "Creation registration changed")
+        self._recheck_root()
+        target = self._root_path / source.relative_path
+        try:
+            target_st = os.stat(target, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        if (
+            (target_st.st_dev, target_st.st_ino) != (handle.device, handle.inode)
+            or _is_reparse_or_link(target, target_st)
+            or not stat.S_ISREG(target_st.st_mode)
+        ):
+            raise SourceConflictError("REVISION_CONFLICT", "Creation publication is not owned")
+        if target_st.st_nlink == 2 and sys.platform != "win32":
+            components = validate_relative_path(handle.relative_path)
+            if len(components) != 1 or not components[0].startswith(f".{target.name}.tmp_"):
+                raise SourceSecurityError("SECURITY_VIOLATION", "Creation temp locator changed")
+            with self._creation_directory(self._root_identity) as directory:
+                staged = os.stat(components[0], dir_fd=directory, follow_symlinks=False)
+                if (staged.st_dev, staged.st_ino) != (handle.device, handle.inode):
+                    raise SourceSecurityError(
+                        "SECURITY_VIOLATION", "Creation temp identity changed"
+                    )
+                os.unlink(components[0], dir_fd=directory)
+                os.fsync(directory)
+        elif target_st.st_nlink != 1:
+            raise SourceSecurityError("SECURITY_VIOLATION", "Creation link count is unsafe")
+        if sys.platform != "win32":
+            with self._creation_directory(self._root_identity) as directory:
+                os.fsync(directory)
+
     def _resolve_and_inspect_path(
-        self, source: SourceFile
-    ) -> tuple[Path, tuple[int, int], list[tuple[Path, tuple[int, int]]]]:
+        self, source: SourceFile, *, allow_missing: bool = False
+    ) -> tuple[Path, tuple[int, int] | None, list[tuple[Path, tuple[int, int]]]]:
         """Resolve source path under root, inspecting every component without following symlinks.
 
         Returns:
@@ -880,6 +1117,8 @@ class SourceFileAdapter:
                 st = os.stat(current, follow_symlinks=False)
             except FileNotFoundError:
                 if is_last:
+                    if allow_missing:
+                        return current, None, intermediate_dirs
                     raise SourceFileError(
                         "SOURCE_NOT_FOUND", "Target source file does not exist", source.id
                     ) from None
@@ -982,7 +1221,9 @@ class SourceFileAdapter:
         source = self.get_source(handle.source_id)
         if source is None:
             raise SourceFileError("SOURCE_NOT_FOUND", "Staged source is not registered")
-        target_path, _, intermediate_dirs = self._resolve_and_inspect_path(source)
+        target_path, _, intermediate_dirs = self._resolve_and_inspect_path(
+            source, allow_missing=source.revision == 0
+        )
         components = validate_relative_path(handle.relative_path, source.id)
         expected_parent = tuple(validate_relative_path(source.relative_path, source.id)[:-1])
         temp_name = components[-1]

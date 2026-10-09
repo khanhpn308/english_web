@@ -27,16 +27,17 @@ from backend.app.adapters.source_files import (
     validate_relative_path,
 )
 from backend.app.application.operations import OperationLedger
-from backend.app.application.source_write import JournalConflictError
+from backend.app.application.source_write import (
+    JournalConflictError,
+    _content_changed,
+    _form_digest,
+    _learning_values,
+    _projection_values,
+    _semantic_key,
+)
 from backend.app.markdown_sync.parser import ParsedDocument, parse_markdown
 from backend.app.review.models import ensure_card, reset_card_state
-from backend.app.vocabulary.models import (
-    ExampleSentence,
-    MeaningEn,
-    MeaningVi,
-    SourceFile,
-    WordForm,
-)
+from backend.app.vocabulary.models import SourceFile, WordForm
 from backend.app.vocabulary.repository import VocabularyRepository
 from backend.app.vocabulary.search_index import SearchIndex
 from sqlalchemy import Connection, Engine
@@ -92,14 +93,6 @@ def _normalize_inferred_date(filename: str) -> str:
     return "1970-01-01"
 
 
-def _learning_values(form: WordForm) -> tuple[object, ...]:
-    return (
-        [m.text for m in form.meanings_en],
-        [m.text for m in form.meanings_vi],
-        [(e.english, e.vietnamese) for e in form.examples],
-    )
-
-
 def _protected_journal_forms(effect_plan: str) -> set[str]:
     """Reject an uninterpretable active plan instead of dropping form protections."""
     message = "Active source journal effect plan is invalid"
@@ -142,6 +135,168 @@ class SyncService:
         self.search_index = search_index or SearchIndex(engine)
         self._sync_lock = threading.Lock()
         self._sync_cache: dict[str, SyncResult] = {}
+
+    def _committed_date_variants(
+        self, connection: Connection, adapter: SourceFileAdapter,
+        identity: tuple[str, str, str], paths: set[str],
+        documents: dict[str, tuple[str, ParsedDocument | None, str | None]],
+        sources: dict[str, dict[str, Any]],
+    ) -> bool:
+        """Authenticate historical date variants; never select a file by recency.
+
+        Every participant must still be a valid, unchanged, linked source. One
+        exact committed write plus its successful durable receipt must explain
+        the current canonical projection. A subsequent external edit, new path,
+        stale revision or incomplete operation therefore cannot borrow that proof.
+        """
+        families = self.repository.get_families_for_root(identity[0], connection=connection)
+        if len(families) != 1:
+            return False
+        canonical = self.repository.get_word_form_by_identity(
+            identity[1], identity[2], families[0].id, connection=connection,
+        )
+        if canonical is None:
+            return False
+        refs = {ref.source_id: ref for ref in canonical.source_refs}
+        participants: list[tuple[SourceFile, ParsedDocument]] = []
+        for path in sorted(paths):
+            snapshot = sources.get(path)
+            content_hash, document, error = documents[path]
+            if snapshot is None or document is None or error is not None:
+                return False
+            source = self.repository.get_source_file(str(snapshot["id"]), connection=connection)
+            if (
+                source is None or source.status != "VALID" or source.relative_path != path
+                or source.revision != snapshot["revision"] or source.content_hash != content_hash
+                or snapshot["status"] != "VALID" or snapshot["content_hash"] != content_hash
+                or source.note_date != document.note_date
+                or source.id not in refs or refs[source.id].status != "VALID"
+                or refs[source.id].note_date != source.note_date
+            ):
+                return False
+            adapter.register_source(source)
+            try:
+                if adapter.get_source_hash(source.id) != content_hash:
+                    return False
+            except SourceFileError:
+                return False
+            participants.append((source, document))
+
+        for source, document in participants:
+            semantics = [sf for sf in document.semantic_forms if (
+                sf.family_root, sf.normalized_lemma, sf.part_of_speech
+            ) == identity]
+            if len(semantics) != 1 or _content_changed(semantics[0], canonical):
+                continue
+            semantic = semantics[0]
+            rows = connection.exec_driver_sql(
+                "SELECT j.operation_id,j.effect_plan,j.response_status,j.result_ref "
+                "FROM source_write_journal j JOIN operations o ON o.operation_id=j.operation_id "
+                "WHERE j.state='COMMITTED' AND j.source_id=? AND j.new_hash=? "
+                "AND j.intended_projection_revision=? AND o.kind='SAVE' AND o.status='SUCCEEDED' "
+                "AND o.response_status=j.response_status AND o.result_ref=j.result_ref",
+                (source.id, source.content_hash, source.revision),
+            ).mappings().all()
+            for row in rows:
+                try:
+                    plan = json.loads(row["effect_plan"])
+                except (ValueError, TypeError, RecursionError):
+                    continue
+                if not isinstance(plan, dict) or plan.get("version") != 1:
+                    continue
+                receipt = plan.get("receipt")
+                effects = plan.get("forms")
+                if (
+                    not isinstance(receipt, dict) or not isinstance(effects, list)
+                    or row["response_status"] != 201 or row["result_ref"] != row["operation_id"]
+                    or receipt.get("operationId") != row["operation_id"]
+                    or receipt.get("sourceId") != source.id
+                    or receipt.get("sourceRevision") != source.revision
+                    or receipt.get("sourceEtag") != source.etag
+                    or receipt.get("noteDate") != source.note_date
+                    or receipt.get("markdownSync") != "COMPLETED"
+                ):
+                    continue
+                matching = [e for e in effects if isinstance(e, dict)
+                            and e.get("key") == _semantic_key(semantic)
+                            and e.get("form_id") == canonical.id
+                            and e.get("family_id") == canonical.family_id]
+                if len(matching) != 1:
+                    continue
+                effect = matching[0]
+                base_revision = effect.get("base_revision")
+                if base_revision is None:
+                    if canonical.revision != 1:
+                        continue
+                elif (
+                    type(base_revision) is not int
+                    or canonical.revision not in (base_revision, base_revision + 1)
+                    or (canonical.revision == base_revision
+                        and _form_digest(canonical) != effect.get("base_hash"))
+                ):
+                    continue
+                card_id = connection.exec_driver_sql(
+                    "SELECT card_id FROM review_cards WHERE word_form_id=?", (canonical.id,),
+                ).scalar_one_or_none()
+                if card_id is None or card_id != effect.get("card_id"):
+                    continue
+                frozen_forms = receipt.get("canonicalForms")
+                if not isinstance(frozen_forms, list):
+                    continue
+                frozen = [f for f in frozen_forms if isinstance(f, dict)
+                          and f.get("id") == canonical.id]
+                if not frozen and (
+                    effect.get("preserve_canonical") is not True
+                    or canonical.revision != base_revision
+                    or _form_digest(canonical) != effect.get("base_hash")
+                ):
+                    continue
+                if frozen and (len(frozen) != 1 or any(
+                    frozen[0].get(key) != value for key, value in {
+                        "familyId": canonical.family_id, "revision": canonical.revision,
+                        "partOfSpeech": canonical.part_of_speech,
+                        "meaningsEn": [m.to_dict() for m in canonical.meanings_en],
+                        "meaningsVi": [m.to_dict() for m in canonical.meanings_vi],
+                        "examples": [e.to_dict() for e in canonical.examples],
+                        "ipaUs": canonical.ipa_us, "cambridgeUrl": canonical.cambridge_url,
+                    }.items()
+                )):
+                    continue
+                return True
+        return False
+
+    def _conflict_snapshot_changed(
+        self, connection: Connection, paths: set[str], sources: dict[str, dict[str, Any]],
+    ) -> bool:
+        """Defer a stale corpus comparison instead of invalidating a concurrent save."""
+        by_id = {str(source["id"]): source for source in sources.values()}
+        related = set(paths)
+        for path in paths:
+            snapshot = sources.get(path)
+            if snapshot is None:
+                continue
+            for form in self.repository.get_forms_for_source(str(snapshot["id"]),
+                                                            connection=connection):
+                for ref in form.source_refs:
+                    if ref.status == "VALID":
+                        known = by_id.get(ref.source_id)
+                        if known is None:
+                            return True
+                        related.add(str(known["relative_path"]))
+        for path in related:
+            current = connection.exec_driver_sql(
+                "SELECT id,status,revision,content_hash FROM source_files WHERE relative_path=?",
+                (path,),
+            ).mappings().first()
+            snapshot = sources.get(path)
+            if snapshot is None:
+                if current is not None:
+                    return True
+            elif current is None or any(
+                current[key] != snapshot[key] for key in ("id", "status", "revision", "content_hash")
+            ):
+                return True
+        return False
 
     def _get_aggregate_source_revision(self, *, connection: Connection | None = None) -> int:
         """Compute durable aggregate revision from retained source files.
@@ -657,14 +812,25 @@ class SyncService:
                         variants = forms_by_identity.setdefault(form_key, {})
                         variants.setdefault(form_val, set()).add(rel_path)
 
-                conflicted_paths: set[str] = set()
-                for _form_key, variants in forms_by_identity.items():
-                    if len(variants) > 1:
-                        # Unresolved conflict: invalidate every source participating
-                        for path_set in variants.values():
-                            conflicted_paths.update(path_set)
+                # Keep the original parsed evidence for transaction-time rechecks.
+                conflict_documents = parsed_docs.copy()
+                conflict_sources = db_sources.copy()
+                conflicts_by_path: dict[str, list[tuple[tuple[str, str, str], set[str]]]] = {}
+                with self.engine.connect() as conn, conn.begin():
+                    for form_key, variants in forms_by_identity.items():
+                        if len(variants) <= 1:
+                            continue
+                        paths: set[str] = set().union(*variants.values())
+                        if self._committed_date_variants(
+                            conn, adapter, form_key, paths, conflict_documents, db_sources,
+                        ):
+                            # Historical Markdown stays intact. Its already committed
+                            # source links must not project old learning content again.
+                            continue
+                        for path in paths:
+                            conflicts_by_path.setdefault(path, []).append((form_key, paths))
 
-                for rel_path in sorted(conflicted_paths):
+                for rel_path in sorted(conflicts_by_path):
                     chash, _doc, _ = parsed_docs[rel_path]
                     parsed_docs[rel_path] = (chash, None, "AMBIGUOUS_CONTENT")
                     sources_invalid += 1
@@ -695,9 +861,28 @@ class SyncService:
                                 "SELECT source_id, effect_plan FROM source_write_journal "
                                 "WHERE state IN ('PREPARED', 'SOURCE_REPLACED', 'DEGRADED')"
                             ).all()
+                            invalid_protected_forms: set[str] = set()
                             for row in active_journals:
-                                _protected_journal_forms(row[1])
+                                invalid_protected_forms.update(_protected_journal_forms(row[1]))
                             if src_id in {str(row[0]) for row in active_journals}:
+                                continue
+                            if any(form.id in invalid_protected_forms for form in
+                                   self.repository.get_forms_for_source(src_id, connection=conn)):
+                                continue
+                            if doc_err_code == "AMBIGUOUS_CONTENT" and any(
+                                self._conflict_snapshot_changed(conn, paths, conflict_sources)
+                                for _key, paths in conflicts_by_path[rel_path]
+                            ):
+                                # The scan predates a committed source/link change.
+                                # Defer all remaining participants to a fresh scan.
+                                sources_invalid -= 1
+                                continue
+                            if doc_err_code == "AMBIGUOUS_CONTENT" and all(
+                                self._committed_date_variants(
+                                    conn, adapter, key, paths, conflict_documents, db_sources,
+                                ) for key, paths in conflicts_by_path[rel_path]
+                            ):
+                                sources_invalid -= 1
                                 continue
 
                             if existing_src is not None:
@@ -792,6 +977,14 @@ class SyncService:
                             self.search_index.update_source(
                                 src_model, affected_forms, connection=conn
                             )
+                            if doc_err_code == "AMBIGUOUS_CONTENT":
+                                # Our own invalidations are expected by the next
+                                # participant's CAS; concurrent mutations are not.
+                                conflict_sources[rel_path] = {
+                                    "id": src_id, "relative_path": rel_path,
+                                    "status": "INVALID", "revision": new_rev,
+                                    "content_hash": content_hash,
+                                }
                             if max_rev_seen is None or new_rev > max_rev_seen:
                                 max_rev_seen = new_rev
                             committed_effects = True
@@ -917,57 +1110,13 @@ class SyncService:
                                 s_form.lemma, s_form.part_of_speech, family.id, connection=conn
                             )
 
-                            en = [
-                                next(
-                                    (m for m in old.meanings_en if m.text == text), MeaningEn(text)
-                                )
-                                if old
-                                else MeaningEn(text)
-                                for text in s_form.meanings_en
-                            ]
-                            vi = [
-                                next(
-                                    (m for m in old.meanings_vi if m.text == text), MeaningVi(text)
-                                )
-                                if old
-                                else MeaningVi(text)
-                                for text in s_form.meanings_vi
-                            ]
-                            examples = [
-                                next(
-                                    (e for e in old.examples if (e.english, e.vietnamese) == pair),
-                                    ExampleSentence(*pair),
-                                )
-                                if old
-                                else ExampleSentence(*pair)
-                                for pair in s_form.examples
-                            ]
-                            ipa_status = (
-                                old.ipa_status
-                                if old and old.ipa_us == s_form.ipa_us
-                                else "MISSING"
-                                if s_form.ipa_us is None
-                                else "UNVERIFIED"
-                            )
-                            link_status = (
-                                old.cambridge_status
-                                if old and old.cambridge_url == s_form.cambridge_url
-                                else "MISSING"
-                                if s_form.cambridge_url is None
-                                else "UNVERIFIED"
-                            )
+                            en, vi, examples, ipa_status, link_status = _projection_values(s_form, old)
                             needs_reset = old is not None and _learning_values(old) != (
                                 s_form.meanings_en,
                                 s_form.meanings_vi,
                                 s_form.examples,
                             )
-                            changed = old is None or (
-                                old.meanings_en,
-                                old.meanings_vi,
-                                old.examples,
-                                old.ipa_us,
-                                old.cambridge_url,
-                            ) != (en, vi, examples, s_form.ipa_us, s_form.cambridge_url)
+                            changed = _content_changed(s_form, old)
 
                             saved_form: WordForm | None = (
                                 self.repository.save_canonical_word_form(
