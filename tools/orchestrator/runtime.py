@@ -143,7 +143,9 @@ class DockerVerificationSandbox:
         except (OSError, RuntimeError) as error:
             raise OrchestratorError("T090 SANDBOX_BLOCKED: unreadable workspace") from error
 
-    def _argv(self, command: list[str], workspace: Path, container: str) -> list[str]:
+    def _argv(
+        self, command: list[str], workspace: Path, container: str, config_dir: Path
+    ) -> list[str]:
         from tools.orchestrator.core import validate_command
 
         validate_command(command)
@@ -151,10 +153,12 @@ class DockerVerificationSandbox:
             raise OrchestratorError("T090 SANDBOX_BLOCKED: setup requires trusted preprovisioning")
         uid = os.geteuid()
         gid = os.getegid()
+        if any(character in str(workspace) for character in ",\\n\\r"):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: invalid Docker mount source")
         return [
             "/usr/bin/docker",
             "--config",
-            "/dev/null",
+            str(config_dir),
             "run",
             "--rm",
             "--pull=never",
@@ -192,38 +196,44 @@ class DockerVerificationSandbox:
         resolved = self._workspace(workspace)
         if not Path("/usr/bin/docker").is_file():
             raise OrchestratorError("T090 SANDBOX_BLOCKED: Docker executable unavailable")
-        inspect = execute(
-            [
-                "/usr/bin/docker",
-                "image",
-                "inspect",
-                "--format",
-                "{{.Id}}",
-                self.policy.image,
-            ],
-            resolved,
-            timeout=20,
-        )
-        if inspect.exit_code or not re.fullmatch(r"sha256:[a-f0-9]{64}\\s*", inspect.stdout):
-            raise OrchestratorError("T090 SANDBOX_BLOCKED: pinned local image unavailable")
-        name = f"t090-verify-{uuid4().hex}"
-        try:
-            result = execute(
-                self._argv(command, resolved, name),
-                resolved,
-                timeout=self.policy.timeout_seconds,
-            )
-        finally:
-            # Docker daemon processes outlive a killed client; explicitly stop
-            # the generated-name container even after a timeout or interruption.
-            cleanup = execute(
-                ["/usr/bin/docker", "rm", "-f", name],
+        with tempfile.TemporaryDirectory(prefix="t090-docker-config-") as temporary:
+            config_dir = Path(temporary)
+            inspect = execute(
+                [
+                    "/usr/bin/docker",
+                    "--config",
+                    str(config_dir),
+                    "image",
+                    "inspect",
+                    "--format",
+                    "{{.Id}}",
+                    self.policy.image,
+                ],
                 resolved,
                 timeout=20,
             )
-            if cleanup.timed_out or cleanup.oversized:
-                raise OrchestratorError("T090 SANDBOX_BLOCKED: container cleanup unverified")
-        return result
+            if inspect.exit_code or not re.fullmatch(
+                r"sha256:[a-f0-9]{64}\\s*", inspect.stdout
+            ):
+                raise OrchestratorError("T090 SANDBOX_BLOCKED: pinned local image unavailable")
+            name = f"t090-verify-{uuid4().hex}"
+            try:
+                result = execute(
+                    self._argv(command, resolved, name, config_dir),
+                    resolved,
+                    timeout=self.policy.timeout_seconds,
+                )
+            finally:
+                # Killing Docker CLI does not guarantee the daemon's container
+                # stopped. Remove by host-generated name with the same clean config.
+                cleanup = execute(
+                    ["/usr/bin/docker", "--config", str(config_dir), "rm", "-f", name],
+                    resolved,
+                    timeout=20,
+                )
+                if cleanup.timed_out or cleanup.oversized:
+                    raise OrchestratorError("T090 SANDBOX_BLOCKED: cleanup not confirmed")
+            return result
 
 
 class _StallExpired(Exception):
