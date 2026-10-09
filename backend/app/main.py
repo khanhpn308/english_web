@@ -14,6 +14,7 @@ from backend.app.adapters.source_files import SourceFileAdapter, SourceFileError
 from backend.app.adapters.watcher import SourceWatcher
 from backend.app.application.ai_admission import AiAdmissionCoordinator
 from backend.app.application.consent import ConsentService
+from backend.app.application.create_quiz import CreateQuizService
 from backend.app.application.edit_word_form import EditWordFormService
 from backend.app.application.operations import OperationConflict, OperationLedger
 from backend.app.application.save_word_family import SaveWordFamilyService
@@ -26,6 +27,7 @@ from backend.app.http.errors import error_response
 from backend.app.http.health import router as health_router
 from backend.app.http.lookups import router as lookups_router
 from backend.app.http.operations import router as operations_router
+from backend.app.http.quiz import router as quiz_router
 from backend.app.http.review import router as review_router
 from backend.app.http.search import router as search_router
 from backend.app.http.session import SessionGuard, SessionStore
@@ -70,6 +72,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.lookup_service = None
     app.state.save_word_family_service = None
     app.state.edit_word_form_service = None
+    app.state.quiz_service = None
     app.state.sessions.activate()
     try:
         if database is not None:
@@ -97,6 +100,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     lambda: app.state.active_ai_policy,
                 )
                 app.state.lookup_service = LookupService(
+                    ledger,
+                    admission_coordinator,
+                    VocabularyRepository(database.engine),
+                )
+                app.state.quiz_service = CreateQuizService(
                     ledger,
                     admission_coordinator,
                     VocabularyRepository(database.engine),
@@ -249,24 +257,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 if lookup_service is not None:
                     await lookup_service.drain()
             finally:
-                app.state.sessions.invalidate()
-                app.state.ready = False
-                app.state.storage_info = None
-                app.state.operation_ledger = None
-                app.state.consent_service = None
-                app.state.search_service = None
-                app.state.review_service = None
-                app.state.sync_service = None
-                app.state.lookup_service = None
-                app.state.save_word_family_service = None
-                app.state.edit_word_form_service = None
-                if database is not None:
-                    await run_in_threadpool(database.close)
-                app.state.database = None
+                try:
+                    quiz_service = app.state.quiz_service
+                    if quiz_service is not None:
+                        await quiz_service.drain()
+                finally:
+                    app.state.sessions.invalidate()
+                    app.state.ready = False
+                    app.state.storage_info = None
+                    app.state.operation_ledger = None
+                    app.state.consent_service = None
+                    app.state.search_service = None
+                    app.state.review_service = None
+                    app.state.sync_service = None
+                    app.state.lookup_service = None
+                    app.state.save_word_family_service = None
+                    app.state.edit_word_form_service = None
+                    app.state.quiz_service = None
+                    if database is not None:
+                        await run_in_threadpool(database.close)
+                    app.state.database = None
 
 
 class RequestBudgetMiddleware:
-    """Record request arrival time before SessionGuard body buffering or parsing (T008)."""
+    """Start AI budgets before SessionGuard body buffering or parsing (T008/T035)."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -276,8 +290,14 @@ class RequestBudgetMiddleware:
             app = scope.get("app")
             clock = None
             if app is not None and hasattr(app, "state"):
-                if getattr(app.state, "lookup_service", None) is not None:
-                    clock = getattr(app.state.lookup_service, "clock", None)
+                service_name = (
+                    "quiz_service"
+                    if scope.get("path") == "/api/v1/quiz-attempts"
+                    else "lookup_service"
+                )
+                service = getattr(app.state, service_name, None)
+                if service is not None:
+                    clock = getattr(service, "clock", None)
                 if clock is None:
                     clock = getattr(app.state, "clock", None)
             if clock is None:
@@ -286,24 +306,66 @@ class RequestBudgetMiddleware:
         if (
             scope["type"] == "http"
             and scope.get("method") == "POST"
-            and scope.get("path") == "/api/v1/lookups"
+            and scope.get("path") in {"/api/v1/lookups", "/api/v1/quiz-attempts"}
         ):
+            from backend.app.application import create_quiz as quiz_module
             from backend.app.enrichment import lookup as lookup_module
 
             budget_clock = clock or monotonic
-            deadline = scope["state"]["request_start_time"] + lookup_module.LOOKUP_DEADLINE_SECONDS
+            budget = (
+                quiz_module.QUIZ_DEADLINE_SECONDS
+                if scope["path"] == "/api/v1/quiz-attempts"
+                else lookup_module.LOOKUP_DEADLINE_SECONDS
+            )
+            deadline = scope["state"]["request_start_time"] + budget
+            response_started = False
 
             async def bounded_receive() -> Message:
                 remaining = deadline - budget_clock()
                 if remaining <= 0:
-                    raise TimeoutError("Lookup request body deadline exhausted")
+                    raise TimeoutError("AI request body deadline exhausted")
                 async with asyncio.timeout(remaining):
                     return await receive()
 
+            async def bounded_send(message: Message) -> None:
+                nonlocal response_started
+                if message["type"] == "http.response.start":
+                    if (
+                        scope["path"] == "/api/v1/quiz-attempts"
+                        and 200 <= message["status"] < 300
+                        and budget_clock() >= deadline
+                    ):
+                        raise TimeoutError("Quiz HTTP success deadline exhausted")
+                    response_started = True
+                await send(message)
+
             try:
-                await self.app(scope, bounded_receive, send)
+                await self.app(scope, bounded_receive, bounded_send)
             except TimeoutError:
-                await error_response(503, "BRIDGE_UNAVAILABLE")(scope, receive, send)
+                if response_started:
+                    raise
+                operation_id = scope["state"].get("quiz_operation_id")
+                details = (
+                    {"kind": "RETRY", "operationId": operation_id}
+                    if operation_id is not None else None
+                )
+                response = error_response(503, "BRIDGE_UNAVAILABLE", details)
+                # Quiz body timeouts escape the current lookup-specific catch in
+                # SessionGuard. Apply its response protections at this outer edge.
+                response.headers.update(
+                    {
+                        "Content-Security-Policy": (
+                            "default-src 'self'; script-src 'self'; connect-src 'self'; "
+                            "object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+                        ),
+                        "X-Content-Type-Options": "nosniff",
+                        "X-Frame-Options": "DENY",
+                        "Referrer-Policy": "no-referrer",
+                        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+                        "Cache-Control": "no-store",
+                    }
+                )
+                await response(scope, receive, send)
             return
         await self.app(scope, receive, send)
 
@@ -338,6 +400,7 @@ def create_app(
     app.state.lookup_service = None
     app.state.save_word_family_service = None
     app.state.edit_word_form_service = None
+    app.state.quiz_service = None
     app.state.active_ai_policy = None
     app.state.sessions = SessionStore()
 
@@ -348,6 +411,14 @@ def create_app(
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+        if request.method == "POST" and request.url.path == "/api/v1/quiz-attempts":
+            service = request.app.state.quiz_service
+            clock = service.clock if service is not None else monotonic
+            start = getattr(request.state, "request_start_time", clock())
+            from backend.app.application import create_quiz as quiz_module
+
+            if clock() >= start + quiz_module.QUIZ_DEADLINE_SECONDS:
+                return error_response(503, "BRIDGE_UNAVAILABLE")
         # FastAPI error objects include input; expose only field and error type.
         if request.url.path != "/api/v1/ai-consent" and any(
             error["type"] == "json_invalid" for error in exc.errors()
@@ -373,6 +444,7 @@ def create_app(
     app.include_router(sources_router)
     app.include_router(lookups_router)
     app.include_router(word_forms_router)
+    app.include_router(quiz_router)
 
     from backend.app.http.consent import router as consent_router
 
