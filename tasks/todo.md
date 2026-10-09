@@ -51,7 +51,7 @@
 - [x] [T059](t059-quiz-scoring.md): Pure quiz scoring và weakest-rating oracle — independently re-audited PASS; 45 scoring/60 SRS tests, 100% scoring line/branch coverage; integrated candidate check:task exit0 (763 Python, 38 frontend, 40 architecture tests, changed coverage100%, total92.78%, zero security findings). Historical automated FAILED run preserved.
 - [x] [T034](t034-quiz-schema.md): Quiz immutable snapshot schema — DONE (merged `0c3fcc4f8`; final acceptance pending)
 - [x] [T035](t035-quiz-api.md): Quiz creation và snapshot retrieval API — DONE (merged `877f44813`; final acceptance pending)
-- [ ] [T036](t036-quiz-ui.md): Quiz builder UI dùng generation API
+- [x] [T036](t036-quiz-ui.md): Quiz builder UI dùng generation API
 - [ ] [T047](t047-quiz-autosave-api.md): Quiz answer draft API với revision
 - [ ] [T050](t050-quiz-runner-ui.md): Quiz runner và revision-aware autosave UI
 - [ ] [T048](t048-quiz-submit-api.md): Quiz submission và atomic SRS handoff
