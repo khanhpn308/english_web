@@ -903,4 +903,3 @@ def test_t090_image_admission_requires_complete_host_pinned_policy(tmp_path: Pat
         check_policy({**valid, name: bad_value}, False)
     (repo / "package-lock.json").write_text("changed")
     check_policy(valid, False)
-

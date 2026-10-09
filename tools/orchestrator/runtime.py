@@ -89,6 +89,7 @@ def admit_verification_image(
     expected_policy_sha256 MUST originate from an independently controlled Host
     trust anchor. A matching JSON document is NOT itself a verified signature.
     """
+
     def blocked() -> OrchestratorError:
         return OrchestratorError("T090 SANDBOX_BLOCKED: trusted image admission unavailable")
 
@@ -131,8 +132,7 @@ def admit_verification_image(
         ):
             values = approval.get(group)
             if not isinstance(values, dict) or not all(
-                isinstance(values.get(name), str)
-                and re.fullmatch(r"[a-f0-9]{64}", values[name])
+                isinstance(values.get(name), str) and re.fullmatch(r"[a-f0-9]{64}", values[name])
                 for name in names
             ):
                 raise blocked()
