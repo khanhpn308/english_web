@@ -4032,9 +4032,7 @@ def test_t090_sealed_source_evidence_supports_new_untracked_source(
     base = git.sha()
     path = repository / "new_source.py"
     path.write_text("SYNTHETIC = True\n")
-    payload = build_sealed_source_evidence(
-        repository, base, git.snapshot(base), ["new_source.py"]
-    )
+    payload = build_sealed_source_evidence(repository, base, git.snapshot(base), ["new_source.py"])
     e = payload["evidence"]
     assert isinstance(e, dict)
     files = e["files"]
