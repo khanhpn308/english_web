@@ -265,3 +265,9 @@ T090 DONE or T089 accepted.
 - Tool-free requests use LoopbackChatTransport's `tools=[]`, `tool_choice=none`, no proxy, no redirect, bounded content and output schema validation. Invalid responses/configurations are BLOCKED. Worker remains separately routed through host-http-edit; no default production role was silently changed to Gemini.
 - Added synthetic denial/valid-result and configuration regression tests in T090-owned test_runtime.py, test_workflow.py, and test_worker_sandbox.py.
 - **Not certified:** user must explicitly configure every semantic role and validate real endpoint identity, model compatibility and no-hidden-tool enforcement. Host-supplied read-only task/source/diff evidence needs a bounded, authenticated materialization channel. OS isolation for host executing candidate-defined verification code is not yet independently accepted. New portable CI must pass on final SHA; T090 IN_PROGRESS, T089 REOPENED_PENDING_T090, PR #9 Draft, no merge.
+
+### Semantic tool-free CI R1 formatting failure (09/10/2026)
+
+- Immutable CI R1: https://github.com/khanhpn308/english_web/actions/runs/37879047094 on `608018e0d427194615939accae1e1df8165e15b1` = FAILURE. The host artifact `11593138594` reports check-fast-active Ruff format at runtime.py:545 (one extra blank line); frontend coverage, portable pytest, secrets, code security, dependency security and architecture PASS. Coverage phase not executed.
+- Removed only the excess runtime.py blank line. A subsequent intermediate R2 from `c2924785774c17978782445da02d312e4d6a8f7f` was launched before this formatting fix and cannot certify the corrected SHA.
+- SecureProvider now rejects even mutable CLI fallback independently of the WorkerResult schema; explicit regression test added. All future PASS/FAIL claims require an independent host run on final SHA. No semantic role was enabled or silently switched from Codex to Gemini.
