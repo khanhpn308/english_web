@@ -1,13 +1,17 @@
 """Synthetic host-only T090 edit-interface tests; no provider security claims."""
 
 import hashlib
+import json
+from typing import Any
 from pathlib import Path
 
 import pytest
 from tools.orchestrator.worker_sandbox import (
     HostEditRejected,
+    LoopbackChatTransport,
     ProposedTextEdit,
     apply_host_text_edit,
+    run_host_mediated_worker,
 )
 
 
@@ -143,3 +147,268 @@ def test_host_does_not_accept_its_allowlist_from_edit_path_prefix(tmp_path: Path
             root, {"src/ok.py"}, ProposedTextEdit("src-evil/ok.py", sha(original), "bad")
         )
     assert (root / "src-evil" / "ok.py").read_bytes() == original
+
+class FakeToolFreeTransport:
+    """Synthetic text-only implementation; NOT a live vendor attestation."""
+
+    def __init__(self, response: dict[str, Any]) -> None:
+        self.response = response
+        self.prompt = ""
+
+    def complete(self, prompt: str, *, model: str, timeout: int | None) -> str:
+        assert model == "gemini-3.8-flash-high"
+        self.prompt = prompt
+        return json.dumps(self.response)
+
+
+def proposal(edits: list[dict[str, object]], *, status: str = "IMPLEMENTED") -> dict[str, Any]:
+    return {
+        "status": status,
+        "summary": "Synthetic model result",
+        "known_issues": [],
+        "edits": edits,
+    }
+
+
+def test_host_worker_completes_without_any_agent_command(tmp_path: Path) -> None:
+    root, original = fixture(tmp_path)
+    fake = FakeToolFreeTransport(
+        proposal(
+            [
+                {
+                    "path": "src/ok.py",
+                    "expected_sha256": sha(original),
+                    "replacement": "updated\n",
+                }
+            ]
+        )
+    )
+    result = run_host_mediated_worker(
+        root,
+        {"src/ok.py"},
+        "Strict synthetic task",
+        model="gemini-3.8-flash-high",
+        transport=fake,
+    )
+    assert result.status == "IMPLEMENTED"
+    assert result.commands_run == []
+    assert result.changed_files == ["src/ok.py"]
+    assert (root / "src/ok.py").read_text() == "updated\n"
+    assert "original" in fake.prompt
+    assert "private.txt" not in fake.prompt
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        {"commands_run": [["git", "status"]]},
+        {"tool_calls": [{"function": {"name": "shell"}}]},
+        {"edits": []},
+    ],
+)
+def test_host_rejects_tool_instructions_extra_fields_or_empty_edits(
+    tmp_path: Path, invalid: dict[str, Any]
+) -> None:
+    root, original = fixture(tmp_path)
+    base = proposal(
+        [{"path": "src/ok.py", "expected_sha256": sha(original), "replacement": "updated"}]
+    )
+    base.update(invalid)
+    with pytest.raises(HostEditRejected):
+        run_host_mediated_worker(
+            root,
+            {"src/ok.py"},
+            "task",
+            model="gemini-3.8-flash-high",
+            transport=FakeToolFreeTransport(base),
+        )
+    assert (root / "src/ok.py").read_bytes() == original
+
+
+@pytest.mark.parametrize(
+    "edits",
+    [
+        [{"path": "private.txt", "expected_sha256": sha(b"protected"), "replacement": "bad"}],
+        [{"path": "../private.txt", "expected_sha256": sha(b"protected"), "replacement": "bad"}],
+        [{"path": "src/ok.py", "expected_sha256": sha(b"stale"), "replacement": "bad"}],
+        [
+            {"path": "src/ok.py", "expected_sha256": sha(b"original\n"), "replacement": "a"},
+            {"path": "src/ok.py", "expected_sha256": sha(b"original\n"), "replacement": "b"},
+        ],
+    ],
+)
+def test_host_rejects_out_of_scope_stale_duplicate_path_without_write(
+    tmp_path: Path, edits: list[dict[str, object]]
+) -> None:
+    root, original = fixture(tmp_path)
+    with pytest.raises(HostEditRejected):
+        run_host_mediated_worker(
+            root,
+            {"src/ok.py"},
+            "task",
+            model="gemini-3.8-flash-high",
+            transport=FakeToolFreeTransport(proposal(edits)),
+        )
+    assert (root / "src/ok.py").read_bytes() == original
+    assert (root / "private.txt").read_text() == "protected"
+
+
+def test_host_preflights_all_edits_before_any_write(tmp_path: Path) -> None:
+    root, original = fixture(tmp_path)
+    fake = FakeToolFreeTransport(
+        proposal(
+            [
+                {"path": "src/ok.py", "expected_sha256": sha(original), "replacement": "changed"},
+                {
+                    "path": "src/next.py",
+                    "expected_sha256": None,
+                    "replacement": "x" * (256 * 1024 + 1),
+                },
+            ]
+        )
+    )
+    with pytest.raises(HostEditRejected, match="size/text"):
+        run_host_mediated_worker(
+            root,
+            {"src/ok.py", "src/next.py"},
+            "task",
+            model="gemini-3.8-flash-high",
+            transport=fake,
+        )
+    assert (root / "src/ok.py").read_bytes() == original
+    assert not (root / "src/next.py").exists()
+
+
+def test_blocked_model_response_never_edits(tmp_path: Path) -> None:
+    root, original = fixture(tmp_path)
+    out = run_host_mediated_worker(
+        root,
+        {"src/ok.py"},
+        "task",
+        model="gemini-3.8-flash-high",
+        transport=FakeToolFreeTransport(proposal([], status="BLOCKED")),
+    )
+    assert out.status == "BLOCKED"
+    assert out.changed_files == []
+    assert out.commands_run == []
+    assert (root / "src/ok.py").read_bytes() == original
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://127.0.0.1:8045/v1/chat/completions",
+        "http://localhost:8045/v1/chat/completions",
+        "http://192.168.1.2:8045/v1/chat/completions",
+        "http://127.0.0.1:8045/unsafe",
+        "http://user:password@127.0.0.1:8045/v1/chat/completions",
+        "http://127.0.0.1:8045/v1/chat/completions?bypass=1",
+    ],
+)
+def test_host_transport_rejects_unsafe_endpoints(url: str) -> None:
+    with pytest.raises(HostEditRejected, match="loopback"):
+        LoopbackChatTransport(url, api_key_env="SAFE_TEST_KEY")
+
+
+def test_transport_requires_credentials_before_any_http(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SAFE_TEST_KEY", raising=False)
+    client = LoopbackChatTransport(
+        "http://127.0.0.1:8045/v1/chat/completions",
+        api_key_env="SAFE_TEST_KEY",
+    )
+    with pytest.raises(HostEditRejected, match="credential"):
+        client.complete("test", model="gemini-3.8-flash-high", timeout=1)
+
+
+def test_transport_issues_explicit_tool_free_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SAFE_TEST_KEY", "synthetic-test-value")
+    client = LoopbackChatTransport(
+        "http://127.0.0.1:8045/v1/chat/completions",
+        api_key_env="SAFE_TEST_KEY",
+    )
+    expected = '{"status":"BLOCKED","summary":"No changes","known_issues":[],"edits":[]}'
+    envelope = {
+        "choices": [
+            {
+                "message": {"role": "assistant", "content": expected},
+                "finish_reason": "stop",
+            }
+        ]
+    }
+
+    class FakeHTTPResponse:
+        status = 200
+
+        def __enter__(self) -> "FakeHTTPResponse":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def read(self, amount: int) -> bytes:
+            assert amount == 4 * 1024 * 1024 + 1
+            return json.dumps(envelope).encode()
+
+    class FakeOpener:
+        def open(self, request: Any, timeout: int) -> FakeHTTPResponse:
+            assert timeout == 5
+            payload = json.loads(request.data)
+            assert payload["tools"] == []
+            assert payload["tool_choice"] == "none"
+            assert payload["stream"] is False
+            assert payload["model"] == "gemini-3.8-flash-high"
+            assert payload["messages"][1]["content"] == "Synthetic request"
+            return FakeHTTPResponse()
+
+    monkeypatch.setattr(client, "_opener", FakeOpener())
+    assert (
+        client.complete("Synthetic request", model="gemini-3.8-flash-high", timeout=5)
+        == expected
+    )
+
+
+def test_transport_rejects_any_model_tool_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SAFE_TEST_KEY", "synthetic-test-value")
+    client = LoopbackChatTransport(
+        "http://127.0.0.1:8045/v1/chat/completions",
+        api_key_env="SAFE_TEST_KEY",
+    )
+
+    class BadHTTPResponse:
+        status = 200
+
+        def __enter__(self) -> "BadHTTPResponse":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def read(self, amount: int) -> bytes:
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "{}",
+                                "tool_calls": [{"id": "forbidden"}],
+                            },
+                            "finish_reason": "stop",
+                        }
+                    ]
+                }
+            ).encode()
+
+    class FakeOpener:
+        def open(self, request: Any, timeout: int) -> BadHTTPResponse:
+            return BadHTTPResponse()
+
+    monkeypatch.setattr(client, "_opener", FakeOpener())
+    with pytest.raises(HostEditRejected, match="tool-free"):
+        client.complete("task", model="gemini-3.8-flash-high", timeout=5)
