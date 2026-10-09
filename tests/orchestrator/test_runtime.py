@@ -857,6 +857,9 @@ def test_t090_image_admission_rejects_unapproved_repo_policy(tmp_path: Path) -> 
 def test_t090_image_admission_requires_complete_host_pinned_policy(tmp_path: Path) -> None:
     import hashlib
     import json
+    import os
+    import shutil
+    import subprocess
 
     from tools.orchestrator.core import OrchestratorError
     from tools.orchestrator.runtime import admit_verification_image
@@ -885,23 +888,71 @@ def test_t090_image_admission_requires_complete_host_pinned_policy(tmp_path: Pat
         "sbom_ref": "sha256:" + "0" * 64,
     }
     policy = tmp_path / "external-approval.json"
+    signing_key = tmp_path / "synthetic-test-only-private-key.pem"
+    public_key = tmp_path / "synthetic-test-only-public-key.pem"
+    signature = tmp_path / "external-approval.sig"
+    if os.name != "posix" or shutil.which("openssl") is None:
+        pytest.skip("Linux OpenSSL Ed25519 approval verification required")
+    subprocess.run(
+        ["openssl", "genpkey", "-algorithm", "Ed25519", "-out", str(signing_key)],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        [
+            "openssl", "pkey", "-in", str(signing_key),
+            "-pubout", "-out", str(public_key),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    trusted_key_digest = hashlib.sha256(public_key.read_bytes()).hexdigest()
+
+    def admission_args() -> dict[str, object]:
+        return {
+            "expected_policy_sha256": hashlib.sha256(policy.read_bytes()).hexdigest(),
+            "authoritative_repository": repo,
+            "approval_signature_path": signature,
+            "trusted_public_key_path": public_key,
+            "expected_public_key_sha256": trusted_key_digest,
+        }
 
     def check_policy(value: dict[str, object], accepted: bool) -> None:
         policy.write_text(json.dumps(value, sort_keys=True))
-        pin = hashlib.sha256(policy.read_bytes()).hexdigest()
+        subprocess.run(
+            [
+                "openssl", "pkeyutl", "-sign", "-inkey", str(signing_key),
+                "-rawin", "-in", str(policy), "-out", str(signature),
+            ],
+            check=True,
+            capture_output=True,
+        )
         if accepted:
-            admitted = admit_verification_image(
-                policy, expected_policy_sha256=pin, authoritative_repository=repo
-            )
+            admitted = admit_verification_image(policy, **admission_args())
             assert admitted.image == image
-            assert admitted.policy_sha256 == pin
+            assert admitted.policy_sha256 == admission_args()["expected_policy_sha256"]
         else:
             with pytest.raises(OrchestratorError, match="trusted image admission unavailable"):
-                admit_verification_image(
-                    policy, expected_policy_sha256=pin, authoritative_repository=repo
-                )
+                admit_verification_image(policy, **admission_args())
 
     check_policy(valid, True)
+    # Approval requires the independent signature AND pinned trusted public key.
+    signature.write_bytes(bytes(64))
+    with pytest.raises(OrchestratorError, match="trusted image admission unavailable"):
+        admit_verification_image(policy, **admission_args())
+    check_policy(valid, True)
+    with pytest.raises(OrchestratorError, match="trusted image admission unavailable"):
+        admit_verification_image(
+            policy, **{**admission_args(), "expected_public_key_sha256": "0" * 64}
+        )
+    with pytest.raises(OrchestratorError, match="trusted image admission unavailable"):
+        admit_verification_image(policy, expected_policy_sha256=admission_args()["expected_policy_sha256"], authoritative_repository=repo)
+    symlink = tmp_path / "public-key-alias.pem"
+    symlink.symlink_to(public_key)
+    with pytest.raises(OrchestratorError, match="trusted image admission unavailable"):
+        admit_verification_image(
+            policy, **{**admission_args(), "trusted_public_key_path": symlink}
+        )
     for name, bad_value in (
         ("build_provenance_ref", None),
         ("sbom_ref", "unverified"),

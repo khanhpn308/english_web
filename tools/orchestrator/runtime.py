@@ -78,35 +78,105 @@ class VerificationImageAdmission:
     sbom_ref: str
 
 
+def _verify_signed_image_policy(raw: bytes, signature: bytes, public_key: bytes) -> bool:
+    """Verify an Ed25519 signature over EXACT policy bytes with a fixed Host tool.
+
+    Only an independently pinned public key is authorized; a policy's own
+    claim about its signing key is never a source of trust.
+    """
+    if len(signature) != 64 or len(public_key) > 2048:
+        return False
+    try:
+        with tempfile.TemporaryDirectory(prefix="t090-image-admission-") as temporary:
+            root = Path(temporary)
+            policy_copy = root / "approval.json"
+            signature_copy = root / "approval.sig"
+            key_copy = root / "approver.pub"
+            policy_copy.write_bytes(raw)
+            signature_copy.write_bytes(signature)
+            key_copy.write_bytes(public_key)
+            result = subprocess.run(
+                [
+                    "/usr/bin/openssl",
+                    "pkeyutl",
+                    "-verify",
+                    "-pubin",
+                    "-inkey",
+                    str(key_copy),
+                    "-sigfile",
+                    str(signature_copy),
+                    "-rawin",
+                    "-in",
+                    str(policy_copy),
+                ],
+                cwd=root,
+                env={
+                    "PATH": "/usr/bin:/bin",
+                    "HOME": str(root),
+                    "OPENSSL_CONF": "/dev/null",
+                },
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+            return result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def admit_verification_image(
     policy_path: Path,
     *,
     expected_policy_sha256: str,
     authoritative_repository: Path,
+    approval_signature_path: Path | None = None,
+    trusted_public_key_path: Path | None = None,
+    expected_public_key_sha256: str | None = None,
 ) -> VerificationImageAdmission:
-    """Deny repo-local or unpinned policy; accept only a complete external approval.
+    """Deny unsigned/unpinned policy; verify Host-authorized approval signature.
 
-    expected_policy_sha256 MUST originate from an independently controlled Host
-    trust anchor. A matching JSON document is NOT itself a verified signature.
+    Both expected SHA-256 values MUST come from an independently controlled Host
+    trust anchor. The signature authenticates *approval*, not image publisher
+    provenance, OSV databases, SBOM content, or the manifest in a registry.
     """
 
     def blocked() -> OrchestratorError:
         return OrchestratorError("T090 SANDBOX_BLOCKED: trusted image admission unavailable")
 
-    if not re.fullmatch(r"[a-f0-9]{64}", expected_policy_sha256):
+    if (
+        not re.fullmatch(r"[a-f0-9]{64}", expected_policy_sha256)
+        or not isinstance(expected_public_key_sha256, str)
+        or not re.fullmatch(r"[a-f0-9]{64}", expected_public_key_sha256)
+        or approval_signature_path is None
+        or trusted_public_key_path is None
+    ):
         raise blocked()
-    if not policy_path.is_absolute() or policy_path.is_symlink():
-        raise blocked()
+    for candidate in (policy_path, approval_signature_path, trusted_public_key_path):
+        if not candidate.is_absolute() or candidate.is_symlink():
+            raise blocked()
     try:
-        path = policy_path.resolve(strict=True)
         repository = authoritative_repository.resolve(strict=True)
-        if path.is_relative_to(repository):
-            raise blocked()
-        st = path.stat()
-        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
-            raise blocked()
+        path, signature_path, public_key_path = (
+            candidate.resolve(strict=True)
+            for candidate in (policy_path, approval_signature_path, trusted_public_key_path)
+        )
+        for candidate in (path, signature_path, public_key_path):
+            if candidate.is_relative_to(repository):
+                raise blocked()
+            st = candidate.stat()
+            if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+                raise blocked()
         raw = path.read_bytes()
+        signature = signature_path.read_bytes()
+        public_key = public_key_path.read_bytes()
         if not hmac.compare_digest(hashlib.sha256(raw).hexdigest(), expected_policy_sha256):
+            raise blocked()
+        if not hmac.compare_digest(
+            hashlib.sha256(public_key).hexdigest(), expected_public_key_sha256
+        ):
+            raise blocked()
+        if not _verify_signed_image_policy(raw, signature, public_key):
             raise blocked()
         approval = json.loads(raw)
         if not isinstance(approval, dict):

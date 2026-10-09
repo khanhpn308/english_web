@@ -1,3 +1,11 @@
+## 09/10/2026 - T090 R6-B1 signed Host approval gate (candidate-only)
+
+- Strengthened `admit_verification_image()`: acceptance now also requires a detached Ed25519 signature over the exact approval policy bytes, verified by a fixed Host OpenSSL command against an independently SHA-256-pinned, external public key. Missing signature, key, digest, changed signature, key-substitution and symlinked approval material fail closed.
+- Approval verification uses private temporary copies and a sanitized OpenSSL environment; it does not invoke untrusted Worker commands or enable Host verification fallback.
+- Synthetic tests generate an ephemeral test key only; no production signing key is provisioned or approved by this change.
+- The signature authenticates an operator's approval document, **not** the image publisher, source-build provenance, SBOM contents, registry manifest or offline database artifacts. `infra/verification/image-policy.json` remains `approved: false`; no real independent publisher attestation, signed image or acceptance is claimed.
+- R6-B1 remains IN_PROGRESS pending real, independently verified supply-chain evidence; R6-B3 legacy Host execution and Bridge hidden-tool audit remain BLOCKED. PR #9 stays Draft; T089 remains reopened.
+
 ## 09/10/2026 - T090 R6-B candidate admission and tooling; enforcement blocked
 
 - Added independent Host-pinned image approval manifest parser. Unapproved, missing, Git-checkout-local or mismatched policies fail closed; manifest includes locked-input, base-image, offline database, provenance and SBOM digest fields.

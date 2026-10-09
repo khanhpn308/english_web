@@ -363,3 +363,9 @@ R6-B3 candidate: `collect_verification_admitted()` binds to `FrozenVerificationS
 
 Release scope approval is required if modifying `orchestrator.yaml`, `.agent/scripts/run-gates.sh`, `requirements-dev.lock` or `package-lock.json`. A genuinely approved, independently verified image digest/provenance must be provisioned by a trusted operator. Do not flip `approved` to true to pass CI. Do not merge PR #9, enable Worker CLI, or declare T089 accepted.
 
+
+### R6-B1 signed Host approval hardening (2026-10-09)
+
+Admission now additionally requires `approval_signature_path`, `trusted_public_key_path` and independently Host-pinned `expected_public_key_sha256`. The Host checks the public-key digest and verifies a detached Ed25519 signature over exact external approval policy bytes through a fixed, sanitized `/usr/bin/openssl` verifier with private temporary copies. Missing or altered signature, replaced key, key-symlink and missing pinned digest deny admission. Ephemeral synthetic test keys do **not** constitute a production authority.
+
+This enforces operator-approval authenticity only. It does **not** verify the registry's image manifest, actual image publisher signature, provenance, SBOM, dependency provenance or OSV database identities, and does not meet B1 final acceptance. Provide an independently controlled production public-key digest and authenticated image/registry/provenance evidence before any real approval; never commit a signing private key. `image-policy.json` stays `approved: false`. B2 and B3 must remain blocked until a genuinely approved image exists.
