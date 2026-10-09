@@ -1,3 +1,10 @@
+## 09/10/2026 - T090 host-mediated Worker route (unverified implementation candidate)
+
+- Added explicit opt-in host-http-edit Worker backend in tools/orchestrator/core.py and tools/orchestrator/workflow.py; default AGY CLI Worker remains blocked. Host applies constrained text proposals without giving the model shell/MCP/Git/Python tools, and blocks missing credentials before dispatch.
+- Extended tools/orchestrator/worker_sandbox.py with loopback-only HTTP text completions (no tools, no redirects, no proxies), strict typed edit protocol, exact allowlisted source preimages and preflighted SHA-256 host edits.
+- Extended tests/orchestrator/test_worker_sandbox.py and tests/orchestrator/test_workflow.py with synthetic malicious proposal and complete Pipeline handoff cases. Added operator/limitation documentation in docs/orchestrator.md and T090 task card.
+- No live AGY/bridge isolation attestation performed. No default worker enablement, no historical T089 evidence changes, no security threshold weakening, no product source changes, no main merge. This candidate requires host CI on its final SHA.
+
 ## 09/10/2026 - T090 phase-2 CI R1 formatting remediation (Asia/Bangkok)
 
 - Historical failed host CI run 37809494529 at candidate 148d94836ced11066225b6b87e107b42baa896d1 retained unchanged: Ruff format check caused check-fast-active FAIL; portable pytest, frontend coverage, all three security gates and architecture PASS; dependent coverage gate not reached.
