@@ -150,7 +150,12 @@ jobs:
               timeout_seconds=120,
           )
           broker = DockerVerificationSandbox(policy)
-          result = broker.run(["python", "-m", "pytest", "-q"], workspace)
+          frozen_digest = broker.source_digest(workspace)
+          result = broker.run(
+              ["python", "-m", "pytest", "-q"],
+              workspace,
+              expected_source_digest=frozen_digest,
+          )
           if result.exit_code != 0:
               # Only the static synthetic pytest fixture is executed here.
               print("T090_SYNTHETIC_PYTEST_STDOUT:", result.stdout[-6000:])
@@ -165,4 +170,42 @@ jobs:
           else:
               raise AssertionError("Untrusted npm ci was not denied")
           print("T090_BROKER_SYNTHETIC_ISOLATION_PASS; NOT WSL2 OR SECURITY ACCEPTANCE")
+
+          # Force source modification AFTER Host checks, BEFORE Docker reads mount.
+          # The trusted bootstrap must reject the private copy BEFORE pytest starts.
+          from tools.orchestrator import runtime
+          original_execute = runtime.execute
+          injected: list[str] = []
+
+          def tamper_before_docker_run(argv, cwd, *, timeout=None):
+              if "run" in argv:
+                  injected.append("docker_run")
+                  sealed_file = cwd / "test_isolation.py"
+                  sealed_file.write_text(
+                      sealed_file.read_text() + "\nprint('T090_UNTRUSTED_CODE_RAN')\n"
+                  )
+                  outcome = original_execute(argv, cwd, timeout=timeout)
+                  assert outcome.exit_code != 0
+                  assert "T090 SANDBOX_BLOCKED: source attestation mismatch" in outcome.stderr
+                  assert "T090_UNTRUSTED_CODE_RAN" not in outcome.stdout
+                  return outcome
+              return original_execute(argv, cwd, timeout=timeout)
+
+          runtime.execute = tamper_before_docker_run
+          try:
+              try:
+                  broker.run(
+                      ["python", "-m", "pytest", "-q"],
+                      workspace,
+                      expected_source_digest=frozen_digest,
+                  )
+              except OrchestratorError as failure:
+                  assert "source attestation mismatch" in str(failure)
+              else:
+                  raise AssertionError("Mutation after Host check was not blocked")
+          finally:
+              runtime.execute = original_execute
+          assert injected == ["docker_run"]
+          assert hashlib.sha256(source.read_bytes()).hexdigest() == before
+          print("T090_CONTAINER_PRE_EXEC_ATTESTATION_BLOCKED_TAMPER: PASS")
           PY
