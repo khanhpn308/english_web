@@ -282,12 +282,14 @@ jobs:
           print("T090_B2_CANDIDATE_RUFF_MYPY_NPM_OFFLINE_PASS; NOT FULL_PORTABLE_GATE")
           PY
 
-      - name: Experiment with full portable application gate inside isolated image
+      - name: Run application-owned verification gates in isolated image (Host suite separate)
         shell: bash
         timeout-minutes: 25
         run: |
           set -euo pipefail
-          # Non-production experimental probe of actual project commands.
+          # Non-production experiment: application-owned tests run in sandbox.
+          # Host-control-plane tests and global coverage ratchet run separately
+          # in the T089 Full Portable Host CI at this exact SHA. Both required.
           docker run -d --name t090-full-gate-registry \
             -p 127.0.0.1:5001:5000 registry:2
           trap 'docker rm -f t090-full-gate-registry >/dev/null 2>&1 || true' EXIT
@@ -357,17 +359,17 @@ jobs:
               return argv
           broker._argv = diagnostic_argv
           result = broker.run(
-              ["npm", "run", "check:task:portable"],
+              ["npm", "run", "check:sandbox:application"],
               workspace,
               expected_source_digest=frozen_digest,
           )
-          print("T090_FULL_PORTABLE_DOCKER_EXIT:", result.exit_code, flush=True)
-          print("T090_FULL_PORTABLE_DOCKER_TIMEOUT:", result.timed_out, flush=True)
-          print("T090_FULL_PORTABLE_DOCKER_OVERSIZED:", result.oversized, flush=True)
-          print("T090_FULL_PORTABLE_OUTPUT_TAIL:", result.stdout[-10500:], flush=True)
-          print("T090_FULL_PORTABLE_ERROR_TAIL:", result.stderr[-1500:], flush=True)
+          print("T090_SANDBOX_APPLICATION_EXIT:", result.exit_code, flush=True)
+          print("T090_SANDBOX_APPLICATION_TIMEOUT:", result.timed_out, flush=True)
+          print("T090_SANDBOX_APPLICATION_OVERSIZED:", result.oversized, flush=True)
+          print("T090_SANDBOX_APPLICATION_OUTPUT_TAIL:", result.stdout[-10500:], flush=True)
+          print("T090_SANDBOX_APPLICATION_ERROR_TAIL:", result.stderr[-1500:], flush=True)
           assert result.exit_code == 0
           assert not result.timed_out and not result.oversized
           assert broker.source_digest(workspace) == frozen_digest
-          print("T090_FULL_PORTABLE_DOCKER_PROBE_PASS; IMAGE_STILL_UNAPPROVED")
+          print("T090_SANDBOX_APPLICATION_PASS; HOST_GATE_STILL_REQUIRED; IMAGE_STILL_UNAPPROVED")
           PY

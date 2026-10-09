@@ -13,6 +13,7 @@
     "check:task:active": "npm run check:fast:active && npm run test:frontend:coverage && python -m pytest && npm run coverage:check && npm run security:secrets && npm run security:code && npm run security:deps",
     "check:task": "npm run check:task:active && npm run architecture:check",
     "check:task:portable": "bash .agent/scripts/run-gates.sh portable-task",
+    "check:sandbox:application": "bash .agent/scripts/run-gates.sh sandbox-application",
     "check:full": "npm run check:task:active && npm run architecture:check",
     "architecture:frontend": "depcruise --config .dependency-cruiser.cjs --output-type err frontend/src",
     "architecture:backend": "lint-imports --config pyproject.toml --no-cache",

@@ -225,8 +225,39 @@ case "$MODE" in
             coverage-check
         ;;
 
+    # Application-owned checks run against the sealed candidate in Docker.
+    # Host controller tests, including process management and Docker broker,
+    # MUST run in the independent trusted Host CI gate at the same Git SHA.
+    # Never run the Host control-plane suite as untrusted application code.
+    sandbox-application)
+        if [[ "${T090_SANDBOX_LIMITED:-0}" != "1" ]]; then
+            echo "T090 SANDBOX_BLOCKED: sandbox application mode requires isolation" >&2
+            exit 2
+        fi
+
+        echo "=== SANDBOX APPLICATION: isolated source and security gates ==="
+        start_gate check-fast-active npm run check:fast:active
+        start_gate frontend-coverage npm run test:frontend:coverage
+        start_gate sandbox-application-pytest python -m pytest backend/tests scripts/tests -n 2
+        start_gate security-secrets npm run security:secrets
+        start_gate security-code npm run security:code
+        start_gate security-deps npm run security:deps
+        start_gate architecture npm run architecture:check
+
+        wait_phase \
+            check-fast-active \
+            frontend-coverage \
+            sandbox-application-pytest \
+            security-secrets \
+            security-code \
+            security-deps \
+            architecture
+
+        echo "T090_APPLICATION_SANDBOX_GATES_PASS"
+        echo "T090_HOST_CONTROLLER_AND_COVERAGE_GATES_REQUIRED_AT_SAME_SHA"
+        ;;
     *)
-        echo "Usage: $0 {fast|full|portable-task}"
+        echo "Usage: $0 {fast|full|portable-task|sandbox-application}"
         exit 2
         ;;
 esac
