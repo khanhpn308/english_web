@@ -371,7 +371,7 @@ class DockerVerificationSandbox:
             "--workdir=/workspace",
             "--mount",
             f"type=bind,src={workspace},dst=/source,readonly,bind-propagation=rprivate",
-            f"--tmpfs=/workspace:rw,nosuid,nodev,size={self.policy.workspace_tmpfs_mib}m,mode=1777",
+            f"--tmpfs=/workspace:rw,nosuid,nodev,size={self.policy.workspace_tmpfs_mib}m,mode=0700,uid={uid},gid={gid}",
             "--tmpfs=/tmp:rw,nosuid,nodev,size=64m,mode=1777",
             "--ulimit=core=0:0",
             "--env=HOME=/tmp",
