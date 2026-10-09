@@ -263,6 +263,7 @@ def test_t090_secure_provider_calls_only_tool_free_transport(
     def complete(
         _self: LoopbackChatTransport, prompt: str, *, model: str, timeout: int | None
     ) -> str:
+        assert _self.response_contract == "semantic-json"
         calls.append(prompt)
         assert model == role.model
         assert timeout == 7
