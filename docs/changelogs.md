@@ -1,3 +1,10 @@
+## 09/10/2026 - T090 local Ruff/Mypy regression repair (WSL2)
+
+- WSL2 host reported 14 Ruff lint findings and three strict Mypy findings after 1/1 host-mediated workflow tests passed on `4a89dd32d77ee11e16e91ba587919dc330ae0ae0`.
+- Corrected T090-owned Ruff violations (import sorting, unused callback/handler args, long string) and introduced Mypy typing issues in worker_sandbox.py, workflow.py and relevant T090 tests. Preserved no-execute and exact allowlist policy.
+- Identified tests/orchestrator/test_core.py:1123 as an inherited Mypy defect present at the same blob on main; left it untouched because not in the T090 exact-file allowlist. No blanket Mypy suppression or test weakening.
+- Follow-up verification must distinguish portable CI from expanded Ruff lint/strict Mypy checks. No production Worker unlock, no main mutation, and no real endpoint attestation claimed.
+
 ## 09/10/2026 - T090 host-mediated CI R1 regression repair
 
 - Host CI run 37870991359 on c28d1d63f1050162cd634e6852e98e09e7ab277a returned FAILURE. Portable pytest 1346/1348 passed; two inherited automatic-recovery cases regressed because global handling of WorkerResult BLOCKED was changed. Ruff formatting in four files also failed. Other six Phase A gates passed; dependent coverage not reached.
