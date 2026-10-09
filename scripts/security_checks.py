@@ -406,7 +406,19 @@ def run_dependencies(repo: Path, report_dir: Path, *, runner: Runner = run_comma
         for kind, path in lockfiles
     ]
     command = [binary, "scan", "source", "--format=json", *arguments]
+    if os.environ.get("T090_OSV_OFFLINE") == "1":
+        # OSV v2 parses --offline as an option of the source scanner;
+        # preceding the verb causes "scan" to be read as a directory.
+        command.insert(3, "--offline")
     result = runner(command, repo)
+    if os.environ.get("T090_SANDBOX_DIAGNOSTIC") == "1":
+        # Candidate CI only: surface scanner failures without suppressing the gate.
+        print(f"[T090-DIAGNOSTIC] osv-scanner exit={result.returncode}", file=sys.stderr)
+        if result.returncode not in {0, 1}:
+            print(
+                "[T090-DIAGNOSTIC] osv-scanner stderr: " + result.stderr[-1200:],
+                file=sys.stderr,
+            )
     if result.returncode not in {0, 1}:
         raise SetupFailure("osv-scanner execution failed")
     try:

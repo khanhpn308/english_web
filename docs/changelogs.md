@@ -1,3 +1,138 @@
+## 09/10/2026 - T090 R6-B candidate admission and tooling; enforcement blocked
+
+- Added independent Host-pinned image approval manifest parser. Unapproved, missing, Git-checkout-local or mismatched policies fail closed; manifest includes locked-input, base-image, offline database, provenance and SBOM digest fields.
+- Added a standalone `collect_verification_admitted()` route that validates Git binding plus admitted image and dispatches commands only via DockerVerificationSandbox. It has no Host fallback; the legacy callsites remain unmigrated.
+- The candidate image CI now probes offline Ruff, MyPy and npm scripts inside the live Docker sandbox. This is NOT a full project `npm run check:task:portable` gate.
+- No signed provenance has been verified, no approved image exists, and the default `image-policy.json` remains `approved=false`. Source binding and image policy metadata cannot substitute for a trusted external publisher attestation.
+- R6-B3 production enforcement NOT DONE. Both `collect_verification()` and `Pipeline.verify()` still have Host execution paths and must not be accepted as isolated; system settings, lockfiles and run-gates remain unchanged pending explicit owner scope approval.
+
+## 09/10/2026 - T090 R6 phase A: canonical tree digest and Git crosswalk
+
+- Canonicalized directory traversal in `_docker_source_digest` to eliminate filesystem enumeration order from tree SHA-256; tests cover reordered directory creation, symlink targets, empty directories and path changes.
+- Added `FrozenVerificationSourceBinding` and `freeze_verification_source_binding`: Host compares the frozen authoritative Git snapshot to both source checkout and detached verification clone, captures the Docker tree digest, then rechecks Git and Docker tree stability.
+- Negative regressions reject changed authoritative source or modified verification clone; the binding is currently a staged primitive, not yet wired to `collect_verification()` or `Pipeline.verify()`.
+- The new code does not change `approved: false`, does not enable untrusted verification, and does not change the AI Bridge/provider configuration. T089 remains reopened pending T090.
+- Remaining R6 release gates: independently approved immutable image provenance/dependencies, preprovisioned trusted toolchain, moving both legacy execution paths to Docker without fallback, and semantic Bridge no-hidden-tool audit.
+
+## 09/10/2026 - T090 R5 source sealing and container pre-exec attestation
+
+- Candidate DockerVerificationSandbox now requires a separately supplied and previously frozen SHA-256 source-tree digest; missing or mismatched evidence blocks execution.
+- Original source is re-checked, privately copied under a Host-owned temporary seal, and re-checked before/after Docker inspection. Docker mounts ONLY the sealed copy read-only.
+- Container hashes its private tmpfs copy before execvp; post-Host-check tampering is a security failure before any untrusted verification program starts.
+- Added regressions for absent digest, stale source, sealing mutation and Docker inspection mutation; Docker CI includes actual in-container tampering probe.
+- WSL2 R4 local resource, CPU throttling, OOM, PID, isolation and fail-closed evidence PASS per owner screenshots. R5 is not yet locally re-verified.
+- Production verification paths and Bridge tool permissions remain unverified; image policy remains approved=false; no merge or change to main.
+
+## 09/10/2026 - T090 staged dual-runtime candidate and offline scanner routing
+
+- Resolved R1 image/clone correction as separate changes: pinned Python Docker entrypoint; verification clone now uses --no-local and tests forbid Git object alternates.
+- Added candidate-only Dockerfile, unapproved image policy, and isolated GitHub Actions build/smoke workflow. Image provenance, hash-complete wheels, Debian package snapshot, OSV archive digests and adversarial isolation are NOT attested.
+- Added T090_OSV_OFFLINE opt-in to keep vulnerability scans offline within future isolated images, preserving the prior host CI behavior; synthetic negative/positive command routing tests added.
+- Existing collect_verification and Pipeline.verify remain untouched/unisolated; no AGY configuration updates, no main merge, no T089 reacceptance. Full CI on final SHA required.
+
+## 09/10/2026 - T090 Docker sandbox broker candidate
+
+- Added non-active Docker verification executor with fixed non-root, no-network, readonly-root policy, capped CPU/memory/PIDs/time, pinned local image and host-only disposable mount rules.
+- Added synthetic negative and Docker-argument assertions. Existing host verification paths are NOT isolated yet and remain security blockers.
+- No Dockerfile outside approved T090 files, no default image selected or provider permission changes; independent live tests and dual-path enforcement required.
+
+## 09/10/2026 - T090 no-suppression host context and rename-path remediation
+
+- Replaced Ruff ARG002 suppression comments forbidden by host floor policy with explicit host-owned context validation in SecureProvider, plus parameterized invalid-context tests.
+- Hardened Git.paths rename boundaries using --no-renames, with tests for both old/new paths and deletion outside allowed_paths.
+- Historical CI R5 failure 37884453037 was check-fast-active floor silenced-checker (three suppressions), although portable pytest and security gates passed. Fresh CI on this candidate required.
+
+## 09/10/2026 - T090 rename scope-hardening
+
+- Independent Git rename test exposed omission of deleted rename origins from default name-only diffs. Git.paths now disables Git rename collapsing so both source and destination require explicit allowlisting.
+- Added regression coverage for changed paths and host-sealed before/after evidence when files are renamed; no Worker CLI or model tools enabled.
+- Previous local PASS on 717c0011 covers the prior version only; full CI required on updated SHA.
+
+## 09/10/2026 - T090 sealed-source CI R1 format repair
+
+- Recorded CI run 37882294933 FAILURE on 4777d903: three Ruff format differences; portable pytest, frontend, architecture and security gates passed.
+- Applied only the three formatter-requested changes in workflow.py and test_workflow.py. No runtime authorization changes; full gate on a fresh SHA required.
+
+## 09/10/2026 - T090 sealed source integration refinement
+
+- Added parallel Reviewer tests for host-supplied source evidence.
+- Persisted evidence artifact digests before model dispatch, and tied final Auditor and Integrator evidence to previously frozen source digests.
+- Historical CI results apply only to the exact SHA tested; updated candidate requires new CI. T090 remains IN_PROGRESS.
+
+## 09/10/2026 - T090 host-sealed source/diff context
+
+- Added host-only changed-path evidence extraction with exact allowlist, two-sided SHA256, unified diff, frozen snapshot binding, checked baseline Git mode, and hard fail-closed text/size/symlink limits. Persisted digest-sealed run artifact.
+- Routed this bounded evidence into tool-free concurrent/resumed Reviewer and final Auditor/Integrator prompts; no AI filesystem/terminal/Git access.
+- Added regressions for valid diff, untracked files, tamper, forbidden path, stale candidate, binary/encoding, oversized and symlink, plus Auditor prompt inclusion. Historical R6 PASS applies only to pre-change source; new CI required.
+- Bridge hidden-tool attestation, unchanged-context expansion, host code-execution OS isolation and final acceptance remain pending. PR Draft; main unchanged.
+
+## 09/10/2026 - T090 Bridge identity and semantic-role prompt correction
+
+- Owner observed local Antigravity Tools Windows listener on IPv4 127.0.0.1:8045, recorded process executable SHA-256 as runtime identity evidence only (not provider tool-isolation attestation).
+- Corrected semantic host HTTP transport to use the requested role JSON schema rather than worker-only WorkerEditResponse instructions, maintaining zero model tools and bounded HTTP transport.
+- Added synthetic contract-level tests; retained fail-closed CLI and host-only edit policies. R4 previously passed on adcd7d6; new source changes require fresh CI.
+- T090 IN_PROGRESS, T089 REOPENED_PENDING_T090, PR #9 Draft.
+
+## 09/10/2026 - T090 tool-free CI R3 format correction
+
+- R3 run 37879458653 on a8c6dc27 is retained as FAILURE: one Ruff format violation at tests/orchestrator/test_runtime.py:302; six other Phase A gates PASS.
+- Added only the missing blank line before a synthetic transport callback. Semantic role and mutable CLI deny policies unchanged; fresh R4 required.
+
+## 09/10/2026 - T090 semantic route CI R1 format repair
+
+- Preserved FAILED CI R1 run 37879047094 on 608018e0: check-fast-active stopped at one Ruff format blank line in runtime.py; other six Phase A gates PASS.
+- Removed the extra blank line; strengthened SecureProvider mutable dispatch to deny all CLI fallback, and added its regression test. Intermediate R2 tested an older SHA and cannot authorize final acceptance.
+- T090 remains IN_PROGRESS; no live semantic endpoint identity, host evidence materialization, OS test-execution isolation, main merge or T089 re-acceptance claimed.
+
+## 09/10/2026 - T090 tool-free semantic role routing candidate
+
+- Restricted production default Pipeline to SecureProvider: unverified read-only agent CLI calls now stop before execution, including concurrent reviewer provider.run calls, planning, Auditor and Integrator. CLI WorkerResult remains blocked as before.
+- Added opt-in host-http-text backend for nonworker AI roles (explicit model, loopback URL and credential env variable); tool-free HTTP completion plus typed role schema, without model tools, subprocess or file-write access.
+- Added tests for default CLI denial, successful tool-free role response, invalid outputs and malicious configuration; documented operator requirements and unresolved context/bridge/OS proof.
+- Deliberately did not change orchestrator.yaml, model routing, user settings, acceptance state or historical T089 evidence; PR #9 Draft. Host CI remains required for this exact candidate SHA.
+
+## 09/10/2026 - T090 WSL2 import-lint final remediation
+
+- Local host reported one remaining Ruff I001 in `tools/orchestrator/worker_sandbox.py`; Ruff formatter and production mypy had passed.
+- Removed exactly one excess blank line after imports, without changing runtime or security behavior. A new host CI run is required on the final commit. Default Worker CLI remains blocked and T090 is not accepted.
+
+## 09/10/2026 - T090 local Ruff/Mypy regression repair (WSL2)
+
+- WSL2 host reported 14 Ruff lint findings and three strict Mypy findings after 1/1 host-mediated workflow tests passed on `4a89dd32d77ee11e16e91ba587919dc330ae0ae0`.
+- Corrected T090-owned Ruff violations (import sorting, unused callback/handler args, long string) and introduced Mypy typing issues in worker_sandbox.py, workflow.py and relevant T090 tests. Preserved no-execute and exact allowlist policy.
+- Identified tests/orchestrator/test_core.py:1123 as an inherited Mypy defect present at the same blob on main; left it untouched because not in the T090 exact-file allowlist. No blanket Mypy suppression or test weakening.
+- Follow-up verification must distinguish portable CI from expanded Ruff lint/strict Mypy checks. No production Worker unlock, no main mutation, and no real endpoint attestation claimed.
+
+## 09/10/2026 - T090 host-mediated CI R1 regression repair
+
+- Host CI run 37870991359 on c28d1d63f1050162cd634e6852e98e09e7ab277a returned FAILURE. Portable pytest 1346/1348 passed; two inherited automatic-recovery cases regressed because global handling of WorkerResult BLOCKED was changed. Ruff formatting in four files also failed. Other six Phase A gates passed; dependent coverage not reached.
+- Restored legacy provider automatic-recovery semantics while retaining terminal BLOCKED specifically for host-http-edit Worker. Applied exact Ruff source/test formatting recommended by host run logs.
+- Updated T090 task card and changelog with immutable R1 failure provenance; R2 host verification remains pending and must target the final source commit.
+- No default Worker CLI unlock, no runtime secret/allowlist change, no historical evidence rewrite, no application edits or main merge.
+
+## 09/10/2026 - T090 host-mediated Worker route (unverified implementation candidate)
+
+- Added explicit opt-in host-http-edit Worker backend in tools/orchestrator/core.py and tools/orchestrator/workflow.py; default AGY CLI Worker remains blocked. Host applies constrained text proposals without giving the model shell/MCP/Git/Python tools, and blocks missing credentials before dispatch.
+- Extended tools/orchestrator/worker_sandbox.py with loopback-only HTTP text completions (no tools, no redirects, no proxies), strict typed edit protocol, exact allowlisted source preimages and preflighted SHA-256 host edits.
+- Extended tests/orchestrator/test_worker_sandbox.py and tests/orchestrator/test_workflow.py with synthetic malicious proposal and complete Pipeline handoff cases. Added operator/limitation documentation in docs/orchestrator.md and T090 task card.
+- No live AGY/bridge isolation attestation performed. No default worker enablement, no historical T089 evidence changes, no security threshold weakening, no product source changes, no main merge. This candidate requires host CI on its final SHA.
+
+## 09/10/2026 - T090 phase-2 CI R1 formatting remediation (Asia/Bangkok)
+
+- Historical failed host CI run 37809494529 at candidate 148d94836ced11066225b6b87e107b42baa896d1 retained unchanged: Ruff format check caused check-fast-active FAIL; portable pytest, frontend coverage, all three security gates and architecture PASS; dependent coverage gate not reached.
+- Reformatted three multiline calls in tests/orchestrator/test_worker_sandbox.py and one SHA validation conditional in tools/orchestrator/worker_sandbox.py to match pinned Ruff. Functional policy was not changed.
+- Updated T090 card with exact failure provenance. A fresh independent CI run is required before making any acceptance claim. AGY/Codex live command-denial proof remains BLOCKED, T089 reopened; WorkerResult fail-closed guard untouched.
+- No historical artifacts, product code, security thresholds, or default branch mutated.
+
+## 08/10/2026 - T090 phase-2 historical-scope audit and host-mediated edit primitive (Asia/Bangkok)
+
+- Status: IN_PROGRESS; Worker AGY/Codex dispatch remains BLOCKED; T089 remains REOPENED_PENDING_T090. No live provider isolation PASS and no new merge authorization claimed.
+- docs/ci-host-verification.md: attributed eight historical out-of-T089-allowlist PR #5 infrastructure paths to immutable pre-/post-PR blob identities, ownership and explicit owner-approved historical merge. Clarified that prior passing CI verifies repository checks, not Worker tool isolation.
+- tools/orchestrator/worker_sandbox.py: introduced a host-only exact-path, SHA-256-bound text edit primitive with checked preimage, content limit, path/symlink rejection and atomic file replacement. Does not grant or invoke AI tool privileges, and is not wired to a provider.
+- tests/orchestrator/test_worker_sandbox.py: synthetic success/denial fixtures for host editing. Real AGY/OS command-denial tests remain unperformed and must not be inferred from these tests.
+- tasks/t090-host-worker-isolation-scope-adjudication.md: documented the unverified provider boundary and next independent acceptance steps.
+- Intentionally untouched: historical T089 artifacts/hashes and Git history, product backend/frontend, policy thresholds, worker permission lock and global CLI settings. Host CI status to be recorded only after a real run.
+
 ## 07/10/2026 - T089-R3: verified external candidate import control plane (Asia/Bangkok)
 
 - Status: `IMPLEMENTATION_READY_FOR_HOST_VERIFICATION`. Implemented the host-authoritative verified external candidate import control plane (`import-candidate` CLI command and `Pipeline.import_candidate()`):

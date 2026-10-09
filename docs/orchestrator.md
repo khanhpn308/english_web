@@ -1,5 +1,170 @@
 # Công cụ điều phối phát triển cục bộ Level 1 và Level 2
 
+
+## T090: Host-mediated text-only Worker (experimental; disabled by default)
+
+The default AGY CLI Worker remains blocked before process dispatch. A
+separately configured host-http-edit mode calls a local text-completion API
+without attaching executable model tools. The host itself reads only exact
+Contract.allowed_paths, pins their SHA-256 preimages, validates strict proposed
+replacement JSON, and writes only allowlisted files. It issues no Worker-origin
+shell, Git, Python, MCP, subprocess or subagent calls.
+
+The explicit Worker-only role configuration is:
+
+    "provider": "agy",
+    "executable": "agy",
+    "model": "gemini-3.8-flash-high",
+    "reasoning": "high",
+    "worker_access": "workspace-write",
+    "allow_process": false,
+    "worker_backend": "host-http-edit",
+    "host_edit_endpoint": "http://127.0.0.1:8045/v1/chat/completions",
+    "host_edit_api_key_env": "HOST_MEDIATED_AI_KEY"
+
+This keeps the existing model selection but does **not** invoke the AGY CLI
+for Worker. The host reads the named secret from its environment only; no
+authentication values, source text, prompts or raw responses belong in logs.
+Missing authentication blocks before model dispatch. Requests contain an
+explicit empty tools array, tool_choice none, no redirects, no proxy, and
+loopback-only URL validation. Invalid JSON, tool calls, unexpected output
+fields, out-of-scope paths, stale SHA and invalid UTF-8 edits fail closed.
+
+**This is not yet certified on AGY/Gemini or Codex**. Synthetic offline
+tests cannot establish whether the installed local model proxy honors
+tool_choice none or supplies hidden executable capabilities. Independently
+test a live synthetic endpoint and observe actual tool denial and legitimate
+source edits before switching from the default blocked mode. Reviewer,
+Auditor and Integrator CLI read-only roles also need independent command
+capability review; read-only filesystem access is not equivalent to no shell.
+
+Multi-file edit publication is not an OS-level transaction: enforce exclusive
+workspace access, revalidate preimages, and retain failed partial candidate
+for host adjudication. Neither a text-only prompt nor SHA checks alone prove
+resistance against a concurrent local process with filesystem privileges.
+
+### T090 Docker Host Verification Sandbox — implementation candidate (NOT ACTIVE)
+
+The WSL2 owner performed a real isolated Docker smoke test (non-root,
+no host bind mounts, no network, read-only root, ephemeral /tmp) with
+cgroup v2 limits: memory.max=268435456, cpu.max=50000 100000 and pids.max=64.
+It passed this **basic smoke**, not adversarial resource or workload tests.
+
+`tools/orchestrator/runtime.py` contains an independent, host-owned
+`DockerVerificationPolicy` and `DockerVerificationSandbox` prototype.
+The policy requires a fully qualified, host-selected `@sha256:` image
+reference, non-root Linux host, finite deadline, explicit CPU/RAM/PID bounds
+and a workspace nested under the trusted disposable verification root.
+It rejects symlink escapes, special files, hardlinks, unpinned/missing images
+and unsupported verification commands before executing any model-generated
+code. The fixed Docker command uses an empty client config, local Unix
+socket, `--pull=never`, `--network=none`, `--read-only`,
+`--cap-drop=ALL`, `no-new-privileges`, no Docker socket or HOME mount,
+a read-only bind of the disposable source at `/source`, a size-capped
+256 MiB private tmpfs at `/workspace`, and a disposable `/tmp`.
+A fixed Python bootstrap copies source into the private tmpfs before executing
+the declared command, so source verification cannot write to the host mount;
+the tmpfs is also counted toward container memory usage. The Docker client is
+invoked without inherited environment variables.
+A host-generated container name is removed after dispatch/timeout.
+
+**This implementation is deliberately NOT yet connected** to either
+`collect_verification()` or `Pipeline.verify()`. Those remain unisolated
+and must be classified as **BLOCKED FOR SECURITY ACCEPTANCE**; passing
+portable CI or synthetic broker tests does not change their status.
+Before activation, the owner must authorize a new image-build file outside
+the existing T090 allowlist, validate the complete Python 3.12 + Node 22
+runner, prove lockfile integrity for `requirements-dev.lock` and
+`package-lock.json`, and approve an immutable image digest with
+independent provenance. Existing `npm ci` setup cannot run against
+candidate-owned scripts with network access; preprovision dependencies
+in a trusted image. `git clone --shared` Git alternates and existing
+toolchain copying require separate examination before bind-mounting
+verification clones.
+
+The final enforcement phase must route **both** explicit detached
+`collect_verification()` and `Pipeline.verify()` (including setup,
+baseline and integration) through the accepted sandbox or fail closed.
+It must have live negative tests for HOME/Windows/Bridge access, unexpected
+Unix sockets, hardlink and symlink escapes, child processes, CPU/RAM/PID,
+timeout cleanup and source/provenance integrity. No fallback to an unsafe
+host subprocess is permitted in production.
+
+### T090 host-sealed source and diff evidence (tool-free semantic roles)
+
+For an opt-in `host-http-text` Reviewer/Auditor/Integrator, the host constructs
+a *bounded evidence snapshot before model dispatch*. It is based on the
+frozen candidate source digest and the exact changed-path set from Git, not
+on paths requested by the model. Only paths permitted by
+`Contract.allowed_paths` enter the payload. For each changed UTF-8 file,
+the host captures baseline and working bytes, independent SHA-256 digests,
+and a text unified diff. New and deleted text files have an explicit null
+side. The canonical JSON evidence is given its own SHA-256 and stored as a
+sealed run artifact, then copied into the role prompt with untrusted-data
+instructions. Both round-one and resumed parallel Reviewers receive the
+same frozen source evidence. The final Auditor and Integrator receive newly
+captured, source-digest-verified evidence via `Pipeline.invoke`.
+
+Limits fail *closed*: at most 24 changed files, 48 KiB of either text side per
+file, 256 KiB serialized total; no binary or non-UTF8 files, symlinks,
+nonregular files, outside-allowlist changes, or stale digests. Evidence is
+never truncated. The host checks candidate digests before and after reading
+and existing orchestration tamper checks protect every registered artifact.
+No model-facing terminal, file tool, Git command, source path resolver, or
+network fetch API is introduced.
+
+**Scope limitation:** evidence covers the *changed* contract paths, not all
+callers/dependencies or arbitrary repository files. If semantic review needs
+unchanged source, a separately authorized bounded host context expansion is
+required; reviewers must not assert inspection of absent code. No automatic
+CLI activation or T090 acceptance follows from this patch. The producer
+of externally executed verification code still requires OS-level isolation.
+
+### T090: Semantic roles without executable CLI tools (opt-in)
+
+The production `Pipeline` now uses `SecureProvider` by default for its
+`prompt_engineer`, all concurrent `reviewer` calls (using the Auditor role),
+`auditor`, `fix` (Prompt Engineer), and `integrator` calls.
+A role that still selects `analysis_backend: "cli"` fails closed **before
+any model-owned CLI command is launched**. Existing explicit mock providers in
+unit tests are not production security evidence.
+
+To use the text-only backend for one semantic role, supply an explicit
+role configuration, with an independently verified local completion endpoint
+and model ID:
+
+    "provider": "agy",
+    "executable": "agy",
+    "model": "gemini-3.8-flash-high",
+    "analysis_backend": "host-http-text",
+    "host_text_endpoint": "http://127.0.0.1:8045/v1/chat/completions",
+    "host_text_api_key_env": "HOST_MEDIATED_AI_KEY"
+
+The same configuration must be applied independently to
+`prompt_engineer`, `auditor` (also used for parallel review), and
+`integrator`. Do **not** silently replace a Codex role/model with Gemini:
+that is an explicit owner choice requiring compatibility tests, source/evidence
+context review, and a pinned capability identity. This example is a template,
+not a change to `orchestrator.yaml`.
+
+`SecureProvider` uses the existing `LoopbackChatTransport`: it sends no
+tool definitions, sets `tool_choice: none`, disallows proxies and redirects,
+validates the returned role-specific JSON schema, and never launches AGY/Codex
+CLI for semantic inference. Worker still uses its separate
+`host-http-edit` route and fail-closed CLI guard. Invalid credentials or
+response data produce `T090 BLOCKED`; neither provider error nor model text
+can authorize a host gate, state transition, file write or Git operation.
+
+**Acceptance limitations:** a response without `tool_calls` and a green
+portable CI are not independent proof that the deployed bridge enforces an
+absence of hidden tools. No immutable endpoint identity or tool-broker
+attestation has been established. A tool-free analyst also cannot read local
+AGENTS/spec/source/diff files itself: the host must materialize and bind the
+minimum necessary task-approved evidence before semantic assessments can be
+reliable. Host verification of untrusted Worker-modified Python/JS likewise
+needs a separately reviewed OS execution boundary. Until those are addressed,
+all CLI analytical roles remain BLOCKED and T090 is IN_PROGRESS.
+
 ## Chế độ host verification tách biệt (T089 final remediation)
 
 Trong đường đi CLI, `run`, `resume`, `retry` và `schedule` kết thúc lượt

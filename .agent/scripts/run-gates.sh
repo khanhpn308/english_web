@@ -4,7 +4,14 @@ set -uo pipefail
 
 MODE="${1:-fast}"
 
-ROOT="$(git rev-parse --show-toplevel)"
+ROOT="$(git rev-parse --show-toplevel)" || {
+    echo "T090 SANDBOX_BLOCKED: verification requires a Git working tree" >&2
+    exit 2
+}
+if [[ -z "$ROOT" || "$ROOT" == "/" ]]; then
+    echo "T090 SANDBOX_BLOCKED: invalid verification repository root" >&2
+    exit 2
+fi
 cd "$ROOT"
 
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
@@ -36,12 +43,21 @@ start_gate() {
     ) &
 
     PIDS["$name"]=$!
+    # In the constrained Docker verification profile each gate completes
+    # before another begins. This bounds combined RAM and workspace pressure.
+    if [[ "${T090_SANDBOX_LIMITED:-0}" == "1" ]]; then
+        wait_gate "$name"
+    fi
 }
 
 wait_gate() {
     local name="$1"
     local pid="${PIDS[$name]}"
 
+    # A sequential sandbox already harvested this gate in start_gate().
+    if [[ -n "${STATUS[$name]:-}" ]]; then
+        return 0
+    fi
     if wait "$pid"; then
         STATUS["$name"]="PASS"
     else
@@ -63,6 +79,18 @@ wait_phase() {
         echo
         echo "Phase failed; stopping later phases."
         print_summary
+        # CI-only synthetic probe: source and logs are inside an isolated
+        # container without mounted Host secrets. Disabled for ordinary runs.
+        if [[ "${T090_SANDBOX_DIAGNOSTIC:-0}" == "1" ]]; then
+            echo "[T090-DIAGNOSTIC] free filesystem capacity"
+            df -h /workspace /tmp || true
+            for gate in "${GATES[@]}"; do
+                if [[ "${STATUS[$gate]:-}" == "FAIL" ]]; then
+                    echo "[T090-DIAGNOSTIC] $gate (last 30 log lines)"
+                    tail -n 30 "$LOG_DIR/$gate.log" || true
+                fi
+            done
+        fi
         exit 1
     fi
 }
@@ -167,7 +195,13 @@ case "$MODE" in
 
         start_gate check-fast-active npm run check:fast:active
         start_gate frontend-coverage npm run test:frontend:coverage
-        start_gate portable-pytest npm run test:python:portable
+        if [[ "${T090_SANDBOX_LIMITED:-0}" == "1" ]]; then
+            # Same test selection/coverage as npm's portable script; fewer
+            # pytest-xdist workers to stay within a finite container budget.
+            start_gate portable-pytest python -m pytest --ignore=backend/tests/windows -n 2
+        else
+            start_gate portable-pytest npm run test:python:portable
+        fi
         start_gate security-secrets npm run security:secrets
         start_gate security-code npm run security:code
         start_gate security-deps npm run security:deps

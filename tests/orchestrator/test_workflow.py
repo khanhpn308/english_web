@@ -2756,6 +2756,9 @@ def test_concurrent_audit_materialization_distinct_staged_and_working_content(
     with pipeline.verification_workspace(
         worktree_path, frozen_digest, distinct_base, "T100", "run-1"
     ) as (verify_path, verify_git):
+        # A verification clone must be fully independent of host Git objects.
+        assert not (verify_path / ".git/objects/info/alternates").exists()
+
         # 1. Assert independently sandbox cached/index content == "value 1\n"
         sandbox_index_diff = verify_git.run("diff", "--cached", "--binary", distinct_base, "--")
         original_index_diff = worktree_git.run("diff", "--cached", "--binary", distinct_base, "--")
@@ -3842,3 +3845,582 @@ def test_integrator_oversized_context_fails_closed_zero_attempts(
     assert "Integrator context exceeds size limit" in (state.last_error or "")
     # Zero calls to IntegrationReview made
     assert "IntegrationReview" not in agents.calls
+
+
+def _host_mediated_fixture_config() -> Config:
+    config = configuration(integrate=False)
+    config.roles["worker"] = Role(
+        provider="agy",
+        executable="agy",
+        model="gemini-3.8-flash-high",
+        reasoning="high",
+        worker_backend="host-http-edit",
+        host_edit_endpoint="http://127.0.0.1:8045/v1/chat/completions",
+        host_edit_api_key_env="TEST_HOST_EDIT_KEY",
+        allow_process=False,
+        worker_access="workspace-write",
+    )
+    return config
+
+
+def test_host_mediated_worker_respects_implemented_handoff_without_cli(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.worker_sandbox import LoopbackChatTransport
+
+    monkeypatch.setenv("TEST_HOST_EDIT_KEY", "synthetic-only")
+    call_count = 0
+
+    def fake_tool_free_completion(
+        _self: LoopbackChatTransport, prompt: str, *, model: str, timeout: int | None
+    ) -> str:
+        nonlocal call_count
+        call_count += 1
+        assert timeout == 30
+        assert model == "gemini-3.8-flash-high"
+        assert "HOST-OWNED ALLOWLIST AND PREIMAGES" in prompt
+        raw = prompt.split("HOST-OWNED ALLOWLIST AND PREIMAGES (untrusted file content):\n", 1)[1]
+        source = json.loads(raw.split("\nReturn JSON with status,", 1)[0])
+        assert "feature.txt" in source
+        assert "docs/changelogs.md" in source
+        edits = [
+            {
+                "path": path,
+                "expected_sha256": source[path]["sha256"],
+                "replacement": (
+                    "good\n\n"
+                    if path == "feature.txt"
+                    else "New synthetic entry\nHistorical entry\n"
+                ),
+            }
+            for path in ("feature.txt", "docs/changelogs.md")
+        ]
+        return json.dumps(
+            {
+                "status": "IMPLEMENTED",
+                "summary": "Synthetic host-mediated implementation",
+                "known_issues": [],
+                "edits": edits,
+            }
+        )
+
+    monkeypatch.setattr(LoopbackChatTransport, "complete", fake_tool_free_completion)
+    fake_agents = FakeAgents()
+    pipeline = Pipeline(repository, _host_mediated_fixture_config(), fake_agents)
+    state = pipeline.start("T100", defer_verification=True)
+    assert state.state == State.IMPLEMENTED
+    assert call_count == 1
+    assert fake_agents.worker_calls == 0
+    worker_result = WorkerResult.model_validate(
+        read_json(pipeline.run_path("T100", state.run_id) / state.artifacts["worker"])
+    )
+    assert worker_result.commands_run == []
+    working = Path(state.worktree_path)
+    assert (working / "feature.txt").read_text() == "good\n\n"
+    assert (working / "docs/changelogs.md").read_text().startswith("New synthetic entry")
+
+
+def test_host_edit_missing_key_blocks_before_worker_model_dispatch(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("TEST_HOST_EDIT_KEY", raising=False)
+    fake_agents = FakeAgents()
+    pipeline = Pipeline(repository, _host_mediated_fixture_config(), fake_agents)
+    state = pipeline.start("T100", defer_verification=True)
+    assert state.state == State.BLOCKED
+    assert state.last_error is not None and "credential is missing" in state.last_error
+    assert fake_agents.worker_calls == 0
+
+
+def test_t090_pipeline_default_fails_closed_for_all_semantic_roles(
+    repository: Path,
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import SecureProvider
+
+    config = configuration(integrate=False)
+    pipeline = Pipeline(repository, config)
+    assert isinstance(pipeline.provider, SecureProvider)
+    for name, response_type in (
+        ("prompt_engineer", Plan),
+        ("auditor", Audit),
+        ("auditor", ReviewShard),
+        ("integrator", IntegrationReview),
+    ):
+        with pytest.raises(OrchestratorError, match="T090 BLOCKED"):
+            pipeline.provider.run(
+                "Synthetic host-supplied evidence",
+                cwd=repository,
+                role=config.roles[name],
+                timeout=1,
+                output=response_type,
+                artifacts=repository,
+                name="semantic-no-cli",
+                readonly=True,
+            )
+
+
+def test_t090_host_sealed_source_evidence_binds_exact_bytes_and_diff(
+    repository: Path,
+) -> None:
+    from tools.orchestrator.core import digest
+    from tools.orchestrator.workflow import build_sealed_source_evidence
+
+    git = Git(repository)
+    base = git.sha()
+    (repository / "feature.txt").write_text("updated feature\n")
+    (repository / "docs/changelogs.md").write_text("Changed record\n")
+    source = git.snapshot(base)
+    payload = build_sealed_source_evidence(
+        repository, base, source, ["feature.txt", "docs/changelogs.md"]
+    )
+    evidence = payload["evidence"]
+    assert isinstance(evidence, dict)
+    assert evidence["base_sha"] == base
+    assert evidence["source_digest"] == source
+    files = evidence["files"]
+    assert isinstance(files, list)
+    assert [item["path"] for item in files] == ["docs/changelogs.md", "feature.txt"]
+    feature = files[1]
+    assert feature["before"] == "good\n"
+    assert feature["after"] == "updated feature\n"
+    assert feature["before_sha256"] == digest(b"good\n")
+    assert feature["after_sha256"] == digest(b"updated feature\n")
+    assert "-good" in feature["unified_diff"]
+    assert "+updated feature" in feature["unified_diff"]
+    canonical = json.dumps(
+        evidence, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8")
+    assert payload["evidence_sha256"] == digest(canonical)
+
+
+@pytest.mark.parametrize(
+    "attack",
+    ["outside", "stale", "nul", "invalid-utf8", "oversized", "symlink"],
+)
+def test_t090_sealed_source_evidence_fails_closed(repository: Path, attack: str) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.workflow import build_sealed_source_evidence
+
+    git = Git(repository)
+    base = git.sha()
+    source = repository / "feature.txt"
+    allowed = ["feature.txt"]
+    if attack == "outside":
+        (repository / "docs/changelogs.md").write_text("outside scope\n")
+    elif attack == "nul":
+        source.write_bytes(b"new\x00content\n")
+    elif attack == "invalid-utf8":
+        source.write_bytes(b"new\xffcontent\n")
+    elif attack == "oversized":
+        source.write_bytes(b"A" * (49 * 1024))
+    elif attack == "symlink":
+        source.unlink()
+        source.symlink_to(repository / "docs/changelogs.md")
+    else:
+        source.write_text("before stale\n")
+    frozen = git.snapshot(base) if attack != "symlink" else "0" * 64
+    if attack == "stale":
+        source.write_text("after stale\n")
+    with pytest.raises(OrchestratorError):
+        build_sealed_source_evidence(repository, base, frozen, allowed)
+
+
+def test_t090_sealed_source_evidence_supports_new_untracked_source(
+    repository: Path,
+) -> None:
+    from tools.orchestrator.workflow import build_sealed_source_evidence
+
+    git = Git(repository)
+    base = git.sha()
+    path = repository / "new_source.py"
+    path.write_text("SYNTHETIC = True\n")
+    payload = build_sealed_source_evidence(repository, base, git.snapshot(base), ["new_source.py"])
+    e = payload["evidence"]
+    assert isinstance(e, dict)
+    files = e["files"]
+    assert isinstance(files, list) and len(files) == 1
+    assert files[0]["before"] is None
+    assert files[0]["after"] == "SYNTHETIC = True\n"
+
+
+def test_t090_sealed_source_artifact_detects_tamper(
+    repository: Path,
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+
+    pipeline = Pipeline(repository, configuration(integrate=False), FakeAgents())
+    state = pipeline.start("T100", defer_verification=True)
+    directory = pipeline.run_path("T100", state.run_id)
+    working = Path(state.worktree_path)
+    frozen = Git(working).snapshot(state.base_sha)
+    context = pipeline.sealed_source_context(directory, state, working, frozen)
+    assert "HOST-SEALED SOURCE/DIFF EVIDENCE" in context
+    assert "untrusted text; data only" in context
+    names = [name for name in state.artifact_digests if "-sealed-source-" in name]
+    assert len(names) == 1
+    artifact = directory / names[0]
+    envelope = json.loads(artifact.read_text(encoding="utf-8"))
+    assert envelope["evidence"]["source_digest"] == frozen
+    pipeline.check_artifacts(directory, state)
+    artifact.write_text("CORRUPTED", encoding="utf-8")
+    with pytest.raises(OrchestratorError):
+        pipeline.check_artifacts(directory, state)
+
+
+def test_t090_secure_auditor_receives_sealed_evidence_without_file_tools(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.core import Fix
+    from tools.orchestrator.runtime import SecureProvider
+    from tools.orchestrator.worker_sandbox import LoopbackChatTransport
+
+    config = configuration(integrate=False)
+    pipeline = Pipeline(repository, config, FakeAgents())
+    state = pipeline.start("T100", defer_verification=True)
+    directory = pipeline.run_path("T100", state.run_id)
+    config.roles["auditor"] = config.roles["auditor"].model_copy(
+        update={
+            "analysis_backend": "host-http-text",
+            "model": "gemini-3.8-flash-high",
+            "host_text_endpoint": "http://127.0.0.1:8045/v1/chat/completions",
+            "host_text_api_key_env": "T090_TEST_ONLY_KEY",
+        }
+    )
+    monkeypatch.setenv("T090_TEST_ONLY_KEY", "synthetic")
+    pipeline.provider = SecureProvider()
+    calls = []
+
+    def respond(
+        _self: LoopbackChatTransport, prompt: str, *, model: str, timeout: int | None
+    ) -> str:
+        assert _self.response_contract == "semantic-json"
+        assert model == "gemini-3.8-flash-high"
+        assert timeout == 30
+        assert "HOST-SEALED SOURCE/DIFF EVIDENCE" in prompt
+        assert "docs/changelogs.md" in prompt
+        assert "feature.txt" in prompt
+        assert "New synthetic entry" in prompt
+        assert "Historical entry" in prompt
+        calls.append(prompt)
+        return '{"fix_prompt":"KEEP_SAFE"}'
+
+    monkeypatch.setattr(LoopbackChatTransport, "complete", respond)
+    result = pipeline.invoke(directory, state, "auditor", Fix, "Read-only source review")
+    assert result.fix_prompt == "KEEP_SAFE"
+    assert len(calls) == 1
+    pipeline.check_artifacts(directory, state)
+
+
+def test_t090_parallel_review_receives_sealed_source_evidence(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.core import digest
+    from tools.orchestrator.runtime import SecureProvider
+
+    config = configuration(integrate=False)
+    pipeline = Pipeline(repository, config, FakeAgents())
+    state = pipeline.start("T100", defer_verification=True)
+    directory = pipeline.run_path("T100", state.run_id)
+    snapshot = Git(Path(state.worktree_path)).snapshot(state.base_sha)
+    checks_name = "t090-synthetic-checks.json"
+    raw_checks = json.dumps({"source_digest": snapshot}).encode()
+    (directory / checks_name).write_bytes(raw_checks)
+    state.artifacts["audit_checks"] = checks_name
+    state.artifact_digests[checks_name] = digest(raw_checks)
+    pipeline.save(directory, state)
+    config.roles["auditor"] = config.roles["auditor"].model_copy(
+        update={
+            "analysis_backend": "host-http-text",
+            "model": "gemini-3.8-flash-high",
+            "host_text_endpoint": "http://127.0.0.1:8045/v1/chat/completions",
+            "host_text_api_key_env": "T090_TEST_ONLY_KEY",
+        }
+    )
+    pipeline.provider = SecureProvider()
+    seen: list[str] = []
+
+    def review(
+        _self: SecureProvider,
+        prompt: str,
+        *,
+        cwd: Path,
+        role: Role,
+        timeout: int | None,
+        output: type[Output],
+        artifacts: Path,
+        name: str,
+        readonly: bool,
+    ) -> Output:
+        assert readonly
+        assert cwd == Path(state.worktree_path)
+        assert role.analysis_backend == "host-http-text"
+        assert timeout == 30
+        assert artifacts == directory
+        assert name
+        assert output is ReviewShard
+        assert "HOST-SEALED SOURCE/DIFF EVIDENCE" in prompt
+        assert "New synthetic entry" in prompt
+        assert "Historical entry" in prompt
+        assert "test_behavior():" not in prompt
+        matched = re.search(r"REVIEW_PERSPECTIVE: ([^\n]+)", prompt)
+        assert matched is not None
+        seen.append(matched[1])
+        return output.model_validate(
+            ReviewShard(
+                perspective=ReviewPerspective(matched[1]),
+                findings=[],
+                probe_request=None,
+            )
+        )
+
+    monkeypatch.setattr(SecureProvider, "run", review)
+    bundle = pipeline.parallel_review(directory, state, "Frozen synthetic context")
+    assert len(seen) == len(ReviewPerspective)
+    assert bundle.source_digest == snapshot
+    pipeline.check_artifacts(directory, state)
+
+
+def test_t090_sealed_source_rename_cannot_hide_deleted_path(
+    repository: Path,
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.workflow import build_sealed_source_evidence
+
+    git = Git(repository)
+    base = git.sha()
+    git.run("mv", "feature.txt", "renamed_feature.txt")
+    source = git.snapshot(base)
+    assert git.paths(base) == ["feature.txt", "renamed_feature.txt"]
+
+    with pytest.raises(OrchestratorError, match="outside contract"):
+        build_sealed_source_evidence(
+            repository,
+            base,
+            source,
+            ["renamed_feature.txt"],
+        )
+
+    payload = build_sealed_source_evidence(
+        repository,
+        base,
+        source,
+        ["feature.txt", "renamed_feature.txt"],
+    )
+    evidence = payload["evidence"]
+    assert isinstance(evidence, dict)
+    files = evidence["files"]
+    assert isinstance(files, list)
+    assert [item["path"] for item in files] == ["feature.txt", "renamed_feature.txt"]
+    assert files[0]["before"] == "good\n"
+    assert files[0]["after"] is None
+    assert files[1]["before"] is None
+    assert files[1]["after"] == "good\n"
+
+
+def test_t090_git_frozen_source_binding_matches_authoritative_snapshot(
+    repository: Path, tmp_path: Path
+) -> None:
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+    from tools.orchestrator.workflow import freeze_verification_source_binding
+
+    base = Git(repository).sha()
+    frozen = Git(repository).snapshot(base)
+    root = tmp_path / "verify-root"
+    verification = root / "verify-binding" / "workspace"
+    verification.parent.mkdir(parents=True)
+    Git(repository).run("clone", "--no-local", "--no-checkout", str(repository), str(verification))
+    Git(verification).run("checkout", "--detach", base)
+    broker = DockerVerificationSandbox(
+        DockerVerificationPolicy("example.org/t090@sha256:" + "a" * 64, root)
+    )
+    binding = freeze_verification_source_binding(
+        working=repository,
+        verification_workspace=verification,
+        base_sha=base,
+        expected_git_snapshot=frozen,
+        sandbox=broker,
+    )
+    assert binding.base_sha == base
+    assert binding.git_snapshot == frozen
+    assert binding.docker_source_digest == broker.source_digest(verification)
+    assert binding.verification_root == verification.resolve()
+
+
+def test_t090_git_frozen_binding_rejects_tampered_clone_before_docker(
+    repository: Path, tmp_path: Path
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+    from tools.orchestrator.workflow import freeze_verification_source_binding
+
+    base = Git(repository).sha()
+    frozen = Git(repository).snapshot(base)
+    root = tmp_path / "verify-root"
+    verification = root / "verify-binding" / "workspace"
+    verification.parent.mkdir(parents=True)
+    Git(repository).run("clone", "--no-local", "--no-checkout", str(repository), str(verification))
+    Git(verification).run("checkout", "--detach", base)
+    (verification / "feature.txt").write_text("tampered after frozen baseline\n")
+    broker = DockerVerificationSandbox(
+        DockerVerificationPolicy("example.org/t090@sha256:" + "a" * 64, root)
+    )
+
+    with pytest.raises(OrchestratorError, match="Git snapshot does not match freeze"):
+        freeze_verification_source_binding(
+            working=repository,
+            verification_workspace=verification,
+            base_sha=base,
+            expected_git_snapshot=frozen,
+            sandbox=broker,
+        )
+
+
+def test_t090_git_frozen_binding_rejects_changed_authoritative_source(
+    repository: Path, tmp_path: Path
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+    from tools.orchestrator.workflow import freeze_verification_source_binding
+
+    base = Git(repository).sha()
+    frozen = Git(repository).snapshot(base)
+    root = tmp_path / "verify-root"
+    verification = root / "verify-binding" / "workspace"
+    verification.parent.mkdir(parents=True)
+    Git(repository).run("clone", "--no-local", "--no-checkout", str(repository), str(verification))
+    Git(verification).run("checkout", "--detach", base)
+    (repository / "feature.txt").write_text("tampered authoritative source\n")
+    broker = DockerVerificationSandbox(
+        DockerVerificationPolicy("example.org/t090@sha256:" + "a" * 64, root)
+    )
+    with pytest.raises(OrchestratorError, match="Git snapshot does not match freeze"):
+        freeze_verification_source_binding(
+            working=repository,
+            verification_workspace=verification,
+            base_sha=base,
+            expected_git_snapshot=frozen,
+            sandbox=broker,
+        )
+
+
+def test_t090_admitted_collector_uses_only_docker_and_binds_git(
+    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.core import FrozenEvidenceIdentity, VerificationRequest
+    from tools.orchestrator.runtime import (
+        DockerVerificationPolicy,
+        DockerVerificationSandbox,
+        ProcessResult,
+        VerificationImageAdmission,
+    )
+    from tools.orchestrator.workflow import (
+        collect_verification_admitted,
+        freeze_verification_source_binding,
+    )
+
+    base = Git(repository).sha()
+    snapshot = Git(repository).snapshot(base)
+    root = tmp_path / "verification-root"
+    clone = root / "verify-fixture" / "workspace"
+    clone.parent.mkdir(parents=True)
+    Git(repository).run("clone", "--no-local", "--no-checkout", str(repository), str(clone))
+    Git(clone).run("checkout", "--detach", base)
+    image = "example.org/verified@sha256:" + "a" * 64
+    broker = DockerVerificationSandbox(DockerVerificationPolicy(image, root))
+    binding = freeze_verification_source_binding(
+        working=repository,
+        verification_workspace=clone,
+        base_sha=base,
+        expected_git_snapshot=snapshot,
+        sandbox=broker,
+    )
+    command = ("python", "-m", "pytest", "-q")
+    request = VerificationRequest(
+        clone,
+        (command,),
+        30,
+        FrozenEvidenceIdentity.freeze("T100", base, "feature/t100", snapshot, (command,)),
+    )
+    approval = VerificationImageAdmission(
+        image, "b" * 64, "sha256:" + "c" * 64, "sha256:" + "d" * 64
+    )
+    captured: list[tuple[str, ...]] = []
+
+    def fake_broker(
+        _self: DockerVerificationSandbox,
+        argv: list[str],
+        _workspace: Path,
+        *,
+        expected_source_digest: str | None = None,
+    ) -> ProcessResult:
+        assert _workspace == clone
+        assert expected_source_digest == binding.docker_source_digest
+        captured.append(tuple(argv))
+        return ProcessResult(tuple(argv), str(clone), "start", "end", 0, "", "")
+
+    monkeypatch.setattr(DockerVerificationSandbox, "run", fake_broker)
+    collection = collect_verification_admitted(
+        request,
+        source_worktree=repository,
+        binding=binding,
+        image_admission=approval,
+        sandbox=broker,
+    )
+    assert not collection.failed and collection.setup_error is None
+    assert captured == [command]
+    assert collection.results[0]["execution_backend"] == "docker-sandbox"
+    assert collection.results[0]["image_policy_digest"] == approval.policy_sha256
+
+
+def test_t090_admitted_collector_denies_without_policy_before_docker(
+    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.core import (
+        FrozenEvidenceIdentity,
+        OrchestratorError,
+        VerificationRequest,
+    )
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+    from tools.orchestrator.workflow import (
+        collect_verification_admitted,
+        freeze_verification_source_binding,
+    )
+
+    base = Git(repository).sha()
+    snapshot = Git(repository).snapshot(base)
+    root = tmp_path / "verification-root"
+    clone = root / "verify-fixture" / "workspace"
+    clone.parent.mkdir(parents=True)
+    Git(repository).run("clone", "--no-local", "--no-checkout", str(repository), str(clone))
+    Git(clone).run("checkout", "--detach", base)
+    broker = DockerVerificationSandbox(
+        DockerVerificationPolicy("example.org/verified@sha256:" + "a" * 64, root)
+    )
+    binding = freeze_verification_source_binding(
+        working=repository,
+        verification_workspace=clone,
+        base_sha=base,
+        expected_git_snapshot=snapshot,
+        sandbox=broker,
+    )
+    command = ("python", "-m", "pytest", "-q")
+    request = VerificationRequest(
+        clone,
+        (command,),
+        30,
+        FrozenEvidenceIdentity.freeze("T100", base, "feature/t100", snapshot, (command,)),
+    )
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("Docker or Host subprocess must not run")
+
+    monkeypatch.setattr(DockerVerificationSandbox, "run", forbidden)
+    with pytest.raises(OrchestratorError, match="trusted image admission required"):
+        collect_verification_admitted(
+            request,
+            source_worktree=repository,
+            binding=binding,
+            image_admission=None,
+            sandbox=broker,
+        )

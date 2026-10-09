@@ -1,0 +1,334 @@
+name: T090 verifier image candidate (non-production)
+
+on:
+  push:
+    branches:
+      - feature/t090-provider-isolation-adjudication
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t090-image-candidate
+  cancel-in-progress: true
+
+jobs:
+  candidate-image:
+    name: Build isolated candidate, never approve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          # floor:check requires a real merge-base against main.
+          # A shallow source checkout can contain both refs but no ancestry.
+          fetch-depth: 0
+
+      - name: Validate candidate is explicitly unapproved
+        run: |
+          python3 - <<'PY'
+          import json
+          with open('infra/verification/image-policy.json', encoding='utf-8') as stream:
+              policy = json.load(stream)
+          assert policy['schema_version'] == 1
+          assert policy['approved'] is False
+          assert policy['image_reference'] is None
+          PY
+
+      - name: Check changed Python formatting without disabling gates
+        run: |
+          python3 -m pip install --disable-pip-version-check 'ruff==0.16.9'
+          python3 -m ruff format --check \
+            tools/orchestrator/runtime.py \
+            tools/orchestrator/workflow.py \
+            tests/orchestrator/test_runtime.py \
+            tests/orchestrator/test_workflow.py \
+            scripts/security_checks.py
+
+      - name: Resolve and record immutable upstream image identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull python:3.12-slim-bookworm
+          docker pull node:22-bookworm-slim
+          py_ref="$(docker image inspect --format '{{index .RepoDigests 0}}' python:3.12-slim-bookworm)"
+          node_ref="$(docker image inspect --format '{{index .RepoDigests 0}}' node:22-bookworm-slim)"
+          [[ "$py_ref" == *@sha256:* ]]
+          [[ "$node_ref" == *@sha256:* ]]
+          echo "T090_PYTHON_BASE=$py_ref" >> "$GITHUB_ENV"
+          echo "T090_NODE_BASE=$node_ref" >> "$GITHUB_ENV"
+          printf 'Python base: %s\nNode base: %s\n' "$py_ref" "$node_ref"
+
+      - name: Build with only allowlisted trusted inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          context="$RUNNER_TEMP/t090-image-input"
+          mkdir -p "$context"
+          cp infra/verification/Dockerfile "$context/Dockerfile"
+          cp package.json package-lock.json requirements-dev.lock "$context/"
+          docker build --progress=plain --pull=false \
+            --build-arg "PYTHON_BASE_IMAGE=$T090_PYTHON_BASE" \
+            --build-arg "NODE_BASE_IMAGE=$T090_NODE_BASE" \
+            -t t090-verifier:candidate \
+            "$context"
+          docker image inspect --format='Candidate local image ID: {{.Id}}' t090-verifier:candidate
+
+      - name: Isolated image smoke without source mounts
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --pull=never \
+            --network=none --read-only --cap-drop=ALL \
+            --security-opt=no-new-privileges \
+            --memory=512m --memory-swap=512m \
+            --cpus=1 --pids-limit=64 \
+            --user=65534:65534 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=64m,mode=1777 \
+            --tmpfs /workspace:rw,nosuid,nodev,size=64m,mode=1777 \
+            --entrypoint=/usr/local/bin/python3 \
+            t090-verifier:candidate -I -c '
+          import os, shutil, subprocess
+          import pytest, ruff, mypy
+          assert not os.path.exists("/root/.ssh")
+          assert os.path.exists("/node_modules/.bin/vitest")
+          assert os.path.exists("/opt/osv-db/archive.sha256")
+          assert os.environ["T090_OSV_OFFLINE"] == "1"
+          assert subprocess.check_output(["node", "--version"], text=True).startswith("v22.")
+          assert shutil.which("gitleaks") and shutil.which("osv-scanner")
+          print("T090_IMAGE_BASIC_SMOKE_PASS: not a security attestation")
+          '
+
+
+      - name: Exercise actual DockerVerificationSandbox against a synthetic source
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Local registry is a disposable CI fixture, not an approved image publisher.
+          docker run -d --name t090-ci-registry \
+            -p 127.0.0.1:5000:5000 registry:2
+          trap 'docker rm -f t090-ci-registry >/dev/null 2>&1 || true' EXIT
+          docker tag t090-verifier:candidate localhost:5000/t090-verifier:synthetic
+          docker push localhost:5000/t090-verifier:synthetic
+          image_ref="$(docker image inspect --format '{{index .RepoDigests 0}}' localhost:5000/t090-verifier:synthetic)"
+          [[ "$image_ref" == localhost:5000/t090-verifier@sha256:* ]]
+          python3 -m pip install --disable-pip-version-check -r requirements-dev.lock
+          T090_CI_IMAGE="$image_ref" python3 - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          from tools.orchestrator.core import OrchestratorError
+          from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "t090-runner-probe"
+          workspace = root / "verify-synthetic-001" / "workspace"
+          workspace.mkdir(parents=True, exist_ok=False)
+          source = workspace / "test_isolation.py"
+          source.write_text(
+              "import os, socket, pytest\n"
+              "def test_host_files_unavailable():\n"
+              "    assert not os.path.exists('/mnt/c')\n"
+              "    assert not os.path.exists('/root/.ssh')\n"
+              "def test_input_mount_is_readonly():\n"
+              "    with pytest.raises(OSError):\n"
+              "        open('/source/test_isolation.py', 'w').write('forbidden')\n"
+              "def test_network_and_bridge_denied():\n"
+              "    with socket.socket() as connection:\n"
+              "        connection.settimeout(2)\n"
+              "        with pytest.raises(OSError):\n"
+              "            connection.connect(('127.0.0.1', 8045))\n"
+              "def test_tmpfs_available():\n"
+              "    with open('/tmp/t090-probe', 'w') as output:\n"
+              "        output.write('ok')\n"
+          )
+          before = hashlib.sha256(source.read_bytes()).hexdigest()
+          policy = DockerVerificationPolicy(
+              image=os.environ["T090_CI_IMAGE"],
+              verification_root=root,
+              memory_mib=512,
+              cpu_millicores=1000,
+              pids_limit=64,
+              timeout_seconds=120,
+          )
+          broker = DockerVerificationSandbox(policy)
+          frozen_digest = broker.source_digest(workspace)
+          result = broker.run(
+              ["python", "-m", "pytest", "-q"],
+              workspace,
+              expected_source_digest=frozen_digest,
+          )
+          if result.exit_code != 0:
+              # Only the static synthetic pytest fixture is executed here.
+              print("T090_SYNTHETIC_PYTEST_STDOUT:", result.stdout[-6000:])
+              print("T090_SYNTHETIC_PYTEST_STDERR:", result.stderr[-1500:])
+              raise AssertionError(f"Broker test failed with exit {result.exit_code}")
+          assert not result.timed_out and not result.oversized
+          assert hashlib.sha256(source.read_bytes()).hexdigest() == before
+          try:
+              broker.run(["npm", "ci"], workspace)
+          except OrchestratorError:
+              pass
+          else:
+              raise AssertionError("Untrusted npm ci was not denied")
+          print("T090_BROKER_SYNTHETIC_ISOLATION_PASS; NOT WSL2 OR SECURITY ACCEPTANCE")
+
+          # Force source modification AFTER Host checks, BEFORE Docker reads mount.
+          # The trusted bootstrap must reject the private copy BEFORE pytest starts.
+          from tools.orchestrator import runtime
+          original_execute = runtime.execute
+          injected: list[str] = []
+
+          def tamper_before_docker_run(argv, cwd, *, timeout=None):
+              if "run" in argv:
+                  injected.append("docker_run")
+                  sealed_file = cwd / "test_isolation.py"
+                  sealed_file.write_text(
+                      sealed_file.read_text() + "\nprint('T090_UNTRUSTED_CODE_RAN')\n"
+                  )
+                  outcome = original_execute(argv, cwd, timeout=timeout)
+                  assert outcome.exit_code != 0
+                  assert "T090 SANDBOX_BLOCKED: source attestation mismatch" in outcome.stderr
+                  assert "T090_UNTRUSTED_CODE_RAN" not in outcome.stdout
+                  return outcome
+              return original_execute(argv, cwd, timeout=timeout)
+
+          runtime.execute = tamper_before_docker_run
+          try:
+              try:
+                  broker.run(
+                      ["python", "-m", "pytest", "-q"],
+                      workspace,
+                      expected_source_digest=frozen_digest,
+                  )
+              except OrchestratorError as failure:
+                  assert "source attestation mismatch" in str(failure)
+              else:
+                  raise AssertionError("Mutation after Host check was not blocked")
+          finally:
+              runtime.execute = original_execute
+          assert injected == ["docker_run"]
+          assert hashlib.sha256(source.read_bytes()).hexdigest() == before
+          print("T090_CONTAINER_PRE_EXEC_ATTESTATION_BLOCKED_TAMPER: PASS")
+
+          # R6-B2 candidate toolchain evidence. Synthetic, NOT the full portable
+          # application gate, which must be independently demonstrated.
+          import json
+          (workspace / "t090_toolchain.py").write_text(
+              "from typing import Final\n\nVERSION: Final[int] = 22\n"
+          )
+          (workspace / "package.json").write_text(json.dumps({
+              "private": True,
+              "scripts": {
+                  "t090:toolchain-probe":
+                      "node -e \"require('vitest/package.json'); console.log('T090_NODE_DEPENDENCY_PASS')\""
+              },
+          }))
+          toolchain_digest = broker.source_digest(workspace)
+          commands = [
+              ["python", "-m", "ruff", "check", "t090_toolchain.py"],
+              ["python", "-m", "mypy", "t090_toolchain.py"],
+              ["npm", "run", "t090:toolchain-probe"],
+          ]
+          for command in commands:
+              result = broker.run(
+                  command,
+                  workspace,
+                  expected_source_digest=toolchain_digest,
+              )
+              if result.exit_code or result.timed_out or result.oversized:
+                  print("TOOLCHAIN_FAIL:", command, result.stdout[-800:], result.stderr[-800:])
+                  raise AssertionError(f"Offline toolchain probe failed: {command[0]}")
+          print("T090_B2_CANDIDATE_RUFF_MYPY_NPM_OFFLINE_PASS; NOT FULL_PORTABLE_GATE")
+          PY
+
+      - name: Experiment with full portable application gate inside isolated image
+        shell: bash
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          # Non-production experimental probe of actual project commands.
+          docker run -d --name t090-full-gate-registry \
+            -p 127.0.0.1:5001:5000 registry:2
+          trap 'docker rm -f t090-full-gate-registry >/dev/null 2>&1 || true' EXIT
+          docker tag t090-verifier:candidate localhost:5001/t090-verifier:probe
+          docker push localhost:5001/t090-verifier:probe
+          image_ref="$(docker image inspect --format '{{json .RepoDigests}}' localhost:5001/t090-verifier:probe | python3 -c '
+          import json, sys
+          entries = json.load(sys.stdin)
+          candidates = [x for x in entries if x.startswith("localhost:5001/t090-verifier@sha256:")]
+          if len(candidates) != 1:
+              raise SystemExit("T090: unique registry digest unavailable")
+          print(candidates[0])
+          ')"
+          [[ "$image_ref" == localhost:5001/t090-verifier@sha256:* ]]
+          python3 -m pip install --disable-pip-version-check -r requirements-dev.lock
+          T090_GATE_IMAGE="$image_ref" python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox, Git
+
+          repo = Path.cwd()
+          root = Path(os.environ["RUNNER_TEMP"]) / "t090-full-portable-probe"
+          root.mkdir()
+          workspace = root / "verify-real-checkout" / "workspace"
+          workspace.parent.mkdir()
+          # Resolve main through trusted CI Git metadata; no network is ever
+          # made available to the untrusted verification container.
+          Git(repo).run(
+              "fetch", "--no-tags", "origin",
+              "+refs/heads/main:refs/remotes/origin/main",
+          )
+          baseline_sha = Git(repo).run("rev-parse", "refs/remotes/origin/main")
+          assert len(baseline_sha) == 40
+          Git(repo).run("update-ref", "refs/heads/main", baseline_sha)
+          Git(repo).run("clone", "--no-local", "--no-checkout", str(repo), str(workspace))
+          sha = Git(repo).sha()
+          Git(workspace).run("checkout", "--detach", sha)
+          assert Git(workspace).sha() == sha
+          # The detached verifier checkout does not inherit a local main ref.
+          # Provide exactly the Host-resolved, trusted main commit before sealing.
+          assert Git(workspace).run("cat-file", "-t", baseline_sha) == "commit"
+          Git(workspace).run("update-ref", "refs/heads/main", baseline_sha)
+          assert Git(workspace).run("rev-parse", "refs/heads/main") == baseline_sha
+          # Verify history completeness before entering the isolated runtime.
+          merge_base = Git(workspace).run("merge-base", "main", "HEAD")
+          assert len(merge_base) == 40
+
+          broker = DockerVerificationSandbox(
+              DockerVerificationPolicy(
+                  image=os.environ["T090_GATE_IMAGE"],
+                  verification_root=root,
+                  memory_mib=4096,
+                  cpu_millicores=2000,
+                  pids_limit=128,
+                  timeout_seconds=1200,
+                  workspace_tmpfs_mib=2048,
+                  temp_tmpfs_mib=768,
+              )
+          )
+          frozen_digest = broker.source_digest(workspace)
+          # Instrument only the CI probe. Production broker commands never
+          # inherit this diagnostic switch or Host environment variables.
+          original_argv = broker._argv
+          def diagnostic_argv(*args):
+              argv = original_argv(*args)
+              argv.insert(argv.index(broker.policy.image), "--env=T090_SANDBOX_DIAGNOSTIC=1")
+              return argv
+          broker._argv = diagnostic_argv
+          result = broker.run(
+              ["npm", "run", "check:task:portable"],
+              workspace,
+              expected_source_digest=frozen_digest,
+          )
+          print("T090_FULL_PORTABLE_DOCKER_EXIT:", result.exit_code, flush=True)
+          print("T090_FULL_PORTABLE_DOCKER_TIMEOUT:", result.timed_out, flush=True)
+          print("T090_FULL_PORTABLE_DOCKER_OVERSIZED:", result.oversized, flush=True)
+          print("T090_FULL_PORTABLE_OUTPUT_TAIL:", result.stdout[-10500:], flush=True)
+          print("T090_FULL_PORTABLE_ERROR_TAIL:", result.stderr[-1500:], flush=True)
+          assert result.exit_code == 0
+          assert not result.timed_out and not result.oversized
+          assert broker.source_digest(workspace) == frozen_digest
+          print("T090_FULL_PORTABLE_DOCKER_PROBE_PASS; IMAGE_STILL_UNAPPROVED")
+          PY

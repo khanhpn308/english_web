@@ -177,3 +177,189 @@ Stop with evidence and `BLOCKED` when:
 - Task definition branch: `feature/t090-host-worker-isolation-scope` (from `main`).
 - T089 reference: Draft PR #5 at tested head `55ad6c20b5f6257761e981729a5df49cb0af16eb`.
 - Task state: `TODO`, no implementation, no live isolation test, no T090 CI evidence yet.
+
+## Phase-2 adjudication record (08/10/2026; no acceptance promotion)
+
+Source: docs/ci-host-verification.md, T090 phase-2 section, on the
+feature/t090-provider-isolation-adjudication branch. It contains eight exact
+out-of-T089-allowlist paths, PR #5 base/head blob identities, host ownership,
+GitHub R5/R4 run links and disposition. The historical PR merge was already
+owner-authorized; this record does not amend original task/run provenance.
+
+Provider feasibility: AGY public documentation offers command(*) and mcp(*)
+denials, while accept-edits permits edits. No installed-version, tool-broker,
+subagent, Windows/WSL or exact-file write-boundary proof has been observed in
+this session. The current CliProvider fail-closed refusal for every WorkerResult
+must remain. No real Worker edit succeeded under an independently attested
+code-only policy; do not mark acceptance criteria completed.
+
+Remaining implementation work: select a tool-broker-enforced edit-only AGY
+session with exact-path write enforcement, or build a host-mediated non-tool
+edit-proposal adapter; bind capability identity to dispatch; run synthetic
+real-provider deny/allow probes; host-run all gates on frozen candidate; then
+perform independent T090 and T089 acceptance review. Codex Worker requires its
+own attestation. Do not infer successful isolation from a green portable CI.
+
+Phase-2 branch is investigative and documentation-only. There is no executable
+Worker enablement, no changed security threshold, and no permission to mark
+T090 DONE or T089 accepted.
+
+### Host-mediated edit primitive implemented on Phase-2 branch (08/10/2026)
+
+- New scoped module: tools/orchestrator/worker_sandbox.py.
+  Host-only ProposedTextEdit to AppliedTextEdit API validates an exact
+  host-owned allowlist, canonical relative path, non-symlink ancestors and
+  target, pinned SHA-256 preimage, text/size bound, rechecks source before
+  atomic publication, and returns before/after digests.
+- New synthetic test coverage: tests/orchestrator/test_worker_sandbox.py,
+  including valid modification/creation, stale source, noncanonical paths,
+  symlinks, prefix confusion, content limits and out-of-allowlist writes.
+- **Isolation status remains BLOCKED for actual Worker dispatch.** This module
+  is not connected to AGY/Codex and does not grant either provider tool access.
+  It does not, alone, protect against a concurrent local OS adversary. Live
+  provider command denial, tool-free invocation and OS-specific proof are still
+  missing; the existing blanket WorkerResult CLI refusal remains enabled.
+- Verification at this change is not yet claimed PASS. The host/CI must run
+  tests and all quality gates against the final candidate SHA. A green CI run
+  cannot substitute for independently observed real-provider isolation.
+- The initial phase-2 record above referred to a documentation-only
+  state; this subsequent commit adds the two scoped host code/test files
+  without changing task acceptance.
+
+### Phase-2 full portable CI R1 failure and format remediation (09/10/2026)
+
+- Failed CI run: https://github.com/khanhpn308/english_web/actions/runs/37809494529 on frozen commit `148d94836ced11066225b6b87e107b42baa896d1`.
+- Host summary: `check-fast-active` failed, while frontend coverage, portable pytest, secrets, code security, dependency security and architecture passed. Phase B coverage check did not run.
+- Downloaded host artifact `11564726690` pinpoints `ruff format --check .` as the failure: three formatting-only changes needed in `tests/orchestrator/test_worker_sandbox.py`, one in `tools/orchestrator/worker_sandbox.py`.
+- Applied those four formatting corrections without changing intended behavior. A fresh CI run and independent host gates on the new candidate SHA are required; previous R1 remains a retained FAIL, not rewritten evidence.
+- Live AGY/Codex isolation evidence is still absent; PR #9 must remain Draft and T090 `IN_PROGRESS`.
+
+### Host-mediated Worker execution path — implementation candidate (09/10/2026)
+
+- Role now supports an explicit, opt-in host-http-edit backend, with required pinned loopback endpoint and credential environment name; current orchestrator.yaml remains AGY CLI + fail-closed, with no silent provider fallback.
+- tools/orchestrator/worker_sandbox.py provides local text-completion transport with no model tools, HTTP redirects or proxy, strict model edit schema, host source materialization restricted to exact contract allowlist and SHA-256 pinned host writes. Every edit is preflighted before first write.
+- tools/orchestrator/workflow.py invokes the host broker only when explicitly configured. The CLI path continues to block WorkerResult; host still owns candidate scope checks, changelog verification and deferred authoritative verification. A model-reported BLOCKED is a truthful BLOCKED state, not IMPLEMENTED.
+- tests/orchestrator/test_worker_sandbox.py and test_workflow.py add synthetic adversarial edit, no-tool request and Pipeline handoff checks. Documentation explains the opt-in settings and the live attestation requirement.
+- **Not accepted:** No test has been performed against the real AGY CLI or the deployed local completion bridge, and Reviewer/Auditor CLI tool-denial remains unverified. Model API compatibility, actual denied tool calls and OS-exclusive workspace boundary need live synthetic tests. No T090 DONE/T089 PASS or PR merge authorization is implied.
+- Await final candidate CI results; do not count the earlier R2 PASS as passing for these new implementation changes.
+
+### Host-mediated CI R1 failure and remediation (09/10/2026)
+
+- Frozen R1 source: c28d1d63f1050162cd634e6852e98e09e7ab277a; GitHub Actions run https://github.com/khanhpn308/english_web/actions/runs/37870991359; historical FAILURE preserved.
+- Host Phase A: frontend coverage, all three security gates, architecture PASS; fast gate FAILED on Ruff formatting in four files; portable pytest 1346 PASS / 2 FAIL. Coverage-check was not reached.
+- Both regressions were the inherited transient automatic Worker recovery tests, worker_blocked and worker_empty. The initial host route treated all BLOCKED WorkerResult outputs as terminal, incorrectly changing legacy fake/CLI recovery behavior.
+- Scope-limited remediation: terminal BLOCKED handling now applies only to host-http-edit backend; legacy CLI/model provider recovery contract remains unchanged. Four Ruff formatting files normalized exactly from host logs, with no functional relaxation.
+- Repeat full portable CI on the next frozen candidate. Do not merge or claim T090 acceptance without live endpoint/OS proof; default CLI Worker remains fail-closed.
+
+### Local WSL2 expanded-static-check findings and scope-preserving remediation (09/10/2026)
+
+- User tested frozen PR #9 candidate `4a89dd32d77ee11e16e91ba587919dc330ae0ae0` on WSL2: focused `test_workflow.py -k host_mediated` passed (1 test), but standalone `ruff check tools/orchestrator tests/orchestrator` reported 14 issues and `mypy tools/orchestrator tests/orchestrator` reported 3 typing issues. These direct checks are stronger in scope than the earlier eight-gate portable CI and must be treated separately.
+- Remediated the **T090-owned** Ruff issues in `worker_sandbox.py`, `test_worker_sandbox.py`, `test_workflow.py` and the **T090-introduced** Mypy assignment/typed JSON issues in `workflow.py` and `test_workflow.py`. Explicitly used unused API arguments in synthetic assertions / redirect-handler denial without reducing tool restrictions.
+- `tests/orchestrator/test_core.py:1123` has an inherited Mypy argument typing error (`provider: str` to `Role.provider: Literal[...]`) already present on `main` at identical Git blob SHA; it is outside the T090 exact allowlist and was intentionally NOT modified. `mypy tools/orchestrator tests/orchestrator` cannot be asserted fully green until this inherited issue receives separate authorization/ownership. Continue running focused strict Mypy on T090-owned modules and preserve explicit full-suite failure attribution, never suppress it.
+- New portable host CI is necessary on the post-remediation SHA. The original local static diagnostics remain historically recorded, not converted to PASS. Live AGY/WSL command denial and Reviewer/Auditor tool isolation remain unverified; PR #9 stays Draft and T090 `IN_PROGRESS`.
+
+### Tool-free semantic role routing candidate (09/10/2026)
+
+- Root cause: Codex `exec --sandbox read-only` for Prompt Engineer/Auditor/Integrator can still run model-generated shell commands. ReviewShard concurrent review calls `provider.run` directly rather than passing through `Pipeline.invoke`.
+- A new opt-in `analysis_backend="host-http-text"` with explicit local model, endpoint and host-owned environment-key name is validated for non-Worker roles. `SecureProvider` is the production Pipeline default, so ordinary semantic-role CLI mode fails closed before CLI execution. All concurrent Reviewer lanes use this same provider; injected test doubles continue to support existing regression suites.
+- Tool-free requests use LoopbackChatTransport's `tools=[]`, `tool_choice=none`, no proxy, no redirect, bounded content and output schema validation. Invalid responses/configurations are BLOCKED. Worker remains separately routed through host-http-edit; no default production role was silently changed to Gemini.
+- Added synthetic denial/valid-result and configuration regression tests in T090-owned test_runtime.py, test_workflow.py, and test_worker_sandbox.py.
+- **Not certified:** user must explicitly configure every semantic role and validate real endpoint identity, model compatibility and no-hidden-tool enforcement. Host-supplied read-only task/source/diff evidence needs a bounded, authenticated materialization channel. OS isolation for host executing candidate-defined verification code is not yet independently accepted. New portable CI must pass on final SHA; T090 IN_PROGRESS, T089 REOPENED_PENDING_T090, PR #9 Draft, no merge.
+
+### Semantic tool-free CI R1 formatting failure (09/10/2026)
+
+- Immutable CI R1: https://github.com/khanhpn308/english_web/actions/runs/37879047094 on `608018e0d427194615939accae1e1df8165e15b1` = FAILURE. The host artifact `11593138594` reports check-fast-active Ruff format at runtime.py:545 (one extra blank line); frontend coverage, portable pytest, secrets, code security, dependency security and architecture PASS. Coverage phase not executed.
+- Removed only the excess runtime.py blank line. A subsequent intermediate R2 from `c2924785774c17978782445da02d312e4d6a8f7f` was launched before this formatting fix and cannot certify the corrected SHA.
+- SecureProvider now rejects even mutable CLI fallback independently of the WorkerResult schema; explicit regression test added. All future PASS/FAIL claims require an independent host run on final SHA. No semantic role was enabled or silently switched from Codex to Gemini.
+
+### Semantic tool-free CI R3 isolated Ruff fix (09/10/2026)
+
+- Immutable host CI R3: https://github.com/khanhpn308/english_web/actions/runs/37879458653 on `a8c6dc27443fea41f41249fd6c359087aa73410d` = FAIL. Host artifact `11593633554` reports one Ruff format blank-line defect in `tests/orchestrator/test_runtime.py:302`; frontend coverage, portable pytest, secrets, code security, dependencies and architecture all PASS. Dependent coverage gate not reached.
+- Corrected exactly the test-format blank line, preserving all model/tool security logic. Full R4 verification on a new frozen SHA is mandatory; no prior CI result has been rewritten or counted as PASS for the new source.
+
+### Bridge listener identity and semantic system-contract remediation (09/10/2026)
+
+- Owner read-only Windows PowerShell audit of TCP port 8045 observed a listener bound to IPv4 `127.0.0.1:8045` with executable name `antigravity-tools.exe`, PID `22304`, parent PID `9172`, and executable SHA-256 `92E1C3504813E9D9E5BD8B17B1839F7E5805DD3051F1D0195E0D5CAD6328CD36`. This is a process/file identity *observation at audit time*, not a code-signature/trust proof; it does not cover IPv6 interfaces or the internal tool broker. No credentials or full user-specific home path recorded.
+- Source review found `LoopbackChatTransport` reused the Worker-only system instruction `WorkerEditResponse` even for semantic role schemas. Live `Fix` success was insufficient to guarantee correct `Audit`, `ReviewShard`, `Plan`, or `IntegrationReview` output. Added an explicit `semantic-json` transport contract selected only by `SecureProvider`, preserving the existing worker-edit default, explicit `tools=[]` and `tool_choice=none`. Added synthetic payload and provider-role assertions.
+- Still unverified: actual Bridge no-hidden-tool enforcement, publisher signature, bounded host-sealed source/diff materialization for review, and host execution sandbox. No automatic semantic-role enablement; PR remains Draft, T090 IN_PROGRESS.
+
+### Host-sealed source/diff materialization candidate (09/10/2026)
+
+- Previous semantic transport R6 CI `37881675069` = SUCCESS on `4a1860dc0112acd41d32c63ab95a7b9069dc7225`. That historical PASS does not cover subsequent source-evidence implementation.
+- New `build_sealed_source_evidence` in T090-owned `tools/orchestrator/workflow.py` freezes changed allowlisted worktree text against a pinned base SHA and candidate source digest. It records exact baseline/current UTF-8 content, per-side SHA256, and host-generated unified diffs. Canonical JSON gets a bundle hash; host registers a separate artifact digest. Limits: 24 files, each side <=48KiB, aggregate <=256KiB. Reject stale, off-scope, binary, non-UTF8, symlink, nonregular, ambiguous/unsafe base mode, and oversize; no truncation or model-selected paths.
+- When an actual `SecureProvider` role explicitly uses `analysis_backend=host-http-text`, both round-one and resumed Reviewers receive this frozen evidence in prompt; final Auditor and Integrator receive a fresh digest-checked source snapshot via `Pipeline.invoke`. Default CLI semantic roles remain denied. Existing mock provider regression flows are unaffected.
+- Synthetic tests added for byte hashes, before/after diff, new untracked file, stale/out-of-scope/binary/oversize/symlink denial, artifact mutation, and the actual Auditor prompt route. New CI on this exact commit is required; no claim of provider hidden-tool isolation or safe execution of untrusted candidate verification.
+- Missing unchanged dependencies and neighboring callers are explicitly out of current evidence scope; host must authorize separate bounded read-only context expansion before an auditor asserts inspection of them. T090 remains IN_PROGRESS, T089 pending.
+
+### Host-sealed Reviewer integration and candidate identity
+
+- Added regression for concurrent Reviewer lanes receiving only changed source paths through the sealed bundle.
+- Source artifact and its digest are registered before dispatch. The final Auditor must match the candidate identity source digest, and the Integrator must match the previously audited digest.
+- Prior sealed-evidence CI runs R1/R2 test intermediate snapshots only; final candidate requires fresh full CI. T090 remains IN_PROGRESS and PR #9 remains Draft.
+
+### Sealed-evidence R1 formatting remediation
+
+- Immutable CI R1 on `4777d90308677883114e9377603002225c3562c7` failed `check-fast-active`: Ruff identified three formatting-only differences in `workflow.py` and `test_workflow.py`. Portable pytest and six other Phase A gates passed. CI artifact preserved in run `37882294933`.
+- Applied those three exact Ruff suggested changes on the current candidate. Intermediate R2/R3 are not evidence for this updated SHA. Fresh full CI required. No security behavior relaxed.
+### Independent source-scope audit: rename-path closing (2026-10-09)
+
+- WSL2 owner confirmed Ruff lint/format, production mypy and 11 focused sealed-source pytest cases PASS on `717c0011b4bd3e562dbbae76a137ccbf1418ba29`. Full CI R5 on this older SHA was still running at last review.
+- Independent reproducible Git test showed default `git diff --name-only` can collapse a detected rename into the destination only, omitting a deleted origin file. This could let an allowlist containing only the destination miss deletion of an unapproved source. The finding affects the shared Git.paths() scope boundary, not just prompt evidence.
+- Updated the host Git paths query to include `--no-renames` for both changed and staged sets. Added synthetic tests validating both rename ends are enumerated; host-sealed evidence fails closed when deletion origin is outside allowed_paths and correctly serializes both origin and destination when both explicitly permitted.
+- This is a scope-hardening change; older CI reports do not cover it. T090 IN_PROGRESS, PR #9 Draft, no main merge.
+### Local lint / CI-floor conflict and independent rename-path guard
+
+- Owner local WSL2 checks on `717c0011...`: Ruff lint PASS; Ruff format 19 files PASS; Mypy source 10 files PASS; scoped pytest 11 PASS.
+- Immutable Full Portable CI R5 #37884453037 on the same SHA ended FAILURE solely on `check-fast-active` floor check: `[silenced-checker]` at `runtime.py` lines 556, 560, 561. The three local `# noqa: ARG002` comments were prohibited by the repository floor policy despite passing standalone Ruff. Frontend coverage, portable pytest, secrets, code/dependency scans and architecture all PASS.
+- Removed the three suppressions and instead validated the required host context arguments `cwd`, `artifacts` and `name` in SecureProvider before any semantic HTTP request. Added three denial tests for malformed host context.
+- Independent adversarial audit also reproduced Git rename-origin omission under default rename detection. Disabled rename collapsing for both staged/unstaged `Git.paths` lists and added scope tests requiring both old and new paths. A new CI on this final SHA is mandatory; no silent CI bypasses.
+
+### Docker HostVerificationSandbox prototype — NOT YET ENFORCED (2026-10-09)
+
+- Owner's WSL2 Docker smoke passed: image python:3.12-slim with no host mounts, no network, read-only root, uid 65534, cap-drop ALL, no-new-privileges, ephemeral /tmp, memory 256MiB, CPU .5, pids 64; effective cgroup settings observed (memory.max 268435456; cpu.max 50000 100000; pids.max 64). No stress/adversarial proof inferred.
+- Added `DockerVerificationPolicy` and `DockerVerificationSandbox` to allowlisted runtime.py, requiring host-supplied immutable @sha256 image, fixed limits, local Docker socket only, empty Docker CLI config, isolated environment, no network, readonly OS, disposable verification workspace, no special files/hardlink/symlink escapes, removal after completion, and denial of missing image/unsafe command. Synthetic unit tests in test_runtime.py; no Docker-required CI changes.
+- **Deliberately not yet active:** both `collect_verification()` and `Pipeline.verify()` still use legacy host `execute()` and cannot claim OS isolation. There is no trusted/pinned dual-runtime image in repository or approved Dockerfile path in the T090 allowlist; the build/provision phase and full enforcement require owner scope authorization and live adversarial verification. The production verification lane therefore remains a security acceptance blocker, regardless of portable CI.
+- Open risks: immutable runner provenance/lockfile attestation, `git clone --shared` alternates, standalone npm ci setup, PATH and runtime materialization, container cleanup semantics, limit enforcement, no-bypass path integration. No config permission changes, no main merge.
+
+### Docker broker CI R1 adjudication and revised container filesystem boundary
+
+- Frozen CI R1 https://github.com/khanhpn308/english_web/actions/runs/37894639645 on `ededfebf06607114efceab0ab3bdecc8b69678b6` = FAIL: Ruff format on runtime.py/test_runtime.py, one synthetic Unix-socket test fixture exceeded Linux AF_UNIX pathname limit, while 1383 other pytest tests and six other Phase A gates passed. No false PASS recorded.
+- Updated the special-file test to use a FIFO within pytest's long temporary path. Applied the explicit Ruff formatting deltas from immutable CI artifacts.
+- Improved draft sandbox: bind candidate source **read-only** at `/source`, copy it via a fixed isolated Python bootstrap into a private 256 MiB `/workspace` tmpfs, and run declared verification there. This prevents untrusted tests from writing directly into the host verification clone and caps container workspace writes. Explicit hardlink/symlink/socket/FIFO rejection remains before dispatch. Docker CLI is env-cleared and fixed to local socket with a temporary empty config; image and command preflight are host-only. Refuse uncertain container cleanup.
+- **Still not integrated:** current production verification paths remain UNSANDBOXED/BLOCKED for T090 acceptance. Trusted dual-runtime runner image with locked provenance requires explicit new image file scope approval. A fresh full CI must test the current candidate SHA.
+
+
+### Owner-authorized image candidate scope extension (2026-10-09)
+
+Owner's "ok, triển khai đi" follows the explicit named-file approval request for the T090 image. Prospective permitted paths only: `infra/verification/Dockerfile`, `infra/verification/image-policy.json`, `.github/workflows/t090-image-attestation.yml`, and `scripts/security_checks.py` for offline OSV adaptation. Existing T090-owned runtime/workflow/tests and task/changelog remain permitted. This is not retrospective scope authorization for T089 and does not authorize changing lockfiles, `orchestrator.yaml`, `.agent/scripts/run-gates.sh`, or production provider permissions.
+
+The three image artifacts are deliberately CANDIDATE ONLY. `image-policy.json` remains `approved=false`. Build CI is neither an image signature nor an OS-security acceptance. Both live verification callsites remain unchanged and must not execute Worker code until separately sandboxed.
+
+### R5 Host-sealed source manifest and container attestation (2026-10-09)
+
+Owner approved R5 source sealing and pre-execution attestation after WSL2 R4 local evidence. This changes the non-active candidate Docker broker, T090 tests and CI only.
+
+Trusted Host MUST freeze the source earlier, independently derive and persist its digest, and pass it as expected_source_digest; the broker never silently derives its acceptance digest during run. The broker rechecks the original source against expected digest, creates a private Host-owned source copy and verifies the copy before/after Docker inspection. Docker binds only that copy read-only. The trusted container bootstrap re-hashes its own tmpfs copy before executing pytest, ruff or mypy.
+
+The v1 digest covers relative paths, regular file contents, file mode and symlink targets; unsafe special files, hardlinks, absolute/out-of-tree links and changes detected during reading are rejected.
+
+Important limitation: the R5 API does not yet integrate with authoritative Git.snapshot evidence in the two legacy callsites; neither live path has been migrated to Docker, and trust in an arbitrary caller-chosen digest alone would be insufficient. A prior Host freeze and external evidence anchoring remain mandatory. Further live adversarial testing and CI on the exact R5 SHA are required. Image policy remains approved=false, PR Draft and main untouched.
+
+### R6 phase A — deterministic digest and frozen Git evidence crosswalk (2026-10-09)
+
+Implementation on draft PR #9 includes deterministic `folders.sort()` before recursive hashing, plus an explicit frozen-source binding that compares the authoritative checkout's `Git.snapshot(base_sha)` to the cloned verification workspace before and after computing the Docker content-tree digest. Tests cover reversed directory creation, empty directory rename, changed authoritative checkout and tampered clone.
+
+**Do not confuse this binding with production admission:** the new helper is not invoked by either live verification entrypoint. `collect_verification()` still uses host `execute()` on the verification clone; `Pipeline.verify()` still executes host commands for setup, baseline and integration. Both must be migrated together, without any fallback to Host if image approval or Git evidence is unavailable.
+
+**Blockers for R6 phase B:** trusted image currently `approved=false`, base apt snapshot and wheel hashes not complete, image/OSV provenance not signed, `.venv` and `node_modules` materialization may exceed 256 MiB tmpfs, `npm ci` setup must move to trusted preprovisioning, Bridge hidden tools remain unverified. Preserve user-approved path scope; changing lockfiles, orchestrator.yaml or run-gates script requires explicit owner approval. Audit fail-closed behavior before changing production.
+
+### R6-B provisional work and hard security gate (2026-10-09)
+
+R6-B1 candidate: `admit_verification_image()` requires an independently controlled, SHA-256-pinned external Host policy document (repo-local policies are not trusted), matching pinned image manifest identity, pinned base images, local dependency lock SHA-256, OSV archive identifiers and provenance/SBOM identifiers. This parser checks declaration completeness and external anchoring; **it does not cryptographically verify the image publisher's signature** or materialize an approved image. User's candidate policy remains `approved: false`.
+
+R6-B2 diagnostic CI: live Docker broker executes minimal offline Ruff, MyPy and npm probes against synthetic data. Full `npm run check:task:portable` (and scanner databases/large outputs/Playwright prerequisites) have **not** been demonstrated in the image.
+
+R6-B3 candidate: `collect_verification_admitted()` binds to `FrozenVerificationSourceBinding` and admitted image before dispatch; it only uses `DockerVerificationSandbox`, never Host fallback. **Critical release blocker**: active legacy `collect_verification()` and `Pipeline.verify()` have not been migrated. Those callsites retain Host execution and must be removed before security acceptance.
+
+Release scope approval is required if modifying `orchestrator.yaml`, `.agent/scripts/run-gates.sh`, `requirements-dev.lock` or `package-lock.json`. A genuinely approved, independently verified image digest/provenance must be provisioned by a trusted operator. Do not flip `approved` to true to pass CI. Do not merge PR #9, enable Worker CLI, or declare T089 accepted.
+

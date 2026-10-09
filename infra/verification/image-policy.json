@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "scope": "T090 candidate image; never production enablement",
+  "approved": false,
+  "allowed_platform": "linux/amd64",
+  "image_reference": null,
+  "verified_image_manifest_digest": null,
+  "expected_source_sha": null,
+  "base_images": {
+    "python": null,
+    "node": null
+  },
+  "locked_inputs_sha256": {
+    "requirements-dev.lock": null,
+    "package-lock.json": null
+  },
+  "offline_osv_db_sha256": {
+    "npm": null,
+    "PyPI": null
+  },
+  "build_provenance_ref": null,
+  "sbom_ref": null,
+  "blockers": [
+    "Wheel artifact hashes not pinned in requirements-dev.lock",
+    "OS package snapshot not pinned",
+    "OSV database archive digests not approved",
+    "No signed image provenance or trusted publisher attestation",
+    "No accepted OS isolation or controlled source mount/copy test",
+    "No pipeline enforcement and no bypass audit"
+  ]
+}

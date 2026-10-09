@@ -1,15 +1,22 @@
 """Processes with opt-in deadlines, local locks, Git and replaceable CLI providers."""
 
+import hashlib
+import hmac
 import importlib
+import inspect
 import json
 import os
+import re
+import shutil
 import signal
+import stat
 import subprocess
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 from time import monotonic, sleep
 from typing import BinaryIO, Protocol, TypeVar, cast
 
@@ -59,6 +66,443 @@ class ProcessResult:
             "stdout_digest": digest(self.stdout.encode()),
             "stderr_digest": digest(self.stderr.encode()),
         }
+
+
+@dataclass(frozen=True)
+class VerificationImageAdmission:
+    """Immutable Host-anchored policy inputs; not a publisher signature verdict."""
+
+    image: str
+    policy_sha256: str
+    provenance_ref: str
+    sbom_ref: str
+
+
+def admit_verification_image(
+    policy_path: Path,
+    *,
+    expected_policy_sha256: str,
+    authoritative_repository: Path,
+) -> VerificationImageAdmission:
+    """Deny repo-local or unpinned policy; accept only a complete external approval.
+
+    expected_policy_sha256 MUST originate from an independently controlled Host
+    trust anchor. A matching JSON document is NOT itself a verified signature.
+    """
+
+    def blocked() -> OrchestratorError:
+        return OrchestratorError("T090 SANDBOX_BLOCKED: trusted image admission unavailable")
+
+    if not re.fullmatch(r"[a-f0-9]{64}", expected_policy_sha256):
+        raise blocked()
+    if not policy_path.is_absolute() or policy_path.is_symlink():
+        raise blocked()
+    try:
+        path = policy_path.resolve(strict=True)
+        repository = authoritative_repository.resolve(strict=True)
+        if path.is_relative_to(repository):
+            raise blocked()
+        st = path.stat()
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+            raise blocked()
+        raw = path.read_bytes()
+        if not hmac.compare_digest(hashlib.sha256(raw).hexdigest(), expected_policy_sha256):
+            raise blocked()
+        approval = json.loads(raw)
+        if not isinstance(approval, dict):
+            raise blocked()
+        image = approval.get("image_reference")
+        if (
+            approval.get("schema_version") != 1
+            or approval.get("approved") is not True
+            or not isinstance(image, str)
+            or not _DOCKER_DIGEST_RE.fullmatch(image)
+        ):
+            raise blocked()
+        digest_from_image = image.split("@", 1)[1]
+        if approval.get("verified_image_manifest_digest") != digest_from_image:
+            raise blocked()
+        for name in ("python", "node"):
+            ref = approval.get("base_images", {}).get(name)
+            if not isinstance(ref, str) or not _DOCKER_DIGEST_RE.fullmatch(ref):
+                raise blocked()
+        for group, names in (
+            ("locked_inputs_sha256", ("requirements-dev.lock", "package-lock.json")),
+            ("offline_osv_db_sha256", ("npm", "PyPI")),
+        ):
+            values = approval.get(group)
+            if not isinstance(values, dict) or not all(
+                isinstance(values.get(name), str) and re.fullmatch(r"[a-f0-9]{64}", values[name])
+                for name in names
+            ):
+                raise blocked()
+        for name in ("build_provenance_ref", "sbom_ref"):
+            value = approval.get(name)
+            if not isinstance(value, str) or not value.startswith("sha256:"):
+                raise blocked()
+            if not re.fullmatch(r"sha256:[a-f0-9]{64}", value):
+                raise blocked()
+        for name in ("requirements-dev.lock", "package-lock.json"):
+            expected_lock_hash = approval["locked_inputs_sha256"][name]
+            actual_lock_hash = hashlib.sha256((repository / name).read_bytes()).hexdigest()
+            if not hmac.compare_digest(expected_lock_hash, actual_lock_hash):
+                raise blocked()
+        return VerificationImageAdmission(
+            image=image,
+            policy_sha256=expected_policy_sha256,
+            provenance_ref=approval["build_provenance_ref"],
+            sbom_ref=approval["sbom_ref"],
+        )
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        raise blocked() from error
+
+
+_DOCKER_DIGEST_RE = re.compile(r"^[a-z0-9][a-z0-9._:/-]*@sha256:[a-f0-9]{64}$")
+
+
+def _docker_source_digest(root: str) -> str:
+    """Hash path, type, permissions and content, independent of directory root."""
+    root = os.path.realpath(root)
+    digest = hashlib.sha256(b"t090-tree-v1\n")
+    for parent, folders, files in os.walk(root, followlinks=False):
+        # os.walk traverses folders in filesystem enumeration order unless sorted.
+        # Sorting only the entries within each parent is not sufficient.
+        folders.sort()
+        for name in sorted([*folders, *files]):
+            path = os.path.join(parent, name)
+            relative = os.path.relpath(path, root).replace(os.sep, "/")
+            before = os.lstat(path)
+            mode = before.st_mode
+            if stat.S_ISDIR(mode):
+                record = ["d", relative, mode & 0o777]
+            elif stat.S_ISLNK(mode):
+                link = os.readlink(path)
+                if os.path.isabs(link):
+                    raise ValueError("absolute source symlink forbidden")
+                target = os.path.realpath(path, strict=True)
+                if os.path.commonpath([root, target]) != root:
+                    raise ValueError("source symlink escapes tree")
+                record = ["l", relative, link]
+            elif stat.S_ISREG(mode):
+                if before.st_nlink != 1:
+                    raise ValueError("hardlinked source forbidden")
+                handle = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+                try:
+                    opened = os.fstat(handle)
+                    if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+                        raise ValueError("source path replaced during scan")
+                    file_hash = hashlib.sha256()
+                    while chunk := os.read(handle, 128 * 1024):
+                        file_hash.update(chunk)
+                    after = os.fstat(handle)
+                    if (opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns) != (
+                        after.st_size,
+                        after.st_mtime_ns,
+                        after.st_ctime_ns,
+                    ):
+                        raise ValueError("source modified during scan")
+                finally:
+                    os.close(handle)
+                record = ["f", relative, mode & 0o777, file_hash.hexdigest()]
+            else:
+                raise ValueError("special source file forbidden")
+            digest.update(json.dumps(record, separators=(",", ":")).encode())
+            digest.update(b"\n")
+    return digest.hexdigest()
+
+
+_DOCKER_TRUSTED_BOOTSTRAP = (
+    "import hashlib, json, os, shutil, stat, sys\n"
+    + inspect.getsource(_docker_source_digest)
+    + "for entry in os.scandir('/source'):\n"
+    "    src = entry.path\n"
+    "    dst = os.path.join('/workspace', entry.name)\n"
+    "    if entry.is_symlink():\n"
+    "        os.symlink(os.readlink(src), dst)\n"
+    "    elif entry.is_dir(follow_symlinks=False):\n"
+    "        shutil.copytree(src, dst, symlinks=True)\n"
+    "    else:\n"
+    "        shutil.copy2(src, dst)\n"
+    "try:\n"
+    "    attested = _docker_source_digest('/workspace') == sys.argv[1]\n"
+    "except (OSError, ValueError):\n"
+    "    attested = False\n"
+    "if not attested:\n"
+    "    raise SystemExit('T090 SANDBOX_BLOCKED: source attestation mismatch')\n"
+    # The image preprovisions Node dependencies outside untrusted source.
+    # Attach them to the isolated tmpfs only AFTER the source digest check.
+    # A source-provided node_modules path must never shadow trusted tools.
+    "if os.path.lexists('/workspace/node_modules'):\n"
+    "    raise SystemExit('T090 SANDBOX_BLOCKED: untrusted node_modules in source')\n"
+    "if not os.path.isfile('/node_modules/typescript/lib/typescript.js'):\n"
+    "    raise SystemExit('T090 SANDBOX_BLOCKED: trusted Node toolchain missing')\n"
+    # Expose immutable image dependencies via symlinks, but keep Vite's
+    # cache writable only inside the disposable workspace tmpfs.
+    "os.mkdir('/workspace/node_modules')\n"
+    "for package in os.scandir('/node_modules'):\n"
+    "    os.symlink(package.path, os.path.join('/workspace/node_modules', package.name))\n"
+    "os.mkdir('/workspace/node_modules/.vite-temp', mode=0o700)\n"
+    "os.chdir('/workspace')\n"
+    "os.execvp(sys.argv[2], sys.argv[2:])\n"
+)
+
+
+@dataclass(frozen=True)
+class DockerVerificationPolicy:
+    """Host-selected immutable Docker image and fixed execution limits.
+
+    An image digest identifies content but does not independently attest its
+    publisher or dependency provenance; approval is a separate host gate.
+    """
+
+    image: str
+    verification_root: Path
+    memory_mib: int = 512
+    cpu_millicores: int = 1000
+    pids_limit: int = 64
+    timeout_seconds: int = 900
+    workspace_tmpfs_mib: int = 256
+    temp_tmpfs_mib: int = 64
+
+    def __post_init__(self) -> None:
+        if not _DOCKER_DIGEST_RE.fullmatch(self.image):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: image must use a pinned sha256 digest")
+        if not (128 <= self.memory_mib <= 4096):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: invalid memory limit")
+        if not (100 <= self.cpu_millicores <= 4000):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: invalid CPU limit")
+        if not (16 <= self.pids_limit <= 256):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: invalid PID limit")
+        if not (1 <= self.timeout_seconds <= 3600):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: timeout must be finite")
+        if not (64 <= self.workspace_tmpfs_mib <= 4096):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: invalid workspace tmpfs limit")
+        if not (64 <= self.temp_tmpfs_mib <= 1024):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: invalid temp tmpfs limit")
+        if not self.verification_root.is_absolute():
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: verification root must be absolute")
+
+
+class DockerVerificationSandbox:
+    """Constructs an unprivileged, network-free Docker command from host policy.
+
+    This is a candidate host executor only. The live pipeline's two legacy
+    verification callsites must not be treated as sandboxed until explicitly
+    migrated and independently verified against a trusted runner image.
+    """
+
+    def __init__(self, policy: DockerVerificationPolicy) -> None:
+        self.policy = policy
+
+    def _workspace(self, workspace: Path) -> Path:
+        if os.name != "posix" or os.geteuid() == 0:
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: requires non-root Linux host")
+        if workspace.is_symlink() or workspace.name != "workspace":
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: invalid workspace entry")
+        if not workspace.parent.name.startswith("verify-"):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: workspace is not a verification clone")
+        try:
+            trusted = self.policy.verification_root.resolve(strict=True)
+            resolved = workspace.resolve(strict=True)
+            if not resolved.is_relative_to(trusted) or resolved == trusted:
+                raise OrchestratorError("T090 SANDBOX_BLOCKED: workspace outside trusted root")
+            if not resolved.is_dir():
+                raise OrchestratorError("T090 SANDBOX_BLOCKED: workspace is not a directory")
+            for root, folders, files in os.walk(resolved, followlinks=False):
+                for name in [*folders, *files]:
+                    path = Path(root) / name
+                    mode = path.lstat().st_mode
+                    if stat.S_ISLNK(mode):
+                        target = path.resolve(strict=True)
+                        if not target.is_relative_to(resolved):
+                            raise OrchestratorError(
+                                "T090 SANDBOX_BLOCKED: workspace symlink escapes sandbox"
+                            )
+                    elif stat.S_ISREG(mode) and path.lstat().st_nlink > 1:
+                        raise OrchestratorError(
+                            "T090 SANDBOX_BLOCKED: linked source may alias host files"
+                        )
+                    elif not stat.S_ISREG(mode) and not stat.S_ISDIR(mode):
+                        raise OrchestratorError(
+                            "T090 SANDBOX_BLOCKED: workspace has a special file"
+                        )
+            return resolved
+        except (OSError, RuntimeError) as error:
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: unreadable workspace") from error
+
+    def source_digest(self, workspace: Path) -> str:
+        """Host must persist this digest at a trusted earlier source-freeze step."""
+        try:
+            return _docker_source_digest(str(self._workspace(workspace)))
+        except (OSError, ValueError) as error:
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: source digest unavailable") from error
+
+    def _attest_source(self, workspace: Path, expected: str) -> None:
+        if not hmac.compare_digest(self.source_digest(workspace), expected):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: source attestation mismatch")
+
+    def _argv(
+        self,
+        command: list[str],
+        workspace: Path,
+        container: str,
+        config_dir: Path,
+        expected_source_digest: str,
+    ) -> list[str]:
+        from tools.orchestrator.core import validate_command
+
+        validate_command(command)
+        if command[:2] == ["npm", "ci"]:
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: setup requires trusted preprovisioning")
+        uid = os.geteuid()
+        gid = os.getegid()
+        if any(character in str(workspace) for character in ",\n\r"):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: invalid Docker mount source")
+        return [
+            "/usr/bin/docker",
+            "--config",
+            str(config_dir),
+            "run",
+            "--rm",
+            "--pull=never",
+            "--name",
+            container,
+            "--network=none",
+            "--read-only",
+            # Override any image-defined ENTRYPOINT. Container execution must
+            # begin with the trusted Python interpreter, never image metadata.
+            "--entrypoint=/usr/local/bin/python3",
+            "--cap-drop=ALL",
+            "--security-opt=no-new-privileges",
+            "--pids-limit",
+            str(self.policy.pids_limit),
+            "--memory",
+            f"{self.policy.memory_mib}m",
+            "--memory-swap",
+            f"{self.policy.memory_mib}m",
+            "--cpus",
+            f"{self.policy.cpu_millicores / 1000:.3f}",
+            "--user",
+            f"{uid}:{gid}",
+            "--workdir=/workspace",
+            "--mount",
+            f"type=bind,src={workspace},dst=/source,readonly,bind-propagation=rprivate",
+            f"--tmpfs=/workspace:rw,nosuid,nodev,size={self.policy.workspace_tmpfs_mib}m,mode=0700,uid={uid},gid={gid}",
+            f"--tmpfs=/tmp:rw,nosuid,nodev,size={self.policy.temp_tmpfs_mib}m,mode=1777",
+            # Only the OSV extraction cache is writable; the vetted DB ZIPs
+            # remain read-only in /opt/osv-db/osv-scanner inside the image.
+            f"--tmpfs=/opt/osv-db/osv-scalibr:rw,nosuid,nodev,size=512m,mode=0700,uid={uid},gid={gid}",
+            "--ulimit=core=0:0",
+            "--env=HOME=/tmp",
+            "--env=TMPDIR=/tmp",
+            "--env=PYTHONDONTWRITEBYTECODE=1",
+            "--env=CI=true",
+            "--env=T090_SANDBOX_LIMITED=1",
+            "--env=PATH=/workspace/node_modules/.bin:/node_modules/.bin:/usr/local/bin:/usr/bin:/bin",
+            self.policy.image,
+            "-I",
+            "-c",
+            _DOCKER_TRUSTED_BOOTSTRAP,
+            expected_source_digest,
+            *command,
+        ]
+
+    @staticmethod
+    def _local_docker(argv: list[str]) -> list[str]:
+        # Host-owned Docker client uses a fixed local socket, no inherited
+        # DOCKER_HOST, user Docker context or credential-bearing HOME.
+        return [
+            "/usr/bin/env",
+            "-i",
+            "PATH=/usr/bin:/bin",
+            "HOME=/tmp",
+            "DOCKER_HOST=unix:///var/run/docker.sock",
+            *argv,
+        ]
+
+    def run(
+        self,
+        command: list[str],
+        workspace: Path,
+        *,
+        expected_source_digest: str | None = None,
+    ) -> ProcessResult:
+        """Execute ONLY against a source digest supplied by a trusted Host freeze."""
+        from tools.orchestrator.core import validate_command
+
+        validate_command(command)
+        if command[:2] == ["npm", "ci"]:
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: setup needs trusted dependencies")
+        if expected_source_digest is None or not re.fullmatch(
+            r"[a-f0-9]{64}", expected_source_digest
+        ):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: trusted source digest required")
+        resolved = self._workspace(workspace)
+        if not Path("/usr/bin/docker").is_file():
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: Docker executable unavailable")
+        self._attest_source(resolved, expected_source_digest)
+
+        # Docker binds a private Host-owned source seal, never the original candidate.
+        # Any mutation during copying or execution is checked against the frozen digest.
+        with tempfile.TemporaryDirectory(
+            prefix="verify-sealed-", dir=self.policy.verification_root
+        ) as sealed_root:
+            sealed = Path(sealed_root) / "workspace"
+            try:
+                shutil.copytree(resolved, sealed, symlinks=True)
+            except (OSError, shutil.Error) as error:
+                raise OrchestratorError("T090 SANDBOX_BLOCKED: source sealing failed") from error
+            self._attest_source(sealed, expected_source_digest)
+
+            with tempfile.TemporaryDirectory(prefix="t090-docker-config-") as temporary:
+                config_dir = Path(temporary)
+                inspected = execute(
+                    self._local_docker(
+                        [
+                            "/usr/bin/docker",
+                            "--config",
+                            str(config_dir),
+                            "image",
+                            "inspect",
+                            "--format",
+                            "{{.Id}}",
+                            self.policy.image,
+                        ]
+                    ),
+                    sealed,
+                    timeout=20,
+                )
+                if inspected.exit_code or not re.fullmatch(
+                    r"sha256:[a-f0-9]{64}\s*", inspected.stdout
+                ):
+                    raise OrchestratorError("T090 SANDBOX_BLOCKED: pinned local image unavailable")
+
+                self._attest_source(sealed, expected_source_digest)
+                name = f"t090-verify-{uuid4().hex}"
+                try:
+                    result = execute(
+                        self._local_docker(
+                            self._argv(command, sealed, name, config_dir, expected_source_digest)
+                        ),
+                        sealed,
+                        timeout=self.policy.timeout_seconds,
+                    )
+                finally:
+                    cleanup = execute(
+                        self._local_docker(
+                            ["/usr/bin/docker", "--config", str(config_dir), "rm", "-f", name]
+                        ),
+                        sealed,
+                        timeout=20,
+                    )
+                    if (
+                        cleanup.timed_out
+                        or cleanup.oversized
+                        or (cleanup.exit_code != 0 and "No such container" not in cleanup.stderr)
+                    ):
+                        raise OrchestratorError("T090 SANDBOX_BLOCKED: cleanup not confirmed")
+                self._attest_source(sealed, expected_source_digest)
+                return result
 
 
 class _StallExpired(Exception):
@@ -278,8 +722,10 @@ class Git:
         return not self.run("status", "--porcelain=v1", "--untracked-files=all")
 
     def paths(self, base: str) -> list[str]:
-        changed = self.run("diff", "--name-only", "-z", base, "--")
-        staged = self.run("diff", "--cached", "--name-only", "-z", base, "--")
+        # Never collapse a rename into its destination: both the deleted source
+        # and added destination must pass the contract's changed-path allowlist.
+        changed = self.run("diff", "--no-renames", "--name-only", "-z", base, "--")
+        staged = self.run("diff", "--cached", "--no-renames", "--name-only", "-z", base, "--")
         untracked = self.run("ls-files", "--others", "--exclude-standard", "-z")
         return sorted({p for p in (changed + "\0" + staged + "\0" + untracked).split("\0") if p})
 
@@ -540,6 +986,63 @@ class CliProvider:
             return output.model_validate_json(raw)
         except (OSError, ValueError, TypeError) as error:
             raise OrchestratorError("Agent returned malformed or schema-invalid JSON") from error
+
+
+class SecureProvider:
+    """Production role router: no analyst/reviewer CLI command execution.
+
+    Explicitly injected AgentProvider instances remain test doubles used by
+    the orchestration regression suite; production Pipeline defaults here.
+    """
+
+    def run(
+        self,
+        prompt: str,
+        *,
+        cwd: Path,
+        role: Role,
+        timeout: int | None,
+        output: type[Output],
+        artifacts: Path,
+        name: str,
+        readonly: bool,
+    ) -> Output:
+        if not readonly:
+            # Mutable Worker dispatch goes exclusively through host-http-edit
+            # in Pipeline.invoke; never use a CLI fallback from this router.
+            raise OrchestratorError("T090 BLOCKED: mutable CLI execution is forbidden")
+        if not cwd.is_dir() or not artifacts.is_dir() or not name.strip():
+            raise OrchestratorError("T090 BLOCKED: invalid host-owned semantic context")
+        if (
+            role.analysis_backend != "host-http-text"
+            or role.allow_process
+            or role.worker_access == "full-access"
+            or role.provider not in {"agy", "codex"}
+            or output is WorkerResult
+        ):
+            raise OrchestratorError(
+                "T090 BLOCKED: read-only CLI can execute commands; "
+                "configure a verified tool-free text provider"
+            )
+        from tools.orchestrator.worker_sandbox import (
+            HostEditRejected,
+            LoopbackChatTransport,
+        )
+
+        try:
+            if not role.model or not role.host_text_endpoint or not role.host_text_api_key_env:
+                raise HostEditRejected("Incomplete text-only semantic provider")
+            transport = LoopbackChatTransport(
+                role.host_text_endpoint,
+                api_key_env=role.host_text_api_key_env,
+                response_contract="semantic-json",
+            )
+            raw = transport.complete(prompt, model=role.model, timeout=timeout)
+            return output.model_validate_json(raw)
+        except (HostEditRejected, ValueError, TypeError) as error:
+            raise OrchestratorError(
+                "T090 BLOCKED: tool-free semantic inference rejected or schema invalid"
+            ) from error
 
 
 def is_worker_code_only(role: Role) -> bool:
