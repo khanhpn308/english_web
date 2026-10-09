@@ -1,3 +1,8 @@
+## 09/10/2026 - T090 tool-free CI R3 format correction
+
+- R3 run 37879458653 on a8c6dc27 is retained as FAILURE: one Ruff format violation at tests/orchestrator/test_runtime.py:302; six other Phase A gates PASS.
+- Added only the missing blank line before a synthetic transport callback. Semantic role and mutable CLI deny policies unchanged; fresh R4 required.
+
 ## 09/10/2026 - T090 semantic route CI R1 format repair
 
 - Preserved FAILED CI R1 run 37879047094 on 608018e0: check-fast-active stopped at one Ruff format blank line in runtime.py; other six Phase A gates PASS.
