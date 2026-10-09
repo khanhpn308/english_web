@@ -527,9 +527,7 @@ def test_t090_docker_sandbox_host_constructs_fixed_arguments(
     monkeypatch.setattr("tools.orchestrator.runtime.os.geteuid", lambda: 1000)
     broker = DockerVerificationSandbox(policy)
     expected_digest = broker.source_digest(working)
-    result = broker.run(
-        ["python", "-m", "pytest"], working, expected_source_digest=expected_digest
-    )
+    result = broker.run(["python", "-m", "pytest"], working, expected_source_digest=expected_digest)
     assert result.exit_code == 0
     assert len(seen) == 3
     assert seen[1][seen[1].index("--name") + 1] == seen[2][-1]
@@ -763,13 +761,10 @@ def test_t090_sealed_source_changed_during_image_inspection_is_blocked(
         assert "inspect" in argv
         operations.append("inspect")
         (cwd / "case.txt").write_text("modified during Docker inspect")
-        return ProcessResult(
-            tuple(argv), str(cwd), "start", "end", 0, "sha256:" + "b" * 64, ""
-        )
+        return ProcessResult(tuple(argv), str(cwd), "start", "end", 0, "sha256:" + "b" * 64, "")
 
     monkeypatch.setattr("tools.orchestrator.runtime.execute", modify_at_inspect)
     with pytest.raises(OrchestratorError, match="source attestation mismatch"):
         broker.run(["python", "-m", "pytest"], workspace, expected_source_digest=expected)
     assert operations == ["inspect"]
     assert (workspace / "case.txt").read_text() == "frozen"
-

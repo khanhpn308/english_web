@@ -69,6 +69,8 @@ class ProcessResult:
 
 
 _DOCKER_DIGEST_RE = re.compile(r"^[a-z0-9][a-z0-9._:/-]*@sha256:[a-f0-9]{64}$")
+
+
 def _docker_source_digest(root: str) -> str:
     """Hash path, type, permissions and content, independent of directory root."""
     root = os.path.realpath(root)
@@ -101,9 +103,10 @@ def _docker_source_digest(root: str) -> str:
                     while chunk := os.read(handle, 128 * 1024):
                         file_hash.update(chunk)
                     after = os.fstat(handle)
-                    if (
-                        (opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns)
-                        != (after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+                    if (opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns) != (
+                        after.st_size,
+                        after.st_mtime_ns,
+                        after.st_ctime_ns,
                     ):
                         raise ValueError("source modified during scan")
                 finally:
@@ -364,9 +367,7 @@ class DockerVerificationSandbox:
                 try:
                     result = execute(
                         self._local_docker(
-                            self._argv(
-                                command, sealed, name, config_dir, expected_source_digest
-                            )
+                            self._argv(command, sealed, name, config_dir, expected_source_digest)
                         ),
                         sealed,
                         timeout=self.policy.timeout_seconds,
@@ -382,10 +383,7 @@ class DockerVerificationSandbox:
                     if (
                         cleanup.timed_out
                         or cleanup.oversized
-                        or (
-                            cleanup.exit_code != 0
-                            and "No such container" not in cleanup.stderr
-                        )
+                        or (cleanup.exit_code != 0 and "No such container" not in cleanup.stderr)
                     ):
                         raise OrchestratorError("T090 SANDBOX_BLOCKED: cleanup not confirmed")
                 self._attest_source(sealed, expected_source_digest)
