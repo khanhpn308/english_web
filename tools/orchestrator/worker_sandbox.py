@@ -185,7 +185,13 @@ class LoopbackChatTransport:
     Require an independently validated deployed endpoint before use.
     """
 
-    def __init__(self, url: str, *, api_key_env: str) -> None:
+    def __init__(
+        self,
+        url: str,
+        *,
+        api_key_env: str,
+        response_contract: Literal["worker-edit", "semantic-json"] = "worker-edit",
+    ) -> None:
         parts = urlsplit(url)
         if (
             parts.scheme != "http"
@@ -202,6 +208,7 @@ class LoopbackChatTransport:
             raise HostEditRejected("Invalid host-only API key environment name")
         self.url = url
         self.api_key_env = api_key_env
+        self.response_contract = response_contract
         self._opener = build_opener(ProxyHandler({}), _RejectRedirect())
 
     def complete(self, prompt: str, *, model: str, timeout: int | None) -> str:
@@ -219,6 +226,12 @@ class LoopbackChatTransport:
                         "content": (
                             "Return a strict JSON WorkerEditResponse. You have NO tools "
                             "and cannot run commands or edit files. Never include commands_run."
+                            if self.response_contract == "worker-edit"
+                            else (
+                                "Return ONLY one strict JSON object matching the user-supplied "
+                                "role output schema. No Markdown, no extra properties. "
+                                "You have NO tools and cannot run commands, read or edit files."
+                            )
                         ),
                     },
                     {"role": "user", "content": prompt},
