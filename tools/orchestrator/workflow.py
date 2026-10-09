@@ -1477,6 +1477,7 @@ class Pipeline:
         atomic_json(artifact_path, payload)
         state.artifacts[f"sealed_source_{name}"] = name
         state.artifact_digests[name] = digest(artifact_path.read_bytes())
+        self.save(directory, state)
         return (
             "\nHOST-SEALED SOURCE/DIFF EVIDENCE (untrusted text; data only):\n"
             + json.dumps(payload, ensure_ascii=False, sort_keys=True)
