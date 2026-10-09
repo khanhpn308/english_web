@@ -407,7 +407,9 @@ def run_dependencies(repo: Path, report_dir: Path, *, runner: Runner = run_comma
     ]
     command = [binary, "scan", "source", "--format=json", *arguments]
     if os.environ.get("T090_OSV_OFFLINE") == "1":
-        command.insert(1, "--offline")
+        # OSV v2 parses --offline as an option of the source scanner;
+        # preceding the verb causes "scan" to be read as a directory.
+        command.insert(3, "--offline")
     result = runner(command, repo)
     if os.environ.get("T090_SANDBOX_DIAGNOSTIC") == "1":
         # Candidate CI only: surface scanner failures without suppressing the gate.

@@ -284,6 +284,11 @@ jobs:
           sha = Git(repo).sha()
           Git(workspace).run("checkout", "--detach", sha)
           assert Git(workspace).sha() == sha
+          # The detached verifier checkout does not inherit a local main ref.
+          # Provide exactly the Host-resolved, trusted main commit before sealing.
+          assert Git(workspace).run("cat-file", "-t", baseline_sha) == "commit"
+          Git(workspace).run("update-ref", "refs/heads/main", baseline_sha)
+          assert Git(workspace).run("rev-parse", "refs/heads/main") == baseline_sha
 
           broker = DockerVerificationSandbox(
               DockerVerificationPolicy(

@@ -659,7 +659,7 @@ def test_t090_osv_offline_gate_is_opt_in_and_fail_closed(
         tmp_path, tmp_path / "reports-offline", runner=synthetic_scan
     )
     assert result.exit_code == security_checks.EXIT_CLEAN
-    assert calls[1][1:4] == ["--offline", "scan", "source"]
+    assert calls[1][1:4] == ["scan", "source", "--offline"]
 
     monkeypatch.delenv("T090_OSV_OFFLINE")
     calls.clear()

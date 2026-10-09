@@ -20,6 +20,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     GITLEAKS_BIN=/usr/local/bin/gitleaks \
     OSV_SCANNER_BIN=/usr/local/bin/osv-scanner \
     SEMGREP_BIN=/opt/semgrep-venv/bin/semgrep \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers \
     PATH=/opt/toolchain/node_modules/.bin:/usr/local/bin:/usr/bin:/bin
 
 # Candidate-only package install. Apt snapshot/version provenance is NOT yet locked.
@@ -36,6 +37,14 @@ COPY package.json package-lock.json /opt/toolchain/
 # Script execution is forbidden during trusted dependency provisioning.
 RUN npm ci --ignore-scripts --no-audit --no-fund \
     && ln -s /opt/toolchain/node_modules /node_modules
+
+# Provision the exact Playwright browser for the locked npm package at image
+# build time only. Never download browser binaries from untrusted code.
+RUN node /opt/toolchain/node_modules/playwright/cli.js install \
+      --with-deps --only-shell chromium \
+    && test -d /opt/playwright-browsers \
+    && chmod -R a+rX /opt/playwright-browsers \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements-dev.lock /opt/locks/requirements-dev.lock
 # Versions are pinned but wheel hashes are NOT present: approval must remain false.
