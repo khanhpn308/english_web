@@ -2108,7 +2108,10 @@ def test_t090_application_sandbox_gate_retains_security_and_requires_host_gate()
     runner = (root / ".agent/scripts/run-gates.sh").read_text(encoding="utf-8")
     sandbox_block = runner.split("    sandbox-application)", 1)[1].split("    *)", 1)[0]
     assert '[[ "${T090_SANDBOX_LIMITED:-0}" != "1" ]]' in sandbox_block
-    assert "python -m pytest backend/tests scripts/tests --ignore=backend/tests/windows -n 2" in sandbox_block
+    assert (
+        "python -m pytest backend/tests scripts/tests --ignore=backend/tests/windows -n 2"
+        in sandbox_block
+    )
     assert "tests/orchestrator" not in sandbox_block
     for required in (
         "check:fast:active",
@@ -2125,4 +2128,3 @@ def test_t090_application_sandbox_gate_retains_security_and_requires_host_gate()
     ]
     assert "start_gate coverage-check npm run coverage:check" in portable_block
     assert "npm run test:python:portable" in portable_block
-
