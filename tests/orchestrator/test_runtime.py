@@ -862,7 +862,7 @@ def test_t090_image_admission_requires_complete_host_pinned_policy(tmp_path: Pat
     import subprocess
 
     from tools.orchestrator.core import OrchestratorError
-    from tools.orchestrator.runtime import admit_verification_image
+    from tools.orchestrator.runtime import VerificationImageAdmission, admit_verification_image
 
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -900,59 +900,77 @@ def test_t090_image_admission_requires_complete_host_pinned_policy(tmp_path: Pat
     )
     subprocess.run(
         [
-            "openssl", "pkey", "-in", str(signing_key),
-            "-pubout", "-out", str(public_key),
+            "openssl",
+            "pkey",
+            "-in",
+            str(signing_key),
+            "-pubout",
+            "-out",
+            str(public_key),
         ],
         check=True,
         capture_output=True,
     )
     trusted_key_digest = hashlib.sha256(public_key.read_bytes()).hexdigest()
 
-    def admission_args() -> dict[str, object]:
-        return {
-            "expected_policy_sha256": hashlib.sha256(policy.read_bytes()).hexdigest(),
-            "authoritative_repository": repo,
-            "approval_signature_path": signature,
-            "trusted_public_key_path": public_key,
-            "expected_public_key_sha256": trusted_key_digest,
-        }
+    def attempt_admission(
+        *,
+        key_override: Path | None = None,
+        digest_override: str | None = None,
+    ) -> VerificationImageAdmission:
+        return admit_verification_image(
+            policy,
+            expected_policy_sha256=hashlib.sha256(policy.read_bytes()).hexdigest(),
+            authoritative_repository=repo,
+            approval_signature_path=signature,
+            trusted_public_key_path=key_override or public_key,
+            expected_public_key_sha256=digest_override or trusted_key_digest,
+        )
 
     def check_policy(value: dict[str, object], accepted: bool) -> None:
         policy.write_text(json.dumps(value, sort_keys=True))
         subprocess.run(
             [
-                "openssl", "pkeyutl", "-sign", "-inkey", str(signing_key),
-                "-rawin", "-in", str(policy), "-out", str(signature),
+                "openssl",
+                "pkeyutl",
+                "-sign",
+                "-inkey",
+                str(signing_key),
+                "-rawin",
+                "-in",
+                str(policy),
+                "-out",
+                str(signature),
             ],
             check=True,
             capture_output=True,
         )
         if accepted:
-            admitted = admit_verification_image(policy, **admission_args())
+            admitted = attempt_admission()
             assert admitted.image == image
-            assert admitted.policy_sha256 == admission_args()["expected_policy_sha256"]
+            assert admitted.policy_sha256 == hashlib.sha256(policy.read_bytes()).hexdigest()
         else:
             with pytest.raises(OrchestratorError, match="trusted image admission unavailable"):
-                admit_verification_image(policy, **admission_args())
+                attempt_admission()
 
     check_policy(valid, True)
     # Approval requires the independent signature AND pinned trusted public key.
     signature.write_bytes(bytes(64))
     with pytest.raises(OrchestratorError, match="trusted image admission unavailable"):
-        admit_verification_image(policy, **admission_args())
+        attempt_admission()
     check_policy(valid, True)
     with pytest.raises(OrchestratorError, match="trusted image admission unavailable"):
-        admit_verification_image(
-            policy, **{**admission_args(), "expected_public_key_sha256": "0" * 64}
-        )
+        attempt_admission(digest_override="0" * 64)
     with pytest.raises(OrchestratorError, match="trusted image admission unavailable"):
-        admit_verification_image(policy, expected_policy_sha256=admission_args()["expected_policy_sha256"], authoritative_repository=repo)
+        admit_verification_image(
+            policy,
+            expected_policy_sha256=hashlib.sha256(policy.read_bytes()).hexdigest(),
+            authoritative_repository=repo,
+        )
     symlink = tmp_path / "public-key-alias.pem"
     symlink.symlink_to(public_key)
     with pytest.raises(OrchestratorError, match="trusted image admission unavailable"):
-        admit_verification_image(
-            policy, **{**admission_args(), "trusted_public_key_path": symlink}
-        )
+        attempt_admission(key_override=symlink)
     for name, bad_value in (
         ("build_provenance_ref", None),
         ("sbom_ref", "unverified"),
