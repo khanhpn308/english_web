@@ -1,3 +1,9 @@
+## 09/10/2026 - T090 sealed source integration refinement
+
+- Added parallel Reviewer tests for host-supplied source evidence.
+- Persisted evidence artifact digests before model dispatch, and tied final Auditor and Integrator evidence to previously frozen source digests.
+- Historical CI results apply only to the exact SHA tested; updated candidate requires new CI. T090 remains IN_PROGRESS.
+
 ## 09/10/2026 - T090 host-sealed source/diff context
 
 - Added host-only changed-path evidence extraction with exact allowlist, two-sided SHA256, unified diff, frozen snapshot binding, checked baseline Git mode, and hard fail-closed text/size/symlink limits. Persisted digest-sealed run artifact.
