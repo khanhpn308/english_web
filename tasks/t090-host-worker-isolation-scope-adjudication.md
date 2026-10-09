@@ -307,3 +307,9 @@ T090 DONE or T089 accepted.
 - Independent reproducible Git test showed default `git diff --name-only` can collapse a detected rename into the destination only, omitting a deleted origin file. This could let an allowlist containing only the destination miss deletion of an unapproved source. The finding affects the shared Git.paths() scope boundary, not just prompt evidence.
 - Updated the host Git paths query to include `--no-renames` for both changed and staged sets. Added synthetic tests validating both rename ends are enumerated; host-sealed evidence fails closed when deletion origin is outside allowed_paths and correctly serializes both origin and destination when both explicitly permitted.
 - This is a scope-hardening change; older CI reports do not cover it. T090 IN_PROGRESS, PR #9 Draft, no main merge.
+### Local lint / CI-floor conflict and independent rename-path guard
+
+- Owner local WSL2 checks on `717c0011...`: Ruff lint PASS; Ruff format 19 files PASS; Mypy source 10 files PASS; scoped pytest 11 PASS.
+- Immutable Full Portable CI R5 #37884453037 on the same SHA ended FAILURE solely on `check-fast-active` floor check: `[silenced-checker]` at `runtime.py` lines 556, 560, 561. The three local `# noqa: ARG002` comments were prohibited by the repository floor policy despite passing standalone Ruff. Frontend coverage, portable pytest, secrets, code/dependency scans and architecture all PASS.
+- Removed the three suppressions and instead validated the required host context arguments `cwd`, `artifacts` and `name` in SecureProvider before any semantic HTTP request. Added three denial tests for malformed host context.
+- Independent adversarial audit also reproduced Git rename-origin omission under default rename detection. Disabled rename collapsing for both staged/unstaged `Git.paths` lists and added scope tests requiring both old and new paths. A new CI on this final SHA is mandatory; no silent CI bypasses.
