@@ -449,7 +449,7 @@ def test_t090_docker_sandbox_host_constructs_fixed_arguments(
     root = tmp_path / "runs"
     working = root / "verify-t090-abc" / "workspace"
     working.mkdir(parents=True)
-    (working / "sample.py").write_text("print('synthetic')\\n")
+    (working / "sample.py").write_text("print('synthetic')\n")
     policy = DockerVerificationPolicy(
         "docker.io/verified/t090@sha256:" + "a" * 64,
         root,
@@ -475,7 +475,7 @@ def test_t090_docker_sandbox_host_constructs_fixed_arguments(
             assert timeout == 20
             return ProcessResult(
                 tuple(command), str(cwd), "start", "end", 0,
-                "sha256:" + "b" * 64 + "\\n", "",
+                "sha256:" + "b" * 64 + "\n", "",
             )
         if "run" in command:
             assert timeout == 45
