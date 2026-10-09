@@ -1,3 +1,10 @@
+## 09/10/2026 - T090 host-mediated CI R1 regression repair
+
+- Host CI run 37870991359 on c28d1d63f1050162cd634e6852e98e09e7ab277a returned FAILURE. Portable pytest 1346/1348 passed; two inherited automatic-recovery cases regressed because global handling of WorkerResult BLOCKED was changed. Ruff formatting in four files also failed. Other six Phase A gates passed; dependent coverage not reached.
+- Restored legacy provider automatic-recovery semantics while retaining terminal BLOCKED specifically for host-http-edit Worker. Applied exact Ruff source/test formatting recommended by host run logs.
+- Updated T090 task card and changelog with immutable R1 failure provenance; R2 host verification remains pending and must target the final source commit.
+- No default Worker CLI unlock, no runtime secret/allowlist change, no historical evidence rewrite, no application edits or main merge.
+
 ## 09/10/2026 - T090 host-mediated Worker route (unverified implementation candidate)
 
 - Added explicit opt-in host-http-edit Worker backend in tools/orchestrator/core.py and tools/orchestrator/workflow.py; default AGY CLI Worker remains blocked. Host applies constrained text proposals without giving the model shell/MCP/Git/Python tools, and blocks missing credentials before dispatch.
