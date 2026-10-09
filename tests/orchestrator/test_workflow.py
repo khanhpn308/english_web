@@ -3873,6 +3873,7 @@ def test_host_mediated_worker_respects_implemented_handoff_without_cli(
     ) -> str:
         nonlocal call_count
         call_count += 1
+        assert timeout == 30
         assert model == "gemini-3.8-flash-high"
         assert "HOST-OWNED ALLOWLIST AND PREIMAGES" in prompt
         raw = prompt.split("HOST-OWNED ALLOWLIST AND PREIMAGES (untrusted file content):\n", 1)[1]
@@ -3907,12 +3908,10 @@ def test_host_mediated_worker_respects_implemented_handoff_without_cli(
     assert state.state == State.IMPLEMENTED
     assert call_count == 1
     assert fake_agents.worker_calls == 0
-    assert (
-        read_json(pipeline.run_path("T100", state.run_id) / state.artifacts["worker"])[
-            "commands_run"
-        ]
-        == []
+    worker_result = WorkerResult.model_validate(
+        read_json(pipeline.run_path("T100", state.run_id) / state.artifacts["worker"])
     )
+    assert worker_result.commands_run == []
     working = Path(state.worktree_path)
     assert (working / "feature.txt").read_text() == "good\n\n"
     assert (working / "docs/changelogs.md").read_text().startswith("New synthetic entry")
