@@ -64,10 +64,7 @@ class ProcessResult:
         }
 
 
-
-_DOCKER_DIGEST_RE = re.compile(
-    r"^[a-z0-9][a-z0-9._:/-]*@sha256:[a-f0-9]{64}$"
-)
+_DOCKER_DIGEST_RE = re.compile(r"^[a-z0-9][a-z0-9._:/-]*@sha256:[a-f0-9]{64}$")
 _DOCKER_TRUSTED_BOOTSTRAP = (
     "import os, shutil, sys; "
     "shutil.copytree('/source', '/workspace', dirs_exist_ok=True, symlinks=True); "
@@ -247,9 +244,7 @@ class DockerVerificationSandbox:
                 resolved,
                 timeout=20,
             )
-            if inspect.exit_code or not re.fullmatch(
-                r"sha256:[a-f0-9]{64}\s*", inspect.stdout
-            ):
+            if inspect.exit_code or not re.fullmatch(r"sha256:[a-f0-9]{64}\s*", inspect.stdout):
                 raise OrchestratorError("T090 SANDBOX_BLOCKED: pinned local image unavailable")
             name = f"t090-verify-{uuid4().hex}"
             try:
@@ -271,10 +266,7 @@ class DockerVerificationSandbox:
                 if (
                     cleanup.timed_out
                     or cleanup.oversized
-                    or (
-                        cleanup.exit_code != 0
-                        and "No such container" not in cleanup.stderr
-                    )
+                    or (cleanup.exit_code != 0 and "No such container" not in cleanup.stderr)
                 ):
                     raise OrchestratorError("T090 SANDBOX_BLOCKED: cleanup not confirmed")
             return result
