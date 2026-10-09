@@ -1,3 +1,10 @@
+## 10/10/2026 — T090 R6-B1.2 candidate Python and Semgrep wheel materialization
+
+- Introduced candidate-only CI to download **binary** Linux/Python 3.12 wheels and record SHA-256 of the exact bytes per artifact. This is a materialization/diagnostic step, **not** publisher verification or production approval.
+- Dev set is compared byte-for-byte by normalized distribution name/version to `requirements-dev.lock`; Semgrep resolves in an independent environment and explicitly fails if a dependency needs a source build. A missing wheel cannot trigger an unsafe source-build fallback.
+- Artifacts include hashed lock candidates and per-wheel hashes or a `BLOCKED.txt` reason. Once generated and independently audited, a separate change may wire them into Docker `pip --require-hashes --no-index` installs.
+- Debian apt/Playwright native dependencies and externally signed operator approval remain outstanding. PR #9 stays Draft, repository policy remains `approved:false`.
+
 ## 10/10/2026 - T090 R6-B1.2 immutable candidate OSV snapshot and production-input guard
 
 - Replaced mutable OSV all.zip downloads in the candidate Dockerfile with digest-locked OCI snapshot copying from signed GHCR candidate image 60add569; checked archive SHA-256 values remain unchanged and fail closed on mismatch.

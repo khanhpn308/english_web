@@ -1,0 +1,50 @@
+name: T090 candidate wheel materialization (non-production)
+
+on:
+  push:
+    branches:
+      - feature/t090-provider-isolation-adjudication
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t090-wheel-materialization-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  candidate-wheels:
+    name: Capture candidate wheel artifacts and exact SHA-256 hashes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resolve metadata tools (candidate only)
+        run: |
+          python -m pip install --disable-pip-version-check 'packaging==26.3'
+      - name: Check hash lock generator formatting
+        run: |
+          python -m pip install --disable-pip-version-check 'ruff==0.16.9'
+          python -m ruff format --check scripts/t090_materialize_wheels.py
+      - name: Download exact binary wheels and emit immutable candidate hashes
+        run: |
+          python scripts/t090_materialize_wheels.py --root . --output "$RUNNER_TEMP/t090-wheel-evidence"
+      - name: Preserve results or explicit blockers
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t090-candidate-wheel-evidence-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/t090-wheel-evidence/dev/requirements-hashed.lock
+            ${{ runner.temp }}/t090-wheel-evidence/dev/requirements-hashed.wheels.json
+            ${{ runner.temp }}/t090-wheel-evidence/semgrep/requirements-hashed.lock
+            ${{ runner.temp }}/t090-wheel-evidence/semgrep/requirements-hashed.wheels.json
+            ${{ runner.temp }}/t090-wheel-evidence/semgrep/BLOCKED.txt
+          if-no-files-found: error
+          retention-days: 14
