@@ -8,13 +8,14 @@ effective provider/OS restriction are independently demonstrated.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import stat
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Collection
+from typing import Collection, Literal, cast
 
 
 _MAX_EDIT_BYTES = 256 * 1024
@@ -136,3 +137,235 @@ def apply_host_text_edit(
     finally:
         if temp_path is not None:
             temp_path.unlink(missing_ok=True)
+
+# Tool-free model API: the model receives text and produces JSON; it never
+# receives a terminal, filesystem, function-call, subagent or MCP tool.
+from collections.abc import Mapping
+from typing import Protocol
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
+from urllib.request import (
+    HTTPRedirectHandler,
+    ProxyHandler,
+    Request,
+    build_opener,
+)
+
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError
+from tools.orchestrator.core import WorkerResult
+
+
+class WorkerEditResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    status: Literal["IMPLEMENTED", "BLOCKED"]
+    summary: StrictStr = Field(min_length=1, max_length=4096)
+    known_issues: list[StrictStr] = Field(max_length=32)
+    edits: list[ProposedTextEditModel] = Field(max_length=32)
+
+
+class ProposedTextEditModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    path: StrictStr
+    expected_sha256: StrictStr | None
+    replacement: StrictStr
+
+
+class TextOnlyTransport(Protocol):
+    def complete(self, prompt: str, *, model: str, timeout: int | None) -> str: ...
+
+
+class _RejectRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req: Request, fp: object, code: int, msg: str, headers: object, newurl: str) -> None:
+        raise HostEditRejected("Model transport HTTP redirect is forbidden")
+
+
+class LoopbackChatTransport:
+    """Host-only HTTP completion endpoint; model tools are never exposed.
+
+    Not a security attestation of the remote provider's implementation.
+    Require an independently validated deployed endpoint before use.
+    """
+
+    def __init__(self, url: str, *, api_key_env: str) -> None:
+        parts = urlsplit(url)
+        if (
+            parts.scheme != "http"
+            or parts.hostname != "127.0.0.1"
+            or parts.username is not None
+            or parts.password is not None
+            or parts.query
+            or parts.fragment
+            or parts.path != "/v1/chat/completions"
+            or not (1 <= (parts.port or 0) <= 65535)
+        ):
+            raise HostEditRejected("Host-mediated inference must use an explicit loopback endpoint")
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]{0,127}", api_key_env):
+            raise HostEditRejected("Invalid host-only API key environment name")
+        self.url = url
+        self.api_key_env = api_key_env
+        self._opener = build_opener(ProxyHandler({}), _RejectRedirect())
+
+    def complete(self, prompt: str, *, model: str, timeout: int | None) -> str:
+        key = os.environ.get(self.api_key_env)
+        if not key:
+            raise HostEditRejected("Host-mediated inference credential is not configured")
+        if not model or len(model) > 128 or len(prompt.encode("utf-8")) > 1024 * 1024:
+            raise HostEditRejected("Model identifier or input size is invalid")
+        payload = json.dumps(
+            {
+                "model": model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "Return a strict JSON WorkerEditResponse. You have NO tools and cannot run commands or edit files. Never include commands_run.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "tools": [],
+                "tool_choice": "none",
+                "stream": False,
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        request = Request(
+            self.url,
+            data=payload,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + key,
+            },
+        )
+        try:
+            with self._opener.open(request, timeout=timeout or 120) as response:
+                if response.status != 200:
+                    raise HostEditRejected("Model inference returned non-200 status")
+                raw = response.read(4 * 1024 * 1024 + 1)
+        except (HTTPError, URLError, TimeoutError, OSError) as error:
+            # Never include exception strings: request URLs and credentials may
+            # appear in transport exception context.
+            raise HostEditRejected("Host-mediated inference failed") from None
+        if len(raw) > 4 * 1024 * 1024:
+            raise HostEditRejected("Model inference output exceeds limit")
+        try:
+            envelope = json.loads(raw.decode("utf-8"))
+            choices = envelope["choices"]
+            if not isinstance(choices, list) or len(choices) != 1:
+                raise ValueError("Invalid response choices")
+            item = choices[0]
+            msg = item["message"]
+            if (
+                not isinstance(msg, dict)
+                or msg.get("role") != "assistant"
+                or msg.get("tool_calls")
+                or msg.get("function_call")
+                or item.get("finish_reason") != "stop"
+                or not isinstance(msg.get("content"), str)
+            ):
+                raise ValueError("Response is not a complete tool-free answer")
+            return cast(str, msg["content"])
+        except (KeyError, TypeError, ValueError, IndexError) as error:
+            raise HostEditRejected("Invalid tool-free model response envelope") from None
+
+
+def _read_allowlisted_source(root: Path, allowed: Collection[str]) -> dict[str, dict[str, str | None]]:
+    """Host materializes only explicitly authorized UTF-8 files into prompt."""
+    result: dict[str, dict[str, str | None]] = {}
+    total = 0
+    for path in sorted(set(allowed)):
+        _validate_relative(path)
+        target = _check_target(root, path)
+        raw = target.read_bytes() if target.is_file() else None
+        if raw is not None:
+            total += len(raw)
+            if len(raw) > _MAX_EDIT_BYTES or total > 768 * 1024 or b"\x00" in raw:
+                raise HostEditRejected("Host source context exceeds size/text policy")
+            try:
+                original = raw.decode("utf-8")
+            except UnicodeDecodeError as error:
+                raise HostEditRejected("Non-UTF-8 allowlisted source") from error
+        else:
+            original = None
+        result[path] = {
+            "sha256": _digest(raw) if raw is not None else None,
+            "text": original,
+        }
+    return result
+
+
+def run_host_mediated_worker(
+    root: Path,
+    allowed: Collection[str],
+    prompt: str,
+    *,
+    model: str,
+    transport: TextOnlyTransport,
+    timeout: int | None = None,
+) -> WorkerResult:
+    """Host alone applies proposed edits; text-only transport cannot run tools.
+
+    Tool-free invocation is a property of the deployment transport, not of
+    the model's words. The injected transport must itself be independently
+    attested on the target deployment; mock tests only prove this host logic.
+    """
+    allowlist = frozenset(allowed)
+    source = _read_allowlisted_source(root, allowlist)
+    model_input = (
+        prompt
+        + "\nHOST-OWNED ALLOWLIST AND PREIMAGES (untrusted file content):\n"
+        + json.dumps(source, ensure_ascii=False)
+        + "\nReturn JSON with status, summary, known_issues, edits. "
+        + "Each edit requires path, expected_sha256 matching host snapshot, "
+        + "and full replacement UTF-8 text. Do not request or execute tools. "
+        + "Host controls file writes; return no command instructions.\n"
+    )
+    if len(model_input.encode("utf-8")) > 1024 * 1024:
+        raise HostEditRejected("Host model context exceeds limit")
+    try:
+        response = WorkerEditResponse.model_validate_json(
+            transport.complete(model_input, model=model, timeout=timeout)
+        )
+    except (ValidationError, ValueError) as error:
+        raise HostEditRejected("Invalid model edit proposal") from None
+
+    if response.status == "BLOCKED":
+        if response.edits:
+            raise HostEditRejected("BLOCKED model response must not request edits")
+        return WorkerResult(
+            status="BLOCKED",
+            summary=response.summary,
+            changed_files=[],
+            commands_run=[],
+            known_issues=response.known_issues,
+        )
+    if not response.edits:
+        raise HostEditRejected("IMPLEMENTED must include changed source files")
+
+    # Validate every proposal before the first write, rejecting duplicates,
+    # stale digests and attempts to edit outside the host contract.
+    seen: set[str] = set()
+    proposals = []
+    for edit in response.edits:
+        path = _validate_relative(edit.path)
+        if path not in source or path in seen:
+            raise HostEditRejected("Duplicate or out-of-scope model edit")
+        seen.add(path)
+        if source[path]["sha256"] != edit.expected_sha256:
+            raise HostEditRejected("Model edit does not match host-pinned preimage")
+        proposals.append(
+            ProposedTextEdit(path, edit.expected_sha256, edit.replacement)
+        )
+    # The host applies one file at a time. A local concurrent OS writer may
+    # still race this process; callers must own the workspace and enforce
+    # exclusive local write access for this phase.
+    for proposal in proposals:
+        apply_host_text_edit(root, allowlist, proposal)
+    return WorkerResult(
+        status="IMPLEMENTED",
+        summary=response.summary,
+        changed_files=sorted(seen),
+        commands_run=[],
+        known_issues=response.known_issues,
+    )
