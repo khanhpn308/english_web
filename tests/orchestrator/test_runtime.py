@@ -769,6 +769,7 @@ def test_t090_sealed_source_changed_during_image_inspection_is_blocked(
     assert operations == ["inspect"]
     assert (workspace / "case.txt").read_text() == "frozen"
 
+
 def test_t090_tree_digest_is_independent_of_creation_and_walk_order(
     tmp_path: Path,
 ) -> None:

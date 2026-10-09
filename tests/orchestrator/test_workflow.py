@@ -4229,9 +4229,7 @@ def test_t090_git_frozen_source_binding_matches_authoritative_snapshot(
     root = tmp_path / "verify-root"
     verification = root / "verify-binding" / "workspace"
     verification.parent.mkdir(parents=True)
-    Git(repository).run(
-        "clone", "--no-local", "--no-checkout", str(repository), str(verification)
-    )
+    Git(repository).run("clone", "--no-local", "--no-checkout", str(repository), str(verification))
     Git(verification).run("checkout", "--detach", base)
     broker = DockerVerificationSandbox(
         DockerVerificationPolicy("example.org/t090@sha256:" + "a" * 64, root)
@@ -4261,9 +4259,7 @@ def test_t090_git_frozen_binding_rejects_tampered_clone_before_docker(
     root = tmp_path / "verify-root"
     verification = root / "verify-binding" / "workspace"
     verification.parent.mkdir(parents=True)
-    Git(repository).run(
-        "clone", "--no-local", "--no-checkout", str(repository), str(verification)
-    )
+    Git(repository).run("clone", "--no-local", "--no-checkout", str(repository), str(verification))
     Git(verification).run("checkout", "--detach", base)
     (verification / "feature.txt").write_text("tampered after frozen baseline\n")
     broker = DockerVerificationSandbox(
@@ -4292,9 +4288,7 @@ def test_t090_git_frozen_binding_rejects_changed_authoritative_source(
     root = tmp_path / "verify-root"
     verification = root / "verify-binding" / "workspace"
     verification.parent.mkdir(parents=True)
-    Git(repository).run(
-        "clone", "--no-local", "--no-checkout", str(repository), str(verification)
-    )
+    Git(repository).run("clone", "--no-local", "--no-checkout", str(repository), str(verification))
     Git(verification).run("checkout", "--detach", base)
     (repository / "feature.txt").write_text("tampered authoritative source\n")
     broker = DockerVerificationSandbox(
@@ -4308,4 +4302,3 @@ def test_t090_git_frozen_binding_rejects_changed_authoritative_source(
             expected_git_snapshot=frozen,
             sandbox=broker,
         )
-
