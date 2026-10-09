@@ -768,3 +768,49 @@ def test_t090_sealed_source_changed_during_image_inspection_is_blocked(
         broker.run(["python", "-m", "pytest"], workspace, expected_source_digest=expected)
     assert operations == ["inspect"]
     assert (workspace / "case.txt").read_text() == "frozen"
+
+def test_t090_tree_digest_is_independent_of_creation_and_walk_order(
+    tmp_path: Path,
+) -> None:
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+
+    root = tmp_path / "frozen"
+    workspaces = []
+    for number, order in enumerate((("zebra", "alpha"), ("alpha", "zebra"))):
+        workspace = root / f"verify-order-{number}" / "workspace"
+        workspace.mkdir(parents=True)
+        for folder in order:
+            directory = workspace / folder
+            directory.mkdir()
+            (directory / "module.py").write_text("SYNTHETIC = True\n")
+            (directory / "empty").mkdir()
+        # In-tree symlink references must have stable relative targets.
+        (workspace / "link").symlink_to("alpha/module.py")
+        workspaces.append(workspace)
+
+    broker = DockerVerificationSandbox(
+        DockerVerificationPolicy("example.org/t090@sha256:" + "a" * 64, root)
+    )
+    first = broker.source_digest(workspaces[0])
+    second = broker.source_digest(workspaces[1])
+    assert first == second
+
+    (workspaces[1] / "alpha/module.py").write_text("SYNTHETIC = False\n")
+    assert broker.source_digest(workspaces[1]) != first
+
+
+def test_t090_digest_detects_empty_directories_and_path_renames(tmp_path: Path) -> None:
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+
+    root = tmp_path / "frozen"
+    workspace = root / "verify-empty" / "workspace"
+    workspace.mkdir(parents=True)
+    broker = DockerVerificationSandbox(
+        DockerVerificationPolicy("example.org/t090@sha256:" + "b" * 64, root)
+    )
+    baseline = broker.source_digest(workspace)
+    (workspace / "empty").mkdir()
+    with_empty = broker.source_digest(workspace)
+    assert baseline != with_empty
+    (workspace / "empty").rename(workspace / "renamed")
+    assert broker.source_digest(workspace) != with_empty

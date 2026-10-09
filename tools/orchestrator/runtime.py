@@ -76,6 +76,9 @@ def _docker_source_digest(root: str) -> str:
     root = os.path.realpath(root)
     digest = hashlib.sha256(b"t090-tree-v1\n")
     for parent, folders, files in os.walk(root, followlinks=False):
+        # os.walk traverses folders in filesystem enumeration order unless sorted.
+        # Sorting only the entries within each parent is not sufficient.
+        folders.sort()
         for name in sorted([*folders, *files]):
             path = os.path.join(parent, name)
             relative = os.path.relpath(path, root).replace(os.sep, "/")
