@@ -815,3 +815,92 @@ def test_t090_digest_detects_empty_directories_and_path_renames(tmp_path: Path) 
     assert baseline != with_empty
     (workspace / "empty").rename(workspace / "renamed")
     assert broker.source_digest(workspace) != with_empty
+
+
+def test_t090_image_admission_rejects_unapproved_repo_policy(tmp_path: Path) -> None:
+    import hashlib
+    import json
+
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import admit_verification_image
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    policy = tmp_path / "trusted-approval.json"
+    policy.write_text(json.dumps({"schema_version": 1, "approved": False}))
+    pinned = hashlib.sha256(policy.read_bytes()).hexdigest()
+
+    with pytest.raises(OrchestratorError, match="trusted image admission unavailable"):
+        admit_verification_image(
+            policy, expected_policy_sha256=pinned, authoritative_repository=repo
+        )
+    with pytest.raises(OrchestratorError, match="trusted image admission unavailable"):
+        admit_verification_image(
+            policy, expected_policy_sha256="f" * 64, authoritative_repository=repo
+        )
+    with pytest.raises(OrchestratorError, match="trusted image admission unavailable"):
+        admit_verification_image(
+            policy, expected_policy_sha256=pinned, authoritative_repository=tmp_path
+        )
+
+
+def test_t090_image_admission_requires_complete_host_pinned_policy(tmp_path: Path) -> None:
+    import hashlib
+    import json
+
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import admit_verification_image
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    for name in ("requirements-dev.lock", "package-lock.json"):
+        (repo / name).write_text(name)
+    lock_hashes = {
+        name: hashlib.sha256((repo / name).read_bytes()).hexdigest()
+        for name in ("requirements-dev.lock", "package-lock.json")
+    }
+    image = "registry.invalid/verifier@sha256:" + "a" * 64
+    valid = {
+        "schema_version": 1,
+        "approved": True,
+        "image_reference": image,
+        "verified_image_manifest_digest": "sha256:" + "a" * 64,
+        "base_images": {
+            "python": "registry.invalid/python@sha256:" + "b" * 64,
+            "node": "registry.invalid/node@sha256:" + "c" * 64,
+        },
+        "locked_inputs_sha256": lock_hashes,
+        "offline_osv_db_sha256": {"npm": "d" * 64, "PyPI": "e" * 64},
+        "build_provenance_ref": "sha256:" + "f" * 64,
+        "sbom_ref": "sha256:" + "0" * 64,
+    }
+    policy = tmp_path / "external-approval.json"
+
+    def check_policy(value: dict[str, object], accepted: bool) -> None:
+        policy.write_text(json.dumps(value, sort_keys=True))
+        pin = hashlib.sha256(policy.read_bytes()).hexdigest()
+        if accepted:
+            admitted = admit_verification_image(
+                policy, expected_policy_sha256=pin, authoritative_repository=repo
+            )
+            assert admitted.image == image
+            assert admitted.policy_sha256 == pin
+        else:
+            with pytest.raises(OrchestratorError, match="trusted image admission unavailable"):
+                admit_verification_image(
+                    policy, expected_policy_sha256=pin, authoritative_repository=repo
+                )
+
+    check_policy(valid, True)
+    for name, bad_value in (
+        ("build_provenance_ref", None),
+        ("sbom_ref", "unverified"),
+        ("verified_image_manifest_digest", "sha256:" + "f" * 64),
+        ("base_images", {"python": "python:latest"}),
+        ("locked_inputs_sha256", {"package-lock.json": "0" * 64}),
+        ("offline_osv_db_sha256", {"npm": "f" * 64}),
+    ):
+        check_policy({**valid, name: bad_value}, False)
+    (repo / "package-lock.json").write_text("changed")
+    check_policy(valid, False)
+

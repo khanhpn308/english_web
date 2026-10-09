@@ -68,6 +68,95 @@ class ProcessResult:
         }
 
 
+@dataclass(frozen=True)
+class VerificationImageAdmission:
+    """Immutable Host-anchored policy inputs; not a publisher signature verdict."""
+
+    image: str
+    policy_sha256: str
+    provenance_ref: str
+    sbom_ref: str
+
+
+def admit_verification_image(
+    policy_path: Path,
+    *,
+    expected_policy_sha256: str,
+    authoritative_repository: Path,
+) -> VerificationImageAdmission:
+    """Deny repo-local or unpinned policy; accept only a complete external approval.
+
+    expected_policy_sha256 MUST originate from an independently controlled Host
+    trust anchor. A matching JSON document is NOT itself a verified signature.
+    """
+    def blocked() -> OrchestratorError:
+        return OrchestratorError("T090 SANDBOX_BLOCKED: trusted image admission unavailable")
+
+    if not re.fullmatch(r"[a-f0-9]{64}", expected_policy_sha256):
+        raise blocked()
+    if not policy_path.is_absolute() or policy_path.is_symlink():
+        raise blocked()
+    try:
+        path = policy_path.resolve(strict=True)
+        repository = authoritative_repository.resolve(strict=True)
+        if path.is_relative_to(repository):
+            raise blocked()
+        st = path.stat()
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+            raise blocked()
+        raw = path.read_bytes()
+        if not hmac.compare_digest(hashlib.sha256(raw).hexdigest(), expected_policy_sha256):
+            raise blocked()
+        approval = json.loads(raw)
+        if not isinstance(approval, dict):
+            raise blocked()
+        image = approval.get("image_reference")
+        if (
+            approval.get("schema_version") != 1
+            or approval.get("approved") is not True
+            or not isinstance(image, str)
+            or not _DOCKER_DIGEST_RE.fullmatch(image)
+        ):
+            raise blocked()
+        digest_from_image = image.split("@", 1)[1]
+        if approval.get("verified_image_manifest_digest") != digest_from_image:
+            raise blocked()
+        for name in ("python", "node"):
+            ref = approval.get("base_images", {}).get(name)
+            if not isinstance(ref, str) or not _DOCKER_DIGEST_RE.fullmatch(ref):
+                raise blocked()
+        for group, names in (
+            ("locked_inputs_sha256", ("requirements-dev.lock", "package-lock.json")),
+            ("offline_osv_db_sha256", ("npm", "PyPI")),
+        ):
+            values = approval.get(group)
+            if not isinstance(values, dict) or not all(
+                isinstance(values.get(name), str)
+                and re.fullmatch(r"[a-f0-9]{64}", values[name])
+                for name in names
+            ):
+                raise blocked()
+        for name in ("build_provenance_ref", "sbom_ref"):
+            value = approval.get(name)
+            if not isinstance(value, str) or not value.startswith("sha256:"):
+                raise blocked()
+            if not re.fullmatch(r"sha256:[a-f0-9]{64}", value):
+                raise blocked()
+        for name in ("requirements-dev.lock", "package-lock.json"):
+            expected_lock_hash = approval["locked_inputs_sha256"][name]
+            actual_lock_hash = hashlib.sha256((repository / name).read_bytes()).hexdigest()
+            if not hmac.compare_digest(expected_lock_hash, actual_lock_hash):
+                raise blocked()
+        return VerificationImageAdmission(
+            image=image,
+            policy_sha256=expected_policy_sha256,
+            provenance_ref=approval["build_provenance_ref"],
+            sbom_ref=approval["sbom_ref"],
+        )
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        raise blocked() from error
+
+
 _DOCKER_DIGEST_RE = re.compile(r"^[a-z0-9][a-z0-9._:/-]*@sha256:[a-f0-9]{64}$")
 
 
