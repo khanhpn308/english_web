@@ -32,7 +32,8 @@
     "test:a11y": "playwright test --grep @a11y",
     "build": "vite build",
     "export:contract": "PYTHONPATH=. python scripts/export_contract.py",
-    "test:contract": "PYTHONPATH=. python -m pytest scripts/tests/test_contract.py"
+    "test:contract": "PYTHONPATH=. python -m pytest scripts/tests/test_contract.py",
+    "benchmark:search": "python benchmarks/search_benchmark.py"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",
