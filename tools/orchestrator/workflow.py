@@ -1546,7 +1546,18 @@ class Pipeline:
             and isinstance(self.provider, SecureProvider)
             and self.config.roles[role_name].analysis_backend == "host-http-text"
         ):
-            prompt += self.sealed_source_context(directory, state, working, snapshot)
+            frozen_source = (
+                context.candidate_identity.source_digest
+                if isinstance(context, AuditorContextV1)
+                else state.audited_digest
+                if isinstance(context, IntegratorContextV1)
+                else snapshot
+            )
+            if not frozen_source or snapshot != frozen_source:
+                raise OrchestratorError(
+                    "T090 SOURCE_STALE: semantic role source differs from frozen evidence"
+                )
+            prompt += self.sealed_source_context(directory, state, working, frozen_source)
         invocation_base = f"{state.fix_cycle:02d}-{role_name}-{uuid4().hex[:8]}"
         protected = {
             p: digest(p.read_bytes())
