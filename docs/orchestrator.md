@@ -60,8 +60,12 @@ and unsupported verification commands before executing any model-generated
 code. The fixed Docker command uses an empty client config, local Unix
 socket, `--pull=never`, `--network=none`, `--read-only`,
 `--cap-drop=ALL`, `no-new-privileges`, no Docker socket or HOME mount,
-an allowlisted disposable workspace mount and a disposable `/tmp`.
-The Docker client is invoked without inherited environment variables.
+a read-only bind of the disposable source at `/source`, a size-capped
+256 MiB private tmpfs at `/workspace`, and a disposable `/tmp`.
+A fixed Python bootstrap copies source into the private tmpfs before executing
+the declared command, so source verification cannot write to the host mount;
+the tmpfs is also counted toward container memory usage. The Docker client is
+invoked without inherited environment variables.
 A host-generated container name is removed after dispatch/timeout.
 
 **This implementation is deliberately NOT yet connected** to either
