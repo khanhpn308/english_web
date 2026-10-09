@@ -210,6 +210,11 @@ class DockerVerificationSandbox:
 
     def run(self, command: list[str], workspace: Path) -> ProcessResult:
         """Run only in a disposable verification clone; never fall back to host."""
+        from tools.orchestrator.core import validate_command
+
+        validate_command(command)
+        if command[:2] == ["npm", "ci"]:
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: setup needs trusted dependencies")
         resolved = self._workspace(workspace)
         if not Path("/usr/bin/docker").is_file():
             raise OrchestratorError("T090 SANDBOX_BLOCKED: Docker executable unavailable")
