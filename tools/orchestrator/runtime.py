@@ -278,8 +278,10 @@ class Git:
         return not self.run("status", "--porcelain=v1", "--untracked-files=all")
 
     def paths(self, base: str) -> list[str]:
-        changed = self.run("diff", "--name-only", "-z", base, "--")
-        staged = self.run("diff", "--cached", "--name-only", "-z", base, "--")
+        # Never collapse a rename into its destination: both the deleted source
+        # and added destination must pass the contract's changed-path allowlist.
+        changed = self.run("diff", "--no-renames", "--name-only", "-z", base, "--")
+        staged = self.run("diff", "--cached", "--no-renames", "--name-only", "-z", base, "--")
         untracked = self.run("ls-files", "--others", "--exclude-standard", "-z")
         return sorted({p for p in (changed + "\0" + staged + "\0" + untracked).split("\0") if p})
 
