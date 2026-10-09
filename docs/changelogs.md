@@ -1,3 +1,9 @@
+## 09/10/2026 - T090 rename scope-hardening
+
+- Independent Git rename test exposed omission of deleted rename origins from default name-only diffs. Git.paths now disables Git rename collapsing so both source and destination require explicit allowlisting.
+- Added regression coverage for changed paths and host-sealed before/after evidence when files are renamed; no Worker CLI or model tools enabled.
+- Previous local PASS on 717c0011 covers the prior version only; full CI required on updated SHA.
+
 ## 09/10/2026 - T090 sealed-source CI R1 format repair
 
 - Recorded CI run 37882294933 FAILURE on 4777d903: three Ruff format differences; portable pytest, frontend, architecture and security gates passed.
