@@ -43,6 +43,36 @@ workspace access, revalidate preimages, and retain failed partial candidate
 for host adjudication. Neither a text-only prompt nor SHA checks alone prove
 resistance against a concurrent local process with filesystem privileges.
 
+### T090 host-sealed source and diff evidence (tool-free semantic roles)
+
+For an opt-in `host-http-text` Reviewer/Auditor/Integrator, the host constructs
+a *bounded evidence snapshot before model dispatch*. It is based on the
+frozen candidate source digest and the exact changed-path set from Git, not
+on paths requested by the model. Only paths permitted by
+`Contract.allowed_paths` enter the payload. For each changed UTF-8 file,
+the host captures baseline and working bytes, independent SHA-256 digests,
+and a text unified diff. New and deleted text files have an explicit null
+side. The canonical JSON evidence is given its own SHA-256 and stored as a
+sealed run artifact, then copied into the role prompt with untrusted-data
+instructions. Both round-one and resumed parallel Reviewers receive the
+same frozen source evidence. The final Auditor and Integrator receive newly
+captured, source-digest-verified evidence via `Pipeline.invoke`.
+
+Limits fail *closed*: at most 24 changed files, 48 KiB of either text side per
+file, 256 KiB serialized total; no binary or non-UTF8 files, symlinks,
+nonregular files, outside-allowlist changes, or stale digests. Evidence is
+never truncated. The host checks candidate digests before and after reading
+and existing orchestration tamper checks protect every registered artifact.
+No model-facing terminal, file tool, Git command, source path resolver, or
+network fetch API is introduced.
+
+**Scope limitation:** evidence covers the *changed* contract paths, not all
+callers/dependencies or arbitrary repository files. If semantic review needs
+unchanged source, a separately authorized bounded host context expansion is
+required; reviewers must not assert inspection of absent code. No automatic
+CLI activation or T090 acceptance follows from this patch. The producer
+of externally executed verification code still requires OS-level isolation.
+
 ### T090: Semantic roles without executable CLI tools (opt-in)
 
 The production `Pipeline` now uses `SecureProvider` by default for its
