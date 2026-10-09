@@ -514,8 +514,6 @@ def test_t090_docker_sandbox_host_constructs_fixed_arguments(
 def test_t090_docker_sandbox_denies_invalid_workspace_before_docker(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
 ) -> None:
-    import socket
-
     from tools.orchestrator.core import OrchestratorError
     from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
 
@@ -528,8 +526,7 @@ def test_t090_docker_sandbox_denies_invalid_workspace_before_docker(
     elif mode == "symlink":
         (workspace / "bad").symlink_to(tmp_path)
     elif mode == "special":
-        sock = socket.socket(socket.AF_UNIX)
-        sock.bind(str(workspace / "control.socket"))
+        os.mkfifo(workspace / "control.pipe")
     else:
         monkeypatch.setattr("tools.orchestrator.runtime.os.geteuid", lambda: 0)
 
@@ -539,12 +536,8 @@ def test_t090_docker_sandbox_denies_invalid_workspace_before_docker(
         raise AssertionError("Docker must not run for invalid workspaces")
 
     monkeypatch.setattr("tools.orchestrator.runtime.execute", forbidden_execute)
-    try:
-        with pytest.raises(OrchestratorError, match="SANDBOX_BLOCKED"):
-            DockerVerificationSandbox(policy).run(["python", "-m", "pytest"], workspace)
-    finally:
-        if mode == "special":
-            sock.close()
+    with pytest.raises(OrchestratorError, match="SANDBOX_BLOCKED"):
+        DockerVerificationSandbox(policy).run(["python", "-m", "pytest"], workspace)
 
 
 def test_t090_docker_sandbox_blocks_missing_pinned_image(
