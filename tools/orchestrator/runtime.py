@@ -555,18 +555,20 @@ class SecureProvider:
         self,
         prompt: str,
         *,
-        cwd: Path,  # noqa: ARG002 - Required AgentProvider keyword contract.
+        cwd: Path,
         role: Role,
         timeout: int | None,
         output: type[Output],
-        artifacts: Path,  # noqa: ARG002 - Required AgentProvider keyword contract.
-        name: str,  # noqa: ARG002 - Required AgentProvider keyword contract.
+        artifacts: Path,
+        name: str,
         readonly: bool,
     ) -> Output:
         if not readonly:
             # Mutable Worker dispatch goes exclusively through host-http-edit
             # in Pipeline.invoke; never use a CLI fallback from this router.
             raise OrchestratorError("T090 BLOCKED: mutable CLI execution is forbidden")
+        if not cwd.is_dir() or not artifacts.is_dir() or not name.strip():
+            raise OrchestratorError("T090 BLOCKED: invalid host-owned semantic context")
         if (
             role.analysis_backend != "host-http-text"
             or role.allow_process
