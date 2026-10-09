@@ -92,9 +92,7 @@ def apply_host_text_edit(
     relative = _validate_relative(proposal.path)
     if relative not in approved:
         raise HostEditRejected("Edit path not in host-owned allowlist")
-    if proposal.expected_sha256 is not None and not _HEX_256.fullmatch(
-        proposal.expected_sha256
-    ):
+    if proposal.expected_sha256 is not None and not _HEX_256.fullmatch(proposal.expected_sha256):
         raise HostEditRejected("Invalid edit preimage digest")
     replacement = proposal.replacement.encode("utf-8", errors="strict")
     if len(replacement) > _MAX_EDIT_BYTES or b"\x00" in replacement:
