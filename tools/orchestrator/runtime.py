@@ -229,6 +229,14 @@ _DOCKER_TRUSTED_BOOTSTRAP = (
     "    attested = False\n"
     "if not attested:\n"
     "    raise SystemExit('T090 SANDBOX_BLOCKED: source attestation mismatch')\n"
+    # The image preprovisions Node dependencies outside untrusted source.
+    # Attach them to the isolated tmpfs only AFTER the source digest check.
+    # A source-provided node_modules path must never shadow trusted tools.
+    "if os.path.lexists('/workspace/node_modules'):\n"
+    "    raise SystemExit('T090 SANDBOX_BLOCKED: untrusted node_modules in source')\n"
+    "if not os.path.isfile('/node_modules/typescript/lib/typescript.js'):\n"
+    "    raise SystemExit('T090 SANDBOX_BLOCKED: trusted Node toolchain missing')\n"
+    "os.symlink('/node_modules', '/workspace/node_modules')\n"
     "os.chdir('/workspace')\n"
     "os.execvp(sys.argv[2], sys.argv[2:])\n"
 )
