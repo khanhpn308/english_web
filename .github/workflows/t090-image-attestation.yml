@@ -97,3 +97,68 @@ jobs:
           assert shutil.which("gitleaks") and shutil.which("osv-scanner")
           print("T090_IMAGE_BASIC_SMOKE_PASS: not a security attestation")
           '
+
+
+      - name: Exercise actual DockerVerificationSandbox against a synthetic source
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Local registry is a disposable CI fixture, not an approved image publisher.
+          docker run -d --name t090-ci-registry \
+            -p 127.0.0.1:5000:5000 registry:2
+          trap 'docker rm -f t090-ci-registry >/dev/null 2>&1 || true' EXIT
+          docker tag t090-verifier:candidate localhost:5000/t090-verifier:synthetic
+          docker push localhost:5000/t090-verifier:synthetic
+          image_ref="$(docker image inspect --format '{{index .RepoDigests 0}}' localhost:5000/t090-verifier:synthetic)"
+          [[ "$image_ref" == localhost:5000/t090-verifier@sha256:* ]]
+          python3 -m pip install --disable-pip-version-check -r requirements-dev.lock
+          T090_CI_IMAGE="$image_ref" python3 - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          from tools.orchestrator.core import OrchestratorError
+          from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "t090-runner-probe"
+          workspace = root / "verify-synthetic-001" / "workspace"
+          workspace.mkdir(parents=True, exist_ok=False)
+          source = workspace / "test_isolation.py"
+          source.write_text(
+              "import os, socket, pytest\n"
+              "def test_host_files_unavailable():\n"
+              "    assert not os.path.exists('/mnt/c')\n"
+              "    assert not os.path.exists('/root/.ssh')\n"
+              "def test_input_mount_is_readonly():\n"
+              "    with pytest.raises(OSError):\n"
+              "        open('/source/test_isolation.py', 'w').write('forbidden')\n"
+              "def test_network_and_bridge_denied():\n"
+              "    with socket.socket() as connection:\n"
+              "        connection.settimeout(2)\n"
+              "        with pytest.raises(OSError):\n"
+              "            connection.connect(('127.0.0.1', 8045))\n"
+              "def test_tmpfs_available():\n"
+              "    with open('/tmp/t090-probe', 'w') as output:\n"
+              "        output.write('ok')\n"
+          )
+          before = hashlib.sha256(source.read_bytes()).hexdigest()
+          policy = DockerVerificationPolicy(
+              image=os.environ["T090_CI_IMAGE"],
+              verification_root=root,
+              memory_mib=512,
+              cpu_millicores=1000,
+              pids_limit=64,
+              timeout_seconds=120,
+          )
+          broker = DockerVerificationSandbox(policy)
+          result = broker.run(["python", "-m", "pytest", "-q"], workspace)
+          assert result.exit_code == 0, f"Broker test failed with exit {result.exit_code}"
+          assert not result.timed_out and not result.oversized
+          assert hashlib.sha256(source.read_bytes()).hexdigest() == before
+          try:
+              broker.run(["npm", "ci"], workspace)
+          except OrchestratorError:
+              pass
+          else:
+              raise AssertionError("Untrusted npm ci was not denied")
+          print("T090_BROKER_SYNTHETIC_ISOLATION_PASS; NOT WSL2 OR SECURITY ACCEPTANCE")
+          PY
