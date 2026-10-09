@@ -149,6 +149,7 @@ def test_host_does_not_accept_its_allowlist_from_edit_path_prefix(tmp_path: Path
         )
     assert (root / "src-evil" / "ok.py").read_bytes() == original
 
+
 class FakeToolFreeTransport:
     """Synthetic text-only implementation; NOT a live vendor attestation."""
 
@@ -367,8 +368,7 @@ def test_transport_issues_explicit_tool_free_request(
 
     monkeypatch.setattr(client, "_opener", FakeOpener())
     assert (
-        client.complete("Synthetic request", model="gemini-3.8-flash-high", timeout=5)
-        == expected
+        client.complete("Synthetic request", model="gemini-3.8-flash-high", timeout=5) == expected
     )
 
 
@@ -414,6 +414,7 @@ def test_transport_rejects_any_model_tool_call(
     with pytest.raises(HostEditRejected, match="tool-free"):
         client.complete("task", model="gemini-3.8-flash-high", timeout=5)
 
+
 def _host_roles() -> dict[str, Role]:
     roles = {
         name: Role(provider="codex", executable="synthetic-codex")
@@ -444,9 +445,7 @@ def test_host_edit_backend_must_be_explicitly_and_safely_configured() -> None:
     ):
         bad_roles = {**roles, "worker": roles["worker"].model_copy(update=changes)}
         with pytest.raises((OrchestratorError, HostEditRejected)):
-            Config(
-                roles=bad_roles, verification=[["python", "-m", "pytest"]]
-            ).validate_roles()
+            Config(roles=bad_roles, verification=[["python", "-m", "pytest"]]).validate_roles()
 
 
 def test_host_edit_transport_rejected_for_nonworker_roles() -> None:
