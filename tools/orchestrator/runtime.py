@@ -542,7 +542,6 @@ class CliProvider:
             raise OrchestratorError("Agent returned malformed or schema-invalid JSON") from error
 
 
-
 class SecureProvider:
     """Production role router: no analyst/reviewer CLI command execution.
 
