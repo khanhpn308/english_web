@@ -1879,7 +1879,10 @@ class Pipeline:
         ) as temporary:
             verify_path = Path(temporary) / "workspace"
             self.git.run(
-                "clone", "--shared", "--no-checkout", str(self.repository), str(verify_path)
+                # --shared introduces Git object alternates pointing to the
+                # authoritative repository; those host paths must never be
+                # required by containerized verification.
+                "clone", "--no-local", "--no-checkout", str(self.repository), str(verify_path)
             )
             verify_git = Git(verify_path)
             verify_git.run("checkout", "--detach", base_sha)

@@ -2756,6 +2756,9 @@ def test_concurrent_audit_materialization_distinct_staged_and_working_content(
     with pipeline.verification_workspace(
         worktree_path, frozen_digest, distinct_base, "T100", "run-1"
     ) as (verify_path, verify_git):
+        # A verification clone must be fully independent of host Git objects.
+        assert not (verify_path / ".git/objects/info/alternates").exists()
+
         # 1. Assert independently sandbox cached/index content == "value 1\n"
         sandbox_index_diff = verify_git.run("diff", "--cached", "--binary", distinct_base, "--")
         original_index_diff = worktree_git.run("diff", "--cached", "--binary", distinct_base, "--")

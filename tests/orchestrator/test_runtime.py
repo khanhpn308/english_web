@@ -488,6 +488,7 @@ def test_t090_docker_sandbox_host_constructs_fixed_arguments(
                 "--pull=never",
                 "--network=none",
                 "--read-only",
+                "--entrypoint=/usr/local/bin/python3",
                 "--cap-drop=ALL",
                 "--security-opt=no-new-privileges",
                 "--pids-limit",
@@ -498,7 +499,7 @@ def test_t090_docker_sandbox_host_constructs_fixed_arguments(
                 "--workdir=/workspace",
             ):
                 assert flag in command
-            assert command[-7:-4] == ["python3", "-I", "-c"]
+            assert command[-6:-4] == ["-I", "-c"]
             assert command[-3:] == ["python", "-m", "pytest"]
             assert "copytree('/source', '/workspace'" in command[-4]
             mount = command[command.index("--mount") + 1]

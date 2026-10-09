@@ -172,6 +172,9 @@ class DockerVerificationSandbox:
             container,
             "--network=none",
             "--read-only",
+            # Override any image-defined ENTRYPOINT. Container execution must
+            # begin with the trusted Python interpreter, never image metadata.
+            "--entrypoint=/usr/local/bin/python3",
             "--cap-drop=ALL",
             "--security-opt=no-new-privileges",
             "--pids-limit",
@@ -196,7 +199,6 @@ class DockerVerificationSandbox:
             "--env=CI=true",
             "--env=PATH=/workspace/node_modules/.bin:/node_modules/.bin:/usr/local/bin:/usr/bin:/bin",
             self.policy.image,
-            "python3",
             "-I",
             "-c",
             _DOCKER_TRUSTED_BOOTSTRAP,
