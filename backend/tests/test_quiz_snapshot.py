@@ -425,7 +425,7 @@ def test_restart_restores_durable_questions_answers_and_revisions(
     database.close()
     reopened = Database(tmp_path / "quiz.db")
     try:
-        assert reopened.initialize().schema_revision == "0008_quiz"
+        assert reopened.initialize().schema_revision == "0010_quiz_answer_receipts"
         with reopened.engine.connect() as connection:
             restored = get_attempt(connection, "attempt_a")
             assert restored == expected
@@ -1132,7 +1132,7 @@ def test_operation_receipt_failure_rolls_back_draft_and_aggregate(database: Data
 
 def test_migration_extends_source_journal_and_preserves_all_prior_rows(tmp_path: Path) -> None:
     scripts = ScriptDirectory.from_config(migration_config())
-    assert scripts.get_heads() == ["0008_quiz"]
+    assert scripts.get_heads() == ["0010_quiz_answer_receipts"]
     quiz = scripts.get_revision("0008_quiz")
     journal = scripts.get_revision("0007_source_journal")
     assert quiz is not None and quiz.down_revision == "0007_source_journal"
@@ -1193,7 +1193,7 @@ def test_migration_extends_source_journal_and_preserves_all_prior_rows(tmp_path:
         first = database.initialize()
         second = database.initialize()
         assert first == second
-        assert first.schema_revision == "0008_quiz"
+        assert first.schema_revision == "0010_quiz_answer_receipts"
         with database.engine.connect() as connection:
             for table, rows in before.items():
                 assert connection.exec_driver_sql(f'SELECT * FROM "{table}"').all() == rows
@@ -1211,7 +1211,7 @@ def test_fresh_repeat_initialization_and_forward_only_downgrade(tmp_path: Path) 
     try:
         first = database.initialize()
         assert database.initialize() == first
-        assert first.schema_revision == "0008_quiz"
+        assert first.schema_revision == "0010_quiz_answer_receipts"
         with (
             database.engine.connect().execution_options(sqlite_begin_immediate=True) as connection,
             connection.begin(),
@@ -1222,6 +1222,6 @@ def test_fresh_repeat_initialization_and_forward_only_downgrade(tmp_path: Path) 
                 command.downgrade(config, "0007_source_journal")
             assert connection.exec_driver_sql(
                 "SELECT version_num FROM alembic_version"
-            ).scalar_one() == "0008_quiz"
+            ).scalar_one() == "0010_quiz_answer_receipts"
     finally:
         database.close()

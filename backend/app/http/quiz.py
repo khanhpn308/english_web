@@ -107,6 +107,8 @@ def _operation_error(error: OperationConflict) -> JSONResponse:
 
 
 def _public(attempt: QuizAttempt, status: int = 200) -> JSONResponse:
+    # The validated projection includes server-issued preconditions for every
+    # question, including unsaved drafts. No private snapshot fields are added.
     return JSONResponse(
         attempt.model_dump(mode="json", by_alias=True),
         status_code=status,
