@@ -585,7 +585,9 @@ class SecureProvider:
             if not role.model or not role.host_text_endpoint or not role.host_text_api_key_env:
                 raise HostEditRejected("Incomplete text-only semantic provider")
             transport = LoopbackChatTransport(
-                role.host_text_endpoint, api_key_env=role.host_text_api_key_env
+                role.host_text_endpoint,
+                api_key_env=role.host_text_api_key_env,
+                response_contract="semantic-json",
             )
             raw = transport.complete(prompt, model=role.model, timeout=timeout)
             return output.model_validate_json(raw)
