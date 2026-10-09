@@ -4342,7 +4342,9 @@ def test_t090_admitted_collector_uses_only_docker_and_binds_git(
         30,
         FrozenEvidenceIdentity.freeze("T100", base, "feature/t100", snapshot, (command,)),
     )
-    approval = VerificationImageAdmission(image, "b" * 64, "sha256:" + "c" * 64, "sha256:" + "d" * 64)
+    approval = VerificationImageAdmission(
+        image, "b" * 64, "sha256:" + "c" * 64, "sha256:" + "d" * 64
+    )
     captured: list[tuple[str, ...]] = []
 
     def fake_broker(
@@ -4374,7 +4376,11 @@ def test_t090_admitted_collector_uses_only_docker_and_binds_git(
 def test_t090_admitted_collector_denies_without_policy_before_docker(
     repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from tools.orchestrator.core import FrozenEvidenceIdentity, OrchestratorError, VerificationRequest
+    from tools.orchestrator.core import (
+        FrozenEvidenceIdentity,
+        OrchestratorError,
+        VerificationRequest,
+    )
     from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
     from tools.orchestrator.workflow import (
         collect_verification_admitted,
@@ -4412,7 +4418,9 @@ def test_t090_admitted_collector_denies_without_policy_before_docker(
     monkeypatch.setattr(DockerVerificationSandbox, "run", forbidden)
     with pytest.raises(OrchestratorError, match="trusted image admission required"):
         collect_verification_admitted(
-            request, source_worktree=repository, binding=binding,
-            image_admission=None, sandbox=broker,
+            request,
+            source_worktree=repository,
+            binding=binding,
+            image_admission=None,
+            sandbox=broker,
         )
-
