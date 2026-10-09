@@ -1,3 +1,9 @@
+## 09/10/2026 - T090 no-suppression host context and rename-path remediation
+
+- Replaced Ruff ARG002 suppression comments forbidden by host floor policy with explicit host-owned context validation in SecureProvider, plus parameterized invalid-context tests.
+- Hardened Git.paths rename boundaries using --no-renames, with tests for both old/new paths and deletion outside allowed_paths.
+- Historical CI R5 failure 37884453037 was check-fast-active floor silenced-checker (three suppressions), although portable pytest and security gates passed. Fresh CI on this candidate required.
+
 ## 09/10/2026 - T090 rename scope-hardening
 
 - Independent Git rename test exposed omission of deleted rename origins from default name-only diffs. Git.paths now disables Git rename collapsing so both source and destination require explicit allowlisting.
