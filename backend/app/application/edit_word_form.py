@@ -60,10 +60,30 @@ class EditExample(BaseModel):
         return _text(value)
 
 
+def _edit_request_schema(schema: dict[str, Any]) -> None:
+    properties = schema["properties"]
+    for name in ("meaningsEn", "meaningsVi", "examples"):
+        field = properties[name]
+        field.update(
+            next(branch for branch in field.pop("anyOf") if branch.get("type") != "null")
+        )
+        field.pop("default", None)
+    # Keep anyOf inside allOf: a root anyOf would union the loose core object
+    # into the generated TypeScript type and allow edits without editable fields.
+    schema["allOf"] = [
+        {
+            "anyOf": [
+                {"type": "object", "properties": {name: properties[name]}, "required": [name]}
+                for name in sorted(_EDITABLE)
+            ]
+        }
+    ]
+
+
 class EditWordFormIntent(BaseModel):
     """Omitted fields are preserved; explicit null is allowed only for IPA/link."""
 
-    model_config = ConfigDict(extra="forbid", strict=True)
+    model_config = ConfigDict(extra="forbid", strict=True, json_schema_extra=_edit_request_schema)
     sourceId: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")]
     sourceRevision: int = Field(ge=1)
     meaningsEn: list[EditMeaning] | None = Field(default=None, min_length=1, max_length=100)

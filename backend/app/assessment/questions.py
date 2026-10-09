@@ -37,6 +37,14 @@ def _tuple(value: Any) -> tuple[Any, ...]:
     return tuple(value)
 
 
+def _array_bounds_schema(schema: dict[str, Any]) -> None:
+    # Field constraints after BeforeValidator retain runtime order but Pydantic
+    # emits string keywords for these tuple fields. Correct only their schema.
+    for string_keyword, array_keyword in (("minLength", "minItems"), ("maxLength", "maxItems")):
+        if string_keyword in schema:
+            schema[array_keyword] = schema.pop(string_keyword)
+
+
 def _note_date(value: str) -> str:
     if date.fromisoformat(value).isoformat() != value:
         raise ValueError("Expected YYYY-MM-DD")
@@ -83,7 +91,9 @@ class RubricDescriptor(StrictModel):
 
 class WritingRubric(StrictModel):
     descriptors: Annotated[
-        tuple[RubricDescriptor, ...], BeforeValidator(_tuple), Field(min_length=5, max_length=5)
+        tuple[RubricDescriptor, ...],
+        BeforeValidator(_tuple),
+        Field(min_length=5, max_length=5, json_schema_extra=_array_bounds_schema),
     ]
 
     @model_validator(mode="after")
@@ -103,7 +113,9 @@ class Question(StrictModel):
 class MCQQuestion(Question):
     type: Literal["MCQ"]
     options: Annotated[
-        tuple[MCQOption, ...], BeforeValidator(_tuple), Field(min_length=1, max_length=100)
+        tuple[MCQOption, ...],
+        BeforeValidator(_tuple),
+        Field(min_length=1, max_length=100, json_schema_extra=_array_bounds_schema),
     ]
 
     @model_validator(mode="after")
@@ -294,7 +306,9 @@ class ClozeQuestionResult(StrictModel):
     is_correct: bool
     rating: Rating
     accepted_answers: Annotated[
-        tuple[Content, ...], BeforeValidator(_tuple), Field(min_length=1, max_length=100)
+        tuple[Content, ...],
+        BeforeValidator(_tuple),
+        Field(min_length=1, max_length=100, json_schema_extra=_array_bounds_schema),
     ]
     explanation_vi: Content
 
@@ -340,13 +354,19 @@ class QuizResult(StrictModel):
     submission_revision: Revision
     objective_scores: ObjectiveScores
     writing_self_scores: Annotated[
-        tuple[WritingSelfScore, ...], BeforeValidator(_tuple), Field(max_length=20)
+        tuple[WritingSelfScore, ...],
+        BeforeValidator(_tuple),
+        Field(max_length=20, json_schema_extra=_array_bounds_schema),
     ]
     question_results: Annotated[
-        tuple[QuestionResult, ...], BeforeValidator(_tuple), Field(min_length=5, max_length=30)
+        tuple[QuestionResult, ...],
+        BeforeValidator(_tuple),
+        Field(min_length=5, max_length=30, json_schema_extra=_array_bounds_schema),
     ]
     review_handoffs: Annotated[
-        tuple[ReviewHandoff, ...], BeforeValidator(_tuple), Field(min_length=1, max_length=30)
+        tuple[ReviewHandoff, ...],
+        BeforeValidator(_tuple),
+        Field(min_length=1, max_length=30, json_schema_extra=_array_bounds_schema),
     ]
     submitted_at: AwareTime
 
@@ -369,14 +389,51 @@ class QuizResult(StrictModel):
         return self
 
 
+def _quiz_attempt_schema(schema: dict[str, Any]) -> None:
+    # Reuse Pydantic's generated reference so FastAPI can remap it correctly.
+    result_schema = next(
+        branch
+        for branch in schema["properties"]["result"]["anyOf"]
+        if branch.get("type") != "null"
+    )
+    # Only the outer object is closed. Closing these partial branches would
+    # reject shared attempt properties. oneOf intersects with the generated core.
+    schema["oneOf"] = [
+        {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "const": "IN_PROGRESS"},
+                "result": {"type": "null"},
+            },
+            "required": ["status", "result"],
+        },
+        {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "const": "SUBMITTED"},
+                "result": result_schema,
+            },
+            "required": ["status", "result"],
+        },
+    ]
+
+
 class QuizAttempt(StrictModel):
+    model_config = ConfigDict(json_schema_extra=_quiz_attempt_schema)
+
     id: Identifier
     note_date: NoteDate
     status: Literal["IN_PROGRESS", "SUBMITTED"]
     questions: Annotated[
-        tuple[PublicQuestion, ...], BeforeValidator(_tuple), Field(min_length=5, max_length=30)
+        tuple[PublicQuestion, ...],
+        BeforeValidator(_tuple),
+        Field(min_length=5, max_length=30, json_schema_extra=_array_bounds_schema),
     ]
-    answers: Annotated[tuple[Answer, ...], BeforeValidator(_tuple), Field(max_length=30)]
+    answers: Annotated[
+        tuple[Answer, ...],
+        BeforeValidator(_tuple),
+        Field(max_length=30, json_schema_extra=_array_bounds_schema),
+    ]
     saved_answer_count: Annotated[int, Field(ge=0, le=30)]
     snapshot_revision: Annotated[int, Field(ge=1)]
     submission_revision: Revision

@@ -22,8 +22,35 @@ router = APIRouter(prefix="/api/v1/word-forms", tags=["word-forms"])
 OpaqueId = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")]
 
 
+def _save_request_schema(schema: dict[str, Any]) -> None:
+    properties = schema["properties"]
+    source_fields = ("sourceId", "sourceRevision")
+    for name in source_fields:
+        field = properties[name]
+        field.update(
+            next(branch for branch in field.pop("anyOf") if branch.get("type") != "null")
+        )
+        field.pop("default", None)
+    # Optional impossible properties express absence and generate optional never
+    # with the pinned generator, which cannot handle boolean property schemas.
+    schema["oneOf"] = [
+        {
+            "type": "object",
+            "properties": {
+                name: {"allOf": [{"type": "string"}, {"type": "null"}]}
+                for name in source_fields
+            },
+        },
+        {
+            "type": "object",
+            "properties": {name: properties[name] for name in source_fields},
+            "required": list(source_fields),
+        },
+    ]
+
+
 class SaveWordFormsRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+    model_config = ConfigDict(extra="forbid", strict=True, json_schema_extra=_save_request_schema)
     lookupId: OpaqueId
     noteDate: str = Field(pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
     sourceId: OpaqueId | None = None
@@ -58,6 +85,34 @@ class SaveResult(BaseModel):
     markdownSync: Literal["COMPLETED"]
 
 
+class SourceConflictDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    kind: Literal["CONFLICT"]
+    expectedRevision: int = Field(ge=1)
+    currentRevision: int = Field(ge=1)
+    resourceType: Literal["SOURCE"]
+    resourceId: str
+
+
+class SourceRetryDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    kind: Literal["RETRY"]
+    operationId: str
+    operationKind: Literal["SAVE", "EDIT"]
+
+
+class SourceFieldError(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    field: str
+    reason: str
+
+
+class SourceFieldDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    kind: Literal["FIELD_ERRORS"]
+    fields: list[SourceFieldError]
+
+
 class SaveErrorBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     code: Literal[
@@ -68,7 +123,10 @@ class SaveErrorBody(BaseModel):
     ]
     message: str
     requestId: str
-    details: dict[str, Any] | None = None
+    details: Annotated[
+        SourceConflictDetails | SourceRetryDetails | SourceFieldDetails,
+        Field(discriminator="kind"),
+    ] | None = None
 
 
 class SaveErrorResponse(BaseModel):
@@ -121,8 +179,22 @@ def _failure(error: OperationConflict, operation_kind: str = "SAVE") -> JSONResp
 )
 def post_word_forms(
     request: Request, body: SaveWordFormsRequest, idempotency_key: IdempotencyKey,
-    if_match: Annotated[str | None, Header(alias="If-Match", max_length=128)] = None,
-    if_none_match: Annotated[str | None, Header(alias="If-None-Match", max_length=1)] = None,
+    if_match: Annotated[str | None, Header(
+        alias="If-Match", max_length=128, json_schema_extra={"minLength": 1},
+        description=(
+            "Required source ETag when sourceId and sourceRevision are supplied. "
+            "Omit for a new-date save and send If-None-Match: * instead. "
+            "The backend enforces these body/header alternatives together."
+        ),
+    )] = None,
+    if_none_match: Annotated[str | None, Header(
+        alias="If-None-Match", max_length=1, json_schema_extra={"const": "*"},
+        description=(
+            "Required as * for a new-date save with sourceId and sourceRevision omitted. "
+            "Omit when those source fields are supplied and send If-Match instead. "
+            "The backend enforces these body/header alternatives together."
+        ),
+    )] = None,
 ) -> JSONResponse:
     if request.query_params or any(len(request.headers.getlist(name)) > 1 for name in (
         "idempotency-key", "if-match", "if-none-match",

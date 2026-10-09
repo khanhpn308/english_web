@@ -23,6 +23,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cards/{cardId}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Review */
+        post: operations["post_review_api_v1_cards__cardId__reviews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -69,6 +86,57 @@ export interface paths {
         };
         /** Get Operation */
         get: operations["get_operation_api_v1_operations__operation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quiz-attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Quiz */
+        post: operations["post_quiz_api_v1_quiz_attempts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quiz-attempts/{attemptId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Quiz */
+        get: operations["get_quiz_api_v1_quiz_attempts__attemptId__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/review-queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Queue */
+        get: operations["get_queue_api_v1_review_queue_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -138,7 +206,8 @@ export interface paths {
         /** List Word Forms */
         get: operations["list_word_forms_api_v1_word_forms_get"];
         put?: never;
-        post?: never;
+        /** Post Word Forms */
+        post: operations["post_word_forms_api_v1_word_forms_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -159,7 +228,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Patch Word Form */
+        patch: operations["patch_word_form_api_v1_word_forms__wordFormId__patch"];
         trace?: never;
     };
     "/bootstrap/exchange": {
@@ -269,6 +339,31 @@ export interface components {
              */
             scope: "LOOKUP" | "QUIZ_GENERATION" | "WRITING_FEEDBACK";
         };
+        /** Answer */
+        Answer: {
+            /** Answer */
+            answer: string;
+            /** Attemptid */
+            attemptId: string;
+            /** Draftrevision */
+            draftRevision: number;
+            /** Operationid */
+            operationId: string;
+            /** Questionid */
+            questionId: string;
+            /**
+             * Savedat
+             * Format: date-time
+             */
+            savedAt: string;
+            /** Selfscore */
+            selfScore: number | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "BLANK" | "DRAFT" | "SCORED";
+        };
         /** BootstrapExchange */
         BootstrapExchange: {
             /** Token */
@@ -288,6 +383,66 @@ export interface components {
             id: string;
             /** State */
             state: string;
+        };
+        /** ClozeQuestion */
+        ClozeQuestion: {
+            /**
+             * Answerpolicyversion
+             * @constant
+             */
+            answerPolicyVersion: "cloze-answer-v1";
+            /** Id */
+            id: string;
+            /** Prompten */
+            promptEn: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "CLOZE";
+            /** Wordformid */
+            wordFormId: string;
+        };
+        /** ClozeQuestionResult */
+        ClozeQuestionResult: {
+            /** Acceptedanswers */
+            acceptedAnswers: string[];
+            /** Explanationvi */
+            explanationVi: string;
+            /** Iscorrect */
+            isCorrect: boolean;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "CORRECT" | "INCORRECT" | "BLANK";
+            /** Questionid */
+            questionId: string;
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "AGAIN" | "HARD" | "GOOD" | "EASY";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "CLOZE";
+        };
+        /** ConsentDetails */
+        ConsentDetails: {
+            /**
+             * Consentstate
+             * @enum {string}
+             */
+            consentState: "NOT_GRANTED" | "GRANTED" | "REVOKED" | "STALE";
+            /** Currentpolicyversion */
+            currentPolicyVersion: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "AI_CONSENT";
         };
         /** ConsentError */
         ConsentError: {
@@ -313,6 +468,12 @@ export interface components {
             /** Operationid */
             operationId: string;
         };
+        /** CreateQuizRequest */
+        CreateQuizRequest: {
+            counts: components["schemas"]["QuizCounts"];
+            /** Notedate */
+            noteDate: string;
+        };
         /** CreateSyncRunRequest */
         CreateSyncRunRequest: {
             /**
@@ -321,7 +482,29 @@ export interface components {
              */
             reason: "STARTUP" | "MANUAL" | "WATCHER";
         };
-        ErrorDetails: {
+        /** EditExample */
+        EditExample: {
+            /** English */
+            english: string;
+            /**
+             * Verificationstatus
+             * @enum {string}
+             */
+            verificationStatus: "VERIFIED" | "UNVERIFIED" | "MISSING";
+            /** Vietnamese */
+            vietnamese: string;
+        };
+        /** EditMeaning */
+        EditMeaning: {
+            /** Text */
+            text: string;
+            /**
+             * Verificationstatus
+             * @enum {string}
+             */
+            verificationStatus: "VERIFIED" | "UNVERIFIED" | "MISSING";
+        };
+        ErrorDetails: components["schemas"]["SourceConflictDetails"] | components["schemas"]["RestoreDetails"] | {
             fields: {
                 field: string;
                 reason: string;
@@ -360,6 +543,23 @@ export interface components {
             verificationStatus: "VERIFIED" | "UNVERIFIED" | "MISSING";
             /** Vietnamese */
             vietnamese: string;
+        };
+        /** FieldError */
+        FieldError: {
+            /** Field */
+            field: string;
+            /** Reason */
+            reason: string;
+        };
+        /** FieldErrorDetails */
+        FieldErrorDetails: {
+            /** Fields */
+            fields: components["schemas"]["FieldError"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "FIELD_ERRORS";
         };
         /** GrantAiConsent */
         GrantAiConsent: {
@@ -483,6 +683,55 @@ export interface components {
              */
             verificationSummary: "VERIFIED" | "UNVERIFIED" | "MISSING";
         };
+        /** MCQOption */
+        MCQOption: {
+            /** Id */
+            id: string;
+            /** Texten */
+            textEn: string;
+        };
+        /** MCQQuestion */
+        MCQQuestion: {
+            /** Id */
+            id: string;
+            /** Options */
+            options: components["schemas"]["MCQOption"][];
+            /** Prompten */
+            promptEn: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "MCQ";
+            /** Wordformid */
+            wordFormId: string;
+        };
+        /** MCQQuestionResult */
+        MCQQuestionResult: {
+            /** Correctoptionid */
+            correctOptionId: string;
+            /** Explanationvi */
+            explanationVi: string;
+            /** Iscorrect */
+            isCorrect: boolean;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "CORRECT" | "INCORRECT" | "BLANK";
+            /** Questionid */
+            questionId: string;
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "AGAIN" | "HARD" | "GOOD" | "EASY";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "MCQ";
+        };
         /** MeaningView */
         MeaningView: {
             /** Language */
@@ -494,6 +743,22 @@ export interface components {
              * @enum {string}
              */
             verificationStatus: "VERIFIED" | "UNVERIFIED" | "MISSING";
+        };
+        /** ObjectiveScore */
+        ObjectiveScore: {
+            /** Accuracy */
+            accuracy: number | null;
+            /** Attempted */
+            attempted: number;
+            /** Correct */
+            correct: number;
+            /** Total */
+            total: number;
+        };
+        /** ObjectiveScores */
+        ObjectiveScores: {
+            cloze: components["schemas"]["ObjectiveScore"];
+            mcq: components["schemas"]["ObjectiveScore"];
         };
         /** Operation */
         Operation: {
@@ -543,6 +808,385 @@ export interface components {
             /** Pagesize */
             pageSize: number;
         };
+        /**
+         * PatchWordFormRequest
+         * @description Canonical editable fields and selected-source preconditions.
+         */
+        PatchWordFormRequest: {
+            /** Cambridgeurl */
+            cambridgeUrl?: string | null;
+            /** Examples */
+            examples?: components["schemas"]["EditExample"][];
+            /** Ipaus */
+            ipaUs?: string | null;
+            /** Meaningsen */
+            meaningsEn?: components["schemas"]["EditMeaning"][];
+            /** Meaningsvi */
+            meaningsVi?: components["schemas"]["EditMeaning"][];
+            /** Sourceid */
+            sourceId: string;
+            /** Sourcerevision */
+            sourceRevision: number;
+        } & ({
+            /** Cambridgeurl */
+            cambridgeUrl: string | null;
+        } | {
+            /** Examples */
+            examples: components["schemas"]["EditExample"][];
+        } | {
+            /** Ipaus */
+            ipaUs: string | null;
+        } | {
+            /** Meaningsen */
+            meaningsEn: components["schemas"]["EditMeaning"][];
+        } | {
+            /** Meaningsvi */
+            meaningsVi: components["schemas"]["EditMeaning"][];
+        });
+        /** QuizAttempt */
+        QuizAttempt: {
+            /** Answers */
+            answers: components["schemas"]["Answer"][];
+            /** Id */
+            id: string;
+            /** Notedate */
+            noteDate: string;
+            /** Questions */
+            questions: (components["schemas"]["MCQQuestion"] | components["schemas"]["ClozeQuestion"] | components["schemas"]["WritingQuestion"])[];
+            result: components["schemas"]["QuizResult"] | null;
+            /** Savedanswercount */
+            savedAnswerCount: number;
+            /** Snapshotrevision */
+            snapshotRevision: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "IN_PROGRESS" | "SUBMITTED";
+            /** Submissionrevision */
+            submissionRevision: number;
+        } & ({
+            result: null;
+            /** @constant */
+            status: "IN_PROGRESS";
+        } | {
+            result: components["schemas"]["QuizResult"];
+            /** @constant */
+            status: "SUBMITTED";
+        });
+        /** QuizCounts */
+        QuizCounts: {
+            /** Cloze */
+            cloze: number;
+            /** Mcq */
+            mcq: number;
+            /** Writing */
+            writing: number;
+        };
+        /** QuizError */
+        QuizError: {
+            /** Code */
+            code: string;
+            /** Details */
+            details?: (components["schemas"]["RetryDetails"] | components["schemas"]["ConsentDetails"] | components["schemas"]["RestoreDetails"] | components["schemas"]["FieldErrorDetails"]) | null;
+            /** Message */
+            message: string;
+            /** Requestid */
+            requestId: string;
+        };
+        /** QuizErrorResponse */
+        QuizErrorResponse: {
+            error: components["schemas"]["QuizError"];
+        };
+        /** QuizResult */
+        QuizResult: {
+            /** Attemptid */
+            attemptId: string;
+            objectiveScores: components["schemas"]["ObjectiveScores"];
+            /** Questionresults */
+            questionResults: (components["schemas"]["MCQQuestionResult"] | components["schemas"]["ClozeQuestionResult"] | components["schemas"]["WritingQuestionResult"])[];
+            /** Reviewhandoffs */
+            reviewHandoffs: components["schemas"]["ReviewHandoff"][];
+            /**
+             * Status
+             * @constant
+             */
+            status: "SUBMITTED";
+            /** Submissionrevision */
+            submissionRevision: number;
+            /**
+             * Submittedat
+             * Format: date-time
+             */
+            submittedAt: string;
+            /** Writingselfscores */
+            writingSelfScores: components["schemas"]["WritingSelfScore"][];
+        };
+        /** RestoreDetails */
+        RestoreDetails: {
+            /** Attemptid */
+            attemptId: string;
+            /**
+             * Guidancecode
+             * @constant
+             */
+            guidanceCode: "QUIZ_RESTORE_REQUIRED";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "RESTORE";
+        };
+        /** RetryDetails */
+        RetryDetails: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "RETRY";
+            /** Operationid */
+            operationId: string;
+        };
+        /** ReviewCardView */
+        ReviewCardView: {
+            /** Cardid */
+            cardId: string;
+            /** Dueat */
+            dueAt: string | null;
+            /** Lemma */
+            lemma: string;
+            /** Notedates */
+            noteDates: string[];
+            /** Queuerevision */
+            queueRevision: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "NEW" | "LEARNED";
+            /** Wordformid */
+            wordFormId: string;
+        };
+        /** ReviewError */
+        ReviewError: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "VALIDATION_ERROR" | "INVALID_QUERY" | "CURSOR_EXPIRED" | "MALFORMED_JSON" | "SESSION_REQUIRED" | "SESSION_INVALID" | "ORIGIN_FORBIDDEN" | "PAYLOAD_TOO_LARGE" | "NOT_FOUND" | "REVISION_CONFLICT" | "CROSS_RESOURCE_MISMATCH" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_IN_FLIGHT" | "STORAGE_BUSY" | "CONFIGURATION_REQUIRED" | "INTERNAL_ERROR";
+            /** Details */
+            details?: components["schemas"]["ReviewRetryDetails"] | components["schemas"]["ReviewFieldDetails"] | null;
+            /** Message */
+            message: string;
+            /** Requestid */
+            requestId: string;
+        };
+        /** ReviewErrorResponse */
+        ReviewErrorResponse: {
+            error: components["schemas"]["ReviewError"];
+        };
+        /** ReviewEventView */
+        ReviewEventView: {
+            /** Attemptid */
+            attemptId?: string | null;
+            /** Cardid */
+            cardId: string;
+            /** Id */
+            id: string;
+            /** Nextdueat */
+            nextDueAt: string;
+            /** Operationid */
+            operationId: string;
+            /** Questionid */
+            questionId?: string | null;
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "AGAIN" | "HARD" | "GOOD" | "EASY";
+            /** Reviewedat */
+            reviewedAt: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "FLASHCARD" | "QUIZ";
+        };
+        /** ReviewFieldDetails */
+        ReviewFieldDetails: {
+            /** Fields */
+            fields: components["schemas"]["ReviewFieldError"][];
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "FIELD_ERRORS";
+        };
+        /** ReviewFieldError */
+        ReviewFieldError: {
+            /** Field */
+            field: string;
+            /** Reason */
+            reason: string;
+        };
+        /** ReviewHandoff */
+        ReviewHandoff: {
+            /** Cardid */
+            cardId: string | null;
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "AGAIN" | "HARD" | "GOOD" | "EASY";
+            /** Revieweventid */
+            reviewEventId: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "APPLIED" | "SKIPPED_INACTIVE";
+            /** Wordformid */
+            wordFormId: string;
+        };
+        /** ReviewQueueView */
+        ReviewQueueView: {
+            /** Data */
+            data: components["schemas"]["ReviewCardView"][];
+            pagination: components["schemas"]["PaginationView"];
+            sort: components["schemas"]["ReviewSortView"];
+        };
+        /** ReviewRequest */
+        ReviewRequest: {
+            /** Attemptid */
+            attemptId?: string | null;
+            /**
+             * Clientoccurredat
+             * Format: date-time
+             */
+            clientOccurredAt?: string | null;
+            /** Questionid */
+            questionId?: string | null;
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "AGAIN" | "HARD" | "GOOD" | "EASY";
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "FLASHCARD" | "QUIZ";
+        } & ({
+            attemptId?: null;
+            questionId?: null;
+            /** @constant */
+            source: "FLASHCARD";
+        } | {
+            attemptId: string;
+            questionId: string;
+            /** @constant */
+            source: "QUIZ";
+        });
+        /** ReviewRetryDetails */
+        ReviewRetryDetails: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "RETRY";
+            /** Operationid */
+            operationId: string;
+        };
+        /** ReviewSortView */
+        ReviewSortView: {
+            /**
+             * By
+             * @enum {string}
+             */
+            by: "dueAt" | "lemma";
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "ASC" | "DESC";
+        };
+        /** RubricDescriptor */
+        RubricDescriptor: {
+            /** Score */
+            score: number;
+            /** Textvi */
+            textVi: string;
+        };
+        /** SaveErrorBody */
+        SaveErrorBody: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "SESSION_REQUIRED" | "SESSION_INVALID" | "ORIGIN_FORBIDDEN" | "VALIDATION_ERROR" | "NOT_FOUND" | "PAYLOAD_TOO_LARGE" | "CONFIGURATION_REQUIRED" | "REVISION_CONFLICT" | "SOURCE_MISSING" | "SOURCE_NOT_WRITABLE" | "CROSS_RESOURCE_MISMATCH" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_IN_FLIGHT" | "STORAGE_BUSY" | "MALFORMED_JSON";
+            /** Details */
+            details?: (components["schemas"]["SourceConflictDetails"] | components["schemas"]["SourceRetryDetails"] | components["schemas"]["SourceFieldDetails"]) | null;
+            /** Message */
+            message: string;
+            /** Requestid */
+            requestId: string;
+        };
+        /** SaveErrorResponse */
+        SaveErrorResponse: {
+            error: components["schemas"]["SaveErrorBody"];
+        };
+        /** SaveResult */
+        SaveResult: {
+            /** Canonicalforms */
+            canonicalForms: components["schemas"]["WordFormDetail"][];
+            /** Createdcardids */
+            createdCardIds: string[];
+            /**
+             * Markdownsync
+             * @constant
+             */
+            markdownSync: "COMPLETED";
+            /** Notedate */
+            noteDate: string;
+            /** Operationid */
+            operationId: string;
+            /** Reusedcardids */
+            reusedCardIds: string[];
+            /** Savedforms */
+            savedForms: components["schemas"]["SavedForm"][];
+            /** Sourceetag */
+            sourceEtag: string;
+            /** Sourceid */
+            sourceId: string;
+            /** Sourcerevision */
+            sourceRevision: number;
+        };
+        /** SaveWordFormsRequest */
+        SaveWordFormsRequest: {
+            /** Lookupid */
+            lookupId: string;
+            /** Notedate */
+            noteDate: string;
+            /** Sourceid */
+            sourceId?: string;
+            /** Sourcerevision */
+            sourceRevision?: number;
+        } & ({
+            sourceId?: string & null;
+            sourceRevision?: string & null;
+        } | {
+            /** Sourceid */
+            sourceId: string;
+            /** Sourcerevision */
+            sourceRevision: number;
+        });
+        /** SavedForm */
+        SavedForm: {
+            /** Id */
+            id: string;
+            /** Revision */
+            revision: number;
+        };
         /** SortView */
         SortView: {
             /**
@@ -555,6 +1199,42 @@ export interface components {
              * @enum {string}
              */
             direction: "ASC" | "DESC";
+        };
+        /** SourceConflictDetails */
+        SourceConflictDetails: {
+            /** Currentrevision */
+            currentRevision: number;
+            /** Expectedrevision */
+            expectedRevision: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "CONFLICT";
+            /** Resourceid */
+            resourceId: string;
+            /**
+             * Resourcetype
+             * @constant
+             */
+            resourceType: "SOURCE";
+        };
+        /** SourceFieldDetails */
+        SourceFieldDetails: {
+            /** Fields */
+            fields: components["schemas"]["SourceFieldError"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "FIELD_ERRORS";
+        };
+        /** SourceFieldError */
+        SourceFieldError: {
+            /** Field */
+            field: string;
+            /** Reason */
+            reason: string;
         };
         /** SourceFilePage */
         SourceFilePage: {
@@ -596,6 +1276,21 @@ export interface components {
              * @enum {string}
              */
             status: "VALID" | "INVALID" | "MISSING";
+        };
+        /** SourceRetryDetails */
+        SourceRetryDetails: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "RETRY";
+            /** Operationid */
+            operationId: string;
+            /**
+             * Operationkind
+             * @enum {string}
+             */
+            operationKind: "SAVE" | "EDIT";
         };
         /**
          * StorageStatus
@@ -697,6 +1392,14 @@ export interface components {
              */
             verificationSummary: "VERIFIED" | "UNVERIFIED" | "MISSING";
         };
+        /** WordFormMutationResult */
+        WordFormMutationResult: {
+            /** Operationid */
+            operationId: string;
+            /** Sourcerevision */
+            sourceRevision: number;
+            wordForm: components["schemas"]["WordFormDetail"];
+        };
         /** WordFormSummary */
         WordFormSummary: {
             /** Id */
@@ -718,6 +1421,67 @@ export interface components {
              * @enum {string}
              */
             verificationSummary: "VERIFIED" | "UNVERIFIED" | "MISSING";
+        };
+        /** WritingQuestion */
+        WritingQuestion: {
+            /** Id */
+            id: string;
+            /** Prompten */
+            promptEn: string;
+            rubric: components["schemas"]["WritingRubric"];
+            /**
+             * Rubricversion
+             * @constant
+             */
+            rubricVersion: "writing-rubric-v1";
+            /** Targetlemma */
+            targetLemma: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "WRITING";
+            /** Wordformid */
+            wordFormId: string;
+        };
+        /** WritingQuestionResult */
+        WritingQuestionResult: {
+            /**
+             * Outcome
+             * @constant
+             */
+            outcome: "SELF_SCORED";
+            /** Questionid */
+            questionId: string;
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "AGAIN" | "HARD" | "GOOD" | "EASY";
+            /** Selfscore */
+            selfScore: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "WRITING";
+        };
+        /** WritingRubric */
+        WritingRubric: {
+            /** Descriptors */
+            descriptors: components["schemas"]["RubricDescriptor"][];
+        };
+        /** WritingSelfScore */
+        WritingSelfScore: {
+            /** Questionid */
+            questionId: string;
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "AGAIN" | "HARD" | "GOOD" | "EASY";
+            /** Selfscore */
+            selfScore: number;
         };
     };
     responses: never;
@@ -1067,6 +1831,126 @@ export interface operations {
             };
         };
     };
+    post_review_api_v1_cards__cardId__reviews_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description Individual card queueRevision, as decimal digits or quoted decimal digits. */
+                "If-Match": string;
+            };
+            path: {
+                cardId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewEventView"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+        };
+    };
     get_health_api_v1_health_get: {
         parameters: {
             query?: never;
@@ -1392,6 +2276,352 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post_quiz_api_v1_quiz_attempts_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateQuizRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizAttempt"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+        };
+    };
+    get_quiz_api_v1_quiz_attempts__attemptId__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attemptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizAttempt"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+        };
+    };
+    get_queue_api_v1_review_queue_get: {
+        parameters: {
+            query?: {
+                noteDate?: string | null;
+                dueOnly?: boolean;
+                cardState?: ("NEW" | "LEARNED") | null;
+                pageSize?: number;
+                sortBy?: "dueAt" | "lemma";
+                sortOrder?: "ASC" | "DESC" | "asc" | "desc";
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewQueueView"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewErrorResponse"];
                 };
             };
         };
@@ -1862,6 +3092,127 @@ export interface operations {
             };
         };
     };
+    post_word_forms_api_v1_word_forms_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description Required source ETag when sourceId and sourceRevision are supplied. Omit for a new-date save and send If-None-Match: * instead. The backend enforces these body/header alternatives together. */
+                "If-Match"?: string | null;
+                /** @description Required as * for a new-date save with sourceId and sourceRevision omitted. Omit when those source fields are supplied and send If-Match instead. The backend enforces these body/header alternatives together. */
+                "If-None-Match"?: "*";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveWordFormsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveErrorResponse"];
+                };
+            };
+        };
+    };
     get_word_form_api_v1_word_forms__wordFormId__get: {
         parameters: {
             query?: never;
@@ -1970,6 +3321,126 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patch_word_form_api_v1_word_forms__wordFormId__patch: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "If-Match": string;
+            };
+            path: {
+                wordFormId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchWordFormRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordFormMutationResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveErrorResponse"];
                 };
             };
         };
