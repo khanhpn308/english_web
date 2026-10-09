@@ -56,7 +56,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          eval "$(python3 - <<'PY'
+          pins_path="$RUNNER_TEMP/t090-base-pins.txt"
+          python3 - <<'PY' > "$pins_path"
           import json, re
           with open('infra/verification/base-image-pins.json', encoding='utf-8') as stream:
               pins = json.load(stream)
@@ -64,9 +65,12 @@ jobs:
           for name in ('python', 'node'):
               ref = pins[name]
               assert re.fullmatch(r'[a-z0-9./_-]+@sha256:[0-9a-f]{64}', ref)
-              print(f'T090_{name.upper()}_BASE={ref}')
+              print(ref)
           PY
-          )"
+          mapfile -t base_refs < "$pins_path"
+          [[ "${#base_refs[@]}" -eq 2 ]]
+          T090_PYTHON_BASE="${base_refs[0]}"
+          T090_NODE_BASE="${base_refs[1]}"
           docker pull --platform linux/amd64 "$T090_PYTHON_BASE"
           docker pull --platform linux/amd64 "$T090_NODE_BASE"
           echo "T090_PYTHON_BASE=$T090_PYTHON_BASE" >> "$GITHUB_ENV"
