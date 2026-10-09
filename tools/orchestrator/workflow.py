@@ -191,7 +191,7 @@ def build_sealed_source_evidence(
         raise OrchestratorError("T090 SOURCE_BLOCKED: changed path outside contract")
 
     def checked_text(raw: bytes, path: str) -> str:
-        if len(raw) > _SOURCE_EVIDENCE_MAX_FILE_BYTES or b"\\x00" in raw:
+        if len(raw) > _SOURCE_EVIDENCE_MAX_FILE_BYTES or b"\x00" in raw:
             raise OrchestratorError(f"T090 SOURCE_BLOCKED: binary/oversized evidence: {path}")
         try:
             return raw.decode("utf-8")
@@ -213,9 +213,9 @@ def build_sealed_source_evidence(
         base_raw: bytes | None = None
         if tree:
             lines = tree.splitlines()
-            if len(lines) != 1 or "\\t" not in lines[0]:
+            if len(lines) != 1 or "\t" not in lines[0]:
                 raise OrchestratorError("T090 SOURCE_BLOCKED: ambiguous base tree entry")
-            metadata, entry_path = lines[0].split("\\t", 1)
+            metadata, entry_path = lines[0].split("\t", 1)
             bits = metadata.split()
             if entry_path != path or len(bits) != 3 or bits[0] not in {"100644", "100755"}:
                 raise OrchestratorError("T090 SOURCE_BLOCKED: unsafe baseline file mode")
@@ -239,7 +239,7 @@ def build_sealed_source_evidence(
                 (current_text or "").splitlines(keepends=True),
                 fromfile=f"a/{path}",
                 tofile=f"b/{path}",
-                lineterm="\\n",
+                lineterm="\n",
             )
         )
         files.append(
