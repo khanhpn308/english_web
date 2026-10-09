@@ -66,9 +66,18 @@ class ProcessResult:
 
 _DOCKER_DIGEST_RE = re.compile(r"^[a-z0-9][a-z0-9._:/-]*@sha256:[a-f0-9]{64}$")
 _DOCKER_TRUSTED_BOOTSTRAP = (
-    "import os, shutil, sys; "
-    "shutil.copytree('/source', '/workspace', dirs_exist_ok=True, symlinks=True); "
-    "os.chdir('/workspace'); os.execvp(sys.argv[1], sys.argv[1:])"
+    "import os, shutil, sys\n"
+    "for entry in os.scandir('/source'):\n"
+    "    src = entry.path\n"
+    "    dst = os.path.join('/workspace', entry.name)\n"
+    "    if entry.is_symlink():\n"
+    "        os.symlink(os.readlink(src), dst)\n"
+    "    elif entry.is_dir(follow_symlinks=False):\n"
+    "        shutil.copytree(src, dst, symlinks=True)\n"
+    "    else:\n"
+    "        shutil.copy2(src, dst)\n"
+    "os.chdir('/workspace')\n"
+    "os.execvp(sys.argv[1], sys.argv[1:])\n"
 )
 
 
