@@ -2,7 +2,8 @@
 
 **Task ID:** `T008`
 **Title:** POST lookup trả preview đã validate
-**Status:** `IMPLEMENTATION_COMPLETE_ENVIRONMENT_VERIFICATION_PENDING`
+**Status:** `DONE` (code merged into `main` at `b46ab6538`; final acceptance `PENDING`)
+**Coding completion policy (2026-10-09):** Implementation integrated into `main`; final project acceptance is pending. Historical TODO, environment limitations and unchecked acceptance cases below remain evidence history, not test PASS.
 **Goal:** POST lookup trả preview đã validate. Valid preview có meaning/example fields; missing IPA/link có nhãn, không hallucinated verified.
 **Suggested model:** GPT-6 Astra
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
