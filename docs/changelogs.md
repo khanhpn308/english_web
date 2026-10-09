@@ -1,3 +1,10 @@
+## 09/10/2026 - T090 Bridge identity and semantic-role prompt correction
+
+- Owner observed local Antigravity Tools Windows listener on IPv4 127.0.0.1:8045, recorded process executable SHA-256 as runtime identity evidence only (not provider tool-isolation attestation).
+- Corrected semantic host HTTP transport to use the requested role JSON schema rather than worker-only WorkerEditResponse instructions, maintaining zero model tools and bounded HTTP transport.
+- Added synthetic contract-level tests; retained fail-closed CLI and host-only edit policies. R4 previously passed on adcd7d6; new source changes require fresh CI.
+- T090 IN_PROGRESS, T089 REOPENED_PENDING_T090, PR #9 Draft.
+
 ## 09/10/2026 - T090 tool-free CI R3 format correction
 
 - R3 run 37879458653 on a8c6dc27 is retained as FAILURE: one Ruff format violation at tests/orchestrator/test_runtime.py:302; six other Phase A gates PASS.
