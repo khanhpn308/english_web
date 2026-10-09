@@ -337,6 +337,68 @@
         "title": "Answer",
         "type": "object"
       },
+      "AnswerDraftRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "maxLength": 4096,
+            "title": "Answer",
+            "type": "string"
+          },
+          "draftRevision": {
+            "minimum": 0.0,
+            "title": "Draftrevision",
+            "type": "integer"
+          },
+          "selfScore": {
+            "anyOf": [
+              {
+                "maximum": 4.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selfscore"
+          }
+        },
+        "required": [
+          "answer",
+          "draftRevision"
+        ],
+        "title": "AnswerDraftRequest",
+        "type": "object"
+      },
+      "AnswerPrecondition": {
+        "additionalProperties": false,
+        "properties": {
+          "draftRevision": {
+            "minimum": 0.0,
+            "title": "Draftrevision",
+            "type": "integer"
+          },
+          "etag": {
+            "pattern": "^\"qa-v1-[0-9a-f]{64}\"$",
+            "title": "Etag",
+            "type": "string"
+          },
+          "questionId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Questionid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "questionId",
+          "draftRevision",
+          "etag"
+        ],
+        "title": "AnswerPrecondition",
+        "type": "object"
+      },
       "BootstrapExchange": {
         "additionalProperties": false,
         "properties": {
@@ -1795,6 +1857,15 @@
           }
         ],
         "properties": {
+          "answerPreconditions": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerPrecondition"
+            },
+            "maxItems": 30,
+            "minItems": 5,
+            "title": "Answerpreconditions",
+            "type": "array"
+          },
           "answers": {
             "items": {
               "$ref": "#/components/schemas/Answer"
@@ -1884,7 +1955,8 @@
           "savedAnswerCount",
           "snapshotRevision",
           "submissionRevision",
-          "result"
+          "result",
+          "answerPreconditions"
         ],
         "title": "QuizAttempt",
         "type": "object"
@@ -4917,6 +4989,193 @@
           }
         },
         "summary": "Get Quiz",
+        "tags": [
+          "assessments"
+        ]
+      }
+    },
+    "/api/v1/quiz-attempts/{attemptId}/answers/{questionId}": {
+      "put": {
+        "operationId": "put_answer_api_v1_quiz_attempts__attemptId__answers__questionId__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attemptId",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "title": "Attemptid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "questionId",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "title": "Questionid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "pattern": "^\"qa-v1-[0-9a-f]{64}\"$",
+              "title": "If-Match",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[\\x20-\\x7e]+$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Answer"
+                }
+              }
+            },
+            "description": "Durably saved Answer or exact historical receipt",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "pattern": "^\"qa-v1-[0-9a-f]{64}\"$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Put Answer",
         "tags": [
           "assessments"
         ]

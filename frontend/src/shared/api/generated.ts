@@ -128,6 +128,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quiz-attempts/{attemptId}/answers/{questionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Answer */
+        put: operations["put_answer_api_v1_quiz_attempts__attemptId__answers__questionId__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/review-queue": {
         parameters: {
             query?: never;
@@ -363,6 +380,24 @@ export interface components {
              * @enum {string}
              */
             state: "BLANK" | "DRAFT" | "SCORED";
+        };
+        /** AnswerDraftRequest */
+        AnswerDraftRequest: {
+            /** Answer */
+            answer: string;
+            /** Draftrevision */
+            draftRevision: number;
+            /** Selfscore */
+            selfScore?: number | null;
+        };
+        /** AnswerPrecondition */
+        AnswerPrecondition: {
+            /** Draftrevision */
+            draftRevision: number;
+            /** Etag */
+            etag: string;
+            /** Questionid */
+            questionId: string;
         };
         /** BootstrapExchange */
         BootstrapExchange: {
@@ -845,6 +880,8 @@ export interface components {
         });
         /** QuizAttempt */
         QuizAttempt: {
+            /** Answerpreconditions */
+            answerPreconditions: components["schemas"]["AnswerPrecondition"][];
             /** Answers */
             answers: components["schemas"]["Answer"][];
             /** Id */
@@ -2495,6 +2532,127 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+        };
+    };
+    put_answer_api_v1_quiz_attempts__attemptId__answers__questionId__put: {
+        parameters: {
+            query?: never;
+            header: {
+                "If-Match": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                attemptId: string;
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Durably saved Answer or exact historical receipt */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Answer"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Service Unavailable */
