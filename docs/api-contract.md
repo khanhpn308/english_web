@@ -190,6 +190,13 @@ Request/response DTOs used by the endpoint tables:
       {"id": "question_e", "type": "WRITING", "wordFormId": "wf_b", "promptEn": "Write one academic sentence using hypothesis.", "targetLemma": "hypothesis", "rubricVersion": "writing-rubric-v1", "rubric": {"descriptors": [{"score": 0, "textVi": "Không có câu có nghĩa hoặc không dùng từ mục tiêu."}, {"score": 1, "textVi": "Có thử dùng từ nhưng sai nghĩa/dạng hoặc lỗi lớn làm khó hiểu."}, {"score": 2, "textVi": "Nhận ra nghĩa định dùng nhưng cần sửa đáng kể dạng từ/ngữ pháp."}, {"score": 3, "textVi": "Đúng nghĩa/dạng, câu rõ; lỗi nhỏ không cản nghĩa."}, {"score": 4, "textVi": "Đúng nghĩa/dạng, đúng ngữ pháp, rõ và tự nhiên trong câu học thuật."}]}}
     ],
     "answers": [],
+    "answerPreconditions": [
+      {"questionId": "question_a", "draftRevision": 0, "etag": "\"qa-v1-a9ac3e024d3e1df93e866f8fd844c6e7be7964fa5ce9ba10bf0de6c148ebd4fa\""},
+      {"questionId": "question_b", "draftRevision": 0, "etag": "\"qa-v1-5567b6e706c874468c6751e3e2bc1ccadff2b71b860542ef4affb21039567a36\""},
+      {"questionId": "question_c", "draftRevision": 0, "etag": "\"qa-v1-a35a6db30646ecc6c9123d139b3f12b7c450f6566a71bb46f042228aacb3b5e6\""},
+      {"questionId": "question_d", "draftRevision": 0, "etag": "\"qa-v1-f8ecfe7e59b3b34a355c64df647675e53a81aba69763639ab8e86724abe0de28\""},
+      {"questionId": "question_e", "draftRevision": 0, "etag": "\"qa-v1-21ca66e933ebc0b91772603b184796cb6b34d1360604a39e80f0c783774cb353\""}
+    ],
     "savedAnswerCount": 0,
     "snapshotRevision": 11,
     "submissionRevision": 0,
@@ -242,7 +249,9 @@ ReviewEvent { id, cardId, source: FLASHCARD | QUIZ, attemptId?, questionId?, rat
 Answer { attemptId, questionId, answer, selfScore: integer 0..4 | null, draftRevision, savedAt, state: BLANK | DRAFT | SCORED, operationId }
 WordFormMutationResult { wordForm, operationId, sourceRevision }
 QuizAttempt { id, noteDate, status: IN_PROGRESS | SUBMITTED, questions: PublicQuestion[], answers: Answer[],
-              savedAnswerCount, snapshotRevision, submissionRevision, result: QuizResult | null }
+              answerPreconditions: AnswerPrecondition[], savedAnswerCount, snapshotRevision,
+              submissionRevision, result: QuizResult | null }
+AnswerPrecondition { questionId, draftRevision: integer >= 0, etag: string }
 QuizResult { attemptId, status: SUBMITTED, submissionRevision, objectiveScores: ObjectiveScores,
              writingSelfScores: {questionId, selfScore: integer 0..4, rating}[],
              questionResults: QuestionResult[], reviewHandoffs: ReviewHandoff[], submittedAt }
@@ -528,7 +537,7 @@ The queue includes only due or `NEW` cards when `dueOnly=true`; date filtering f
 |---|---|---|---|---|
 | quiz attempt | `POST` | `/api/v1/quiz-attempts` | `{noteDate, counts: {mcq, cloze, writing}}`, total 5–30, each 0–20, required `Idempotency-Key` | `201 QuizAttempt` with public questions and null result, or typed validation/dependency error |
 | quiz attempt | `GET` | `/api/v1/quiz-attempts/{attemptId}` | path ID | `200 QuizAttempt`; immutable public snapshot plus null IN_PROGRESS result or stored SUBMITTED result; `Cache-Control: no-store` |
-| answer draft | `PUT` | `/api/v1/quiz-attempts/{attemptId}/answers/{questionId}` | `{answer, selfScore?, draftRevision}` plus `If-Match` and required `Idempotency-Key` | `200 Answer` with next revision and operation ID |
+| answer draft | `PUT` | `/api/v1/quiz-attempts/{attemptId}/answers/{questionId}` | `{answer, selfScore?, draftRevision}` plus `If-Match` and required `Idempotency-Key` | `200 Answer` with next revision, operation ID and its strong `ETag` response header |
 | submission | `POST` | `/api/v1/quiz-attempts/{attemptId}/submissions` | Current aggregate `{submissionRevision}` plus `Idempotency-Key` | `201 QuizResult`; same intent replays it; fresh terminal intent → `409 ALREADY_SUBMITTED`; in-flight duplicate → `409 IDEMPOTENCY_IN_FLIGHT` |
 | AI writing feedback | `POST` | `/api/v1/quiz-questions/{questionId}/feedback` | `{rubricVersion, answerRevision, retryOfOperationId?}` plus a fresh `Idempotency-Key`; answer is read from canonical draft | `201/202 Feedback` or dependency error |
 | feedback history | `GET` | `/api/v1/quiz-questions/{questionId}/feedback` | attempt/question filters, cursor pagination | `200 FeedbackPage` |
@@ -536,6 +545,32 @@ The queue includes only due or `NEW` cards when `dueOnly=true`; date filtering f
 The attempt state is `IN_PROGRESS → SUBMITTED`, with `FAILED`/`UNKNOWN` operation records for recoverable errors. Question content is an immutable creation snapshot; source revisions do not mutate an in-progress attempt. The user's writing score is stored separately and is never overwritten by AI feedback. Rubric `writing-rubric-v1` has the five descriptors in ADR-0005 C013-03; score 0/1→AGAIN, 2→HARD, 3→GOOD, 4→EASY. Null writing score prevents submission (`422 VALIDATION_ERROR`), never fabricates zero. Blank objective answers retain BLANK outcome and map to AGAIN at terminal scoring; objective selfScore must be null. Blank writing can submit only with an explicit user score 0.
 
 `submissionRevision` starts at 0 and increases atomically once for each fresh answer write alongside its per-question `draftRevision`. The submit request must equal the current aggregate revision; stale → `409 REVISION_CONFLICT` before mutation. Submission is a short local transaction that commits result, SUBMITTED state, grouped SRS handoffs and receipt together. For each form use the weakest rating once (AGAIN < HARD < GOOD < EASY); inactive cards/sources yield `SKIPPED_INACTIVE` with no review event. Answers/score edits after SUBMITTED return `409 ALREADY_SUBMITTED`. GET attempt restores the terminal result after reload/rebootstrap without bridge access. A lost response is reconciled by operation/attempt read or replay of the same key, never a second handoff. Identical receipt replay precedes current revision/terminal checks; changed fingerprint still fails `422 IDEMPOTENCY_KEY_REUSED`.
+
+#### Answer draft preconditions and historical receipts
+
+Creation and `GET /api/v1/quiz-attempts/{attemptId}` include required `answerPreconditions` in question order, exactly one `{questionId,draftRevision,etag}` for every public question. An unsaved question has revision 0, no fabricated Answer row, and an initial server-issued token. Clients copy that entry's revision and opaque token into the PUT body and `If-Match`. They must not construct tokens or use the attempt's snapshot/submission revision instead.
+
+The strong ETag is bound to the attempt, question, current draft revision and discriminator `quiz-answer-v1`. The server computes SHA-256 over ASCII UTF-8 bytes of the compact JSON array `["quiz-answer-v1",attemptId,questionId,draftRevision]`, with JSON ASCII escaping, no spaces and no trailing newline. Its value is a double-quoted `qa-v1-` followed by the lowercase hexadecimal digest. The derivation needs no secret, is stable across restarts and changes once for each fresh successful write. This documents server behavior, not a client construction API. Tokens do not grant access or replace session guards.
+
+PUT requires `answer` as a string of at most 4096 Unicode code points, strict integer `draftRevision >= 0`, exactly one strong `If-Match`, and exactly one printable-ASCII `Idempotency-Key` of length 1–128. `selfScore` is optional: omission preserves an existing writing score, explicit null clears it, and explicit integer 0–4 sets it. An unsaved omitted score is null. Objective scores must be null or omitted. Empty answers are retained; autosave never evaluates objective correctness, submits, updates SRS or dispatches AI.
+
+After session, request-shape and attempt/question identity checks, reconcile a known identical key/fingerprint before current revision or terminal checks. The fingerprint includes method, resource path, canonical supplied body fields and `If-Match`; omitted `selfScore` and explicit null are distinct intents. An identical successful replay returns the exact historical `200 Answer` and the ETag of that historical revision, even after later drafts, submission or restart. It does not return the latest Answer. GET attempt remains authoritative for the latest draft and its precondition.
+
+For a fresh write, validate both numeric revision and token against the current answer inside the existing SQLite `BEGIN IMMEDIATE` completion transaction. Persist the next Answer, append-only historical receipt, aggregate `submissionRevision` increment and successful operation status atomically. Only durable confirmation permits 200. The body includes canonical answer/score/state/time/revision and `operationId`; the response has `Cache-Control: no-store` and the saved Answer's `ETag`. A replay does not advance either revision or create a receipt.
+
+| Condition | Response |
+|---|---|
+| Missing, duplicate, malformed, weak, wildcard or list `If-Match`; invalid body/key; objective non-null score | `422 VALIDATION_ERROR` |
+| Well-formed token from another answer resource, stale token, stale numeric revision or mixed versions | `409 REVISION_CONFLICT`, no successful receipt or draft change |
+| Same key with different fingerprint | `422 IDEMPOTENCY_KEY_REUSED` |
+| Duplicate PENDING/UNKNOWN intent | `409 IDEMPOTENCY_IN_FLIGHT` with operation ID |
+| Missing attempt or question | `404 NOT_FOUND` |
+| Existing question belonging to another attempt | `422 CROSS_RESOURCE_MISMATCH` |
+| Fresh write to SUBMITTED attempt | `409 ALREADY_SUBMITTED` |
+| Missing/corrupt historical receipt or snapshot | `409 QUIZ_RESTORE_REQUIRED`, never a substituted latest answer |
+| SQLite unavailable/locked or failed write | `503 STORAGE_BUSY`; no false success |
+
+After a lost response, retain and replay the same key/body/precondition or read the existing operation and attempt APIs. A committed receipt survives interruption. If storage prevents determining the outcome, preserve the intent and report the operation reference; never automatically retry the mutation. Existing databases keep their latest drafts during migration. Missing older receipt contents are not reconstructed, and no historical revision is fabricated. New receipts remain for database lifetime, including after submission and backup.
 
 Negative count fixture (with a valid session and otherwise eligible sources):
 
