@@ -75,6 +75,9 @@ COPY --from=osv_snapshot /opt/playwright-browsers /opt/playwright-browsers
 RUN node -e 'const b=require("/opt/toolchain/node_modules/playwright-core/browsers.json").browsers.find(x=>x.name==="chromium-headless-shell"); if(!b) process.exit(3); const p="/opt/playwright-browsers/chromium_headless_shell-"+b.revision; if(!require("fs").existsSync(p))process.exit(4);' \
     && chmod -R a+rX /opt/playwright-browsers
 
+# The original lock is retained only for OSV's requirements.txt parser.
+# It is NEVER used to install Python dependencies into the image.
+COPY requirements-dev.lock /opt/locks/requirements-dev.lock
 # Byte-verified Linux/Python 3.12 candidate wheel locks; never resolve an
 # unpinned dependency or build from a Python sdist during image construction.
 COPY requirements-dev-hashed.lock /opt/locks/requirements-dev-hashed.lock
