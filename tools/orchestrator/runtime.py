@@ -248,6 +248,7 @@ class DockerVerificationPolicy:
     cpu_millicores: int = 1000
     pids_limit: int = 64
     timeout_seconds: int = 900
+    workspace_tmpfs_mib: int = 256
 
     def __post_init__(self) -> None:
         if not _DOCKER_DIGEST_RE.fullmatch(self.image):
@@ -260,6 +261,8 @@ class DockerVerificationPolicy:
             raise OrchestratorError("T090 SANDBOX_BLOCKED: invalid PID limit")
         if not (1 <= self.timeout_seconds <= 3600):
             raise OrchestratorError("T090 SANDBOX_BLOCKED: timeout must be finite")
+        if not (64 <= self.workspace_tmpfs_mib <= 4096):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: invalid workspace tmpfs limit")
         if not self.verification_root.is_absolute():
             raise OrchestratorError("T090 SANDBOX_BLOCKED: verification root must be absolute")
 
@@ -368,7 +371,7 @@ class DockerVerificationSandbox:
             "--workdir=/workspace",
             "--mount",
             f"type=bind,src={workspace},dst=/source,readonly,bind-propagation=rprivate",
-            "--tmpfs=/workspace:rw,nosuid,nodev,size=256m,mode=1777",
+            f"--tmpfs=/workspace:rw,nosuid,nodev,size={self.policy.workspace_tmpfs_mib}m,mode=1777",
             "--tmpfs=/tmp:rw,nosuid,nodev,size=64m,mode=1777",
             "--ulimit=core=0:0",
             "--env=HOME=/tmp",

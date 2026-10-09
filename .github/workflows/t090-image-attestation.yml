@@ -239,3 +239,60 @@ jobs:
                   raise AssertionError(f"Offline toolchain probe failed: {command[0]}")
           print("T090_B2_CANDIDATE_RUFF_MYPY_NPM_OFFLINE_PASS; NOT FULL_PORTABLE_GATE")
           PY
+
+      - name: Experiment with full portable application gate inside isolated image
+        shell: bash
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          # Non-production experimental probe of actual project commands.
+          docker run -d --name t090-full-gate-registry \
+            -p 127.0.0.1:5001:5000 registry:2
+          trap 'docker rm -f t090-full-gate-registry >/dev/null 2>&1 || true' EXIT
+          docker tag t090-verifier:candidate localhost:5001/t090-verifier:probe
+          docker push localhost:5001/t090-verifier:probe
+          image_ref="$(docker image inspect --format '{{index .RepoDigests 0}}' localhost:5001/t090-verifier:probe)"
+          [[ "$image_ref" == localhost:5001/t090-verifier@sha256:* ]]
+          python3 -m pip install --disable-pip-version-check -r requirements-dev.lock
+          T090_GATE_IMAGE="$image_ref" python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox, Git
+
+          repo = Path.cwd()
+          root = Path(os.environ["RUNNER_TEMP"]) / "t090-full-portable-probe"
+          root.mkdir()
+          workspace = root / "verify-real-checkout" / "workspace"
+          workspace.parent.mkdir()
+          Git(repo).run("clone", "--no-local", "--no-checkout", str(repo), str(workspace))
+          sha = Git(repo).sha()
+          Git(workspace).run("checkout", "--detach", sha)
+          assert Git(workspace).sha() == sha
+
+          broker = DockerVerificationSandbox(
+              DockerVerificationPolicy(
+                  image=os.environ["T090_GATE_IMAGE"],
+                  verification_root=root,
+                  memory_mib=3072,
+                  cpu_millicores=2000,
+                  pids_limit=128,
+                  timeout_seconds=1200,
+                  workspace_tmpfs_mib=2048,
+              )
+          )
+          frozen_digest = broker.source_digest(workspace)
+          result = broker.run(
+              ["npm", "run", "check:task:portable"],
+              workspace,
+              expected_source_digest=frozen_digest,
+          )
+          print("T090_FULL_PORTABLE_DOCKER_EXIT:", result.exit_code, flush=True)
+          print("T090_FULL_PORTABLE_DOCKER_TIMEOUT:", result.timed_out, flush=True)
+          print("T090_FULL_PORTABLE_DOCKER_OVERSIZED:", result.oversized, flush=True)
+          print("T090_FULL_PORTABLE_OUTPUT_TAIL:", result.stdout[-3500:], flush=True)
+          print("T090_FULL_PORTABLE_ERROR_TAIL:", result.stderr[-1500:], flush=True)
+          assert result.exit_code == 0
+          assert not result.timed_out and not result.oversized
+          assert broker.source_digest(workspace) == frozen_digest
+          print("T090_FULL_PORTABLE_DOCKER_PROBE_PASS; IMAGE_STILL_UNAPPROVED")
+          PY
