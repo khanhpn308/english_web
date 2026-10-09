@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
+import type { components } from '@/shared/api/generated';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 import {
@@ -72,6 +73,33 @@ describe('Route Map & v1 Screens', () => {
       expect(html).toContain('aria-describedby="lookup-help lookup-status"');
       expect(html).toContain('id="lookup-status"');
       expect(html).toContain('Nhập từ hoặc cụm từ để tra cứu.');
+      expect(html).not.toContain('Tính năng đang được xây dựng (chưa khả dụng)');
+    } else if (path === '/review') {
+      const markup = document.createElement('div');
+      markup.innerHTML = html;
+      const review = markup.querySelector<HTMLElement>('section[aria-label="Hàng đợi ôn tập flashcard"]');
+      expect(review).not.toBeNull();
+      expect(review!.hidden).toBe(false);
+      expect(review!.querySelector('label[for="review-note-date"]')?.textContent).toBe('Ngày ghi chú');
+      expect(review!.querySelector('input#review-note-date')?.getAttribute('type')).toBe('date');
+      expect(review!.querySelector('input#review-note-date')?.getAttribute('aria-describedby')).toBe('review-filter-help');
+      const status = review!.querySelector('#review-status');
+      expect(status?.getAttribute('role')).toBe('status');
+      expect(status?.getAttribute('aria-live')).toBe('polite');
+      expect(status?.getAttribute('aria-atomic')).toBe('true');
+      expect(status?.textContent).toBe('Chọn ngày ghi chú hoặc bắt đầu ôn tập.');
+      expect(html).not.toContain('Tính năng đang được xây dựng (chưa khả dụng)');
+    } else if (path === '/search') {
+      expect(html).toContain('aria-label="Tìm trong kho từ"');
+      expect(html).toContain('for="meaningVi"');
+      expect(html).toContain('for="lemma"');
+      expect(html).toContain('Duyệt kho từ');
+      expect(html).toContain('Nhập nghĩa tiếng Việt hoặc dạng từ');
+      expect(html).not.toContain('Tính năng đang được xây dựng (chưa khả dụng)');
+    } else if (path.startsWith('/word-forms/')) {
+      expect(html).toContain('aria-label="Dạng từ đã lưu"');
+      expect(html).toContain('Quay lại kết quả tìm kiếm');
+      expect(html).toContain('Đang tải chi tiết');
       expect(html).not.toContain('Tính năng đang được xây dựng (chưa khả dụng)');
     } else {
       // Unimplemented routes still explain their availability.
@@ -193,7 +221,7 @@ describe('T076 Design System Integration', () => {
   });
 
   it('uses canonical Card primitive for placeholders with structured content and route params', () => {
-    const html = renderToStaticMarkup(<AppShell currentPath="/word-forms/test-item-42" />);
+    const html = renderToStaticMarkup(<AppShell currentPath="/quiz/test-attempt-42" />);
     // Card primitive classes
     expect(html).toContain('bg-card');
     expect(html).toContain('text-card-foreground');
@@ -201,8 +229,8 @@ describe('T076 Design System Integration', () => {
     expect(html).toContain('aria-label="Thông báo trạng thái tính năng"');
     // Content structure
     expect(html).toContain('Tính năng đang được xây dựng (chưa khả dụng)');
-    expect(html).toContain('wordFormId');
-    expect(html).toContain('test-item-42');
+    expect(html).toContain('attemptId');
+    expect(html).toContain('test-attempt-42');
   });
 
   it('uses canonical Card and Button primitives for ErrorBoundary recovery actions', () => {
@@ -331,6 +359,125 @@ describe('AppShell - Mounted Client-Side Interactions (T076 Coverage Extension)'
     const destinationHeading = container!.querySelector<HTMLHeadingElement>('#main-content h1');
     expect(destinationHeading).not.toBeNull();
     expect(document.activeElement).toBe(destinationHeading);
+  });
+
+  it('navigates through real Search and Word Detail and restores the filtered result URL', async () => {
+    const word = {
+      id: 'form_shell_synthetic', lemma: 'robust', partOfSpeech: 'ADJECTIVE',
+      meaningViMatch: 'vững chắc', verificationSummary: 'UNVERIFIED',
+      noteDates: ['2026-10-09'], revision: 1, updatedAt: '2026-10-09T00:00:00Z',
+    } satisfies components['schemas']['WordFormSummary'];
+    const results: components['schemas']['WordFormCollection'] = {
+      data: [word], pagination: { pageSize: 50, nextCursor: null, hasMore: false },
+      sort: { by: 'relevance', direction: 'ASC' },
+    };
+    const detail: components['schemas']['WordFormDetail'] = {
+      ...word, familyId: 'family_shell_synthetic',
+      meaningsEn: [{ text: 'strong', language: 'en', verificationStatus: 'VERIFIED' }],
+      meaningsVi: [{ text: 'vững chắc', language: 'vi', verificationStatus: 'UNVERIFIED' }],
+      examples: [{ english: 'A robust design.', vietnamese: 'Một thiết kế vững chắc.', verificationStatus: 'UNVERIFIED' }],
+      ipaUs: null, cambridgeUrl: null, card: null,
+      sourceRefs: [{ sourceId: 'source_shell_synthetic', noteDate: '2026-10-09', status: 'VALID' }],
+    };
+    const reads: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      expect(init.method ?? 'GET').toBe('GET');
+      expect(init.credentials).toBe('same-origin');
+      reads.push(url);
+      if (!url.startsWith('/api/v1/word-forms')) throw new Error('Unexpected API read');
+      return new Response(JSON.stringify(url === '/api/v1/word-forms/form_shell_synthetic' ? detail : results), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }));
+    window.history.replaceState(null, '', '/');
+    await act(async () => root!.render(<AppShell />));
+    const nav = container!.querySelector('nav[aria-label="Điều hướng chính"]')!;
+    const searchAnchor = nav.querySelector<HTMLAnchorElement>('a[href="/search"]')!;
+    await act(async () => {
+      searchAnchor.click();
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(searchAnchor.getAttribute('aria-current')).toBe('page');
+    expect(reads).toEqual([]);
+    const main = container!.querySelector('main')!;
+    expect(main.querySelector('h1')?.textContent).toBe('Tìm kiếm từ vựng');
+    expect(document.activeElement).toBe(main.querySelector('h1'));
+    expect(main.querySelector('section[aria-label="Tìm trong kho từ"]')).not.toBeNull();
+    const meaning = main.querySelector<HTMLInputElement>('input#meaningVi')!;
+    expect(main.querySelector('label[for="meaningVi"]')?.textContent).toBe('Nghĩa tiếng Việt');
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(meaning, 'vững chắc');
+      meaning.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const searchPath = window.location.pathname + window.location.search;
+    expect(new URLSearchParams(window.location.search).get('meaningVi')).toBe('vững chắc');
+    expect(new URL(reads[0], window.location.origin).searchParams.get('meaningVi')).toBe('vững chắc');
+    const result = main.querySelector<HTMLAnchorElement>('ul[aria-label="Kết quả tìm kiếm"] a')!;
+    expect(result.textContent).toBe('robust');
+    expect(new URL(result.href).searchParams.get('returnTo')).toBe(searchPath);
+    await act(async () => {
+      result.click();
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(window.location.pathname).toBe('/word-forms/form_shell_synthetic');
+    expect(main.querySelector('h1')?.textContent).toBe('Chi tiết từ vựng');
+    expect(document.activeElement).toBe(main.querySelector('h1'));
+    expect(main.querySelector('section[aria-label="Dạng từ đã lưu"]')).not.toBeNull();
+    expect(main.textContent).toContain('Nguồn hợp lệ');
+    expect(main.textContent).toContain('Chưa xác minh');
+    expect(main.textContent).toContain('Một thiết kế vững chắc.');
+    const back = main.querySelector<HTMLAnchorElement>('section[aria-label="Dạng từ đã lưu"] > a')!;
+    expect(back.textContent).toBe('Quay lại kết quả tìm kiếm');
+    expect(back.getAttribute('href')).toBe(searchPath);
+    await act(async () => {
+      back.click();
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(window.location.pathname + window.location.search).toBe(searchPath);
+    expect(main.querySelector<HTMLInputElement>('#meaningVi')?.value).toBe('vững chắc');
+    expect(document.activeElement).toBe(main.querySelector('h1'));
+    expect(main.querySelector('ul[aria-label="Kết quả tìm kiếm"]')?.textContent).toContain('robust');
+    expect(reads).toEqual([
+      '/api/v1/word-forms?meaningVi=v%E1%BB%AFng+ch%E1%BA%AFc',
+      '/api/v1/word-forms/form_shell_synthetic',
+      '/api/v1/word-forms?meaningVi=v%E1%BB%AFng+ch%E1%BA%AFc',
+    ]);
+  });
+
+  it('reads the initial query and restores query, cursor and controls from popstate', async () => {
+    const queries: URLSearchParams[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      queries.push(new URL(url, window.location.origin).searchParams);
+      const results: components['schemas']['WordFormCollection'] = {
+        data: [], pagination: { pageSize: 20, nextCursor: null, hasMore: false },
+        sort: { by: 'lemma', direction: 'DESC' },
+      };
+      return new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } });
+    }));
+    const initial = '/search?meaningVi=vững+chắc&sortBy=lemma&sortOrder=DESC&pageSize=20&cursor=cursor_shell';
+    window.history.replaceState(null, '', initial);
+    await act(async () => root!.render(<AppShell />));
+    expect(queries[0].get('meaningVi')).toBe('vững chắc');
+    expect(queries[0].get('cursor')).toBe('cursor_shell');
+    expect(container!.querySelector<HTMLInputElement>('#meaningVi')?.value).toBe('vững chắc');
+    await act(async () => {
+      window.history.pushState(null, '', '/search?lemma=resilient&browse=1');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(container!.querySelector<HTMLInputElement>('#lemma')?.value).toBe('resilient');
+    expect(container!.querySelector<HTMLInputElement>('#meaningVi')?.value).toBe('');
+    expect(queries.at(-1)?.get('cursor')).toBeNull();
+    expect(queries.at(-1)?.get('lemma')).toBe('resilient');
+    expect(document.activeElement).toBe(container!.querySelector('main h1'));
+    await act(async () => {
+      window.history.replaceState(null, '', initial);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(container!.querySelector<HTMLInputElement>('#meaningVi')?.value).toBe('vững chắc');
+    expect(container!.querySelector<HTMLSelectElement>('#sortOrder')?.value).toBe('DESC');
+    expect(queries.at(-1)?.get('cursor')).toBe('cursor_shell');
+    expect(container!.querySelector('main')?.textContent).toContain('Không tìm thấy dạng từ phù hợp');
   });
 
   it('navigates from invalid path to / via real 404 recovery action DOM interaction and focuses heading (AppShell:346)', async () => {

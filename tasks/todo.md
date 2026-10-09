@@ -43,7 +43,7 @@
 - [ ] [T024](t024-save-api.md): Explicit save preview vào Markdown và cards
 - [ ] [T025](t025-save-ui-audio.md): Save lookup preview và local pronunciation
 - [ ] [T027](t027-search-api.md): Search/detail API có cursor và filters
-- [ ] [T028](t028-search-ui.md): Search/detail read flow
+- [ ] [T028](t028-search-ui.md): Search/detail read flow, SOURCE_COMPLETE_UNVERIFIED; approved shell test extension complete; Host AppShell reconciliation and verification pending (09/10/2026)
 - [ ] [T029](t029-edit-api.md): Revision-safe word-form edit API
 - [ ] [T030](t030-edit-ui.md): Edit form và conflict dialog
 - [ ] [T032](t032-review-api.md): Review queue và review event API

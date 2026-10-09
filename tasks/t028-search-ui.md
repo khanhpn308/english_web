@@ -7,6 +7,8 @@
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
 
+Owner-approved extension on 09/10/2026 permits the seven source/test paths listed below for T028 completion. Common bookkeeping remains separate from that implementation allowlist.
+
 ## Context cần đọc
 
 - [CONSTRAINTS.md](../CONSTRAINTS.md)
@@ -33,6 +35,8 @@ Mọi dependency phải có evidence hoàn tất. Task ID không biểu thị th
 - `frontend/src/features/search/search.test.tsx`
 - `frontend/tests/e2e/search.spec.ts`
 - `frontend/src/app/AppShell.tsx`
+- `frontend/src/app/AppShell.test.tsx` (owner-approved T028 test scope extension, 09/10/2026)
+- `frontend/tests/e2e/shell.spec.ts` (owner-approved T028 test scope extension, 09/10/2026)
 
 Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa generated file bằng tay. Common bookkeeping được phép: thẻ task này, [todo.md](todo.md), [changelog](../docs/changelogs.md), artifact verification đã loại dữ liệu nhạy cảm.
 
@@ -91,3 +95,64 @@ npm run test:e2e -- frontend/tests/e2e/search.spec.ts
 ## Commit message đề xuất
 
 `feat(T028): search/detail read flow`
+
+## Source completion handoff, 09/10/2026 (Asia/Bangkok)
+
+- Task status remains `TODO`; implementation status is `SOURCE_COMPLETE_UNVERIFIED`. Acceptance boxes remain unchecked until Host verification.
+- Worktree: `/home/khanh/projects/vocabularies-t028-codex`; branch: `feature/t028-codex`; BASE_SHA / inspected HEAD: `aeaaa322ef8f3b94a6ab9f2330dd2ef90b3dcd97`.
+- Owner approved extending the original five implementation/test paths with `frontend/src/app/AppShell.test.tsx` and `frontend/tests/e2e/shell.spec.ts`. This is one Search/detail flow, not a second subsystem.
+- Original in-flight implementation was preserved. Existing T028 modifications in `AppShell.tsx` were inspected and left unchanged this session. No synchronization with main or manual T033 import occurred.
+
+### Requirement review and authored evidence
+
+| Requirement | Source evidence and regression coverage |
+|---|---|
+| Typed Search API | Uses T017 generated query keys, WordFormCollection and WordFormDetail with the shared same-origin API client. Validates consumed response shapes before rendering. No generated files or endpoints changed. |
+| URL state/navigation | URL owns query/filter/sort/page size/cursor. Mounted AppShell tests cover initial query and popstate restoration; real-shell Playwright cases cover Search/detail navigation, return URL, reload and browser back/forward. |
+| Cursor/races | AbortController, generation guard and keyed state reject obsolete reads, including A → B → A. Existing reverse-order/unmount/page/reset/expiry tests retained. Expiry removes only cursor, keeps filters and replaces history with a first-page notice. |
+| Word Detail/source validity | Real source dates, source health, aggregate and per-meaning/example verification, revision and card information render. Invalid/missing/absent sources hide current study content; mixed valid/invalid sources keep current data available. Tests retain stale content to prove withholding. Editing remains T030. |
+| Error recovery | Empty results differ from local network, storage, session, invalid-query and missing-form errors. Malformed success JSON and malformed error codes use safe recovery instead of perpetual loading/render errors. User-triggered retries keep URL intent; raw messages and unsafe request IDs are withheld. |
+| Accessibility | Labelled native controls, semantic result lists/links, route focus and live regions reviewed. Shell announcement locator now selects its own status region. Keyboard Enter/Tab, heading focus, Search/Detail axe assertions and long Vietnamese/reflow checks authored. Browser/contrast/zoom/performance evidence is pending. |
+| Regression/scope | Corrected only obsolete Search/detail placeholder assertions. Preserved placeholder Card/parameter coverage on the unimplemented quiz route and all unrelated shell assertions. Fixture mocking is at the HTTP boundary; real AppShell/Search/Detail remain mounted. |
+
+### Checks and integration limits
+
+`TESTS: NOT_RUN`. `AUDIT: SOURCE_REVIEW_ONLY`. `GIT_MUTATIONS: NOT_PERFORMED`.
+
+Read-only inspection used `git status --short`, `git diff --stat`, path-specific `git diff`, `git rev-parse HEAD`, `git branch --show-current`, `rg`, `cat`, `sed` and `tail`. No tests, builds, lint, typecheck, executable audits, dependency installation or browser execution were performed. No passing result, measured coverage, performance or accessibility conformance is claimed.
+
+Host verification commands, recorded but not executed:
+
+```text
+npm run test:frontend -- frontend/src/features/search/search.test.tsx frontend/src/app/AppShell.test.tsx
+npm run test:e2e -- frontend/tests/e2e/search.spec.ts frontend/tests/e2e/shell.spec.ts
+npm run test:a11y
+npm run build
+npm run check:task
+```
+
+Expected outcomes: zero task/type/lint/security failures; Search and detail retain URL state through reload/history; newest read wins; cursor expiry restarts safely; invalid sources and malformed responses do not expose current/stale content or private errors; keyboard and serious/critical accessibility checks pass. These are pending outcomes, not observed results. Changed-code coverage and other CONSTRAINTS gates remain mandatory.
+
+- Shared AppShell risk: Host reports main advanced to `e8ebfe8` after T033 changed `AppShell.tsx`. Host must reconcile T028 imports, pathname-plus-query state, popstate focus, push/replace search navigation and real Search/Detail rendering with T033's shell. Existing unrelated-route tests retain this base's behavior and need comparison with T033 tests during integration.
+- Known blockers: Host AppShell reconciliation and executable verification. Local task metadata still lists T010/T027 as TODO despite their existing source; Host owns authoritative dependency/integration status.
+- Scope exceptions: exactly the two owner-approved test files. No additional implementation path, dependency, generated-artifact, schema or quality-bar exception. Native input/select controls match existing Lookup practice; the installed UI directory has Button/Card/Dialog and no Input/Select primitive.
+- Intentionally untouched: existing `AppShell.tsx` delta this session, backend, generated DTO/OpenAPI, shared API/errors, Lookup/consent, design-system primitives/config, spec/ADRs, user vocabulary data and all T033 work.
+- Next action: Host reconciliation and verification of T028; T030 remains the separate editing task. Source handoff is ready, but integration/release gates and task DONE are not approved by source review.
+
+### Skills read and applied at actual installed paths
+
+The legacy AGENT.md references 0.6.11; installed engineering skills were found at 0.6.12. Owner instructions override runtime/commit steps and the cross-model CLI audit flow. Skill application here is source review and authored tests only where execution is prohibited.
+
+| Actual SKILL.md path | Application |
+|---|---|
+| `/mnt/c/Users/khanh/.codex/plugins/cache/agent-skills/agent-skills/0.6.12/skills/frontend-ui-engineering/SKILL.md` | Canonical Button/Card primitives, native labelled controls, semantic tokens, focus and reflow source review. |
+| `/mnt/c/Users/khanh/.codex/plugins/cache/agent-skills/agent-skills/0.6.12/skills/incremental-implementation/SKILL.md` | Preserved the in-flight implementation; completed shell tests and recovery fixes as separate scoped edits. |
+| `/mnt/c/Users/khanh/.codex/plugins/cache/agent-skills/agent-skills/0.6.12/skills/test-driven-development/SKILL.md` | Authored malformed-response regressions before the corresponding fixes; RED/GREEN execution deferred by owner instruction. |
+| `/mnt/c/Users/khanh/.codex/plugins/cache/agent-skills/agent-skills/0.6.12/skills/api-and-interface-design/SKILL.md` | Checked generated query/collection/detail DTOs and existing typed API/error boundary; no contract changes. |
+| `/mnt/c/Users/khanh/.codex/plugins/cache/agent-skills/agent-skills/0.6.12/skills/debugging-and-error-recovery/SKILL.md` | Traced obsolete assertions and malformed-response failures to their source; added explicit retry regressions. |
+| `/mnt/c/Users/khanh/.codex/plugins/cache/agent-skills/agent-skills/0.6.12/skills/doubt-driven-development/SKILL.md` | Three bounded fresh-context, read-only adversarial reviews. Actionable malformed success/error findings corrected; final correction reviewed locally. No external CLI audit. |
+| `/mnt/c/Users/khanh/.codex/plugins/cache/agent-skills/agent-skills/0.6.12/skills/security-and-hardening/SKILL.md` | Reviewed response shape, escaped content, same-origin reads, bounded correlation IDs, local return targets and dictionary URL allowlist. |
+| `/mnt/c/Users/khanh/.codex/plugins/cache/agent-skills/agent-skills/0.6.12/skills/browser-testing-with-devtools/SKILL.md` | Applied keyboard/landmark/network/accessibility verification guidance to authored Playwright cases; no browser execution or observed browser evidence. |
+| `/mnt/c/Users/khanh/.codex/plugins/cache/agent-skills/agent-skills/0.6.12/skills/git-workflow-and-versioning/SKILL.md` | Inspected branch/base/diff using read-only Git; preserved uncommitted work and identified shared AppShell reconciliation risk. |
+| `/mnt/c/Users/khanh/.codex/plugins/cache/agent-skills/agent-skills/0.6.12/skills/documentation-and-adrs/SKILL.md` | Recorded the authorized extension, source evidence, deferred gates and handoff; no new architectural decision or ADR. |
+| `/home/khanh/.agents/skills/unslop/SKILL.md` | Plain-language updates, changelog and handoff with no invented verification claims. |
