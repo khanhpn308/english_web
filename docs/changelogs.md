@@ -1,3 +1,8 @@
+## 09/10/2026 - T090 sealed-source CI R1 format repair
+
+- Recorded CI run 37882294933 FAILURE on 4777d903: three Ruff format differences; portable pytest, frontend, architecture and security gates passed.
+- Applied only the three formatter-requested changes in workflow.py and test_workflow.py. No runtime authorization changes; full gate on a fresh SHA required.
+
 ## 09/10/2026 - T090 sealed source integration refinement
 
 - Added parallel Reviewer tests for host-supplied source evidence.
