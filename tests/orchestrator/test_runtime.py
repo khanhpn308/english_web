@@ -568,3 +568,32 @@ def test_t090_docker_sandbox_blocks_missing_pinned_image(
         DockerVerificationSandbox(policy).run(["python", "-m", "pytest"], workspace)
     assert len(seen) == 1
     assert "inspect" in seen[0]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["bash", "-c", "echo malicious"],
+        ["python", "-c", "print('malicious')"],
+        ["git", "status"],
+        ["npm", "ci"],
+    ],
+)
+def test_t090_docker_sandbox_rejects_unapproved_command_before_host_execution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: list[str]
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+
+    root = tmp_path / "verification"
+    workspace = root / "verify-t090" / "workspace"
+    workspace.mkdir(parents=True)
+    monkeypatch.setattr("tools.orchestrator.runtime.os.geteuid", lambda: 1000)
+
+    def no_host_command(*args: object, **kwargs: object) -> None:
+        raise AssertionError("Unapproved command reached host execution")
+
+    monkeypatch.setattr("tools.orchestrator.runtime.execute", no_host_command)
+    policy = DockerVerificationPolicy("example.com/t090@sha256:" + "a" * 64, root)
+    with pytest.raises(OrchestratorError):
+        DockerVerificationSandbox(policy).run(command, workspace)
