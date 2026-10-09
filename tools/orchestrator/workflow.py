@@ -1354,6 +1354,7 @@ class Pipeline:
         context: str | AuditorContextV1 | IntegratorContextV1,
         *,
         cwd: Path | None = None,
+        worker_contract: Contract | None = None,
     ) -> BaseModel:
         working = cwd or Path(state.worktree_path)
         self.check_artifacts(directory, state)
@@ -1464,16 +1465,43 @@ class Pipeline:
 
             rejected_result: Plan | Audit | None = None
             try:
-                result = self.provider.run(
-                    prompt,
-                    cwd=working,
-                    role=self.config.roles[role_name],
-                    timeout=self.config.timeout_seconds,
-                    output=output,
-                    artifacts=directory,
-                    name=attempt_name,
-                    readonly=role_name != "worker",
-                )
+                if role_name == "worker" and role.worker_backend == "host-http-edit":
+                    if worker_contract is None or output is not WorkerResult:
+                        raise OrchestratorError("Host Worker requires a pinned source contract")
+                    from tools.orchestrator.worker_sandbox import (
+                        HostEditRejected,
+                        LoopbackChatTransport,
+                        run_host_mediated_worker,
+                    )
+
+                    try:
+                        transport = LoopbackChatTransport(
+                            role.host_edit_endpoint or "",
+                            api_key_env=role.host_edit_api_key_env or "",
+                        )
+                        result = run_host_mediated_worker(
+                            working,
+                            worker_contract.allowed_paths,
+                            prompt,
+                            model=role.model or "",
+                            transport=transport,
+                            timeout=self.config.timeout_seconds,
+                        )
+                    except HostEditRejected as error:
+                        raise OrchestratorError(
+                            "T090 BLOCKED: host-mediated Worker rejected unverified proposal"
+                        ) from error
+                else:
+                    result = self.provider.run(
+                        prompt,
+                        cwd=working,
+                        role=self.config.roles[role_name],
+                        timeout=self.config.timeout_seconds,
+                        output=output,
+                        artifacts=directory,
+                        name=attempt_name,
+                        readonly=role_name != "worker",
+                    )
                 self.skill_manifest(directory, state)
                 if isinstance(result, Plan):
                     rejected_result = result
@@ -2556,6 +2584,7 @@ class Pipeline:
                         context
                         + json.dumps(contract.model_dump(mode="json"))
                         + prompt_path.read_text(),
+                        worker_contract=contract,
                     )
                 )
                 self.contract(directory, state)
