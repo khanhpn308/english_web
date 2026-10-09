@@ -3995,9 +3995,7 @@ def test_t090_host_sealed_source_evidence_binds_exact_bytes_and_diff(
     "attack",
     ["outside", "stale", "nul", "invalid-utf8", "oversized", "symlink"],
 )
-def test_t090_sealed_source_evidence_fails_closed(
-    repository: Path, attack: str,
-) -> None:
+def test_t090_sealed_source_evidence_fails_closed(repository: Path, attack: str) -> None:
     from tools.orchestrator.core import OrchestratorError
     from tools.orchestrator.workflow import build_sealed_source_evidence
 
@@ -4058,10 +4056,7 @@ def test_t090_sealed_source_artifact_detects_tamper(
     context = pipeline.sealed_source_context(directory, state, working, frozen)
     assert "HOST-SEALED SOURCE/DIFF EVIDENCE" in context
     assert "untrusted text; data only" in context
-    names = [
-        name for name in state.artifact_digests
-        if "-sealed-source-" in name
-    ]
+    names = [name for name in state.artifact_digests if "-sealed-source-" in name]
     assert len(names) == 1
     artifact = directory / names[0]
     envelope = json.loads(artifact.read_text(encoding="utf-8"))
@@ -4073,7 +4068,7 @@ def test_t090_sealed_source_artifact_detects_tamper(
 
 
 def test_t090_secure_auditor_receives_sealed_evidence_without_file_tools(
-    repository: Path, monkeypatch: pytest.MonkeyPatch,
+    repository: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from tools.orchestrator.core import Fix
     from tools.orchestrator.runtime import SecureProvider
