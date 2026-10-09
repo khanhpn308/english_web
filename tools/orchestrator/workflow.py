@@ -1,9 +1,11 @@
 """Deterministic role pipeline; model responses never execute Git or choose states."""
 
+import difflib
 import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -160,6 +162,111 @@ def task_context(card: TaskCard, state: RunState) -> str:
         json.dumps(card.model_dump(mode="json"))
         + f"\nBASE_SHA: {state.base_sha}\nMAX_FIX_CYCLES: {state.max_fix_cycles}\n"
     )
+
+
+_SOURCE_EVIDENCE_MAX_FILES = 24
+_SOURCE_EVIDENCE_MAX_FILE_BYTES = 48 * 1024
+_SOURCE_EVIDENCE_MAX_PAYLOAD_BYTES = 256 * 1024
+
+
+def build_sealed_source_evidence(
+    worktree: Path,
+    base_sha: str,
+    expected_source_digest: str,
+    allowed_paths: list[str],
+) -> dict[str, object]:
+    """Host-owned bounded source/diff snapshot for tool-free semantic readers.
+
+    No model can request paths. Fail closed on stale, unallowlisted, binary,
+    symlinked or oversized source rather than truncating review evidence.
+    """
+    git = Git(worktree)
+    if git.snapshot(base_sha) != expected_source_digest:
+        raise OrchestratorError("T090 SOURCE_STALE: candidate changed before evidence capture")
+    allowed = {safe_path(path) for path in allowed_paths}
+    changed = git.paths(base_sha)
+    if not changed or len(changed) > _SOURCE_EVIDENCE_MAX_FILES:
+        raise OrchestratorError("T090 SOURCE_BLOCKED: empty or oversized changed-path set")
+    if set(changed) - allowed:
+        raise OrchestratorError("T090 SOURCE_BLOCKED: changed path outside contract")
+
+    def checked_text(raw: bytes, path: str) -> str:
+        if len(raw) > _SOURCE_EVIDENCE_MAX_FILE_BYTES or b"\\x00" in raw:
+            raise OrchestratorError(f"T090 SOURCE_BLOCKED: binary/oversized evidence: {path}")
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise OrchestratorError("T090 SOURCE_BLOCKED: non-UTF8 source") from error
+
+    files: list[dict[str, object]] = []
+    for path in changed:
+        safe_path(path)
+        current = worktree / path
+        if current.is_symlink() or not current.resolve().is_relative_to(worktree.resolve()):
+            raise OrchestratorError("T090 SOURCE_BLOCKED: symlink or path escape")
+        if current.exists() and not current.is_file():
+            raise OrchestratorError("T090 SOURCE_BLOCKED: non-file source")
+        current_raw = current.read_bytes() if current.exists() else None
+        current_text = checked_text(current_raw, path) if current_raw is not None else None
+
+        tree = git.run("ls-tree", "-r", base_sha, "--", path)
+        base_raw: bytes | None = None
+        if tree:
+            lines = tree.splitlines()
+            if len(lines) != 1 or "\\t" not in lines[0]:
+                raise OrchestratorError("T090 SOURCE_BLOCKED: ambiguous base tree entry")
+            metadata, entry_path = lines[0].split("\\t", 1)
+            bits = metadata.split()
+            if entry_path != path or len(bits) != 3 or bits[0] not in {"100644", "100755"}:
+                raise OrchestratorError("T090 SOURCE_BLOCKED: unsafe baseline file mode")
+            if int(git.run("cat-file", "-s", bits[2])) > _SOURCE_EVIDENCE_MAX_FILE_BYTES:
+                raise OrchestratorError("T090 SOURCE_BLOCKED: oversized baseline")
+            read = subprocess.run(
+                ["git", "show", f"{base_sha}:{path}"],
+                cwd=worktree,
+                capture_output=True,
+                timeout=20,
+                check=False,
+            )
+            if read.returncode:
+                raise OrchestratorError("T090 SOURCE_BLOCKED: baseline read failed")
+            base_raw = read.stdout
+        base_text = checked_text(base_raw, path) if base_raw is not None else None
+
+        difference = "".join(
+            difflib.unified_diff(
+                (base_text or "").splitlines(keepends=True),
+                (current_text or "").splitlines(keepends=True),
+                fromfile=f"a/{path}",
+                tofile=f"b/{path}",
+                lineterm="\\n",
+            )
+        )
+        files.append(
+            {
+                "path": path,
+                "before_sha256": digest(base_raw) if base_raw is not None else None,
+                "after_sha256": digest(current_raw) if current_raw is not None else None,
+                "before": base_text,
+                "after": current_text,
+                "unified_diff": difference,
+            }
+        )
+
+    evidence: dict[str, object] = {
+        "schema_version": 1,
+        "base_sha": base_sha,
+        "source_digest": expected_source_digest,
+        "files": files,
+    }
+    canonical = json.dumps(
+        evidence, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8")
+    if len(canonical) > _SOURCE_EVIDENCE_MAX_PAYLOAD_BYTES:
+        raise OrchestratorError("T090 SOURCE_BLOCKED: evidence exceeds prompt budget")
+    if git.snapshot(base_sha) != expected_source_digest:
+        raise OrchestratorError("T090 SOURCE_STALE: candidate changed during evidence capture")
+    return {"evidence": evidence, "evidence_sha256": digest(canonical)}
 
 
 def agent_prompt(role: str, context: str, output: type[BaseModel]) -> str:
