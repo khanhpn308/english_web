@@ -182,7 +182,9 @@ class Config(Model):
                     or not role.host_edit_endpoint
                     or not role.host_edit_api_key_env
                 ):
-                    raise OrchestratorError("Unsafe or incomplete host-mediated Worker configuration")
+                    raise OrchestratorError(
+                        "Unsafe or incomplete host-mediated Worker configuration"
+                    )
                 # Validate fully before any model invocation or filesystem change.
                 from tools.orchestrator.worker_sandbox import LoopbackChatTransport
 
