@@ -574,7 +574,13 @@ class SecureProvider:
                 name=name,
                 readonly=False,
             )
-        if role.analysis_backend != "host-http-text":
+        if (
+            role.analysis_backend != "host-http-text"
+            or role.allow_process
+            or role.worker_access == "full-access"
+            or role.provider not in {"agy", "codex"}
+            or output is WorkerResult
+        ):
             raise OrchestratorError(
                 "T090 BLOCKED: read-only CLI can execute commands; "
                 "configure a verified tool-free text provider"
