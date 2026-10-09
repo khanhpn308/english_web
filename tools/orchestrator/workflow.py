@@ -1882,7 +1882,11 @@ class Pipeline:
                 # --shared introduces Git object alternates pointing to the
                 # authoritative repository; those host paths must never be
                 # required by containerized verification.
-                "clone", "--no-local", "--no-checkout", str(self.repository), str(verify_path)
+                "clone",
+                "--no-local",
+                "--no-checkout",
+                str(self.repository),
+                str(verify_path),
             )
             verify_git = Git(verify_path)
             verify_git.run("checkout", "--detach", base_sha)
