@@ -6,8 +6,13 @@ on:
       - feature/t090-provider-isolation-adjudication
   workflow_dispatch:
 
+# Candidate publishing is NOT production approval. CI OIDC only signs evidence.
 permissions:
   contents: read
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+  packages: write
 
 concurrency:
   group: t090-image-candidate
@@ -375,3 +380,157 @@ jobs:
           assert broker.source_digest(workspace) == frozen_digest
           print("T090_SANDBOX_APPLICATION_PASS; HOST_GATE_STILL_REQUIRED; IMAGE_STILL_UNAPPROVED")
           PY
+
+      # R6-B1.2: signed candidate evidence, never an image approval.
+      - name: Record pinned candidate input identities and OSV archive checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/t090-supply-chain"
+          for item in requirements-dev.lock package-lock.json infra/verification/Dockerfile; do
+            sha256sum "$item"
+          done > "$RUNNER_TEMP/t090-supply-chain/input-sha256.txt"
+          cid="$(docker create t090-verifier:candidate)"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          docker cp "$cid:/opt/osv-db/archive.sha256" "$RUNNER_TEMP/t090-supply-chain/osv-archive.sha256"
+          docker rm "$cid" >/dev/null
+          trap - EXIT
+          cat "$RUNNER_TEMP/t090-supply-chain/osv-archive.sha256"
+          python3 - <<'PY'
+          from pathlib import Path
+          from scripts.t090_supply_chain import inspect_candidate_locks
+          result = inspect_candidate_locks(
+              Path("requirements-dev.lock").resolve(),
+              Path("package-lock.json").resolve(),
+          )
+          print("T090_CANDIDATE_LOCK_STATUS:", result)
+          # This is NOT an approval gate: incomplete hashes are visible blockers.
+          PY
+
+      - name: Generate non-production image SPDX SBOM with pinned scanner action
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          image: t090-verifier:candidate
+          format: spdx-json
+          output-file: t090-candidate.spdx.json
+          artifact-name: t090-candidate-image-sbom.spdx.json
+          upload-artifact: true
+          upload-release-assets: false
+
+      - name: Validate candidate SBOM and record digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          from scripts.t090_supply_chain import verify_spdx_file
+          path = Path("t090-candidate.spdx.json").resolve()
+          pin = hashlib.sha256(path.read_bytes()).hexdigest()
+          report = verify_spdx_file(path, pin)
+          print("T090_CANDIDATE_SPDX_PACKAGES:", len(report["packages"]))
+          print("T090_CANDIDATE_SPDX_SHA256:", pin)
+          PY
+          sha256sum t090-candidate.spdx.json > "$RUNNER_TEMP/t090-supply-chain/sbom-sha256.txt"
+
+      - name: Authenticate candidate publisher to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish candidate image by immutable identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}/t090-verifier"
+          tag="candidate-${GITHUB_SHA}"
+          docker tag t090-verifier:candidate "$image:$tag"
+          docker push "$image:$tag"
+          image_digest="$(docker image inspect --format '{{json .RepoDigests}}' "$image:$tag" | python3 -c '
+          import json, sys
+          refs = json.load(sys.stdin)
+          expected = sys.argv[1]
+          choices = [ref.split("@", 1)[1] for ref in refs if ref.startswith(expected + "@sha256:")]
+          if len(choices) != 1:
+              raise SystemExit("T090: unique pushed OCI image digest unavailable")
+          print(choices[0])
+          ' "$image")"
+          [[ "$image_digest" == sha256:* ]]
+          echo "T090_CANDIDATE_IMAGE=$image" >> "$GITHUB_ENV"
+          echo "T090_CANDIDATE_DIGEST=$image_digest" >> "$GITHUB_ENV"
+          printf '%s@%s\n' "$image" "$image_digest" > "$RUNNER_TEMP/t090-supply-chain/image-reference.txt"
+          echo "T090_IMAGE_PUBLISHED_CANDIDATE_ONLY; STILL_UNAPPROVED"
+
+      - name: Generate signed OIDC/Sigstore build provenance for exact image digest
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-name: ${{ env.T090_CANDIDATE_IMAGE }}
+          subject-digest: ${{ env.T090_CANDIDATE_DIGEST }}
+          push-to-registry: true
+
+      - name: Generate signed OIDC/Sigstore SBOM attestation for same digest
+        id: sbom_attestation
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-name: ${{ env.T090_CANDIDATE_IMAGE }}
+          subject-digest: ${{ env.T090_CANDIDATE_DIGEST }}
+          sbom-path: t090-candidate.spdx.json
+          push-to-registry: true
+
+      - name: Independently verify both GitHub-issued signatures and source binding
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          subject="oci://${T090_CANDIDATE_IMAGE}@${T090_CANDIDATE_DIGEST}"
+          signer="${GITHUB_REPOSITORY}/.github/workflows/t090-image-attestation.yml"
+          gh attestation verify "$subject" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$signer" \
+            --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" \
+            --predicate-type https://slsa.dev/provenance/v1 --format json \
+            > "$RUNNER_TEMP/t090-supply-chain/verified-provenance.json"
+          gh attestation verify "$subject" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$signer" \
+            --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" \
+            --predicate-type https://spdx.dev/Document/v2.3 --format json \
+            > "$RUNNER_TEMP/t090-supply-chain/verified-sbom.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"]) / "t090-supply-chain"
+          subject = os.environ["T090_CANDIDATE_IMAGE"]
+          image_digest = os.environ["T090_CANDIDATE_DIGEST"].split(":", 1)[1]
+          for file_name, predicate in (
+              ("verified-provenance.json", "https://slsa.dev/provenance/v1"),
+              ("verified-sbom.json", "https://spdx.dev/Document/v2.3"),
+          ):
+              records = json.loads((root / file_name).read_text())
+              assert isinstance(records, list) and records
+              assert any(
+                  isinstance(r.get("verificationResult"), dict)
+                  and isinstance(r["verificationResult"].get("statement"), dict)
+                  and r["verificationResult"]["statement"].get("predicateType") == predicate
+                  and any(
+                      x.get("name") == subject and x.get("digest", {}).get("sha256") == image_digest
+                      for x in r["verificationResult"]["statement"].get("subject", [])
+                      if isinstance(x, dict)
+                  )
+                  for r in records if isinstance(r, dict)
+              ), f"T090: signed attestation subject/predicate mismatch: {file_name}"
+          print("T090_SIGNED_CANDIDATE_PROVENANCE_AND_SBOM: VERIFIED_NOT_APPROVED")
+          PY
+
+      - name: Upload reproducible candidate evidence without approval material
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t090-supply-chain-candidate-${{ github.run_id }}
+          path: ${{ runner.temp }}/t090-supply-chain/*
+          if-no-files-found: warn
+          retention-days: 14

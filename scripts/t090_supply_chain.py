@@ -14,7 +14,7 @@ import subprocess
 from pathlib import Path
 
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
-_IMAGE = re.compile(r"ghcr\\.io/[a-z0-9._/-]+@sha256:([0-9a-f]{64})\Z")
+_IMAGE = re.compile(r"ghcr\.io/[a-z0-9._/-]+@sha256:([0-9a-f]{64})\Z")
 _PREDICATES = (
     "https://slsa.dev/provenance/v1",
     "https://spdx.dev/Document/v2.3",
@@ -82,7 +82,7 @@ def npm_lock_has_integrities(path: Path) -> bool:
     try:
         lock = json.loads(_trusted_file(path))
         packages = lock["packages"]
-        return bool(packages) and all(
+        return isinstance(packages, dict) and bool(packages) and all(
             name == "" or (
                 isinstance(item, dict)
                 and (
