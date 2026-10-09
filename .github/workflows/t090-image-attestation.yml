@@ -173,6 +173,19 @@ jobs:
           mkdir -p "$context"
           cp infra/verification/Dockerfile "$context/Dockerfile"
           cp package.json package-lock.json requirements-dev.lock "$context/"
+          cp infra/verification/requirements-dev-hashed.lock "$context/"
+          cp infra/verification/semgrep-hashed.lock "$context/"
+          mkdir -p "$context/wheels/dev" "$context/wheels/semgrep"
+          # Only exact listed, hash-verified binary wheels enter the image build.
+          # Dependency installation inside Docker uses --no-index.
+          python3 -m pip download --disable-pip-version-check \
+            --only-binary=:all: --no-deps --require-hashes \
+            --dest "$context/wheels/dev" \
+            -r "$context/requirements-dev-hashed.lock"
+          python3 -m pip download --disable-pip-version-check \
+            --only-binary=:all: --no-deps --require-hashes \
+            --dest "$context/wheels/semgrep" \
+            -r "$context/semgrep-hashed.lock"
           docker build --progress=plain --pull=false \
             --build-arg "PYTHON_BASE_IMAGE=$T090_PYTHON_BASE" \
             --build-arg "NODE_BASE_IMAGE=$T090_NODE_BASE" \

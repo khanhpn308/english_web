@@ -51,11 +51,18 @@ RUN node /opt/toolchain/node_modules/playwright/cli.js install \
     && chmod -R a+rX /opt/playwright-browsers \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements-dev.lock /opt/locks/requirements-dev.lock
-# Versions are pinned but wheel hashes are NOT present: approval must remain false.
-RUN python3 -m pip install -r /opt/locks/requirements-dev.lock \
+# Byte-verified Linux/Python 3.12 candidate wheel locks; never resolve an
+# unpinned dependency or build from a Python sdist during image construction.
+COPY requirements-dev-hashed.lock /opt/locks/requirements-dev-hashed.lock
+COPY semgrep-hashed.lock /opt/locks/semgrep-hashed.lock
+RUN --mount=type=bind,source=wheels,target=/opt/wheels,readonly \
+    python3 -m pip install --no-index --only-binary=:all: --require-hashes \
+      --find-links=/opt/wheels/dev -r /opt/locks/requirements-dev-hashed.lock \
     && python3 -m venv /opt/semgrep-venv \
-    && /opt/semgrep-venv/bin/pip install 'semgrep==1.178.0'
+    && /opt/semgrep-venv/bin/pip install --no-index --only-binary=:all: --require-hashes \
+      --find-links=/opt/wheels/semgrep -r /opt/locks/semgrep-hashed.lock \
+    && python3 -m pip check \
+    && /opt/semgrep-venv/bin/pip check
 
 # Fixed release checksums originate from existing T089 host CI.
 RUN curl --fail --location --silent --show-error \

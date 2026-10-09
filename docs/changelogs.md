@@ -1,3 +1,10 @@
+## 10/10/2026 — T090 R6-B1.2 binary-only Python/Semgrep offline installs
+
+- Recorded `55` dev and `66` Semgrep wheel SHA-256 values from candidate materializer CI #37968072442, including an offline `pip --require-hashes --no-index` install and dependency check per environment.
+- Docker candidate CI now downloads *only* exact committed hash-approved Linux/Python 3.12 wheels into a temporary build context and refuses mismatches or source distributions. BuildKit exposes wheel directories only in a read-only build-time bind mount; in-container pip installation uses `--no-index --only-binary=:all: --require-hashes` and checks installed dependencies. Separate Semgrep virtualenv preserved.
+- Root `requirements-dev.lock` remains authoritative for Host CI and is not silently rewritten. Candidate locks are not platform-portable and **not independent publisher approval**. Debian apt/Playwright system packages, browser bytes, external trust anchor and production-enforced admission remain separate blockers.
+- Keep PR #9 Draft and `infra/verification/image-policy.json` `approved: false`; no production assumption from candidate CI.
+
 ## 10/10/2026 — T090 R6-B1.2 candidate Python and Semgrep wheel materialization
 
 - Introduced candidate-only CI to download **binary** Linux/Python 3.12 wheels and record SHA-256 of the exact bytes per artifact. This is a materialization/diagnostic step, **not** publisher verification or production approval.
