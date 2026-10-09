@@ -202,9 +202,7 @@ def build_sealed_source_evidence(
     for path in changed:
         safe_path(path)
         current = worktree / path
-        if current.is_symlink() or not current.resolve().is_relative_to(
-            worktree.resolve()
-        ):
+        if current.is_symlink() or not current.resolve().is_relative_to(worktree.resolve()):
             raise OrchestratorError("T090 SOURCE_BLOCKED: symlink or path escape")
         if current.exists() and not current.is_file():
             raise OrchestratorError("T090 SOURCE_BLOCKED: non-file source")
@@ -219,11 +217,7 @@ def build_sealed_source_evidence(
                 raise OrchestratorError("T090 SOURCE_BLOCKED: ambiguous base tree entry")
             metadata, entry_path = lines[0].split("\t", 1)
             bits = metadata.split()
-            if (
-                entry_path != path
-                or len(bits) != 3
-                or bits[0] not in {"100644", "100755"}
-            ):
+            if entry_path != path or len(bits) != 3 or bits[0] not in {"100644", "100755"}:
                 raise OrchestratorError("T090 SOURCE_BLOCKED: unsafe baseline file mode")
             if int(git.run("cat-file", "-s", bits[2])) > _SOURCE_EVIDENCE_MAX_FILE_BYTES:
                 raise OrchestratorError("T090 SOURCE_BLOCKED: oversized baseline")
