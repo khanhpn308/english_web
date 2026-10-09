@@ -65,9 +65,7 @@ def test_host_can_create_only_explicitly_allowlisted_path(tmp_path: Path) -> Non
 def test_host_rejects_noncanonical_paths_without_writes(tmp_path: Path, path: str) -> None:
     root, original = fixture(tmp_path)
     with pytest.raises(HostEditRejected):
-        apply_host_text_edit(
-            root, {"src/ok.py"}, ProposedTextEdit(path, sha(original), "changed")
-        )
+        apply_host_text_edit(root, {"src/ok.py"}, ProposedTextEdit(path, sha(original), "changed"))
     assert (root / "src/ok.py").read_bytes() == original
 
 
@@ -95,9 +93,7 @@ def test_host_rejects_stale_sha(tmp_path: Path) -> None:
 def test_host_rejects_invalid_preimage_format(tmp_path: Path) -> None:
     root, original = fixture(tmp_path)
     with pytest.raises(HostEditRejected, match="digest"):
-        apply_host_text_edit(
-            root, {"src/ok.py"}, ProposedTextEdit("src/ok.py", "BAD", "changed")
-        )
+        apply_host_text_edit(root, {"src/ok.py"}, ProposedTextEdit("src/ok.py", "BAD", "changed"))
     assert (root / "src/ok.py").read_bytes() == original
 
 
@@ -134,9 +130,7 @@ def test_host_rejects_symlinked_ancestor(tmp_path: Path) -> None:
 def test_host_rejects_missing_preimage_for_existing_file(tmp_path: Path) -> None:
     root, original = fixture(tmp_path)
     with pytest.raises(HostEditRejected, match="preimage"):
-        apply_host_text_edit(
-            root, {"src/ok.py"}, ProposedTextEdit("src/ok.py", None, "changed")
-        )
+        apply_host_text_edit(root, {"src/ok.py"}, ProposedTextEdit("src/ok.py", None, "changed"))
     assert (root / "src/ok.py").read_bytes() == original
 
 
