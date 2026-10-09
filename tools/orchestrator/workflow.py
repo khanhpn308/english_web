@@ -2596,7 +2596,7 @@ class Pipeline:
                 )
                 self.contract(directory, state)
                 self.artifact(directory, state, "worker", result)
-                if result.status == "BLOCKED":
+                if worker_role.worker_backend == "host-http-edit" and result.status == "BLOCKED":
                     state.last_error = "T090 BLOCKED: Worker refused to implement candidate"
                     self.move(directory, state, State.BLOCKED)
                     self.report(directory, state)
