@@ -4152,6 +4152,11 @@ def test_t090_parallel_review_receives_sealed_source_evidence(
         readonly: bool,
     ) -> Output:
         assert readonly
+        assert cwd == Path(state.worktree_path)
+        assert role.analysis_backend == "host-http-text"
+        assert timeout == 30
+        assert artifacts == directory
+        assert name
         assert output is ReviewShard
         assert "HOST-SEALED SOURCE/DIFF EVIDENCE" in prompt
         assert "New synthetic entry" in prompt
