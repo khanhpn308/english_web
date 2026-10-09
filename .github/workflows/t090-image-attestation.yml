@@ -280,11 +280,12 @@ jobs:
               DockerVerificationPolicy(
                   image=os.environ["T090_GATE_IMAGE"],
                   verification_root=root,
-                  memory_mib=3072,
+                  memory_mib=4096,
                   cpu_millicores=2000,
                   pids_limit=128,
                   timeout_seconds=1200,
                   workspace_tmpfs_mib=2048,
+                  temp_tmpfs_mib=768,
               )
           )
           frozen_digest = broker.source_digest(workspace)

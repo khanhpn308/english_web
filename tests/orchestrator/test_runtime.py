@@ -435,6 +435,7 @@ def test_t090_docker_sandbox_rejects_unpinned_image_and_bad_limits(tmp_path: Pat
         ("pids_limit", 1000),
         ("timeout_seconds", 0),
         ("workspace_tmpfs_mib", 1),
+        ("temp_tmpfs_mib", 1),
     ):
         with pytest.raises(OrchestratorError, match="SANDBOX_BLOCKED"):
             DockerVerificationPolicy(valid, tmp_path, **{field: value})

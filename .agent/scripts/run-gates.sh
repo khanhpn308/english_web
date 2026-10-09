@@ -82,6 +82,8 @@ wait_phase() {
         # CI-only synthetic probe: source and logs are inside an isolated
         # container without mounted Host secrets. Disabled for ordinary runs.
         if [[ "${T090_SANDBOX_DIAGNOSTIC:-0}" == "1" ]]; then
+            echo "[T090-DIAGNOSTIC] free filesystem capacity"
+            df -h /workspace /tmp || true
             for gate in "${GATES[@]}"; do
                 if [[ "${STATUS[$gate]:-}" == "FAIL" ]]; then
                     echo "[T090-DIAGNOSTIC] $gate (last 30 log lines)"
