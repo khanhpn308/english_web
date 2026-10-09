@@ -1,3 +1,12 @@
+## 09/10/2026 - T090 R5 source sealing and container pre-exec attestation
+
+- Candidate DockerVerificationSandbox now requires a separately supplied and previously frozen SHA-256 source-tree digest; missing or mismatched evidence blocks execution.
+- Original source is re-checked, privately copied under a Host-owned temporary seal, and re-checked before/after Docker inspection. Docker mounts ONLY the sealed copy read-only.
+- Container hashes its private tmpfs copy before execvp; post-Host-check tampering is a security failure before any untrusted verification program starts.
+- Added regressions for absent digest, stale source, sealing mutation and Docker inspection mutation; Docker CI includes actual in-container tampering probe.
+- WSL2 R4 local resource, CPU throttling, OOM, PID, isolation and fail-closed evidence PASS per owner screenshots. R5 is not yet locally re-verified.
+- Production verification paths and Bridge tool permissions remain unverified; image policy remains approved=false; no merge or change to main.
+
 ## 09/10/2026 - T090 staged dual-runtime candidate and offline scanner routing
 
 - Resolved R1 image/clone correction as separate changes: pinned Python Docker entrypoint; verification clone now uses --no-local and tests forbid Git object alternates.

@@ -334,3 +334,13 @@ T090 DONE or T089 accepted.
 Owner's "ok, triển khai đi" follows the explicit named-file approval request for the T090 image. Prospective permitted paths only: `infra/verification/Dockerfile`, `infra/verification/image-policy.json`, `.github/workflows/t090-image-attestation.yml`, and `scripts/security_checks.py` for offline OSV adaptation. Existing T090-owned runtime/workflow/tests and task/changelog remain permitted. This is not retrospective scope authorization for T089 and does not authorize changing lockfiles, `orchestrator.yaml`, `.agent/scripts/run-gates.sh`, or production provider permissions.
 
 The three image artifacts are deliberately CANDIDATE ONLY. `image-policy.json` remains `approved=false`. Build CI is neither an image signature nor an OS-security acceptance. Both live verification callsites remain unchanged and must not execute Worker code until separately sandboxed.
+
+### R5 Host-sealed source manifest and container attestation (2026-10-09)
+
+Owner approved R5 source sealing and pre-execution attestation after WSL2 R4 local evidence. This changes the non-active candidate Docker broker, T090 tests and CI only.
+
+Trusted Host MUST freeze the source earlier, independently derive and persist its digest, and pass it as expected_source_digest; the broker never silently derives its acceptance digest during run. The broker rechecks the original source against expected digest, creates a private Host-owned source copy and verifies the copy before/after Docker inspection. Docker binds only that copy read-only. The trusted container bootstrap re-hashes its own tmpfs copy before executing pytest, ruff or mypy.
+
+The v1 digest covers relative paths, regular file contents, file mode and symlink targets; unsafe special files, hardlinks, absolute/out-of-tree links and changes detected during reading are rejected.
+
+Important limitation: the R5 API does not yet integrate with authoritative Git.snapshot evidence in the two legacy callsites; neither live path has been migrated to Docker, and trust in an arbitrary caller-chosen digest alone would be insufficient. A prior Host freeze and external evidence anchoring remain mandatory. Further live adversarial testing and CI on the exact R5 SHA are required. Image policy remains approved=false, PR Draft and main untouched.
