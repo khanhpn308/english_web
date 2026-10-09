@@ -23,6 +23,7 @@ import stat
 import threading
 import time
 from collections.abc import AsyncIterator, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 from secrets import token_urlsafe
 from typing import Any
@@ -36,8 +37,10 @@ from backend.app.adapters.source_files import (
 from backend.app.adapters.watcher import SourceWatcher
 from backend.app.application.operations import OperationLedger
 from backend.app.application.source_write import SourceWriteCoordinator
-from backend.app.application.sync import CursorExpiredError, SyncService
+from backend.app.application.sync import CursorExpiredError, SyncReason, SyncService
 from backend.app.main import create_app
+from backend.app.markdown_sync.parser import parse_markdown
+from backend.app.markdown_sync.serializer import upsert_structured_family
 from backend.app.persistence.database import Database
 from backend.app.platform.config import AppSettings
 from backend.app.review.models import ensure_card, get_card, record_review
@@ -46,6 +49,7 @@ from backend.app.vocabulary.repository import VocabularyRepository
 from backend.app.vocabulary.search_index import SearchIndex
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import Connection
 
 pytestmark = pytest.mark.anyio
 
@@ -155,6 +159,140 @@ The system is robust.
 
 *Bản dịch:* Hệ thống rất bền vững.
 """
+
+
+def test_structured_verification_precedence_and_metadata_only_updates(
+    test_db: Database, markdown_root: Path,
+) -> None:
+    """Explicit field states replace stale projection; learning text alone resets SRS."""
+    payload: dict[str, Any] = {"version": 1, "familyRoot": "robust", "forms": [
+        {
+            "lemma": "robust", "partOfSpeech": pos,
+            "meaningsEn": [
+                {"text": "first English", "language": "en", "verificationStatus": "VERIFIED"},
+                {"text": "second English", "language": "en", "verificationStatus": "MISSING"},
+            ],
+            "meaningsVi": [
+                {"text": "nghĩa đầu", "language": "vi", "verificationStatus": "UNVERIFIED"},
+                {"text": "nghĩa sau", "language": "vi", "verificationStatus": "VERIFIED"},
+            ],
+            "examples": [
+                {"english": "One example.", "vietnamese": "Ví dụ một.",
+                 "verificationStatus": "VERIFIED"},
+                {"english": "Two examples.", "vietnamese": "Hai ví dụ.",
+                 "verificationStatus": "MISSING"},
+            ],
+            "ipaUs": "/roʊ.bʌst/", "ipaStatus": "VERIFIED",
+            "cambridgeUrl": "https://dictionary.cambridge.org/dictionary/english/robust",
+            "cambridgeStatus": "UNVERIFIED",
+        }
+        for pos in ("ADJECTIVE", "VERB")
+    ]}
+    # Deliberately distinct grammatical-form verification; association must not collapse.
+    payload["forms"][1]["meaningsEn"][0]["verificationStatus"] = "UNVERIFIED"
+    path = markdown_root / "29-09-2026.md"
+
+    def write_structured() -> None:
+        parsed = parse_markdown(path.read_text(encoding="utf-8") if path.exists()
+                                else SAMPLE_NOTE_G, filename=path.name)
+        assert parsed.is_valid and parsed.document is not None
+        path.write_text(upsert_structured_family(parsed.document, payload), encoding="utf-8")
+
+    write_structured()
+    ledger = OperationLedger(test_db.engine)
+    service = SyncService(test_db.engine, markdown_root, operation_ledger=ledger)
+    repo = VocabularyRepository(test_db.engine)
+    assert service.sync(reason="STARTUP").sources_invalid == 0
+    forms = {f.part_of_speech: f for f in repo.get_forms_for_date("2026-09-29")}
+    assert set(forms) == {"ADJECTIVE", "VERB"}
+    adjective = forms["ADJECTIVE"]
+    assert [m.verification_status for m in adjective.meanings_en] == ["VERIFIED", "MISSING"]
+    assert [m.verification_status for m in adjective.meanings_vi] == ["UNVERIFIED", "VERIFIED"]
+    assert [e.verification_status for e in adjective.examples] == ["VERIFIED", "MISSING"]
+    assert forms["VERB"].meanings_en[0].verification_status == "UNVERIFIED"
+    assert adjective.ipa_status == "VERIFIED" and adjective.cambridge_status == "UNVERIFIED"
+    with test_db.engine.connect() as connection:
+        card_id = str(connection.exec_driver_sql(
+            "SELECT card_id FROM review_cards WHERE word_form_id=?", (adjective.id,),
+        ).scalar_one())
+    claim = ledger.claim(kind="REVIEW", key="structured-review", method="POST", path="/review",
+                         body={"cardId": card_id}, preconditions={})
+
+    def review(connection: Connection) -> None:
+        record_review(connection, card_id=card_id, event_id="structured-review-event",
+                      operation_id=claim.operation.operation_id, source="FLASHCARD", rating="GOOD",
+                      reviewed_at=datetime(2026, 9, 29, 10, tzinfo=UTC))
+
+    ledger.complete(claim.operation.operation_id, response_status=200,
+                    result_ref="structured-review-event", local_write=review)
+    with test_db.engine.connect() as connection:
+        progress = get_card(connection, card_id)
+        history = list(connection.exec_driver_sql("SELECT * FROM review_events ORDER BY id"))
+    echo_reasons: tuple[SyncReason, ...] = ("WATCHER", "STARTUP")
+    for reason in echo_reasons:
+        assert service.sync(reason=reason).sources_invalid == 0
+        assert repo.get_word_form(adjective.id) == adjective
+
+    payload["forms"][0]["meaningsEn"][0]["verificationStatus"] = "UNVERIFIED"
+    payload["forms"][0]["meaningsVi"][0]["verificationStatus"] = "MISSING"
+    payload["forms"][0]["examples"][0]["verificationStatus"] = "MISSING"
+    payload["forms"][0]["ipaStatus"] = "UNVERIFIED"
+    payload["forms"][0]["cambridgeStatus"] = "VERIFIED"
+    write_structured()
+    assert service.sync(reason="WATCHER").sources_invalid == 0
+    updated = repo.get_word_form(adjective.id)
+    assert updated is not None and updated.revision == adjective.revision + 1
+    assert updated.meanings_en[0].verification_status == "UNVERIFIED"
+    assert updated.meanings_vi[0].verification_status == "MISSING"
+    assert updated.examples[0].verification_status == "MISSING"
+    assert updated.ipa_status == "UNVERIFIED" and updated.cambridge_status == "VERIFIED"
+    assert repo.get_word_form(forms["VERB"].id) == forms["VERB"]
+    # A status-only edit of IPA/link must also persist when all learning fields are identical.
+    payload["forms"][0]["ipaStatus"] = "VERIFIED"
+    payload["forms"][0]["cambridgeStatus"] = "UNVERIFIED"
+    write_structured()
+    assert service.sync(reason="WATCHER").sources_invalid == 0
+    metadata = repo.get_word_form(adjective.id)
+    assert metadata is not None and metadata.revision == updated.revision + 1
+    assert metadata.ipa_status == "VERIFIED" and metadata.cambridge_status == "UNVERIFIED"
+    with test_db.engine.connect() as connection:
+        assert get_card(connection, card_id) == progress
+        assert list(connection.exec_driver_sql("SELECT * FROM review_events ORDER BY id")) == history
+    assert service.sync(reason="WATCHER").sources_invalid == 0
+    assert repo.get_word_form(adjective.id) == metadata
+
+    payload["forms"][0]["examples"][0]["english"] = "Actual learning content edit."
+    write_structured()
+    assert service.sync(reason="WATCHER").sources_invalid == 0
+    with test_db.engine.connect() as connection:
+        reset = get_card(connection, card_id)
+        assert reset is not None and progress is not None
+        assert reset.box == 0 and reset.due_at is None
+        assert reset.queue_revision == progress.queue_revision + 1
+        assert list(connection.exec_driver_sql("SELECT * FROM review_events ORDER BY id")) == history
+    recreated = SyncService(test_db.engine, markdown_root, operation_ledger=ledger)
+    assert recreated.sync(reason="STARTUP").sources_invalid == 0
+    assert recreated.sync(reason="WATCHER").sources_invalid == 0
+    with test_db.engine.connect() as connection:
+        assert get_card(connection, card_id) == reset
+        assert list(connection.exec_driver_sql("SELECT * FROM review_events ORDER BY id")) == history
+
+
+def test_legacy_source_without_structured_verification_uses_unverified_fallback(
+    test_db: Database, markdown_root: Path,
+) -> None:
+    path = markdown_root / "29-09-2026.md"
+    path.write_text(SAMPLE_NOTE_G, encoding="utf-8")
+    service = SyncService(test_db.engine, markdown_root)
+    repo = VocabularyRepository(test_db.engine)
+    assert service.sync(reason="STARTUP").sources_invalid == 0
+    form = repo.get_forms_for_date("2026-09-29")[0]
+    assert all(m.verification_status == "UNVERIFIED" for m in form.meanings_vi)
+    assert all(e.verification_status == "UNVERIFIED" for e in form.examples)
+    assert form.ipa_status == form.cambridge_status == "UNVERIFIED"
+    assert form.verification_summary != "VERIFIED"
+    assert service.sync(reason="WATCHER").sources_invalid == 0
+    assert repo.get_word_form(form.id) == form
 
 
 def test_ac09_invalid_source_excludes_x_and_valid_source_keeps_y(

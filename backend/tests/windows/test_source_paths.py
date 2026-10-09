@@ -718,3 +718,35 @@ def test_windows_privacy_sentinels_no_raw_path_or_content_leaks(
         assert "C_Users_SecretUser_AppData_Local" not in rendered
         assert "windows_secret_meaning_token" not in rendered
         assert "S-1-5-" not in rendered
+
+
+@pytest.mark.parametrize("competing", [False, True])
+def test_windows_native_conditional_create_never_overwrites_and_keeps_owner_acl(
+    tmp_path: Path, competing: bool,
+) -> None:
+    from dataclasses import replace
+
+    _require_native_windows()
+    root = tmp_path / "conditional-native"
+    root.mkdir()
+    source = replace(_make_source_file(status="MISSING", revision=0),
+                     error_code="CREATION_PENDING")
+    adapter = SourceFileAdapter(root, {source.id: source})
+    content = _make_valid_markdown()
+    staged = adapter.prepare_staged_create(source.id, content)
+    target = root / source.relative_path
+    temp = root / staged.recovery_handle.relative_path
+    if competing:
+        target.write_bytes(b"competing owner bytes")
+        with pytest.raises(SourceConflictError):
+            staged.commit()
+        assert target.read_bytes() == b"competing owner bytes"
+    else:
+        receipt = staged.commit()
+        assert receipt.new_content_hash == _sha256(content)
+        assert target.read_bytes() == content.encode()
+        security = _inspect_windows_security_info(target)
+        assert security["api_success"] and security["owner_matched"]
+        assert security["dacl_present"] and security["dacl_valid"]
+        assert _check_windows_ownership(target)
+    assert not temp.exists()

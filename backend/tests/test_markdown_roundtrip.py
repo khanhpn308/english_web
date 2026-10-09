@@ -583,3 +583,182 @@ def test_parse_diagnostic_to_dict() -> None:
     assert d["line"] == 10
     assert d["column"] == 2
     assert d["field"] == "test"
+
+
+def test_structured_arrays_related_forms_and_unknown_context_roundtrip() -> None:
+    from backend.app.markdown_sync.serializer import upsert_structured_family
+
+    original = (
+        "# 29-09-2026\n\n## Tra cứu nhanh\n\n"
+        "| Từ/cụm từ | IPA (US) | Nghĩa ngắn | Ví dụ ngắn | Dịch ví dụ |\n"
+        "|---|---|---|---|---|\n\n## Notes\n\nUnrelated text stays.\n"
+    )
+    form: dict[str, Any] = {
+        "lemma": "anchor", "partOfSpeech": "NOUN",
+        "meaningsEn": [{"text": x, "language": "en", "verificationStatus": "UNVERIFIED"}
+                       for x in ["first meaning", "second meaning"]],
+        "meaningsVi": [{"text": x, "language": "vi", "verificationStatus": "UNVERIFIED"}
+                       for x in ["nghĩa một", "nghĩa hai"]],
+        "examples": [{"english": x, "vietnamese": y, "verificationStatus": "UNVERIFIED"}
+                     for x, y in [("One 🧪.", "Một."), ("Two.", "Hai.")]],
+        "ipaUs": None, "ipaStatus": "MISSING", "cambridgeUrl": None,
+        "cambridgeStatus": "MISSING", "futureField": {"keep": True},
+    }
+    data = {"version": 1, "familyRoot": "anchor", "forms": [
+        form, {**form, "lemma": "anchored", "partOfSpeech": "VERB"},
+    ], "unknownFamilyField": "preserved"}
+    parsed = parse_markdown(original, filename="29-09-2026.md")
+    assert parsed.document is not None
+    content = upsert_structured_family(parsed.document, data)
+    assert content.startswith(original)
+    parsed = parse_markdown(content, filename="29-09-2026.md")
+    assert parsed.is_valid and parsed.document is not None
+    assert [f.family_root for f in parsed.document.semantic_forms] == ["anchor", "anchor"]
+    assert parsed.document.semantic_forms[0].meanings_en == ["first meaning", "second meaning"]
+    assert parsed.document.semantic_forms[0].meanings_vi == ["nghĩa một", "nghĩa hai"]
+    assert parsed.document.semantic_forms[0].examples == [("One 🧪.", "Một."), ("Two.", "Hai.")]
+    assert serialize_document(parsed.document) == content
+    updated = upsert_structured_family(parsed.document, {**data, "forms": [form]})
+    again = parse_markdown(updated, filename="29-09-2026.md")
+    assert again.is_valid and again.document is not None
+    assert again.document.semantic_forms == parsed.document.semantic_forms
+    assert "futureField" in updated and "unknownFamilyField" in updated
+    assert "Unrelated text stays." in updated
+
+
+def _structured_payload() -> dict[str, Any]:
+    return {"version": 1, "familyRoot": "anchor", "forms": [{
+        "lemma": "anchor", "partOfSpeech": "NOUN",
+        "meaningsEn": [{"text": "new meaning", "language": "en",
+                        "verificationStatus": "UNVERIFIED"}],
+        "meaningsVi": [{"text": "nghĩa mới", "language": "vi",
+                        "verificationStatus": "UNVERIFIED"}],
+        "examples": [{"english": "New example.", "vietnamese": "Ví dụ mới.",
+                      "verificationStatus": "UNVERIFIED"}],
+        "ipaUs": None, "ipaStatus": "MISSING", "cambridgeUrl": None,
+        "cambridgeStatus": "MISSING",
+    }]}
+
+
+def test_legacy_subset_save_keeps_other_forms_and_all_unrelated_bytes() -> None:
+    from backend.app.markdown_sync.serializer import upsert_structured_family
+
+    original = FIXTURE_PATH.read_text(encoding="utf-8")
+    parsed = parse_markdown(original, filename="29-09-2026.md")
+    assert parsed.is_valid and parsed.document is not None
+    unrelated = {entry.heading: entry.raw_text for entry in parsed.document.entries
+                 if entry.normalized_lemma != "anchor"}
+    old = {(f.normalized_lemma, f.part_of_speech): f for f in parsed.document.semantic_forms}
+    saved = upsert_structured_family(parsed.document, _structured_payload())
+    after = parse_markdown(saved, filename="29-09-2026.md")
+    assert after.is_valid and after.document is not None
+    forms = {(f.normalized_lemma, f.part_of_speech): f for f in after.document.semantic_forms}
+    assert set(forms) == set(old)
+    for identity, form in old.items():
+        if identity != ("anchor", "NOUN"):
+            assert forms[identity].meanings_en == form.meanings_en
+            assert forms[identity].meanings_vi == form.meanings_vi
+            assert forms[identity].examples == form.examples
+    for raw in unrelated.values():
+        assert raw in saved
+    assert "Hàng ngữ cảnh không xác định từ loại" in saved
+    assert serialize_document(after.document) == saved
+
+
+def test_equivalent_structured_input_keeps_order_unknown_fields_and_learning_fingerprint() -> None:
+    import hashlib
+    import json
+
+    from backend.app.markdown_sync.serializer import upsert_structured_family
+
+    legacy = parse_markdown(FIXTURE_PATH.read_text(encoding="utf-8"), filename="29-09-2026.md")
+    assert legacy.document is not None
+    data = _structured_payload()
+    data["forms"][0]["meaningsVi"][0]["unknownMeaning"] = {"opaque": [1, 2]}
+    content = upsert_structured_family(legacy.document, data)
+    parsed = parse_markdown(content, filename="29-09-2026.md")
+    assert parsed.document is not None
+    equivalent = _structured_payload()
+    equivalent["forms"][0]["meaningsVi"][0]["text"] = unicodedata.normalize("NFD", "nghĩa mới")
+    echoed = upsert_structured_family(parsed.document, equivalent)
+    again = parse_markdown(echoed, filename="29-09-2026.md")
+    assert again.is_valid and again.document is not None
+
+    def fingerprint(document: Any) -> str:
+        values = [(f.family_root, f.normalized_lemma, f.part_of_speech,
+                   f.meanings_en, f.meanings_vi, f.examples) for f in document.semantic_forms]
+        return hashlib.sha256(json.dumps(values, ensure_ascii=False).encode()).hexdigest()
+
+    assert fingerprint(parsed.document) == fingerprint(again.document)
+    assert "unknownMeaning" in echoed
+    assert [(f.normalized_lemma, f.part_of_speech) for f in again.document.semantic_forms] == [
+        (f.normalized_lemma, f.part_of_speech) for f in parsed.document.semantic_forms
+    ]
+
+
+@pytest.mark.parametrize("broken", ["duplicate", "boolean-version", "nonfinite", "language"])
+def test_structured_invalid_content_remains_typed_invalid(broken: str) -> None:
+    import json
+
+    from backend.app.markdown_sync.serializer import structured_section
+
+    data = _structured_payload()
+    block = structured_section(data)
+    if broken == "duplicate":
+        block = block.replace('"version": 1', '"version": 1, "version": 1')
+    elif broken == "boolean-version":
+        block = block.replace('"version": 1', '"version": true')
+    elif broken == "nonfinite":
+        block = block.replace('"version": 1', '"opaque": NaN, "version": 1')
+    else:
+        data["forms"][0]["meaningsEn"][0]["language"] = "vi"
+        block = "### Vocabulary data (v1)\n\n```json\n" + json.dumps(data) + "\n```\n"
+    original = FIXTURE_PATH.read_text(encoding="utf-8")
+    parsed = parse_markdown(original + "\n## Structured\n\n" + block, filename="29-09-2026.md")
+    assert not parsed.is_valid
+    assert any(d.code == "INVALID_STRUCTURED_CONTENT" for d in parsed.diagnostics)
+
+
+def test_structured_pos_alias_and_heading_whitespace_do_not_duplicate_identity() -> None:
+    from backend.app.markdown_sync.serializer import upsert_structured_family
+
+    original = parse_markdown(FIXTURE_PATH.read_text(encoding="utf-8"), filename="29-09-2026.md")
+    assert original.document is not None
+    alias = _structured_payload()
+    alias["forms"][0]["partOfSpeech"] = "n."
+    content = upsert_structured_family(original.document, alias).replace(
+        "### Vocabulary data (v1)\n", "###   Vocabulary data (v1) \t\n",
+    )
+    parsed = parse_markdown(content, filename="29-09-2026.md")
+    assert parsed.is_valid and parsed.document is not None
+    updated = _structured_payload()
+    updated["forms"][0]["examples"][0]["english"] = "Changed example with canonical POS."
+    echoed = upsert_structured_family(parsed.document, updated)
+    after = parse_markdown(echoed, filename="29-09-2026.md")
+    assert after.is_valid and after.document is not None
+    assert len(after.document.semantic_forms) == len(parsed.document.semantic_forms)
+    noun = next(f for f in after.document.semantic_forms
+                if f.normalized_lemma == "anchor" and f.part_of_speech == "NOUN")
+    assert noun.examples[0][0] == "Changed example with canonical POS."
+
+
+def test_extending_valid_legacy_family_preserves_large_existing_content() -> None:
+    from backend.app.markdown_sync.serializer import upsert_structured_family
+
+    original = FIXTURE_PATH.read_text(encoding="utf-8").replace(
+        "Nơi thả neo an toàn; chỗ bám", "Nghĩa cũ " + "x" * 5000,
+    )
+    related = "".join(
+        f"| legacy-{index} | noun | | Nghĩa {index}. | Example {index}. | Dịch {index}. |\n"
+        for index in range(101)
+    )
+    original = original.replace("### Ghi chú bổ sung", related + "\n### Ghi chú bổ sung")
+    parsed = parse_markdown(original, filename="29-09-2026.md")
+    assert parsed.is_valid and parsed.document is not None
+    saved = upsert_structured_family(parsed.document, _structured_payload())
+    after = parse_markdown(saved, filename="29-09-2026.md")
+    assert after.is_valid and after.document is not None
+    assert len(after.document.semantic_forms) == len(parsed.document.semantic_forms)
+    anchorage = next(f for f in after.document.semantic_forms if f.lemma == "anchorage")
+    assert anchorage.meanings_vi == ["Nghĩa cũ " + "x" * 5000]
+    assert "legacy-100" in {f.lemma for f in after.document.semantic_forms}

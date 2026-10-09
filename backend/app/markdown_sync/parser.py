@@ -3,12 +3,125 @@
 Pure parser boundary: no filesystem access, no SQLite, no network, no AI, no global mutable state.
 """
 
+import json
 import os
 import re
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+
+STRUCTURED_HEADING = "Vocabulary data (v1)"
+Verification = Literal["VERIFIED", "UNVERIFIED", "MISSING"]
+
+
+class StructuredMeaning(BaseModel):
+    model_config = ConfigDict(extra="allow", strict=True)
+    text: str = Field(min_length=1)
+    language: Literal["en", "vi"]
+    verificationStatus: Verification
+
+    @field_validator("text")
+    @classmethod
+    def nonblank(cls, value: str) -> str:
+        if not value.strip() or any(0xD800 <= ord(c) <= 0xDFFF for c in value):
+            raise ValueError("Invalid learning text")
+        return unicodedata.normalize("NFC", value)
+
+
+class StructuredExample(BaseModel):
+    model_config = ConfigDict(extra="allow", strict=True)
+    # Legacy sources can contain an untranslated example. Preserve the empty
+    # side rather than inventing text; validated saves require complete pairs.
+    english: str
+    vietnamese: str
+    verificationStatus: Verification
+
+    @field_validator("english", "vietnamese")
+    @classmethod
+    def nonblank(cls, value: str) -> str:
+        return StructuredMeaning.nonblank(value) if value else value
+
+
+class StructuredForm(BaseModel):
+    model_config = ConfigDict(extra="allow", strict=True)
+    lemma: str = Field(min_length=1)
+    partOfSpeech: str = Field(min_length=1)
+    meaningsEn: list[StructuredMeaning]
+    meaningsVi: list[StructuredMeaning]
+    examples: list[StructuredExample]
+    ipaUs: str | None
+    cambridgeUrl: str | None
+    ipaStatus: Verification
+    cambridgeStatus: Verification
+
+    @field_validator("lemma", "partOfSpeech")
+    @classmethod
+    def nonblank(cls, value: str) -> str:
+        return StructuredMeaning.nonblank(value)
+
+
+class StructuredFamily(BaseModel):
+    model_config = ConfigDict(extra="allow", strict=True)
+    version: Literal[1]
+    familyRoot: str = Field(min_length=1)
+    forms: list[StructuredForm] = Field(min_length=1)
+
+    @field_validator("familyRoot")
+    @classmethod
+    def nonblank(cls, value: str) -> str:
+        return StructuredMeaning.nonblank(value)
+
+
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate structured field")
+        result[key] = value
+    return result
+
+
+def _reject_constant(_value: str) -> None:
+    raise ValueError("Non-finite structured number")
+
+
+def structured_semantics(data: dict[str, Any], note_date: str) -> list["SemanticForm"]:
+    """Validate the explicit extension; legacy prose is never guessed as JSON."""
+    if not isinstance(data, dict) or type(data.get("version")) is not int:
+        raise ValueError("Invalid structured version")
+    family = StructuredFamily.model_validate(data)
+    root = normalize_lemma(family.familyRoot)
+    identities: set[tuple[str, str]] = set()
+    result: list[SemanticForm] = []
+    for index, form in enumerate(family.forms):
+        pos = VALID_POS_MAP.get(form.partOfSpeech.lower())
+        identity = (normalize_lemma(form.lemma), pos or "")
+        if pos is None or identity in identities:
+            raise ValueError("Ambiguous structured identity")
+        identities.add(identity)
+        if any(m.language != "en" for m in form.meaningsEn) or any(
+            m.language != "vi" for m in form.meaningsVi
+        ):
+            raise ValueError("Meaning language mismatch")
+        if (form.ipaUs is None) != (form.ipaStatus == "MISSING") or (
+            (form.cambridgeUrl is None) != (form.cambridgeStatus == "MISSING")
+        ):
+            raise ValueError("Nullable field status mismatch")
+        result.append(SemanticForm(
+            lemma=form.lemma, normalized_lemma=identity[0], part_of_speech=pos,
+            is_primary=index == 0, family_root=root, ipa_us=form.ipaUs,
+            cambridge_url=form.cambridgeUrl, meanings_en=[m.text for m in form.meaningsEn],
+            meanings_vi=[m.text for m in form.meaningsVi],
+            examples=[(e.english, e.vietnamese) for e in form.examples], source_date=note_date,
+            meanings_en_statuses=[m.verificationStatus for m in form.meaningsEn],
+            meanings_vi_statuses=[m.verificationStatus for m in form.meaningsVi],
+            example_statuses=[e.verificationStatus for e in form.examples],
+            ipa_status=form.ipaStatus, cambridge_status=form.cambridgeStatus,
+        ))
+    return result
 
 # Pinned constants
 MAX_SOURCE_SIZE_BYTES = 8 * 1024 * 1024  # 8 MiB (8,388,608 bytes)
@@ -150,6 +263,11 @@ class SemanticForm:
     examples: list[tuple[str, str]] = field(default_factory=list)
     source_date: str = ""
     source_date_legacy: str = ""
+    meanings_en_statuses: list[Verification] = field(default_factory=list)
+    meanings_vi_statuses: list[Verification] = field(default_factory=list)
+    example_statuses: list[Verification] = field(default_factory=list)
+    ipa_status: Verification | None = None
+    cambridge_status: Verification | None = None
 
 
 @dataclass
@@ -170,6 +288,7 @@ class DetailedEntry:
     opaque_rows: list[str] = field(default_factory=list)
     opaque_sections: list[str] = field(default_factory=list)
     raw_text: str = ""
+    structured_data: dict[str, Any] | None = None
 
 
 @dataclass
@@ -447,6 +566,37 @@ def parse_markdown(content: str, filename: str | None = None) -> ParseResult:
                 h3_title = line_str[4:].strip()
                 h3_indices.append((offset, h3_title))
 
+        structured = [(offset, title) for offset, title in h3_indices
+                      if title == STRUCTURED_HEADING]
+        if structured:
+            try:
+                if len(structured) != 1:
+                    raise ValueError("Duplicate structured section")
+                offset = structured[0][0]
+                ending = next((o for o, _ in h3_indices if o > offset), len(entry_lines))
+                block = "".join(entry_lines[offset + 1:ending]).strip()
+                match = re.fullmatch(r"```json\s*\n(.*?)\n```", block, flags=re.DOTALL)
+                if match is None:
+                    raise ValueError("Invalid structured fence")
+                data = json.loads(
+                    match[1], object_pairs_hook=_unique_object, parse_constant=_reject_constant,
+                )
+                forms = structured_semantics(data, h1_iso)
+                primary = forms[0]
+                entries.append(DetailedEntry(
+                    heading=title, lemma=primary.lemma,
+                    normalized_lemma=primary.normalized_lemma,
+                    parts_of_speech=[primary.part_of_speech], raw_pos=primary.part_of_speech,
+                    ipa_us=primary.ipa_us, stress=None, cambridge_url=primary.cambridge_url,
+                    raw_text=raw_section_text, structured_data=data,
+                ))
+            except (ValueError, TypeError, ValidationError, RecursionError):
+                diagnostics.append(ParseDiagnostic(
+                    code="INVALID_STRUCTURED_CONTENT", message="Invalid vocabulary data section",
+                    line=r_start + 1,
+                ))
+            continue
+
         pre_h3_lines: list[tuple[int, str]]
         if h3_indices:
             first_h3_offset = h3_indices[0][0]
@@ -701,6 +851,9 @@ def parse_markdown(content: str, filename: str | None = None) -> ParseResult:
     # Build semantic forms
     semantic_forms: list[SemanticForm] = []
     for entry in entries:
+        if entry.structured_data is not None:
+            semantic_forms.extend(structured_semantics(entry.structured_data, h1_iso))
+            continue
         norm_root = normalize_lemma(entry.lemma)
         ex_tuple = (
             [

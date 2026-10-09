@@ -20,10 +20,18 @@ from secrets import token_urlsafe
 from typing import Any, Literal, Protocol
 
 from backend.app.adapters.source_files import SourceFileAdapter, SourceFileError, StagedTempHandle
-from backend.app.application.operations import OperationLedger
+from backend.app.application.operations import OperationConflict, OperationLedger
 from backend.app.markdown_sync.parser import ParsedDocument, SemanticForm, parse_markdown
 from backend.app.review.models import ensure_card, reset_card_state
-from backend.app.vocabulary.models import ExampleSentence, MeaningEn, MeaningVi, WordForm
+from backend.app.vocabulary.models import (
+    ExampleSentence,
+    MeaningEn,
+    MeaningVi,
+    SourceFile,
+    VerificationStatus,
+    WordForm,
+    compute_verification_summary,
+)
 from backend.app.vocabulary.repository import VocabularyRepository
 from backend.app.vocabulary.search_index import (
     ProjectionVersionMismatchError,
@@ -139,6 +147,50 @@ def _form_digest(form: WordForm) -> str:
     )
 
 
+def _projection_values(
+    semantic: SemanticForm, old: WordForm | None,
+) -> tuple[list[MeaningEn], list[MeaningVi], list[ExampleSentence],
+           VerificationStatus, VerificationStatus]:
+    en = [
+        MeaningEn(text, verification_status=semantic.meanings_en_statuses[i])
+        if semantic.meanings_en_statuses else
+        next((m for m in old.meanings_en if m.text == text), MeaningEn(text)) if old
+        else MeaningEn(text)
+        for i, text in enumerate(semantic.meanings_en)
+    ]
+    vi = [
+        MeaningVi(text, verification_status=semantic.meanings_vi_statuses[i])
+        if semantic.meanings_vi_statuses else
+        next((m for m in old.meanings_vi if m.text == text), MeaningVi(text)) if old
+        else MeaningVi(text)
+        for i, text in enumerate(semantic.meanings_vi)
+    ]
+    examples = [
+        ExampleSentence(*pair, verification_status=semantic.example_statuses[i])
+        if semantic.example_statuses else
+        next((e for e in old.examples if (e.english, e.vietnamese) == pair),
+             ExampleSentence(*pair)) if old else ExampleSentence(*pair)
+        for i, pair in enumerate(semantic.examples)
+    ]
+    ipa_status: VerificationStatus = semantic.ipa_status or (
+        old.ipa_status if old and old.ipa_us == semantic.ipa_us else
+        "MISSING" if semantic.ipa_us is None else "UNVERIFIED"
+    )
+    link_status: VerificationStatus = semantic.cambridge_status or (
+        old.cambridge_status if old and old.cambridge_url == semantic.cambridge_url else
+        "MISSING" if semantic.cambridge_url is None else "UNVERIFIED"
+    )
+    return en, vi, examples, ipa_status, link_status
+
+
+def _content_changed(semantic: SemanticForm, old: WordForm | None) -> bool:
+    en, vi, examples, ipa_status, link_status = _projection_values(semantic, old)
+    return old is None or (
+        old.meanings_en, old.meanings_vi, old.examples, old.ipa_us, old.ipa_status,
+        old.cambridge_url, old.cambridge_status,
+    ) != (en, vi, examples, semantic.ipa_us, ipa_status, semantic.cambridge_url, link_status)
+
+
 class SourceWriteCoordinator:
     """Coordinate one durable source intent with T021 and T014."""
 
@@ -222,6 +274,81 @@ class SourceWriteCoordinator:
         ):
             yield connection
 
+    def _save_receipt(
+        self, connection: Connection, source_id: str, document: ParsedDocument,
+        plan: dict[str, Any], operation_id: str, revision: int, context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Freeze the exact original result in existing immutable journal evidence.
+
+        Timestamp, memberships and card baselines are checked/applied by completion;
+        replay never substitutes today's canonical content for the saved snapshot.
+        """
+        stamp = _now()
+        plan["receipt_time"] = stamp
+        semantics = self._semantics(document)
+        by_identity = {
+            (semantics[e["key"]].family_root, semantics[e["key"]].normalized_lemma,
+             semantics[e["key"]].part_of_speech): e for e in plan["forms"]
+        }
+        created: list[str] = []
+        reused: list[str] = []
+        forms: list[dict[str, Any]] = []
+        for identity in context["identities"]:
+            effect = by_identity.get(tuple(identity))
+            if effect is None:
+                raise JournalConflictError("Preview identity is absent from proposed source")
+            semantic = semantics[effect["key"]]
+            old = self.repository.get_word_form(effect["form_id"], connection=connection)
+            en, vi, examples, ipa_status, link_status = _projection_values(semantic, old)
+            card = connection.exec_driver_sql(
+                "SELECT box,due_at,queue_revision FROM review_cards WHERE card_id=?",
+                (effect["card_id"],),
+            ).first()
+            effect["card_baseline"] = list(card) if card is not None else None
+            effect["refs_baseline"] = json.dumps(
+                sorted([sorted(ref.to_dict().items()) for ref in old.source_refs]) if old else [],
+                sort_keys=True,
+            )
+            (reused if card is not None else created).append(effect["card_id"])
+            refs = (
+                [ref.to_dict() for ref in old.source_refs if ref.source_id != source_id]
+                if old else []
+            )
+            refs.append({"sourceId": source_id, "noteDate": document.note_date, "status": "VALID"})
+            changed = _content_changed(semantic, old)
+            forms.append({
+                "id": effect["form_id"], "familyId": effect["family_id"],
+                "lemma": old.lemma if old else semantic.lemma,
+                "partOfSpeech": semantic.part_of_speech,
+                "meaningsEn": [m.to_dict() for m in en],
+                "meaningsVi": [m.to_dict() for m in vi],
+                "examples": [e.to_dict() for e in examples],
+                "ipaUs": semantic.ipa_us, "cambridgeUrl": semantic.cambridge_url,
+                "sourceRefs": sorted(refs, key=lambda ref: (ref["noteDate"], ref["sourceId"])),
+                "card": {
+                    "id": effect["card_id"],
+                    "state": (
+                        "NEW" if card is None or effect["reset"] or card[0] == 0 else "LEARNED"
+                    ),
+                    "dueAt": None if card is None or effect["reset"] else card[1],
+                },
+                "revision": old.revision + int(changed) if old else 1,
+                "verificationSummary": compute_verification_summary(
+                    meanings_en=en, meanings_vi=vi, examples=examples,
+                    ipa_us=semantic.ipa_us, cambridge_url=semantic.cambridge_url,
+                    ipa_status=ipa_status, cambridge_status=link_status,
+                ),
+                "updatedAt": stamp if changed or old is None else old.updated_at,
+            })
+        return {
+            "operationId": operation_id, "sourceId": source_id,
+            "sourceRevision": revision, "sourceEtag": f'"source-{source_id}-r{revision}"',
+            "noteDate": document.note_date,
+            "savedForms": [{"id": f["id"], "revision": f["revision"]} for f in forms],
+            "canonicalForms": forms, "createdCardIds": created, "reusedCardIds": reused,
+            "markdownSync": "COMPLETED",
+        }
+
     @staticmethod
     def _fault(fault: FaultInjector | None, point: FaultPoint) -> None:
         if fault is not None:
@@ -284,6 +411,8 @@ class SourceWriteCoordinator:
         result_ref: str = "source_write",
         fault: FaultInjector | None = None,
         _require_new: bool = False,
+        creation: bool = False,
+        receipt_context: dict[str, Any] | None = None,
     ) -> JournalRecord:
         """Persist PREPARED intent before calling any filesystem replacement."""
         new_hash = _hash(new_content)
@@ -322,6 +451,28 @@ class SourceWriteCoordinator:
                     raise JournalBusyError("Source is degraded and requires explicit repair")
                 raise JournalBusyError("Source has an in-flight write")
 
+            if creation:
+                registered = self.adapter.get_source(source_id)
+                if registered is None or (
+                    registered.status != "MISSING" or registered.revision != 0
+                    or registered.error_code != "CREATION_PENDING"
+                    or expected_old_hash != _hash("") or intended_projection_revision != 1
+                ):
+                    raise JournalConflictError("Creation registration is missing")
+                occupied = connection.exec_driver_sql(
+                    "SELECT 1 FROM source_files WHERE note_date=? OR relative_path=?",
+                    (registered.note_date, registered.relative_path),
+                ).first()
+                if occupied is not None:
+                    raise JournalConflictError("Creation date is occupied")
+                self.adapter.assert_creation_absent(registered)
+                self.repository.save_source_file(
+                    source_id=source_id, relative_path=registered.relative_path,
+                    note_date=registered.note_date, status="MISSING", revision=0,
+                    etag=registered.etag, content_hash=expected_old_hash,
+                    error_code="CREATION_PENDING", connection=connection,
+                )
+
             source = (
                 connection.exec_driver_sql(
                     "SELECT status,revision,content_hash,note_date,relative_path "
@@ -336,18 +487,60 @@ class SourceWriteCoordinator:
             registered = self.adapter.get_source(source_id)
             if registered is None or registered.relative_path != source["relative_path"]:
                 raise JournalConflictError("Filesystem registration differs from canonical source")
-            if source["status"] != "VALID" or source["content_hash"] != expected_old_hash:
+            expected_status = "MISSING" if creation else "VALID"
+            if source["status"] != expected_status or source["content_hash"] != expected_old_hash:
                 raise JournalConflictError("Source revision or hash is stale")
             if int(source["revision"]) + 1 != intended_projection_revision:
                 raise JournalConflictError("Projection revision is stale")
             if document.note_date != source["note_date"]:
                 raise JournalConflictError("Source date changed")
+            if receipt_context is not None:
+                date_sources = list(connection.exec_driver_sql(
+                    "SELECT id FROM source_files WHERE note_date=?", (source["note_date"],),
+                ).scalars())
+                if date_sources != [source_id]:
+                    raise SourceFileError("SOURCE_NOT_WRITABLE", "Source date is ambiguous")
             operation_status = connection.exec_driver_sql(
                 "SELECT status FROM operations WHERE operation_id=?", (operation_id,)
             ).scalar_one_or_none()
             if operation_status != "PENDING":
                 raise UnknownOperationError("A new source write requires a pending operation")
             plan = self._plan(connection, source_id, document)
+            if creation:
+                plan["mutation"] = "CREATE"
+            if receipt_context is not None:
+                plan["save_context"] = receipt_context
+                if not creation:
+                    # A date note can retain an older snapshot of shared forms.
+                    # Saving another preview owns only its selected identities;
+                    # unchanged historical sections must not roll canonical content
+                    # or SRS back. Authenticate this decision before publication.
+                    previous_content = self.adapter.read_source_content(source_id)
+                    if _hash(previous_content) != expected_old_hash:
+                        raise JournalConflictError("Source bytes changed before preparation")
+                    previous = self._semantics(self._document(source_id, previous_content))
+                    proposed = self._semantics(document)
+                    selected = {tuple(identity) for identity in receipt_context["identities"]}
+                    for effect in plan["forms"]:
+                        semantic = proposed[effect["key"]]
+                        identity = (semantic.family_root, semantic.normalized_lemma,
+                                    semantic.part_of_speech)
+                        if identity in selected or effect["base_revision"] is None:
+                            continue
+                        prior = previous.get(effect["key"])
+                        if prior is None or (
+                            prior.ipa_us, prior.cambridge_url, _projection_values(prior, None)
+                        ) != (
+                            semantic.ipa_us, semantic.cambridge_url,
+                            _projection_values(semantic, None),
+                        ):
+                            raise JournalConflictError("Save changes an unselected source form")
+                        effect["preserve_canonical"] = True
+                        effect["reset"] = False
+                plan["receipt"] = self._save_receipt(
+                    connection, source_id, document, plan, operation_id,
+                    intended_projection_revision, receipt_context,
+                )
 
             now = _now()
             self._fault(fault, "BEFORE_PREPARED")
@@ -425,12 +618,31 @@ class SourceWriteCoordinator:
                     journal.new_hash,
                 )
             )
-        if self.adapter.get_source_hash(journal.source_id) != journal.old_hash:
+        if journal.effect_plan.get("mutation") == "CREATE":
+            source = self.adapter.get_source(journal.source_id)
+            if source is None:
+                raise JournalError("Creation registration is missing")
+            self.adapter.assert_creation_absent(source)
+        elif self.adapter.get_source_hash(journal.source_id) != journal.old_hash:
             return self._transition(journal.operation_id, "DEGRADED")
         ledger = ledger or OperationLedger(self.engine)
         if ledger.engine is not self.engine:
             raise JournalError("Source and receipt must share the database engine")
-        ledger.abort_source_write(journal.operation_id, expected_old_hash=journal.old_hash)
+        try:
+            ledger.abort_source_write(journal.operation_id, expected_old_hash=journal.old_hash)
+        except OperationConflict as error:
+            if error.code != "SOURCE_EVIDENCE_MISMATCH":
+                raise
+            return self._transition(journal.operation_id, "DEGRADED")
+        if journal.effect_plan.get("mutation") == "CREATE":
+            # Retain the reserved identity and journal FK for audit/recovery.
+            # MISSING is read-only; a fresh key cannot silently repair this date.
+            with self._writer() as connection:
+                connection.exec_driver_sql(
+                    "UPDATE source_files SET error_code='CREATION_ABORTED' "
+                    "WHERE id=? AND revision=0",
+                    (journal.source_id,),
+                )
         result = self.get(journal.operation_id)
         if result is None:
             raise JournalError("Aborted journal disappeared")
@@ -452,13 +664,20 @@ class SourceWriteCoordinator:
                 return
             raise JournalError("Journal is not ready for completion")
         source = self.repository.get_source_file(journal.source_id, connection=connection)
-        if source is None or source.status != "VALID":
-            raise JournalError("Source registration is unavailable")
+        creation = journal.effect_plan.get("mutation") == "CREATE"
+        if source is None or source.status != ("MISSING" if creation else "VALID"):
+            raise AmbiguousSourceStateError("Source registration is unavailable")
         if (
             source.content_hash != journal.old_hash
             or source.revision + 1 != journal.intended_projection_revision
         ):
             raise AmbiguousSourceStateError("Database source revision is ambiguous")
+        if "save_context" in journal.effect_plan:
+            ids = list(connection.exec_driver_sql(
+                "SELECT id FROM source_files WHERE note_date=?", (source.note_date,),
+            ).scalars())
+            if ids != [source.id]:
+                raise AmbiguousSourceStateError("Source date became ambiguous")
         linked = self.repository.get_forms_for_source(source.id, connection=connection)
         if sorted(form.id for form in linked) != journal.effect_plan["links"]:
             raise AmbiguousSourceStateError("Source projection links changed")
@@ -497,55 +716,36 @@ class SourceWriteCoordinator:
                 or _form_digest(old) != effect["base_hash"]
             ):
                 raise AmbiguousSourceStateError("Canonical form changed since preparation")
-            en = [
-                next((m for m in old.meanings_en if m.text == text), MeaningEn(text))
-                if old
-                else MeaningEn(text)
-                for text in semantic.meanings_en
-            ]
-            vi = [
-                next((m for m in old.meanings_vi if m.text == text), MeaningVi(text))
-                if old
-                else MeaningVi(text)
-                for text in semantic.meanings_vi
-            ]
-            examples = [
-                next(
-                    (e for e in old.examples if (e.english, e.vietnamese) == pair),
-                    ExampleSentence(*pair),
+            en, vi, examples, ipa_status, link_status = _projection_values(semantic, old)
+            if "card_baseline" in effect:
+                baseline = connection.exec_driver_sql(
+                    "SELECT box,due_at,queue_revision FROM review_cards WHERE card_id=?",
+                    (effect["card_id"],),
+                ).first()
+                if (list(baseline) if baseline is not None else None) != effect["card_baseline"]:
+                    raise AmbiguousSourceStateError("Card changed since save preparation")
+                refs = (
+                    sorted([sorted(ref.to_dict().items()) for ref in old.source_refs])
+                    if old else []
                 )
-                if old
-                else ExampleSentence(*pair)
-                for pair in semantic.examples
-            ]
-            ipa_status = (
-                old.ipa_status
-                if old and old.ipa_us == semantic.ipa_us
-                else "MISSING"
-                if semantic.ipa_us is None
-                else "UNVERIFIED"
-            )
-            link_status = (
-                old.cambridge_status
-                if old and old.cambridge_url == semantic.cambridge_url
-                else "MISSING"
-                if semantic.cambridge_url is None
-                else "UNVERIFIED"
-            )
-            needs_reset = old is not None and _learning_values(old) != (
+                if json.dumps(refs, sort_keys=True) != effect["refs_baseline"]:
+                    raise AmbiguousSourceStateError("Source membership changed since preparation")
+            preserve = effect.get("preserve_canonical", False)
+            if preserve and (
+                old is None or "save_context" not in journal.effect_plan
+                or [semantic.family_root, semantic.normalized_lemma, semantic.part_of_speech]
+                in journal.effect_plan["save_context"]["identities"]
+                or effect["reset"]
+            ):
+                raise AmbiguousSourceStateError("Preserved form intent is inconsistent")
+            needs_reset = not preserve and old is not None and _learning_values(old) != (
                 semantic.meanings_en,
                 semantic.meanings_vi,
                 semantic.examples,
             )
             if effect["reset"] and not needs_reset:
                 raise AmbiguousSourceStateError("Card reset evidence changed")
-            changed = old is None or (
-                old.meanings_en,
-                old.meanings_vi,
-                old.examples,
-                old.ipa_us,
-                old.cambridge_url,
-            ) != (en, vi, examples, semantic.ipa_us, semantic.cambridge_url)
+            changed = not preserve and _content_changed(semantic, old)
             form = (
                 self.repository.save_canonical_word_form(
                     lemma=semantic.lemma,
@@ -566,6 +766,11 @@ class SourceWriteCoordinator:
             )
             if form is None:
                 raise JournalError("Canonical projection was not applied")
+            if changed and "receipt_time" in journal.effect_plan:
+                connection.exec_driver_sql(
+                    "UPDATE word_forms SET updated_at=? WHERE id=?",
+                    (journal.effect_plan["receipt_time"], form.id),
+                )
             self.repository.link_word_form_to_source(
                 form.id, source.id, source.note_date, connection=connection
             )
@@ -604,10 +809,27 @@ class SourceWriteCoordinator:
         if reset_cards is not None:
             reset_cards(connection, journal)
         self._fault(fault, "AFTER_CARD_RESET")
+        context = journal.effect_plan.get("save_context")
+        if context is not None:
+            preview = connection.exec_driver_sql(
+                "SELECT owner_session_id,status FROM lookup_previews WHERE lookup_id=?",
+                (context["lookup_id"],),
+            ).first()
+            if (
+                preview is None or preview[0] != context["owner"]
+                or preview[1] not in {"PREVIEW", "CONSUMED"}
+            ):
+                raise AmbiguousSourceStateError("Preview authorization changed since preparation")
+            connection.exec_driver_sql(
+                "UPDATE lookup_previews SET status='CONSUMED' WHERE lookup_id=?",
+                (context["lookup_id"],),
+            )
         # Terminal filesystem consistency linearizes after all local effects/hooks.
         # A mismatch raises inside T014's transaction, rolling those effects back
         # before _complete persists DEGRADED in a separate short transaction.
         try:
+            if creation:
+                self.verify_creation(journal)
             terminal_hash = self.adapter.get_source_hash(journal.source_id)
         except SourceFileError:
             raise AmbiguousSourceStateError("Terminal source evidence is unavailable") from None
@@ -697,7 +919,56 @@ class SourceWriteCoordinator:
         result = self.get(journal.operation_id)
         if result is None or result.state != "COMMITTED":
             raise RuntimeError("Committed journal disappeared")
+        source = self.repository.get_source_file(journal.source_id)
+        if source is not None:
+            self.adapter.register_source(source)
         return result
+
+    def verify_creation(self, journal: JournalRecord) -> None:
+        """A matching hash alone cannot identify the winning creator."""
+        if journal.temp_path is None or journal.temp_device is None or journal.temp_inode is None:
+            raise AmbiguousSourceStateError("Creation publication evidence is incomplete")
+        self.adapter.reconcile_creation_temp(StagedTempHandle(
+            journal.source_id, journal.temp_path, journal.temp_device, journal.temp_inode,
+            journal.new_hash,
+        ))
+
+    def create(
+        self, *, operation_id: str, note_date: str, new_content: str,
+        operation_ledger: OperationLedger | None = None,
+        response_status: int = 201, result_ref: str = "source_create",
+        receipt_context: dict[str, Any] | None = None, fault: FaultInjector | None = None,
+    ) -> JournalRecord:
+        """Reserve a backend-generated date source and publish it conditionally."""
+        prior = self.get(operation_id)
+        if prior is not None:
+            if prior.effect_plan.get("mutation") != "CREATE":
+                raise JournalConflictError("Operation has a different source intent")
+            source = self.repository.get_source_file(prior.source_id)
+            if source is None or source.note_date != note_date:
+                raise JournalConflictError("Operation has a different creation date")
+            self.adapter.register_source(source)
+            return self.write(
+                operation_id=operation_id, source_id=prior.source_id,
+                expected_old_hash=_hash(""), new_content=new_content,
+                intended_projection_revision=1, operation_ledger=operation_ledger,
+                response_status=response_status, result_ref=result_ref, fault=fault,
+                creation=True, receipt_context=receipt_context,
+            )
+        source_id = f"src_{token_urlsafe(12)}"
+        now = _now()
+        source = SourceFile(
+            source_id, self.adapter.creation_path(note_date), note_date, "MISSING", 0,
+            f'"source-{source_id}-r0"', _hash(""), None, "CREATION_PENDING", now, now,
+        )
+        self.adapter.assert_creation_absent(source)
+        self.adapter.register_source(source)
+        return self.write(
+            operation_id=operation_id, source_id=source_id, expected_old_hash=_hash(""),
+            new_content=new_content, intended_projection_revision=1,
+            operation_ledger=operation_ledger, response_status=response_status,
+            result_ref=result_ref, fault=fault, creation=True, receipt_context=receipt_context,
+        )
 
     def write(
         self,
@@ -713,6 +984,8 @@ class SourceWriteCoordinator:
         apply_projection: ProjectionApply | None = None,
         reset_cards: CardReset | None = None,
         fault: FaultInjector | None = None,
+        creation: bool = False,
+        receipt_context: dict[str, Any] | None = None,
     ) -> JournalRecord:
         """Run PREPARED → safe replacement → projection/card/receipt → COMMITTED."""
         operation_ledger = operation_ledger or OperationLedger(self.engine)
@@ -751,8 +1024,13 @@ class SourceWriteCoordinator:
             raise JournalBusyError("Source is degraded and requires explicit repair")
         if prior is not None:
             try:
+                if prior.effect_plan.get("mutation") == "CREATE":
+                    source = self.adapter.get_source(source_id)
+                    if source is not None and self.adapter.creation_destination_absent(source):
+                        raise JournalBusyError("Prepared creation requires startup reconciliation")
+                    self.verify_creation(prior)
                 actual_hash = self.adapter.get_source_hash(source_id)
-            except SourceFileError:
+            except (SourceFileError, AmbiguousSourceStateError):
                 actual_hash = None
             if actual_hash == prior.new_hash:
                 journal = (
@@ -784,6 +1062,8 @@ class SourceWriteCoordinator:
             result_ref=result_ref,
             fault=fault,
             _require_new=True,
+            creation=creation,
+            receipt_context=receipt_context,
         )
         if journal.state == "COMMITTED":
             return journal
@@ -792,12 +1072,32 @@ class SourceWriteCoordinator:
         staged = None
         crash = False
         try:
-            staged = self.adapter.prepare_staged_write(source_id, new_content, expected_old_hash)
+            staged = (
+                self.adapter.prepare_staged_create(source_id, new_content)
+                if creation else
+                self.adapter.prepare_staged_write(source_id, new_content, expected_old_hash)
+            )
             self._fault(fault, "BEFORE_TEMP_HANDLE")
             self._record_stage(journal, staged.recovery_handle)
             self._fault(fault, "AFTER_TEMP_FSYNC")
+            if receipt_context is not None:
+                with self._writer() as connection:
+                    source = self.repository.get_source_file(source_id, connection=connection)
+                    ids = list(connection.exec_driver_sql(
+                        "SELECT id FROM source_files WHERE note_date=?",
+                        (source.note_date if source is not None else "",),
+                    ).scalars())
+                    if source is None or ids != [source_id] or (
+                        source.status != ("MISSING" if creation else "VALID")
+                        or source.revision + 1 != intended_projection_revision
+                        or source.content_hash != expected_old_hash
+                    ):
+                        raise SourceFileError("SOURCE_NOT_WRITABLE", "Source preconditions changed")
             receipt = staged.commit()
             self._fault(fault, "AFTER_ATOMIC_REPLACE")
+            journal = self.get(operation_id) or journal
+            if creation:
+                self.verify_creation(journal)
             actual_hash = self.adapter.get_source_hash(source_id)
             if receipt.new_content_hash != journal.new_hash or actual_hash != journal.new_hash:
                 self._transition(journal.operation_id, "DEGRADED")
@@ -819,9 +1119,24 @@ class SourceWriteCoordinator:
         except SourceFileError:
             actual = None
             try:
+                if creation:
+                    current = self.get(operation_id)
+                    if current is not None and current.temp_path is not None:
+                        self.verify_creation(current)
                 actual = self.adapter.get_source_hash(source_id)
             except SourceFileError:
                 actual = None
+            if creation and actual is None:
+                current = self.get(operation_id)
+                source = self.adapter.get_source(source_id)
+                if current is not None and source is not None:
+                    try:
+                        self.adapter.assert_creation_absent(source)
+                    except SourceFileError:
+                        self._transition(operation_id, "DEGRADED")
+                    else:
+                        self._abort(current, operation_ledger)
+                raise
             if actual == expected_old_hash:
                 current = self.get(journal.operation_id)
                 if current is None:

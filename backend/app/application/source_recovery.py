@@ -60,9 +60,28 @@ class SourceRecovery:
             journal = self.coordinator.get(str(operation_id))
             if journal is None or journal.state not in {"PREPARED", "SOURCE_REPLACED"}:
                 continue
+            creation = journal.effect_plan.get("mutation") == "CREATE"
+            if creation and journal.state == "PREPARED":
+                source = self.coordinator.adapter.get_source(journal.source_id)
+                if source is None:
+                    reconciled.append(self._degrade(journal.operation_id))
+                    continue
+                try:
+                    absent = self.coordinator.adapter.creation_destination_absent(source)
+                except SourceFileError:
+                    reconciled.append(self._degrade(journal.operation_id))
+                    continue
+                if absent:
+                    try:
+                        reconciled.append(self.coordinator._abort(journal, operation_ledger))
+                    except (SourceFileError, OperationConflict):
+                        reconciled.append(self._degrade(journal.operation_id))
+                    continue
             try:
+                if creation:
+                    self.coordinator.verify_creation(journal)
                 actual_hash = self.coordinator.adapter.get_source_hash(journal.source_id)
-            except SourceFileError:
+            except (SourceFileError, AmbiguousSourceStateError):
                 reconciled.append(self._degrade(journal.operation_id))
                 continue
 

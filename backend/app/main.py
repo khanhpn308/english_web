@@ -15,6 +15,7 @@ from backend.app.adapters.watcher import SourceWatcher
 from backend.app.application.ai_admission import AiAdmissionCoordinator
 from backend.app.application.consent import ConsentService
 from backend.app.application.operations import OperationConflict, OperationLedger
+from backend.app.application.save_word_family import SaveWordFamilyService
 from backend.app.application.source_recovery import SourceRecovery
 from backend.app.application.source_write import SourceWriteCoordinator
 from backend.app.application.sync import SyncService
@@ -28,6 +29,7 @@ from backend.app.http.review import router as review_router
 from backend.app.http.search import router as search_router
 from backend.app.http.session import SessionGuard, SessionStore
 from backend.app.http.sources import router as sources_router
+from backend.app.http.word_forms import router as word_forms_router
 from backend.app.persistence.database import Database, StorageError
 from backend.app.platform.config import AppSettings
 from backend.app.review.queue import ReviewService
@@ -65,6 +67,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.sync_service = None
     app.state.watcher = None
     app.state.lookup_service = None
+    app.state.save_word_family_service = None
     app.state.sessions.activate()
     try:
         if database is not None:
@@ -149,6 +152,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         app.state.storage_error = "DEGRADED"
                         app.state.ready = False
                     else:
+                        app.state.save_word_family_service = SaveWordFamilyService(ledger, coordinator)
                         sync_service = SyncService(
                             database.engine, markdown_root, operation_ledger=ledger
                         )
@@ -251,6 +255,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 app.state.review_service = None
                 app.state.sync_service = None
                 app.state.lookup_service = None
+                app.state.save_word_family_service = None
                 if database is not None:
                     await run_in_threadpool(database.close)
                 app.state.database = None
@@ -327,6 +332,7 @@ def create_app(
     app.state.sync_service = None
     app.state.watcher = None
     app.state.lookup_service = None
+    app.state.save_word_family_service = None
     app.state.active_ai_policy = None
     app.state.sessions = SessionStore()
 
@@ -361,6 +367,7 @@ def create_app(
     app.include_router(review_router)
     app.include_router(sources_router)
     app.include_router(lookups_router)
+    app.include_router(word_forms_router)
 
     from backend.app.http.consent import router as consent_router
 
