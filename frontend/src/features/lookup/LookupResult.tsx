@@ -23,10 +23,10 @@ function sourceLink(raw: string | null): string | null {
 }
 
 /** Provider text stays text. Only the returned Cambridge reference can become a link. */
-export function LookupResult({ preview }: { preview: Preview }) {
+export function LookupResult({ preview, savedNoteDate }: { preview: Preview; savedNoteDate?: string }) {
   return <section aria-labelledby="lookup-preview-heading" className="space-y-4 min-w-0 break-words [overflow-wrap:anywhere]">
     <h2 id="lookup-preview-heading" className="m-0 text-xl font-semibold">Kết quả xem trước: {preview.term}</h2>
-    <p className="text-sm text-muted-foreground">Chỉ xem trước. Chưa lưu vào Markdown hoặc tạo thẻ ôn tập. Lưu và phát âm sẽ được tích hợp ở bước sau.</p>
+    <p className="text-sm text-muted-foreground">{savedNoteDate ? `Backend đã xác nhận lưu bản xem trước vào ngày ${savedNoteDate}.` : 'Chỉ xem trước. Chưa lưu vào Markdown hoặc tạo thẻ ôn tập.'} Phát âm Mỹ chỉ khả dụng khi trình duyệt có giọng en-US chạy cục bộ.</p>
     <p><VerificationLabel status={preview.verificationSummary} /></p>
     {preview.forms.length === 0 && <p>Không có dạng từ trong kết quả xem trước.</p>}
     {preview.forms.map(form => {

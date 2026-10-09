@@ -2,7 +2,7 @@
 
 **Task ID:** `T036`  
 **Title:** Quiz builder UI dùng generation API  
-**Status:** `TODO`  
+**Status:** `DONE` (merged into `main`; final acceptance `PENDING`)
 **Goal:** Quiz builder UI dùng generation API. Config exactly API counts/limits, date valid and errors localized.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.

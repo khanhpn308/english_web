@@ -4,6 +4,25 @@ import { build } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'path';
+import type { components } from '../../src/shared/api/generated';
+
+const shellWord = {
+  id: 'wf-deep-link-test-999', lemma: 'robust', partOfSpeech: 'ADJECTIVE',
+  meaningViMatch: 'vững chắc', verificationSummary: 'UNVERIFIED',
+  noteDates: ['2026-10-09'], revision: 1, updatedAt: '2026-10-09T00:00:00Z',
+} satisfies components['schemas']['WordFormSummary'];
+const shellResults: components['schemas']['WordFormCollection'] = {
+  data: [shellWord], pagination: { pageSize: 50, nextCursor: null, hasMore: false },
+  sort: { by: 'relevance', direction: 'ASC' },
+};
+const shellDetail: components['schemas']['WordFormDetail'] = {
+  ...shellWord, familyId: 'family_shell_synthetic',
+  meaningsEn: [{ text: 'strong', language: 'en', verificationStatus: 'VERIFIED' }],
+  meaningsVi: [{ text: 'vững chắc', language: 'vi', verificationStatus: 'UNVERIFIED' }],
+  examples: [{ english: 'A robust design.', vietnamese: 'Một thiết kế vững chắc.', verificationStatus: 'UNVERIFIED' }],
+  ipaUs: null, cambridgeUrl: null, card: null,
+  sourceRefs: [{ sourceId: 'source_shell_synthetic', noteDate: '2026-10-09', status: 'VALID' }],
+};
 
 test.describe('T076 AppShell E2E & Visual Migration', () => {
   let bootstrapToken = '';
@@ -189,7 +208,8 @@ test.describe('T076 AppShell E2E & Visual Migration', () => {
     await expect(lookupHeading).toBeFocused();
 
     // Live region announces active screen
-    const liveRegion = page.locator('[role="status"]');
+    const liveRegion = page.getByRole('status').filter({ hasText: 'Đang hiển thị màn hình' });
+    await expect(liveRegion).toHaveCount(1);
     await expect(liveRegion).toContainText('Đang hiển thị màn hình Tra cứu từ vựng');
 
     // Navigate to Search
@@ -202,6 +222,10 @@ test.describe('T076 AppShell E2E & Visual Migration', () => {
     await expect(searchHeading).toBeVisible();
     await expect(searchHeading).toBeFocused();
     await expect(liveRegion).toContainText('Đang hiển thị màn hình Tìm kiếm từ vựng');
+    await expect(page.getByRole('region', { name: 'Tìm trong kho từ', exact: true })).toBeVisible();
+    await expect(page.getByLabel('Nghĩa tiếng Việt', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Duyệt kho từ', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Thông báo trạng thái tính năng' })).toHaveCount(0);
   });
 
   test('Header brand link navigates to home dashboard, updates URL, renders overview, and focuses h1', async ({ page }) => {
@@ -235,12 +259,25 @@ test.describe('T076 AppShell E2E & Visual Migration', () => {
     await page.goto(`/bootstrap#token=${bootstrapToken}`);
     await page.waitForLoadState('networkidle');
 
+    const detailReads: string[] = [];
+    await page.route('**/api/v1/word-forms/wf-deep-link-test-999', async route => {
+      expect(route.request().method()).toBe('GET');
+      detailReads.push(new URL(route.request().url()).pathname);
+      await route.fulfill({ json: shellDetail });
+    });
     await page.goto('/word-forms/wf-deep-link-test-999');
     await page.waitForLoadState('networkidle');
 
     const wfHeading = page.getByRole('heading', { level: 1, name: 'Chi tiết từ vựng' });
     await expect(wfHeading).toBeVisible();
-    await expect(page.getByText('wf-deep-link-test-999')).toBeVisible();
+    const detail = page.getByRole('region', { name: 'Dạng từ đã lưu', exact: true });
+    await expect(detail.getByRole('heading', { level: 2, name: 'robust', exact: true })).toBeVisible();
+    await expect(detail.getByText('Nguồn hợp lệ', { exact: false })).toBeVisible();
+    await expect(detail.getByText('Một thiết kế vững chắc.', { exact: true })).toBeVisible();
+    await expect(detail.getByRole('link', { name: 'Quay lại kết quả tìm kiếm', exact: true })).toHaveAttribute('href', '/search');
+    expect(detailReads.length).toBeGreaterThan(0);
+    expect(detailReads.every(path => path === '/api/v1/word-forms/wf-deep-link-test-999')).toBe(true);
+    await expect(page.getByRole('region', { name: 'Thông báo trạng thái tính năng' })).toHaveCount(0);
 
     // 2. Direct deep link with dynamic parameter: quiz/:attemptId
     await page.goto('/quiz/att-session-777');
@@ -266,6 +303,74 @@ test.describe('T076 AppShell E2E & Visual Migration', () => {
     // Browser Forward
     await page.goForward();
     await expect(page.getByRole('heading', { level: 1, name: 'Trạng thái hệ thống & Quyền AI' })).toBeVisible();
+  });
+
+  test('Keyboard navigation opens Search and Word Detail and restores URL state through history and reload', async ({ page }) => {
+    const reads: URL[] = [];
+    await page.route(/\/api\/v1\/word-forms(?:\/[^/?]+)?(?:\?.*)?$/, async route => {
+      const url = new URL(route.request().url());
+      expect(route.request().method()).toBe('GET');
+      reads.push(url);
+      if (url.pathname === '/api/v1/word-forms') {
+        await route.fulfill({ json: shellResults });
+      } else if (url.pathname === '/api/v1/word-forms/wf-deep-link-test-999') {
+        await route.fulfill({ json: shellDetail });
+      } else {
+        throw new Error('Unexpected word-form read');
+      }
+    });
+    await page.goto(`/bootstrap#token=${bootstrapToken}`);
+    const nav = page.getByRole('navigation', { name: 'Điều hướng chính', exact: true });
+    const searchLink = nav.getByRole('link', { name: 'Tìm kiếm', exact: true });
+    await searchLink.focus();
+    await expect(searchLink).toBeFocused();
+    await page.keyboard.press('Enter');
+    const searchHeading = page.getByRole('heading', { level: 1, name: 'Tìm kiếm từ vựng', exact: true });
+    await expect(searchHeading).toBeFocused();
+    await expect(searchLink).toHaveAttribute('aria-current', 'page');
+    expect(reads).toEqual([]);
+    await page.keyboard.press('Tab');
+    const meaning = page.getByRole('searchbox', { name: 'Nghĩa tiếng Việt', exact: true });
+    await expect(meaning).toBeFocused();
+    await page.keyboard.insertText('vững chắc');
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('searchbox', { name: 'Dạng từ / lemma', exact: true })).toBeFocused();
+    const results = page.getByRole('list', { name: 'Kết quả tìm kiếm', exact: true });
+    const result = results.getByRole('link', { name: 'robust', exact: true });
+    await expect(result).toBeVisible();
+    const searchUrl = page.url();
+    expect(new URL(searchUrl).searchParams.get('meaningVi')).toBe('vững chắc');
+    expect(reads.at(-1)?.searchParams.get('meaningVi')).toBe('vững chắc');
+    await result.focus();
+    await expect(result).toBeFocused();
+    await page.keyboard.press('Enter');
+    const detailHeading = page.getByRole('heading', { level: 1, name: 'Chi tiết từ vựng', exact: true });
+    await expect(detailHeading).toBeFocused();
+    await expect(page.getByRole('heading', { level: 2, name: 'robust', exact: true })).toBeVisible();
+    const detailUrl = page.url();
+    expect(new URL(detailUrl).searchParams.get('returnTo')).toBe(new URL(searchUrl).pathname + new URL(searchUrl).search);
+    await expect(page.getByRole('region', { name: 'Nguồn và ngày ghi chú', exact: true })).toContainText('Nguồn hợp lệ');
+    await page.reload();
+    await expect(detailHeading).toBeFocused();
+    await page.keyboard.press('Tab');
+    const back = page.getByRole('link', { name: 'Quay lại kết quả tìm kiếm', exact: true });
+    await expect(back).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(searchUrl);
+    await expect(searchHeading).toBeFocused();
+    await expect(meaning).toHaveValue('vững chắc');
+    await expect(result).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(detailUrl);
+    await expect(detailHeading).toBeFocused();
+    await page.goForward();
+    await expect(page).toHaveURL(searchUrl);
+    await expect(searchHeading).toBeFocused();
+    await expect(meaning).toHaveValue('vững chắc');
+    await page.reload();
+    await expect(meaning).toHaveValue('vững chắc');
+    await expect(result).toBeVisible();
+    await expect(searchLink).toHaveAttribute('aria-current', 'page');
   });
 
   test('404 Not Found view renders accessible error message and recovers to home via Button with h1 focus', async ({ page }) => {

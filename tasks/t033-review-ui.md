@@ -2,7 +2,8 @@
 
 **Task ID:** `T033`  
 **Title:** Flashcard review flow  
-**Status:** `TODO`  
+**Status:** `DONE` (code merged into `main` at `e8ebfe862`; final acceptance `PENDING`)
+**Coding completion policy (2026-10-09):** Implementation integrated into `main`; final project acceptance is pending. Historical TODO, environment limitations and unchecked acceptance cases below remain evidence history, not test PASS.
 **Goal:** Flashcard review flow. Front/back/rating keyboard flow accessible; due/date filters reflect server data.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.

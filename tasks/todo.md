@@ -2,8 +2,8 @@
 
 **Planning state:** T001/T002/T058/T003/T004/T005/T053/T063/T013/T006 đã có evidence hoàn tất; trạng thái các task còn lại theo checklist dưới đây.
 **Canonical plan:** [docs/task-plan.md](../docs/task-plan.md).  
-**Next ready work:** candidate DAG resolves 6 READY tasks (T008, T018, T023, T027, T034, T083); canonical main dry-run requires integration of T083 metadata.
-**Handoff rule:** Chỉ check item khi thẻ tương ứng có acceptance/verification evidence và task status `DONE`. PENDING environment không được check thành PASS.
+**Next ready work:** Recompute from the current integrated DAG; older READY/BLOCKED snapshots in this file are historical.
+**Owner coding-completion policy (2026-10-09):** Task merged into `main` is `DONE` for implementation. Final integrated/Windows/security/performance acceptance is deferred to the project-wide release phase; `DONE` does not mean deferred tests passed. Unmerged remediation and explicit security holds remain open.
 
 ## Ordered task list
 
@@ -27,11 +27,11 @@
 - [x] [T016](t016-dispatch-fence.md): Consent admission fence trước AI dispatch
 - [x] [T080](t080-shadcn-ui-foundation.md): shadcn/ui foundation & Tailwind integration — DONE: Tailwind v4 (layer theme/utilities without Preflight) + Vite, components.json, @/* alias, cn(), Button/Card/Dialog primitives, 27 design-system tests pass; full check:task green (810 Python, 65 frontend, 40 architecture tests, coverage changed 100%, total 92.96%, zero security findings).
 - [x] [T081](t081-app-shell-shadcn-migration.md): AppShell shadcn/ui & semantic design-system migration — DONE: AppShell migrated to canonical shadcn Button/Card and Tailwind v4 semantic tokens; 9 routes, landmarks, ErrorBoundary, 404 preserved; 27 unit tests (including jsdom mounted interaction coverage for brand and 404 recovery navigation handlers; changed-code coverage 100%), 48 focused E2E tests across 4 viewports (mounted ErrorBoundary fixture recovery, brand/404 navigation with h1 focus, 200% effective layout reflow at 640px, CDP visual scaling), 8 axe-core a11y tests pass; 11 Windows-native tests fail-closed on Linux (inherited baseline); zero security findings.
-- [ ] [T018](t018-consent-ui.md): Consent dialog và Status panel (BLOCKED_BY_T080_T081)
+- [x] [T018](t018-consent-ui.md): Consent dialog và Status panel — DONE (merged `c4fe06c13`; final acceptance pending)
 - [x] [T019](t019-vocabulary-schema.md): Schema vocabulary, source links và preview
-- [ ] [T008](t008-lookup-api-vertical-slice.md): POST lookup trả preview đã validate (IMPLEMENTATION_COMPLETE_ENVIRONMENT_VERIFICATION_PENDING; Round-4 authorization: tasks/t008-r4-shared-remediation.md)
-- [ ] [T009](t009-lookup-ui-vertical-slice.md): Lookup UI gọi API thật qua client
-- [ ] [T010](t010-error-handling-recovery.md): Typed UI recovery cho common error codes
+- [x] [T008](t008-lookup-api-vertical-slice.md): POST lookup trả preview đã validate — DONE (merged `b46ab6538`; final acceptance pending)
+- [x] [T009](t009-lookup-ui-vertical-slice.md): Lookup UI gọi API thật qua client — DONE (merged `aca6afc04`; final acceptance pending)
+- [x] [T010](t010-error-handling-recovery.md): Typed UI recovery cho common error codes — DONE (merged `aeaaa322e`; final acceptance pending)
 - [ ] [T011](t011-observability-instrumentation.md): Local JSON logs, correlation và span boundary
 - [ ] [T012](t012-ci-pipeline.md): CI lõi cho build và tests
 - [x] [T020](t020-markdown-parser.md): Lossless Markdown parser/serializer
@@ -40,19 +40,19 @@
 - [x] [T021](t021-safe-source-files.md): Allowlisted Windows source file adapter; owner-attested Windows native PASS, portable Linux checks PASS, commit `ef93413` integrated locally.
 - [x] [T022](t022-source-journal.md): Durable source journal và crash reconciliation — DONE: independent AUDIT_PASS; owner-authorized local integration, 339 critical tests and 8 late-H3/control cases pass; linear 0007 head, static/type/architecture gates green.
 - [x] [T023](t023-source-sync.md): Startup/watcher sync và source API — DONE: GET /sources, POST/GET /sync-runs conform; safe diagnostic/cursor snapshot validation; AC-09/10/31, T021 adapter refusals, T022 write fencing, truthful receipts/failed-run metadata, ABA conflict detection, watcher debounce and crash degradation verified; 25/25 focused tests, 339 dependency tests, and 5/5 contract tests pass.
-- [ ] [T024](t024-save-api.md): Explicit save preview vào Markdown và cards
-- [ ] [T025](t025-save-ui-audio.md): Save lookup preview và local pronunciation
-- [ ] [T027](t027-search-api.md): Search/detail API có cursor và filters
-- [ ] [T028](t028-search-ui.md): Search/detail read flow
-- [ ] [T029](t029-edit-api.md): Revision-safe word-form edit API
-- [ ] [T030](t030-edit-ui.md): Edit form và conflict dialog
-- [ ] [T032](t032-review-api.md): Review queue và review event API
-- [ ] [T033](t033-review-ui.md): Flashcard review flow
+- [x] [T024](t024-save-api.md): Explicit save preview vào Markdown và cards — DONE (merged `9bb0f45d8`; final acceptance pending)
+- [x] [T025](t025-save-ui-audio.md): Save lookup preview và local pronunciation — DONE (merged `0641e3a8e`; final acceptance pending)
+- [x] [T027](t027-search-api.md): Search/detail API có cursor và filters — DONE (merged `83ddb1047`; final acceptance pending)
+- [x] [T028](t028-search-ui.md): Search/detail read flow, SOURCE_COMPLETE_UNVERIFIED; approved shell test extension complete; Host AppShell reconciliation and verification pending — DONE (merged `58dc087a9`; final acceptance pending)
+- [x] [T029](t029-edit-api.md): Revision-safe word-form edit API — DONE (merged `94775646f`; final acceptance pending)
+- [x] [T030](t030-edit-ui.md): Edit form và conflict dialog — DONE (merged `e619ee0`; whitespace cleanup `02bfbd6`; final acceptance pending)
+- [x] [T032](t032-review-api.md): Review queue và review event API — DONE (merged `4b9a1cab0`; final acceptance pending)
+- [x] [T033](t033-review-ui.md): Flashcard review flow — DONE (merged `e8ebfe862`; final acceptance pending)
 - [x] [T059](t059-quiz-scoring.md): Pure quiz scoring và weakest-rating oracle — independently re-audited PASS; 45 scoring/60 SRS tests, 100% scoring line/branch coverage; integrated candidate check:task exit0 (763 Python, 38 frontend, 40 architecture tests, changed coverage100%, total92.78%, zero security findings). Historical automated FAILED run preserved.
-- [ ] [T034](t034-quiz-schema.md): Quiz immutable snapshot schema
-- [ ] [T035](t035-quiz-api.md): Quiz creation và snapshot retrieval API
-- [ ] [T036](t036-quiz-ui.md): Quiz builder UI dùng generation API
-- [ ] [T047](t047-quiz-autosave-api.md): Quiz answer draft API với revision
+- [x] [T034](t034-quiz-schema.md): Quiz immutable snapshot schema — DONE (merged `0c3fcc4f8`; final acceptance pending)
+- [x] [T035](t035-quiz-api.md): Quiz creation và snapshot retrieval API — DONE (merged `877f44813`; final acceptance pending)
+- [x] [T036](t036-quiz-ui.md): Quiz builder UI dùng generation API
+- [x] [T047](t047-quiz-autosave-api.md): Quiz answer draft API với revision
 - [ ] [T050](t050-quiz-runner-ui.md): Quiz runner và revision-aware autosave UI
 - [ ] [T048](t048-quiz-submit-api.md): Quiz submission và atomic SRS handoff
 - [ ] [T049](t049-writing-feedback-api.md): Writing feedback API và history retry
@@ -67,7 +67,7 @@
 - [ ] [T054](t054-restore-recovery-drill.md): Staging restore và migration recovery drill
 - [ ] [T041](t041-security-hardening.md): Browser/API/filesystem hardening evidence
 - [x] [T042](t042-performance-fixture.md): Deterministic100k search benchmark fixture
-- [ ] [T065](t065-search-performance-evidence.md): Search browser timing trên100k fixture
+- [x] [T065](t065-search-performance-evidence.md): Search browser timing trên100k fixture
 - [ ] [T064](t064-ui-performance-harness.md): Local Lighthouse performance harness
 - [ ] [T043](t043-accessibility-evidence.md): WCAG 2.2 AA browser/manual evidence
 - [ ] [T055](t055-ai-content-evidence.md): Human-reviewed semantic fixture và optional AI smoke
@@ -156,6 +156,6 @@ Infrastructure verification: [final evidence](../docs/reviews/orchestrator-verif
 - [x] [T082](t082-task-id-remediation.md): Canonical-ID remediation integrated on main: orchestrator T075/T076 preserved, UI cards renumbered T080/T081, live UI links/dependencies remapped, 82 unique IDs confirmed.
 
 - [ ] [T083](t083-dag-metadata-remediation.md): Repository DAG dependency metadata remediation ready for review: removed T018 and T081 Dependencies prose self-references; candidate DAG resolves with zero self-dependencies (83 cards, 40 DONE, 6 READY, 37 BLOCKED). Canonical main dry-run pending integration.
-- [ ] [T085](t085-task-dependency-parser.md): Normalize authoritative task dependency parsing across orchestrator layers ready for review: shared `dependency_ids` helper eliminates false dependency edges from embedded prose tokens such as `BLOCKED_BY_T080_T081` while preserving fail-closed validation. All 283 orchestrator tests pass.
+- [x] [T085](t085-task-dependency-parser.md): Normalize authoritative task dependency parsing — DONE (merged `2f0a7b900`; final acceptance pending)
 
-- [ ] [T084](t084-scheduler-admission-platform-baseline.md): R2 `REMEDIATION_READY` for independent review, uncommitted: owner-authorized parallel runner remediation (`run-gates.sh portable-task`) delivers complete 8-gate portable verification in **79.011s** (complying with CONSTRAINTS.md <= 90s budget, reduced from serial 140.566s); Phase A concurrent execution graph and Phase B coverage synchronization proven by behavioral regression tests; T081 verification metadata normalized with historical snapshot preserved; real T018 preflight passes without T080 (11 verification commands); 296 orchestrator tests, static linters, and native-Windows fail-closed guards pass; integration pending authorization.
+- [x] [T084](t084-scheduler-admission-platform-baseline.md): Scheduler admission & platform-baseline normalization — DONE (merged `47da21a08`; final acceptance pending); later R2 remediation evidence remains pending

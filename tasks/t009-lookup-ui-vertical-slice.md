@@ -2,7 +2,8 @@
 
 **Task ID:** `T009`  
 **Title:** Lookup UI gọi API thật qua client  
-**Status:** `TODO`  
+**Status:** `DONE` (code merged into `main` at `aca6afc04`; final acceptance `PENDING`)
+**Coding completion policy (2026-10-09):** Implementation integrated into `main`; final project acceptance is pending. Historical TODO, environment limitations and unchecked acceptance cases below remain evidence history, not test PASS.
 **Goal:** Lookup UI gọi API thật qua client. Grant/decline giữ term, không tự submit; fresh click mới gọi POST.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.

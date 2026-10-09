@@ -16,6 +16,7 @@ from backend.app.assessment.questions import (
     PUBLIC_QUESTION_ADAPTER,
     SNAPSHOT_ADAPTER,
     Answer,
+    AnswerPrecondition,
     ClozeSnapshot,
     MCQSnapshot,
     QuestionSet,
@@ -23,6 +24,7 @@ from backend.app.assessment.questions import (
     QuizAttempt,
     QuizResult,
     WritingQuestion,
+    answer_etag,
     storage_payload,
 )
 from pydantic import ValidationError
@@ -249,6 +251,7 @@ def _restore(
             or row["result_digest"] is not None
         ):
             raise ValueError("Unexpected terminal evidence")
+        revisions = {answer.question_id: answer.draft_revision for answer in answers}
         attempt = QuizAttempt(
             id=row["id"],
             note_date=row["note_date"],
@@ -262,6 +265,16 @@ def _restore(
             snapshot_revision=row["snapshot_revision"],
             submission_revision=row["submission_revision"],
             result=result,
+            answer_preconditions=tuple(
+                AnswerPrecondition(
+                    question_id=question.id,
+                    draft_revision=revisions.get(question.id, 0),
+                    etag=answer_etag(
+                        row["id"], question.id, revisions.get(question.id, 0),
+                    ),
+                )
+                for question in questions
+            ),
         )
         return attempt, questions
     except QuizPersistenceError as error:
@@ -309,6 +322,12 @@ def create_attempt(
             snapshot_revision=snapshot_revision,
             submission_revision=0,
             result=None,
+            answer_preconditions=tuple(
+                AnswerPrecondition(
+                    question_id=q.id, draft_revision=0, etag=answer_etag(attempt_id, q.id, 0)
+                )
+                for q in questions.questions
+            ),
         )
     except ValidationError:
         raise QuizPersistenceError("VALIDATION_ERROR") from None
@@ -417,7 +436,7 @@ def save_answer(
                 ),
             )
         else:
-            connection.exec_driver_sql(
+            updated = connection.exec_driver_sql(
                 "UPDATE quiz_answers SET answer=?,self_score=?,draft_revision=?,saved_at=?,"
                 "state=?,operation_id=? WHERE attempt_id=? AND question_id=? AND draft_revision=?",
                 (
@@ -432,8 +451,38 @@ def save_answer(
                     expected_draft_revision,
                 ),
             )
+            if updated.rowcount != 1:
+                raise QuizPersistenceError("REVISION_CONFLICT")
         get_attempt(connection, attempt_id)
     return draft
+
+
+def store_answer_receipt(connection: Connection, answer: Answer) -> None:
+    """Append the canonical draft in the same caller-owned transaction as completion."""
+    _writer(connection)
+    answer = Answer.model_validate(answer)
+    connection.exec_driver_sql(
+        "INSERT INTO quiz_answer_receipts "
+        "(attempt_id,question_id,draft_revision,answer,self_score,saved_at,state,operation_id) "
+        "VALUES (?,?,?,?,?,?,?,?)",
+        (
+            answer.attempt_id, answer.question_id, answer.draft_revision, answer.answer,
+            answer.self_score, _utc(answer.saved_at), answer.state, answer.operation_id,
+        ),
+    )
+
+
+def get_answer_receipt(connection: Connection, operation_id: str) -> Answer:
+    """Read an exact historical receipt; never substitute the latest answer."""
+    row = connection.exec_driver_sql(
+        "SELECT * FROM quiz_answer_receipts WHERE operation_id=?", (operation_id,)
+    ).mappings().first()
+    if row is None:
+        raise QuizPersistenceError("QUIZ_RESTORE_REQUIRED")
+    try:
+        return Answer.model_validate({**row, "saved_at": datetime.fromisoformat(row["saved_at"])})
+    except (ValueError, TypeError):
+        raise QuizPersistenceError("QUIZ_RESTORE_REQUIRED") from None
 
 
 def store_submission(

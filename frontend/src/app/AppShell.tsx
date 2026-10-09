@@ -6,7 +6,10 @@ import { cn } from '@/lib/utils';
 import { AiConsentProvider } from '@/features/consent/AiConsentGate';
 import { AiConsentPanel } from '@/features/consent/AiConsentPanel';
 import { LookupPage } from '@/features/lookup/LookupPage';
-
+import { ReviewPage } from '@/features/review/ReviewPage';
+import { SearchPage } from '@/features/search/SearchPage';
+import { WordDetail } from '@/features/search/WordDetail';
+import { QuizBuilder } from '@/features/quiz/QuizBuilder';
 
 export interface RouteMatch {
   routeId: string;
@@ -202,7 +205,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
       return propPath;
     }
     if (typeof window !== 'undefined') {
-      return window.location.pathname || '/';
+      return (window.location.pathname || '/') + window.location.search;
     }
     return '/';
   });
@@ -215,8 +218,9 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
     }
 
     const handlePopState = () => {
-      const newPath = window.location.pathname || '/';
+      const newPath = (window.location.pathname || '/') + window.location.search;
       setInternalPath(newPath);
+      requestAnimationFrame(() => document.querySelector<HTMLHeadingElement>('#main-content h1')?.focus());
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -224,6 +228,16 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
       window.removeEventListener('popstate', handlePopState);
     };
   }, []);
+
+  const navigateSearch = (path: string, replace = false) => {
+    if (replace) window.history.replaceState(null, '', path);
+    else window.history.pushState(null, '', path);
+    setInternalPath(path);
+    onNavigate?.(path);
+    if (path.split('?')[0] !== activePath.split('?')[0]) {
+      requestAnimationFrame(() => document.querySelector<HTMLHeadingElement>('#main-content h1')?.focus());
+    }
+  };
 
   const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (typeof window === 'undefined') {
@@ -319,7 +333,10 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
                 {matchedRoute.title}
               </h1>
               {matchedRoute.routeId === 'status' && <AiConsentPanel />}
-              {matchedRoute.routeId !== 'lookup' && <Card role="region" aria-label="Thông báo trạng thái tính năng">
+              {matchedRoute.routeId === 'search' && <SearchPage path={activePath} onNavigate={navigateSearch} />}
+              {matchedRoute.routeId === 'word-form-detail' && <WordDetail wordFormId={matchedRoute.params.wordFormId} path={activePath} onNavigate={navigateSearch} />}
+              {matchedRoute.routeId === 'quiz-builder' && <QuizBuilder path={activePath} onNavigate={navigateSearch} />}
+              {!['lookup', 'review', 'search', 'word-form-detail', 'quiz-builder'].includes(matchedRoute.routeId) && <Card role="region" aria-label="Thông báo trạng thái tính năng">
                 <CardHeader>
                   <CardTitle className="text-primary text-lg">Tính năng đang được xây dựng (chưa khả dụng) trong giai đoạn khởi tạo shell.</CardTitle>
                 </CardHeader>
@@ -357,6 +374,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
           )}
           {/* Keep the draft and operation identity during local route navigation. */}
           <LookupPage active={matchedRoute?.routeId === 'lookup'} />
+          <ReviewPage active={matchedRoute?.routeId === 'review'} />
           </AiConsentProvider>
         </ErrorBoundary>
       </main>

@@ -2,7 +2,8 @@
 
 **Task ID:** `T034`  
 **Title:** Quiz immutable snapshot schema  
-**Status:** `TODO`  
+**Status:** `DONE` (code merged into `main` at `0c3fcc4f8`; final acceptance `PENDING`)
+**Coding completion policy (2026-10-09):** Implementation integrated into `main`; final project acceptance is pending. Historical TODO, environment limitations and unchecked acceptance cases below remain evidence history, not test PASS.
 **Goal:** Quiz immutable snapshot schema. MCQ/Cloze/Writing discriminated shape đủ offline restore; source edit/delete không mutate.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.

@@ -2,7 +2,8 @@
 
 **Task ID:** `T025`  
 **Title:** Save lookup preview và local pronunciation  
-**Status:** `TODO`  
+**Status:** `DONE` (code merged into `main` at `0641e3a8e`; final acceptance `PENDING`)
+**Coding completion policy (2026-10-09):** Implementation integrated into `main`; final project acceptance is pending. Historical TODO, environment limitations and unchecked acceptance cases below remain evidence history, not test PASS.
 **Goal:** Save lookup preview và local pronunciation. Save success only after durable receipt; duplicate click/reload reconciles and invalidates local queries.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.

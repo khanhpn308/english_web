@@ -7,6 +7,7 @@ scoring; the adapter below only translates validated content into its existing t
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import Counter
 from datetime import date, datetime
@@ -268,6 +269,22 @@ class Answer(StrictModel):
     operation_id: Identifier
 
 
+def answer_etag(attempt_id: str, question_id: str, draft_revision: int) -> str:
+    """Server-issued strong validator, stable across restart. See ADR-0008."""
+    canonical = json.dumps(
+        ["quiz-answer-v1", attempt_id, question_id, draft_revision],
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+    return '"qa-v1-' + hashlib.sha256(canonical.encode("ascii")).hexdigest() + '"'
+
+
+class AnswerPrecondition(StrictModel):
+    question_id: Identifier
+    draft_revision: Revision
+    etag: Annotated[str, Field(pattern=r'^"qa-v1-[0-9a-f]{64}"$')]
+
+
 class ObjectiveScore(StrictModel):
     total: Annotated[int, Field(ge=0, le=20)]
     attempted: Annotated[int, Field(ge=0, le=20)]
@@ -438,6 +455,11 @@ class QuizAttempt(StrictModel):
     snapshot_revision: Annotated[int, Field(ge=1)]
     submission_revision: Revision
     result: QuizResult | None
+    answer_preconditions: Annotated[
+        tuple[AnswerPrecondition, ...],
+        BeforeValidator(_tuple),
+        Field(min_length=5, max_length=30, json_schema_extra=_array_bounds_schema),
+    ]
 
     @model_validator(mode="after")
     def state_and_membership(self) -> Self:
@@ -452,6 +474,17 @@ class QuizAttempt(StrictModel):
             raise ValueError("Saved answer count mismatch")
         if self.submission_revision != sum(answer.draft_revision for answer in self.answers):
             raise ValueError("Aggregate draft revision mismatch")
+        revisions = {answer.question_id: answer.draft_revision for answer in self.answers}
+        expected = tuple(
+            AnswerPrecondition(
+                question_id=question.id,
+                draft_revision=revisions.get(question.id, 0),
+                etag=answer_etag(self.id, question.id, revisions.get(question.id, 0)),
+            )
+            for question in self.questions
+        )
+        if self.answer_preconditions != expected:
+            raise ValueError("Answer preconditions differ from saved revisions")
         if (self.status == "SUBMITTED") != (self.result is not None):
             raise ValueError("Terminal result/state mismatch")
         if self.result is not None:

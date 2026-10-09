@@ -2,7 +2,8 @@
 
 **Task ID:** `T018`  
 **Title:** Consent dialog và Status panel  
-**Status:** `TODO` (Readiness: `BLOCKED_BY_T080_T081`)
+**Status:** `DONE` (code merged into `main` at `c4fe06c13`; final acceptance `PENDING`)
+**Coding completion policy (2026-10-09):** Implementation integrated into `main`; final project acceptance is pending. Historical TODO, environment limitations and unchecked acceptance cases below remain evidence history, not test PASS.
 **Goal:** Consent dialog và Status panel. All NOT_GRANTED/GRANTED/REVOKED/STALE/loading/error states visible; structured disclosure fields rendered.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
