@@ -486,11 +486,16 @@ def test_t090_docker_sandbox_host_constructs_fixed_arguments(
                 "--cpus", "--user", "--workdir=/workspace",
             ):
                 assert flag in command
-            assert command[-4:] == [
-                "docker.io/verified/t090@sha256:" + "a" * 64,
-                "python", "-m", "pytest",
+            assert command[-7:-4] == [
+                "python3", "-I", "-c",
             ]
-            assert str(working) in command[command.index("--mount") + 1]
+            assert command[-3:] == ["python", "-m", "pytest"]
+            assert "copytree('/source', '/workspace'" in command[-4]
+            mount = command[command.index("--mount") + 1]
+            assert str(working) in mount
+            assert "dst=/source,readonly" in mount
+            assert "--tmpfs=/workspace:rw,nosuid,nodev,size=256m,mode=1777" in command
+            assert "--ulimit=core=0:0" in command
             assert str(tmp_path / "secret") not in " ".join(command)
             return ProcessResult(tuple(command), str(cwd), "start", "end", 0, "PASS", "")
         assert "rm" in command
