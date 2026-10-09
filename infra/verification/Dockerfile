@@ -76,6 +76,9 @@ RUN for ecosystem in npm PyPI; do \
     && sha256sum /opt/osv-db/osv-scanner/npm/all.zip \
                  /opt/osv-db/osv-scanner/PyPI/all.zip \
         > /opt/osv-db/archive.sha256
+# OSV uses this separate runtime extraction cache; Docker overlays it with a
+# bounded writable tmpfs, leaving the immutable offline DB archives read-only.
+RUN mkdir -p /opt/osv-db/osv-scalibr
 
 RUN python3 --version && node --version && npm --version \
     && git --version && gitleaks version \

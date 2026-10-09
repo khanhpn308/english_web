@@ -22,6 +22,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          # floor:check requires a real merge-base against main.
+          # A shallow source checkout can contain both refs but no ancestry.
+          fetch-depth: 0
 
       - name: Validate candidate is explicitly unapproved
         run: |
@@ -289,6 +292,9 @@ jobs:
           assert Git(workspace).run("cat-file", "-t", baseline_sha) == "commit"
           Git(workspace).run("update-ref", "refs/heads/main", baseline_sha)
           assert Git(workspace).run("rev-parse", "refs/heads/main") == baseline_sha
+          # Verify history completeness before entering the isolated runtime.
+          merge_base = Git(workspace).run("merge-base", "main", "HEAD")
+          assert len(merge_base) == 40
 
           broker = DockerVerificationSandbox(
               DockerVerificationPolicy(
