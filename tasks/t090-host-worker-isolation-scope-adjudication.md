@@ -290,3 +290,9 @@ T090 DONE or T089 accepted.
 - When an actual `SecureProvider` role explicitly uses `analysis_backend=host-http-text`, both round-one and resumed Reviewers receive this frozen evidence in prompt; final Auditor and Integrator receive a fresh digest-checked source snapshot via `Pipeline.invoke`. Default CLI semantic roles remain denied. Existing mock provider regression flows are unaffected.
 - Synthetic tests added for byte hashes, before/after diff, new untracked file, stale/out-of-scope/binary/oversize/symlink denial, artifact mutation, and the actual Auditor prompt route. New CI on this exact commit is required; no claim of provider hidden-tool isolation or safe execution of untrusted candidate verification.
 - Missing unchanged dependencies and neighboring callers are explicitly out of current evidence scope; host must authorize separate bounded read-only context expansion before an auditor asserts inspection of them. T090 remains IN_PROGRESS, T089 pending.
+
+### Host-sealed Reviewer integration and candidate identity
+
+- Added regression for concurrent Reviewer lanes receiving only changed source paths through the sealed bundle.
+- Source artifact and its digest are registered before dispatch. The final Auditor must match the candidate identity source digest, and the Integrator must match the previously audited digest.
+- Prior sealed-evidence CI runs R1/R2 test intermediate snapshots only; final candidate requires fresh full CI. T090 remains IN_PROGRESS and PR #9 remains Draft.
