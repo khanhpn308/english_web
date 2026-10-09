@@ -1,3 +1,9 @@
+## 09/10/2026 - T090 Docker sandbox broker candidate
+
+- Added non-active Docker verification executor with fixed non-root, no-network, readonly-root policy, capped CPU/memory/PIDs/time, pinned local image and host-only disposable mount rules.
+- Added synthetic negative and Docker-argument assertions. Existing host verification paths are NOT isolated yet and remain security blockers.
+- No Dockerfile outside approved T090 files, no default image selected or provider permission changes; independent live tests and dual-path enforcement required.
+
 ## 09/10/2026 - T090 no-suppression host context and rename-path remediation
 
 - Replaced Ruff ARG002 suppression comments forbidden by host floor policy with explicit host-owned context validation in SecureProvider, plus parameterized invalid-context tests.
