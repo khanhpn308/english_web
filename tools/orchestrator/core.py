@@ -138,6 +138,9 @@ class Role(Model):
     worker_backend: Literal["cli", "host-http-edit"] = "cli"
     host_edit_endpoint: str | None = None
     host_edit_api_key_env: str | None = None
+    analysis_backend: Literal["cli", "host-http-text"] = "cli"
+    host_text_endpoint: str | None = None
+    host_text_api_key_env: str | None = None
     stall_timeout_seconds: Annotated[StrictInt, Field(ge=1, le=86400)] | None = None
     stall_confirm_seconds: Annotated[StrictInt, Field(ge=1, le=3600)] = 30
     max_stall_retries: Annotated[StrictInt, Field(ge=0, le=10)] = 1
@@ -164,6 +167,28 @@ class Config(Model):
         if set(self.roles) != {"prompt_engineer", "worker", "auditor", "integrator"}:
             raise OrchestratorError("Configure exactly the four agent roles")
         for name, role in self.roles.items():
+            if name == "worker":
+                if (
+                    role.analysis_backend != "cli"
+                    or role.host_text_endpoint is not None
+                    or role.host_text_api_key_env is not None
+                ):
+                    raise OrchestratorError("Host text-only analysis belongs to read-only roles")
+            elif role.analysis_backend == "host-http-text":
+                if (
+                    role.provider not in {"agy", "codex"}
+                    or not role.model
+                    or not role.host_text_endpoint
+                    or not role.host_text_api_key_env
+                ):
+                    raise OrchestratorError("Incomplete host text-only analysis configuration")
+                from tools.orchestrator.worker_sandbox import LoopbackChatTransport
+
+                LoopbackChatTransport(
+                    role.host_text_endpoint, api_key_env=role.host_text_api_key_env
+                )
+            elif role.host_text_endpoint is not None or role.host_text_api_key_env is not None:
+                raise OrchestratorError("Host text endpoint requires host-http-text backend")
             if name != "worker" and (role.worker_access == "full-access" or role.allow_process):
                 raise OrchestratorError("Elevated execution permissions belong to Worker only")
             if name != "worker" and (
