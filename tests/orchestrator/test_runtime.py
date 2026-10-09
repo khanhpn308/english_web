@@ -612,7 +612,6 @@ def test_t090_docker_sandbox_rejects_unapproved_command_before_host_execution(
         DockerVerificationSandbox(policy).run(command, workspace)
 
 
-
 def test_t090_osv_offline_gate_is_opt_in_and_fail_closed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -626,9 +625,7 @@ def test_t090_osv_offline_gate_is_opt_in_and_fail_closed(
     def synthetic_scan(argv: Sequence[str], _cwd: Path) -> subprocess.CompletedProcess[str]:
         calls.append(list(argv))
         if "--version" in argv:
-            return subprocess.CompletedProcess(
-                list(argv), 0, "osv-scanner version: 2.6.0\n", ""
-            )
+            return subprocess.CompletedProcess(list(argv), 0, "osv-scanner version: 2.6.0\n", "")
         return subprocess.CompletedProcess(list(argv), 0, '{"results":[]}', "")
 
     monkeypatch.setenv("T090_OSV_OFFLINE", "1")
@@ -640,7 +637,5 @@ def test_t090_osv_offline_gate_is_opt_in_and_fail_closed(
 
     monkeypatch.delenv("T090_OSV_OFFLINE")
     calls.clear()
-    security_checks.run_dependencies(
-        tmp_path, tmp_path / "reports-online", runner=synthetic_scan
-    )
+    security_checks.run_dependencies(tmp_path, tmp_path / "reports-online", runner=synthetic_scan)
     assert "--offline" not in calls[1]
