@@ -3927,3 +3927,31 @@ def test_host_edit_missing_key_blocks_before_worker_model_dispatch(
     assert state.state == State.BLOCKED
     assert state.last_error is not None and "credential is missing" in state.last_error
     assert fake_agents.worker_calls == 0
+
+
+def test_t090_pipeline_default_fails_closed_for_all_semantic_roles(
+    repository: Path,
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import SecureProvider
+
+    config = configuration(integrate=False)
+    pipeline = Pipeline(repository, config)
+    assert isinstance(pipeline.provider, SecureProvider)
+    for name, response_type in (
+        ("prompt_engineer", Plan),
+        ("auditor", Audit),
+        ("auditor", ReviewShard),
+        ("integrator", IntegrationReview),
+    ):
+        with pytest.raises(OrchestratorError, match="T090 BLOCKED"):
+            pipeline.provider.run(
+                "Synthetic host-supplied evidence",
+                cwd=repository,
+                role=config.roles[name],
+                timeout=1,
+                output=response_type,
+                artifacts=repository,
+                name="semantic-no-cli",
+                readonly=True,
+            )
