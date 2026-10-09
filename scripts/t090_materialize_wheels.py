@@ -16,7 +16,7 @@ from pathlib import Path
 
 from packaging.utils import canonicalize_name, parse_wheel_filename
 
-_PIN = re.compile(r"^([A-Za-z0-9_.-]+)(?:\\[[A-Za-z0-9_,.-]+\\])?==([A-Za-z0-9][A-Za-z0-9.!+_-]*)$")
+_PIN = re.compile(r"^([A-Za-z0-9_.-]+)(?:\[[A-Za-z0-9_,.-]+\])?==([A-Za-z0-9][A-Za-z0-9.!+_-]*)$")
 
 
 def read_pins(path: Path) -> dict[str, str]:
@@ -65,8 +65,8 @@ def materialize_wheel_lock(
         raise ValueError(f"Wheel set mismatch: missing={missing}, extra={extra}, versions={wrong}")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
-        "# T090 candidate Linux/amd64 Python 3.12 wheel bytes, NOT production approved\\n"
-        + "".join(f"{r['name']}=={r['version']} --hash=sha256:{r['sha256']}\\n" for r in records),
+        "# T090 candidate Linux/amd64 Python 3.12 wheel bytes, NOT production approved\n"
+        + "".join(f"{r['name']}=={r['version']} --hash=sha256:{r['sha256']}\n" for r in records),
         encoding="utf-8",
     )
     output.with_suffix(".wheels.json").write_text(
@@ -117,7 +117,7 @@ def main() -> int:
     except (ValueError, subprocess.CalledProcessError) as error:
         (semgrep / "BLOCKED.txt").parent.mkdir(parents=True, exist_ok=True)
         (semgrep / "BLOCKED.txt").write_text(
-            f"Cannot admit binary-only Semgrep wheel closure: {error}\\n",
+            f"Cannot admit binary-only Semgrep wheel closure: {error}\n",
             encoding="utf-8",
         )
         raise
