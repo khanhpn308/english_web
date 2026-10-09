@@ -530,12 +530,19 @@ def test_t090_semantic_transport_has_role_schema_not_worker_edit_contract(
 
         def read(self, amount: int) -> bytes:
             assert amount == 4 * 1024 * 1024 + 1
-            return json.dumps({
-                "choices": [{
-                    "message": {"role": "assistant", "content": '{"fix_prompt":"KEEP_SAFE"}'},
-                    "finish_reason": "stop",
-                }]
-            }).encode()
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": '{"fix_prompt":"KEEP_SAFE"}',
+                            },
+                            "finish_reason": "stop",
+                        }
+                    ]
+                }
+            ).encode()
 
     class Opener:
         def open(self, request: Any, timeout: int) -> Response:
@@ -549,6 +556,7 @@ def test_t090_semantic_transport_has_role_schema_not_worker_edit_contract(
             return Response()
 
     monkeypatch.setattr(client, "_opener", Opener())
-    assert client.complete(
-        "Fix output schema", model="gemini-3.8-flash-high", timeout=5
-    ) == '{"fix_prompt":"KEEP_SAFE"}'
+    assert (
+        client.complete("Fix output schema", model="gemini-3.8-flash-high", timeout=5)
+        == '{"fix_prompt":"KEEP_SAFE"}'
+    )
