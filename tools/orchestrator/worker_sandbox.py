@@ -357,7 +357,7 @@ def run_host_mediated_worker(
     # not a cross-file transaction in the face of an OS-level concurrent writer.
     for proposal in proposals:
         content = proposal.replacement.encode("utf-8")
-        if len(content) > _MAX_EDIT_BYTES or b"\\x00" in content:
+        if len(content) > _MAX_EDIT_BYTES or b"\x00" in content:
             raise HostEditRejected("Edit content violates size/text constraints")
         target = _check_target(root, proposal.path)
         existing = target.read_bytes() if target.is_file() else None
