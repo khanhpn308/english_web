@@ -2,7 +2,7 @@
 
 **Task ID:** `T011`  
 **Title:** Local JSON logs, correlation và span boundary  
-**Status:** `TODO`  
+**Status:** `DONE` (coding merged; final acceptance `PENDING`)
 **Goal:** Local JSON logs, correlation và span boundary. requestId echo và local parent/child spans theo cùng operation.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.

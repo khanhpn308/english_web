@@ -32,7 +32,7 @@
 - [x] [T008](t008-lookup-api-vertical-slice.md): POST lookup trả preview đã validate — DONE (merged `b46ab6538`; final acceptance pending)
 - [x] [T009](t009-lookup-ui-vertical-slice.md): Lookup UI gọi API thật qua client — DONE (merged `aca6afc04`; final acceptance pending)
 - [x] [T010](t010-error-handling-recovery.md): Typed UI recovery cho common error codes — DONE (merged `aeaaa322e`; final acceptance pending)
-- [ ] [T011](t011-observability-instrumentation.md): Local JSON logs, correlation và span boundary
+- [x] [T011](t011-observability-instrumentation.md): Local JSON logs, correlation và span boundary
 - [ ] [T012](t012-ci-pipeline.md): CI lõi cho build và tests
 - [x] [T020](t020-markdown-parser.md): Lossless Markdown parser/serializer
 - [x] [T026](t026-search-projection.md): Vietnamese normalized n-gram projection
