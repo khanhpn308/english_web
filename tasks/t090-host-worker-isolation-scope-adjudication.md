@@ -225,3 +225,11 @@ T090 DONE or T089 accepted.
 - The initial phase-2 record above referred to a documentation-only
   state; this subsequent commit adds the two scoped host code/test files
   without changing task acceptance.
+
+### Phase-2 full portable CI R1 failure and format remediation (09/10/2026)
+
+- Failed CI run: https://github.com/khanhpn308/english_web/actions/runs/37809494529 on frozen commit `148d94836ced11066225b6b87e107b42baa896d1`.
+- Host summary: `check-fast-active` failed, while frontend coverage, portable pytest, secrets, code security, dependency security and architecture passed. Phase B coverage check did not run.
+- Downloaded host artifact `11564726690` pinpoints `ruff format --check .` as the failure: three formatting-only changes needed in `tests/orchestrator/test_worker_sandbox.py`, one in `tools/orchestrator/worker_sandbox.py`.
+- Applied those four formatting corrections without changing intended behavior. A fresh CI run and independent host gates on the new candidate SHA are required; previous R1 remains a retained FAIL, not rewritten evidence.
+- Live AGY/Codex isolation evidence is still absent; PR #9 must remain Draft and T090 `IN_PROGRESS`.
