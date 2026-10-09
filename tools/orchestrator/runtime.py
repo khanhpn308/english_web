@@ -3,13 +3,16 @@
 import importlib
 import json
 import os
+import re
 import signal
+import stat
 import subprocess
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 from time import monotonic, sleep
 from typing import BinaryIO, Protocol, TypeVar, cast
 
@@ -59,6 +62,168 @@ class ProcessResult:
             "stdout_digest": digest(self.stdout.encode()),
             "stderr_digest": digest(self.stderr.encode()),
         }
+
+
+
+_DOCKER_DIGEST_RE = re.compile(
+    r"^[a-z0-9][a-z0-9._:/-]*@sha256:[a-f0-9]{64}$"
+)
+
+
+@dataclass(frozen=True)
+class DockerVerificationPolicy:
+    """Host-selected immutable Docker image and fixed execution limits.
+
+    An image digest identifies content but does not independently attest its
+    publisher or dependency provenance; approval is a separate host gate.
+    """
+
+    image: str
+    verification_root: Path
+    memory_mib: int = 512
+    cpu_millicores: int = 1000
+    pids_limit: int = 64
+    timeout_seconds: int = 900
+
+    def __post_init__(self) -> None:
+        if not _DOCKER_DIGEST_RE.fullmatch(self.image):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: image must use a pinned sha256 digest")
+        if not (128 <= self.memory_mib <= 4096):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: invalid memory limit")
+        if not (100 <= self.cpu_millicores <= 4000):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: invalid CPU limit")
+        if not (16 <= self.pids_limit <= 256):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: invalid PID limit")
+        if not (1 <= self.timeout_seconds <= 3600):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: timeout must be finite")
+        if not self.verification_root.is_absolute():
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: verification root must be absolute")
+
+
+class DockerVerificationSandbox:
+    """Constructs an unprivileged, network-free Docker command from host policy.
+
+    This is a candidate host executor only. The live pipeline's two legacy
+    verification callsites must not be treated as sandboxed until explicitly
+    migrated and independently verified against a trusted runner image.
+    """
+
+    def __init__(self, policy: DockerVerificationPolicy) -> None:
+        self.policy = policy
+
+    def _workspace(self, workspace: Path) -> Path:
+        if os.name != "posix" or os.geteuid() == 0:
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: requires non-root Linux host")
+        if workspace.is_symlink() or workspace.name != "workspace":
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: invalid workspace entry")
+        if not workspace.parent.name.startswith("verify-"):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: workspace is not a verification clone")
+        try:
+            trusted = self.policy.verification_root.resolve(strict=True)
+            resolved = workspace.resolve(strict=True)
+            if not resolved.is_relative_to(trusted) or resolved == trusted:
+                raise OrchestratorError("T090 SANDBOX_BLOCKED: workspace outside trusted root")
+            if not resolved.is_dir():
+                raise OrchestratorError("T090 SANDBOX_BLOCKED: workspace is not a directory")
+            for root, folders, files in os.walk(resolved, followlinks=False):
+                for name in [*folders, *files]:
+                    path = Path(root) / name
+                    mode = path.lstat().st_mode
+                    if stat.S_ISLNK(mode):
+                        target = path.resolve(strict=True)
+                        if not target.is_relative_to(resolved):
+                            raise OrchestratorError(
+                                "T090 SANDBOX_BLOCKED: workspace symlink escapes sandbox"
+                            )
+                    elif not stat.S_ISREG(mode) and not stat.S_ISDIR(mode):
+                        raise OrchestratorError(
+                            "T090 SANDBOX_BLOCKED: workspace has a special file"
+                        )
+            return resolved
+        except (OSError, RuntimeError) as error:
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: unreadable workspace") from error
+
+    def _argv(self, command: list[str], workspace: Path, container: str) -> list[str]:
+        from tools.orchestrator.core import validate_command
+
+        validate_command(command)
+        if command[:2] == ["npm", "ci"]:
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: setup requires trusted preprovisioning")
+        uid = os.geteuid()
+        gid = os.getegid()
+        return [
+            "/usr/bin/docker",
+            "--config",
+            "/dev/null",
+            "run",
+            "--rm",
+            "--pull=never",
+            "--name",
+            container,
+            "--network=none",
+            "--read-only",
+            "--cap-drop=ALL",
+            "--security-opt=no-new-privileges",
+            "--pids-limit",
+            str(self.policy.pids_limit),
+            "--memory",
+            f"{self.policy.memory_mib}m",
+            "--memory-swap",
+            f"{self.policy.memory_mib}m",
+            "--cpus",
+            f"{self.policy.cpu_millicores / 1000:.3f}",
+            "--user",
+            f"{uid}:{gid}",
+            "--workdir=/workspace",
+            "--mount",
+            f"type=bind,src={workspace},dst=/workspace,bind-propagation=rprivate",
+            "--tmpfs=/tmp:rw,nosuid,nodev,size=64m,mode=1777",
+            "--env=HOME=/tmp",
+            "--env=TMPDIR=/tmp",
+            "--env=PYTHONDONTWRITEBYTECODE=1",
+            "--env=CI=true",
+            "--env=PATH=/workspace/node_modules/.bin:/node_modules/.bin:/usr/local/bin:/usr/bin:/bin",
+            self.policy.image,
+            *command,
+        ]
+
+    def run(self, command: list[str], workspace: Path) -> ProcessResult:
+        """Run only in a disposable verification clone; never fall back to host."""
+        resolved = self._workspace(workspace)
+        if not Path("/usr/bin/docker").is_file():
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: Docker executable unavailable")
+        inspect = execute(
+            [
+                "/usr/bin/docker",
+                "image",
+                "inspect",
+                "--format",
+                "{{.Id}}",
+                self.policy.image,
+            ],
+            resolved,
+            timeout=20,
+        )
+        if inspect.exit_code or not re.fullmatch(r"sha256:[a-f0-9]{64}\\s*", inspect.stdout):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: pinned local image unavailable")
+        name = f"t090-verify-{uuid4().hex}"
+        try:
+            result = execute(
+                self._argv(command, resolved, name),
+                resolved,
+                timeout=self.policy.timeout_seconds,
+            )
+        finally:
+            # Docker daemon processes outlive a killed client; explicitly stop
+            # the generated-name container even after a timeout or interruption.
+            cleanup = execute(
+                ["/usr/bin/docker", "rm", "-f", name],
+                resolved,
+                timeout=20,
+            )
+            if cleanup.timed_out or cleanup.oversized:
+                raise OrchestratorError("T090 SANDBOX_BLOCKED: container cleanup unverified")
+        return result
 
 
 class _StallExpired(Exception):
