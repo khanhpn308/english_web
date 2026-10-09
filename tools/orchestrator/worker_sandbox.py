@@ -24,7 +24,6 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError
 from tools.orchestrator.core import WorkerResult
 
-
 _MAX_EDIT_BYTES = 256 * 1024
 _HEX_256 = re.compile(r"^[0-9a-f]{64}$")
 
