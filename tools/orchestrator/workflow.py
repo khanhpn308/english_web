@@ -1463,6 +1463,7 @@ class Pipeline:
             print(f"AGENT {state.task_id}: {role_name}")
 
             rejected_result: Plan | Audit | None = None
+            result: BaseModel
             try:
                 if role_name == "worker" and role.worker_backend == "host-http-edit":
                     if output is not WorkerResult:
