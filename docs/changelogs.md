@@ -1,3 +1,8 @@
+## 09/10/2026 - T090 WSL2 import-lint final remediation
+
+- Local host reported one remaining Ruff I001 in `tools/orchestrator/worker_sandbox.py`; Ruff formatter and production mypy had passed.
+- Removed exactly one excess blank line after imports, without changing runtime or security behavior. A new host CI run is required on the final commit. Default Worker CLI remains blocked and T090 is not accepted.
+
 ## 09/10/2026 - T090 local Ruff/Mypy regression repair (WSL2)
 
 - WSL2 host reported 14 Ruff lint findings and three strict Mypy findings after 1/1 host-mediated workflow tests passed on `4a89dd32d77ee11e16e91ba587919dc330ae0ae0`.
