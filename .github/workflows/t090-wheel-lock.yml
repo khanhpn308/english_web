@@ -35,6 +35,27 @@ jobs:
       - name: Download exact binary wheels and emit immutable candidate hashes
         run: |
           python scripts/t090_materialize_wheels.py --root . --output "$RUNNER_TEMP/t090-wheel-evidence"
+      - name: Verify both candidate locks against offline wheel bytes
+        run: |
+          set -euo pipefail
+          for scope in dev semgrep; do
+            python -m venv "$RUNNER_TEMP/t090-verify-$scope"
+            "$RUNNER_TEMP/t090-verify-$scope/bin/python" -m pip install \
+              --disable-pip-version-check --no-index --only-binary=:all: \
+              --find-links "$RUNNER_TEMP/t090-wheel-evidence/$scope/wheels" \
+              --require-hashes \
+              -r "$RUNNER_TEMP/t090-wheel-evidence/$scope/requirements-hashed.lock"
+            "$RUNNER_TEMP/t090-verify-$scope/bin/python" -m pip check
+          done
+          echo "T090_OFFLINE_WHEELHOUSE_HASH_VERIFICATION_PASS_NOT_APPROVED"
+      - name: Expose exact candidate lock text for Host source review
+        run: |
+          set -euo pipefail
+          for scope in dev semgrep; do
+            echo "T090_LOCK_${scope}_BEGIN"
+            cat "$RUNNER_TEMP/t090-wheel-evidence/$scope/requirements-hashed.lock"
+            echo "T090_LOCK_${scope}_END"
+          done
       - name: Preserve results or explicit blockers
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
