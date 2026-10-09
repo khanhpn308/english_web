@@ -2,7 +2,7 @@
 
 **Task ID:** `T030`  
 **Title:** Edit form và conflict dialog  
-**Status:** `TODO`  
+**Status:** `DONE` (code merged `e619ee0`; formatting cleanup `02bfbd6`; final acceptance `PENDING`)
 **Goal:** Edit form và conflict dialog. Client validation maps backend field errors; draft preserved through retry/session renewal.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.

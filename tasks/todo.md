@@ -45,7 +45,7 @@
 - [x] [T027](t027-search-api.md): Search/detail API có cursor và filters — DONE (merged `83ddb1047`; final acceptance pending)
 - [x] [T028](t028-search-ui.md): Search/detail read flow, SOURCE_COMPLETE_UNVERIFIED; approved shell test extension complete; Host AppShell reconciliation and verification pending — DONE (merged `58dc087a9`; final acceptance pending)
 - [x] [T029](t029-edit-api.md): Revision-safe word-form edit API — DONE (merged `94775646f`; final acceptance pending)
-- [ ] [T030](t030-edit-ui.md): Edit form và conflict dialog
+- [x] [T030](t030-edit-ui.md): Edit form và conflict dialog — DONE (merged `e619ee0`; whitespace cleanup `02bfbd6`; final acceptance pending)
 - [x] [T032](t032-review-api.md): Review queue và review event API — DONE (merged `4b9a1cab0`; final acceptance pending)
 - [x] [T033](t033-review-ui.md): Flashcard review flow — DONE (merged `e8ebfe862`; final acceptance pending)
 - [x] [T059](t059-quiz-scoring.md): Pure quiz scoring và weakest-rating oracle — independently re-audited PASS; 45 scoring/60 SRS tests, 100% scoring line/branch coverage; integrated candidate check:task exit0 (763 Python, 38 frontend, 40 architecture tests, changed coverage100%, total92.78%, zero security findings). Historical automated FAILED run preserved.
