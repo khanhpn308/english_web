@@ -68,6 +68,11 @@ class ProcessResult:
 _DOCKER_DIGEST_RE = re.compile(
     r"^[a-z0-9][a-z0-9._:/-]*@sha256:[a-f0-9]{64}$"
 )
+_DOCKER_TRUSTED_BOOTSTRAP = (
+    "import os, shutil, sys; "
+    "shutil.copytree('/source', '/workspace', dirs_exist_ok=True, symlinks=True); "
+    "os.chdir('/workspace'); os.execvp(sys.argv[1], sys.argv[1:])"
+)
 
 
 @dataclass(frozen=True)
@@ -184,14 +189,20 @@ class DockerVerificationSandbox:
             f"{uid}:{gid}",
             "--workdir=/workspace",
             "--mount",
-            f"type=bind,src={workspace},dst=/workspace,bind-propagation=rprivate",
+            f"type=bind,src={workspace},dst=/source,readonly,bind-propagation=rprivate",
+            "--tmpfs=/workspace:rw,nosuid,nodev,size=256m,mode=1777",
             "--tmpfs=/tmp:rw,nosuid,nodev,size=64m,mode=1777",
+            "--ulimit=core=0:0",
             "--env=HOME=/tmp",
             "--env=TMPDIR=/tmp",
             "--env=PYTHONDONTWRITEBYTECODE=1",
             "--env=CI=true",
             "--env=PATH=/workspace/node_modules/.bin:/node_modules/.bin:/usr/local/bin:/usr/bin:/bin",
             self.policy.image,
+            "python3",
+            "-I",
+            "-c",
+            _DOCKER_TRUSTED_BOOTSTRAP,
             *command,
         ]
 
