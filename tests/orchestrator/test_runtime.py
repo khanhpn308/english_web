@@ -525,9 +525,7 @@ def test_t090_docker_sandbox_host_constructs_fixed_arguments(
                 f"--tmpfs=/workspace:rw,nosuid,nodev,size=256m,mode=0700,uid=1000,gid={os.getegid()}"
                 in command
             )
-            assert not any(
-                "--tmpfs=/opt/osv-db" in argument for argument in command
-            )
+            assert not any("--tmpfs=/opt/osv-db" in argument for argument in command)
             assert "--ulimit=core=0:0" in command
             assert str(tmp_path / "secret") not in " ".join(command)
             return ProcessResult(tuple(command), str(cwd), "start", "end", 0, "PASS", "")
