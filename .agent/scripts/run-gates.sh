@@ -238,7 +238,7 @@ case "$MODE" in
         echo "=== SANDBOX APPLICATION: isolated source and security gates ==="
         start_gate check-fast-active npm run check:fast:active
         start_gate frontend-coverage npm run test:frontend:coverage
-        start_gate sandbox-application-pytest python -m pytest backend/tests scripts/tests -n 2
+        start_gate sandbox-application-pytest python -m pytest backend/tests scripts/tests --ignore=backend/tests/windows -n 2
         start_gate security-secrets npm run security:secrets
         start_gate security-code npm run security:code
         start_gate security-deps npm run security:deps

@@ -30,7 +30,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=node_toolchain /usr/local/bin/node /usr/local/bin/node
 COPY --from=node_toolchain /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
-RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
+RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+    && test -f /usr/local/lib/node_modules/npm/bin/npx-cli.js
 
 WORKDIR /opt/toolchain
 COPY package.json package-lock.json /opt/toolchain/

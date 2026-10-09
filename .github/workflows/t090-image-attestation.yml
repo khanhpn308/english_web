@@ -261,7 +261,8 @@ jobs:
               "private": True,
               "scripts": {
                   "t090:toolchain-probe":
-                      "node -e \"require('vitest/package.json'); console.log('T090_NODE_DEPENDENCY_PASS')\""
+                      "node -e \"require('vitest/package.json'); console.log('T090_NODE_DEPENDENCY_PASS')\"",
+                  "t090:npx-probe": "npx --no-install openapi-typescript --version"
               },
           }))
           toolchain_digest = broker.source_digest(workspace)
@@ -269,6 +270,7 @@ jobs:
               ["python", "-m", "ruff", "check", "t090_toolchain.py"],
               ["python", "-m", "mypy", "t090_toolchain.py"],
               ["npm", "run", "t090:toolchain-probe"],
+              ["npm", "run", "t090:npx-probe"],
           ]
           for command in commands:
               result = broker.run(
