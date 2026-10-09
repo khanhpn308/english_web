@@ -462,7 +462,10 @@ def test_t090_docker_sandbox_host_constructs_fixed_arguments(
     def fake_execute(
         command: list[str], cwd: Path, *, timeout: int | float | None = None
     ) -> ProcessResult:
-        assert cwd == working
+        assert cwd != working
+        assert cwd.name == "workspace"
+        assert cwd.parent.name.startswith("verify-sealed-")
+        assert (cwd / "sample.py").read_text() == "print('synthetic')\n"
         assert command[:6] == [
             "/usr/bin/env",
             "-i",
@@ -501,13 +504,16 @@ def test_t090_docker_sandbox_host_constructs_fixed_arguments(
                 "--workdir=/workspace",
             ):
                 assert flag in command
-            assert command[-6:-4] == ["-I", "-c"]
+            assert command[-7:-5] == ["-I", "-c"]
+            assert command[-4] == expected_digest
             assert command[-3:] == ["python", "-m", "pytest"]
-            assert "for entry in os.scandir('/source')" in command[-4]
-            assert "shutil.copytree(src, dst, symlinks=True)" in command[-4]
-            assert "os.execvp(sys.argv[1], sys.argv[1:])" in command[-4]
+            assert "for entry in os.scandir('/source')" in command[-5]
+            assert "shutil.copytree(src, dst, symlinks=True)" in command[-5]
+            assert "source attestation mismatch" in command[-5]
+            assert "os.execvp(sys.argv[2], sys.argv[2:])" in command[-5]
             mount = command[command.index("--mount") + 1]
-            assert str(working) in mount
+            assert str(working) not in mount
+            assert str(cwd) in mount
             assert "dst=/source,readonly" in mount
             assert "--tmpfs=/workspace:rw,nosuid,nodev,size=256m,mode=1777" in command
             assert "--ulimit=core=0:0" in command
@@ -519,7 +525,11 @@ def test_t090_docker_sandbox_host_constructs_fixed_arguments(
 
     monkeypatch.setattr("tools.orchestrator.runtime.execute", fake_execute)
     monkeypatch.setattr("tools.orchestrator.runtime.os.geteuid", lambda: 1000)
-    result = DockerVerificationSandbox(policy).run(["python", "-m", "pytest"], working)
+    broker = DockerVerificationSandbox(policy)
+    expected_digest = broker.source_digest(working)
+    result = broker.run(
+        ["python", "-m", "pytest"], working, expected_source_digest=expected_digest
+    )
     assert result.exit_code == 0
     assert len(seen) == 3
     assert seen[1][seen[1].index("--name") + 1] == seen[2][-1]
@@ -552,7 +562,9 @@ def test_t090_docker_sandbox_denies_invalid_workspace_before_docker(
 
     monkeypatch.setattr("tools.orchestrator.runtime.execute", forbidden_execute)
     with pytest.raises(OrchestratorError, match="SANDBOX_BLOCKED"):
-        DockerVerificationSandbox(policy).run(["python", "-m", "pytest"], workspace)
+        DockerVerificationSandbox(policy).run(
+            ["python", "-m", "pytest"], workspace, expected_source_digest="a" * 64
+        )
 
 
 def test_t090_docker_sandbox_blocks_missing_pinned_image(
@@ -580,7 +592,12 @@ def test_t090_docker_sandbox_blocks_missing_pinned_image(
     monkeypatch.setattr("tools.orchestrator.runtime.execute", fail_inspect)
     policy = DockerVerificationPolicy("example.com/t090@sha256:" + "1" * 64, root)
     with pytest.raises(OrchestratorError, match="pinned local image unavailable"):
-        DockerVerificationSandbox(policy).run(["python", "-m", "pytest"], workspace)
+        broker = DockerVerificationSandbox(policy)
+        broker.run(
+            ["python", "-m", "pytest"],
+            workspace,
+            expected_source_digest=broker.source_digest(workspace),
+        )
     assert len(seen) == 1
     assert "inspect" in seen[0]
 
@@ -641,3 +658,118 @@ def test_t090_osv_offline_gate_is_opt_in_and_fail_closed(
     calls.clear()
     security_checks.run_dependencies(tmp_path, tmp_path / "reports-online", runner=synthetic_scan)
     assert "--offline" not in calls[1]
+
+
+def test_t090_missing_source_digest_blocks_without_any_docker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+
+    root = tmp_path / "test-root"
+    workspace = root / "verify-fixture" / "workspace"
+    workspace.mkdir(parents=True)
+    (workspace / "case.txt").write_text("frozen")
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("Docker must not be contacted")
+
+    monkeypatch.setattr("tools.orchestrator.runtime.execute", forbidden)
+    broker = DockerVerificationSandbox(
+        DockerVerificationPolicy("example.com/image@sha256:" + "a" * 64, root)
+    )
+    with pytest.raises(OrchestratorError, match="trusted source digest required"):
+        broker.run(["python", "-m", "pytest"], workspace)
+
+
+def test_t090_stale_or_modified_candidate_rejected_before_docker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+
+    root = tmp_path / "test-root"
+    workspace = root / "verify-fixture" / "workspace"
+    workspace.mkdir(parents=True)
+    (workspace / "case.txt").write_text("frozen")
+    broker = DockerVerificationSandbox(
+        DockerVerificationPolicy("example.com/image@sha256:" + "a" * 64, root)
+    )
+    expected = broker.source_digest(workspace)
+    (workspace / "case.txt").write_text("tampered")
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("Docker must not be contacted")
+
+    monkeypatch.setattr("tools.orchestrator.runtime.execute", forbidden)
+    with pytest.raises(OrchestratorError, match="source attestation mismatch"):
+        broker.run(["python", "-m", "pytest"], workspace, expected_source_digest=expected)
+
+
+def test_t090_source_modified_during_sealing_is_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+    from tools.orchestrator import runtime
+
+    root = tmp_path / "test-root"
+    workspace = root / "verify-fixture" / "workspace"
+    workspace.mkdir(parents=True)
+    (workspace / "case.txt").write_text("frozen")
+    broker = DockerVerificationSandbox(
+        DockerVerificationPolicy("example.com/image@sha256:" + "a" * 64, root)
+    )
+    expected = broker.source_digest(workspace)
+    original_copytree = runtime.shutil.copytree
+
+    def malicious_copy(src: Path, dst: Path, *, symlinks: bool = False) -> Path:
+        result = original_copytree(src, dst, symlinks=symlinks)
+        (dst / "case.txt").write_text("modified during seal")
+        return result
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("Docker must not be contacted")
+
+    monkeypatch.setattr("tools.orchestrator.runtime.shutil.copytree", malicious_copy)
+    monkeypatch.setattr("tools.orchestrator.runtime.execute", forbidden)
+    with pytest.raises(OrchestratorError, match="source attestation mismatch"):
+        broker.run(["python", "-m", "pytest"], workspace, expected_source_digest=expected)
+
+
+def test_t090_sealed_source_changed_during_image_inspection_is_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import (
+        DockerVerificationPolicy,
+        DockerVerificationSandbox,
+        ProcessResult,
+    )
+
+    root = tmp_path / "test-root"
+    workspace = root / "verify-fixture" / "workspace"
+    workspace.mkdir(parents=True)
+    (workspace / "case.txt").write_text("frozen")
+    broker = DockerVerificationSandbox(
+        DockerVerificationPolicy("example.com/image@sha256:" + "a" * 64, root)
+    )
+    expected = broker.source_digest(workspace)
+    operations: list[str] = []
+
+    def modify_at_inspect(
+        argv: list[str], cwd: Path, *, timeout: int | float | None = None
+    ) -> ProcessResult:
+        assert "inspect" in argv
+        operations.append("inspect")
+        (cwd / "case.txt").write_text("modified during Docker inspect")
+        return ProcessResult(
+            tuple(argv), str(cwd), "start", "end", 0, "sha256:" + "b" * 64, ""
+        )
+
+    monkeypatch.setattr("tools.orchestrator.runtime.execute", modify_at_inspect)
+    with pytest.raises(OrchestratorError, match="source attestation mismatch"):
+        broker.run(["python", "-m", "pytest"], workspace, expected_source_digest=expected)
+    assert operations == ["inspect"]
+    assert (workspace / "case.txt").read_text() == "frozen"
+
