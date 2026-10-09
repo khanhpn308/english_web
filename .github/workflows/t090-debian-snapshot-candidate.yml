@@ -1,0 +1,88 @@
+name: T090 Debian snapshot candidate evidence (non-production)
+
+on:
+  push:
+    branches:
+      - feature/t090-provider-isolation-adjudication
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t090-debian-snapshot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  candidate-debian:
+    name: Verify signed Debian snapshot and capture exact archive identities
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Load existing pinned Python base image
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          pins = json.loads(Path("infra/verification/base-image-pins.json").read_text())
+          assert pins["platform"] == "linux/amd64"
+          print(pins["python"])
+          PY
+          )"
+          [[ "$ref" == *@sha256:* ]]
+          echo "T090_DEBIAN_BASE_IMAGE=$ref" >> "$GITHUB_ENV"
+          docker pull --platform linux/amd64 "$ref"
+      - name: Download from dated signed Debian Release, never moving apt mirrors
+        shell: bash
+        timeout-minutes: 18
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/t090-debian-evidence"
+          docker run --rm --platform linux/amd64 --user=0:0 \
+            -v "$RUNNER_TEMP/t090-debian-evidence:/evidence" \
+            "$T090_DEBIAN_BASE_IMAGE" sh -eu -c '
+          cat > /etc/apt/sources.list.d/debian.sources <<EOF
+          Types: deb
+          URIs: https://snapshot.debian.org/archive/debian/20261001T000000Z/
+          Suites: bookworm bookworm-updates
+          Components: main
+          Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+          Check-Valid-Until: no
+
+          Types: deb
+          URIs: https://snapshot.debian.org/archive/debian-security/20261001T000000Z/
+          Suites: bookworm-security
+          Components: main
+          Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+          Check-Valid-Until: no
+          EOF
+          rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*.list
+          # APT must verify Debian signatures and the hash-linked Packages indexes.
+          apt-get update
+          find /var/lib/apt/lists -maxdepth 1 -type f -name "*InRelease" \
+            -exec sha256sum {} + | sort > /evidence/signed-inrelease.sha256
+          test "$(wc -l < /evidence/signed-inrelease.sha256)" -ge 2
+          apt-get install -y --download-only --no-install-recommends \
+            bash ca-certificates curl git libstdc++6
+          find /var/cache/apt/archives -type f -name "*.deb" \
+            -exec sha256sum {} + | sort > /evidence/downloaded-debs.sha256
+          dpkg-query -W > /evidence/base-installed-packages.txt
+          cp /etc/apt/sources.list.d/debian.sources /evidence/snapshot.sources
+          echo T090_DEBIAN_SIGNED_SNAPSHOT_CANDIDATE_PASS_NOT_APPROVED
+          '
+          echo T090_DEBIAN_SIGNED_SNAPSHOT_REPORT_BEGIN
+          cat "$RUNNER_TEMP/t090-debian-evidence/signed-inrelease.sha256"
+          echo T090_DEBIAN_SIGNED_SNAPSHOT_REPORT_END
+      - name: Preserve candidate Debian evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t090-debian-candidate-${{ github.run_id }}
+          path: ${{ runner.temp }}/t090-debian-evidence/*
+          if-no-files-found: warn
+          retention-days: 14
