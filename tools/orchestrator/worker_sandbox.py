@@ -13,9 +13,17 @@ import os
 import re
 import stat
 import tempfile
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Collection, Literal, cast
+from typing import Any, Literal, Protocol, cast
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
+
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError
+
+from tools.orchestrator.core import WorkerResult
 
 
 _MAX_EDIT_BYTES = 256 * 1024
@@ -140,19 +148,14 @@ def apply_host_text_edit(
 
 # Tool-free model API: the model receives text and produces JSON; it never
 # receives a terminal, filesystem, function-call, subagent or MCP tool.
-from collections.abc import Mapping
-from typing import Protocol
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
-from urllib.request import (
-    HTTPRedirectHandler,
-    ProxyHandler,
-    Request,
-    build_opener,
-)
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError
-from tools.orchestrator.core import WorkerResult
+
+class ProposedTextEditModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    path: StrictStr
+    expected_sha256: StrictStr | None
+    replacement: StrictStr
 
 
 class WorkerEditResponse(BaseModel):
@@ -164,20 +167,12 @@ class WorkerEditResponse(BaseModel):
     edits: list[ProposedTextEditModel] = Field(max_length=32)
 
 
-class ProposedTextEditModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    path: StrictStr
-    expected_sha256: StrictStr | None
-    replacement: StrictStr
-
-
 class TextOnlyTransport(Protocol):
     def complete(self, prompt: str, *, model: str, timeout: int | None) -> str: ...
 
 
 class _RejectRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req: Request, fp: object, code: int, msg: str, headers: object, newurl: str) -> None:
+    def redirect_request(self, req: Request, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
         raise HostEditRejected("Model transport HTTP redirect is forbidden")
 
 
@@ -243,7 +238,7 @@ class LoopbackChatTransport:
                 if response.status != 200:
                     raise HostEditRejected("Model inference returned non-200 status")
                 raw = response.read(4 * 1024 * 1024 + 1)
-        except (HTTPError, URLError, TimeoutError, OSError) as error:
+        except (HTTPError, URLError, TimeoutError, OSError):
             # Never include exception strings: request URLs and credentials may
             # appear in transport exception context.
             raise HostEditRejected("Host-mediated inference failed") from None
@@ -266,7 +261,7 @@ class LoopbackChatTransport:
             ):
                 raise ValueError("Response is not a complete tool-free answer")
             return cast(str, msg["content"])
-        except (KeyError, TypeError, ValueError, IndexError) as error:
+        except (KeyError, TypeError, ValueError, IndexError):
             raise HostEditRejected("Invalid tool-free model response envelope") from None
 
 
@@ -327,7 +322,7 @@ def run_host_mediated_worker(
         response = WorkerEditResponse.model_validate_json(
             transport.complete(model_input, model=model, timeout=timeout)
         )
-    except (ValidationError, ValueError) as error:
+    except (ValidationError, ValueError):
         raise HostEditRejected("Invalid model edit proposal") from None
 
     if response.status == "BLOCKED":
