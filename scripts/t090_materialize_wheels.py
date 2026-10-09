@@ -37,7 +37,9 @@ def read_pins(path: Path) -> dict[str, str]:
     return pins
 
 
-def materialize_wheel_lock(wheel_dir: Path, output: Path, expected: dict[str, str] | None) -> dict[str, str]:
+def materialize_wheel_lock(
+    wheel_dir: Path, output: Path, expected: dict[str, str] | None
+) -> dict[str, str]:
     pins: dict[str, str] = {}
     records: list[dict[str, str]] = []
     for wheel in sorted(wheel_dir.glob("*.whl")):
