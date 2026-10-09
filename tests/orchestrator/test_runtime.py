@@ -12,6 +12,7 @@ from tools.orchestrator.core import (
 )
 from tools.orchestrator.runtime import (
     CliProvider,
+    Git,
     execute,
 )
 
@@ -376,3 +377,20 @@ def test_t090_secure_provider_rejects_mutable_cli_for_any_schema(
             readonly=False,
         )
     assert not (tmp_path / "shell-capable").exists()
+
+
+def test_t090_changed_path_allowlist_must_include_both_rename_ends(
+    tmp_path: Path,
+) -> None:
+    git = Git(tmp_path)
+    git.run("init", "-b", "main")
+    git.run("config", "user.email", "fixture@example.invalid")
+    git.run("config", "user.name", "Fixture")
+    (tmp_path / "original.py").write_text("VALUE = 1\n")
+    git.run("add", "original.py")
+    git.run("commit", "-m", "base")
+    base = git.sha()
+    git.run("mv", "original.py", "renamed.py")
+    assert git.paths(base) == ["original.py", "renamed.py"]
+    assert not (tmp_path / "original.py").exists()
+    assert (tmp_path / "renamed.py").read_text() == "VALUE = 1\n"
