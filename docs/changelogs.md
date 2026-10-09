@@ -1,3 +1,11 @@
+## 09/10/2026 - T090 R6-B1.2 candidate supply-chain evidence wiring
+
+- Added non-production GHCR OCI publication by digest, SPDX SBOM generation via pinned Anchore action, GitHub OIDC/Sigstore provenance and SBOM attestation generation via pinned `actions/attest`, followed by `gh attestation verify` with workflow identity, source commit/ref and subject digest checks.
+- Added Host-side `scripts/t090_supply_chain.py` fail-closed checks for independent GH CLI digest, signed registry provenance/SBOM, SBOM integrity and dependency lock completeness; added adversarial regression tests.
+- Pinned candidate Python and Node base image OCI identities, extracted from successful T090 CI 37958366313, in `infra/verification/base-image-pins.json`; builds must pull those digests instead of mutable version tags.
+- **NOT COMPLETE:** Python dependency wheels have no approved artifact hashes; Debian apt packages are not snapshot-pinned; OSV archive digests are collected but not independently authorized. The signed CI attestation is NOT operator acceptance. Trusted GH verifier binary digest, independent publisher review and production image approval are still absent. `image-policy.json` stays `approved:false`.
+- CI on this change is required; no gate skipped, no Host fallback enabled, no merge or T089 re-acceptance.
+
 ## 09/10/2026 - T090 R6-B1 signed Host approval gate (candidate-only)
 
 - Strengthened `admit_verification_image()`: acceptance now also requires a detached Ed25519 signature over the exact approval policy bytes, verified by a fixed Host OpenSSL command against an independently SHA-256-pinned, external public key. Missing signature, key, digest, changed signature, key-substitution and symlinked approval material fail closed.

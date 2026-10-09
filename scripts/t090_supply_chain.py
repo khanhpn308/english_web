@@ -3,6 +3,7 @@
 This module never approves an image. Signed registry attestations must be
 verified before any independent Host operator chooses to sign an approval.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -82,16 +83,21 @@ def npm_lock_has_integrities(path: Path) -> bool:
     try:
         lock = json.loads(_trusted_file(path))
         packages = lock["packages"]
-        return isinstance(packages, dict) and bool(packages) and all(
-            name == "" or (
-                isinstance(item, dict)
-                and (
-                    isinstance(item.get("integrity"), str)
-                    and item["integrity"].startswith("sha512-")
-                    or item.get("link") is True
+        return (
+            isinstance(packages, dict)
+            and bool(packages)
+            and all(
+                name == ""
+                or (
+                    isinstance(item, dict)
+                    and (
+                        isinstance(item.get("integrity"), str)
+                        and item["integrity"].startswith("sha512-")
+                        or item.get("link") is True
+                    )
                 )
+                for name, item in packages.items()
             )
-            for name, item in packages.items()
         )
     except (KeyError, TypeError, ValueError, UnicodeError):
         return False
@@ -183,7 +189,9 @@ def verify_registry_attestations(
                 raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: signed attestation rejected")
             results = json.loads(proc.stdout)
         except (OSError, subprocess.TimeoutExpired, UnicodeError, ValueError) as error:
-            raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: attestation verification failed") from error
+            raise SupplyChainBlocked(
+                "T090 SUPPLY_CHAIN_BLOCKED: attestation verification failed"
+            ) from error
         if not isinstance(results, list) or not results:
             raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: no verified attestations")
         accepted: dict[str, object] | None = None

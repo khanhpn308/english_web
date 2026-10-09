@@ -1,4 +1,5 @@
 """Adversarial tests for Host-side candidate supply-chain checks."""
+
 import hashlib
 import json
 import subprocess
@@ -15,7 +16,9 @@ from scripts.t090_supply_chain import (
 )
 
 
-def test_t090_supply_chain_candidate_lock_does_not_claim_version_pin_is_hash(tmp_path: Path) -> None:
+def test_t090_supply_chain_candidate_lock_does_not_claim_version_pin_is_hash(
+    tmp_path: Path,
+) -> None:
     requirements = tmp_path / "requirements.lock"
     npm = tmp_path / "package-lock.json"
     requirements.write_text("pytest==9.1.1\n")
@@ -69,17 +72,18 @@ def test_t090_supply_chain_attestation_requires_pinned_gh_and_2_predicates(
         commands.append(argv)
         assert kwargs["shell"] is False
         predicate = argv[argv.index("--predicate-type") + 1]
-        result = [{
-            "verificationResult": {
-                "statement": {
-                    "predicateType": predicate,
-                    "subject": [{
-                        "name": image.rsplit("@", 1)[0],
-                        "digest": {"sha256": "a" * 64}
-                    }]
+        result = [
+            {
+                "verificationResult": {
+                    "statement": {
+                        "predicateType": predicate,
+                        "subject": [
+                            {"name": image.rsplit("@", 1)[0], "digest": {"sha256": "a" * 64}}
+                        ],
+                    }
                 }
             }
-        }]
+        ]
         return subprocess.CompletedProcess(argv, 0, json.dumps(result), "")
 
     monkeypatch.setattr("scripts.t090_supply_chain.subprocess.run", fake_run)
@@ -111,16 +115,21 @@ def test_t090_supply_chain_rejects_wrong_attested_image(
 ) -> None:
     gh = tmp_path / "trusted-gh"
     gh.write_text("synthetic-gh-binary")
+
     def forged_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         predicate = argv[argv.index("--predicate-type") + 1]
-        forged = [{
-            "verificationResult": {
-                "statement": {
-                    "predicateType": predicate,
-                    "subject": [{"name": "ghcr.io/attacker/other", "digest": {"sha256": "c" * 64}}],
+        forged = [
+            {
+                "verificationResult": {
+                    "statement": {
+                        "predicateType": predicate,
+                        "subject": [
+                            {"name": "ghcr.io/attacker/other", "digest": {"sha256": "c" * 64}}
+                        ],
+                    }
                 }
             }
-        }]
+        ]
         return subprocess.CompletedProcess(argv, 0, json.dumps(forged), "")
     monkeypatch.setattr("scripts.t090_supply_chain.subprocess.run", forged_run)
     with pytest.raises(SupplyChainBlocked, match="subject mismatch"):

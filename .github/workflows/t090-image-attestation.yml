@@ -52,19 +52,26 @@ jobs:
             tests/orchestrator/test_workflow.py \
             scripts/security_checks.py
 
-      - name: Resolve and record immutable upstream image identities
+      - name: Validate and pull fixed base-image digests
         shell: bash
         run: |
           set -euo pipefail
-          docker pull python:3.12-slim-bookworm
-          docker pull node:22-bookworm-slim
-          py_ref="$(docker image inspect --format '{{index .RepoDigests 0}}' python:3.12-slim-bookworm)"
-          node_ref="$(docker image inspect --format '{{index .RepoDigests 0}}' node:22-bookworm-slim)"
-          [[ "$py_ref" == *@sha256:* ]]
-          [[ "$node_ref" == *@sha256:* ]]
-          echo "T090_PYTHON_BASE=$py_ref" >> "$GITHUB_ENV"
-          echo "T090_NODE_BASE=$node_ref" >> "$GITHUB_ENV"
-          printf 'Python base: %s\nNode base: %s\n' "$py_ref" "$node_ref"
+          eval "$(python3 - <<'PY'
+          import json, re
+          with open('infra/verification/base-image-pins.json', encoding='utf-8') as stream:
+              pins = json.load(stream)
+          assert pins['platform'] == 'linux/amd64'
+          for name in ('python', 'node'):
+              ref = pins[name]
+              assert re.fullmatch(r'[a-z0-9./_-]+@sha256:[0-9a-f]{64}', ref)
+              print(f'T090_{name.upper()}_BASE={ref}')
+          PY
+          )"
+          docker pull --platform linux/amd64 "$T090_PYTHON_BASE"
+          docker pull --platform linux/amd64 "$T090_NODE_BASE"
+          echo "T090_PYTHON_BASE=$T090_PYTHON_BASE" >> "$GITHUB_ENV"
+          echo "T090_NODE_BASE=$T090_NODE_BASE" >> "$GITHUB_ENV"
+          printf 'Pinned Python base: %s\nPinned Node base: %s\n' "$T090_PYTHON_BASE" "$T090_NODE_BASE"
 
       - name: Build with only allowlisted trusted inputs
         shell: bash
