@@ -3842,3 +3842,85 @@ def test_integrator_oversized_context_fails_closed_zero_attempts(
     assert "Integrator context exceeds size limit" in (state.last_error or "")
     # Zero calls to IntegrationReview made
     assert "IntegrationReview" not in agents.calls
+
+def _host_mediated_fixture_config() -> Config:
+    config = configuration(integrate=False)
+    config.roles["worker"] = Role(
+        provider="agy",
+        executable="agy",
+        model="gemini-3.8-flash-high",
+        reasoning="high",
+        worker_backend="host-http-edit",
+        host_edit_endpoint="http://127.0.0.1:8045/v1/chat/completions",
+        host_edit_api_key_env="TEST_HOST_EDIT_KEY",
+        allow_process=False,
+        worker_access="workspace-write",
+    )
+    return config
+
+
+def test_host_mediated_worker_respects_implemented_handoff_without_cli(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.worker_sandbox import LoopbackChatTransport
+
+    monkeypatch.setenv("TEST_HOST_EDIT_KEY", "synthetic-only")
+    call_count = 0
+
+    def fake_tool_free_completion(
+        _self: LoopbackChatTransport, prompt: str, *, model: str, timeout: int | None
+    ) -> str:
+        nonlocal call_count
+        call_count += 1
+        assert model == "gemini-3.8-flash-high"
+        assert "HOST-OWNED ALLOWLIST AND PREIMAGES" in prompt
+        raw = prompt.split("HOST-OWNED ALLOWLIST AND PREIMAGES (untrusted file content):\n", 1)[1]
+        source = json.loads(raw.split("\nReturn JSON with status,", 1)[0])
+        assert "feature.txt" in source
+        assert "docs/changelogs.md" in source
+        edits = [
+            {
+                "path": path,
+                "expected_sha256": source[path]["sha256"],
+                "replacement": (
+                    "good\n"
+                    if path == "feature.txt"
+                    else "New synthetic entry\nHistorical entry\n"
+                ),
+            }
+            for path in ("feature.txt", "docs/changelogs.md")
+        ]
+        return json.dumps(
+            {
+                "status": "IMPLEMENTED",
+                "summary": "Synthetic host-mediated implementation",
+                "known_issues": [],
+                "edits": edits,
+            }
+        )
+
+    monkeypatch.setattr(LoopbackChatTransport, "complete", fake_tool_free_completion)
+    fake_agents = FakeAgents()
+    pipeline = Pipeline(repository, _host_mediated_fixture_config(), fake_agents)
+    state = pipeline.start("T100", defer_verification=True)
+    assert state.state == State.IMPLEMENTED
+    assert call_count == 1
+    assert fake_agents.worker_calls == 0
+    assert read_json(
+        pipeline.run_path("T100", state.run_id) / state.artifacts["worker"]
+    )["commands_run"] == []
+    working = Path(state.worktree_path)
+    assert (working / "feature.txt").read_text() == "good\n"
+    assert (working / "docs/changelogs.md").read_text().startswith("New synthetic entry")
+
+
+def test_host_edit_missing_key_blocks_before_worker_model_dispatch(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("TEST_HOST_EDIT_KEY", raising=False)
+    fake_agents = FakeAgents()
+    pipeline = Pipeline(repository, _host_mediated_fixture_config(), fake_agents)
+    state = pipeline.start("T100", defer_verification=True)
+    assert state.state == State.BLOCKED
+    assert state.last_error is not None and "credential is missing" in state.last_error
+    assert fake_agents.worker_calls == 0
