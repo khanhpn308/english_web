@@ -394,3 +394,24 @@ def test_t090_changed_path_allowlist_must_include_both_rename_ends(
     assert git.paths(base) == ["original.py", "renamed.py"]
     assert not (tmp_path / "original.py").exists()
     assert (tmp_path / "renamed.py").read_text() == "VALUE = 1\n"
+
+
+@pytest.mark.parametrize("invalid", ["cwd", "artifacts", "name"])
+def test_t090_secure_provider_rejects_invalid_host_context(
+    tmp_path: Path, invalid: str
+) -> None:
+    from tools.orchestrator.core import Fix, OrchestratorError
+    from tools.orchestrator.runtime import SecureProvider
+
+    missing = tmp_path / "not-created"
+    with pytest.raises(OrchestratorError, match="invalid host-owned semantic context"):
+        SecureProvider().run(
+            "Synthetic",
+            cwd=missing if invalid == "cwd" else tmp_path,
+            role=Role(provider="codex", executable="nonexistent"),
+            timeout=1,
+            output=Fix,
+            artifacts=missing if invalid == "artifacts" else tmp_path,
+            name="" if invalid == "name" else "test",
+            readonly=True,
+        )
