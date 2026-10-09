@@ -1,3 +1,10 @@
+## 09/10/2026 - T090 tool-free semantic role routing candidate
+
+- Restricted production default Pipeline to SecureProvider: unverified read-only agent CLI calls now stop before execution, including concurrent reviewer provider.run calls, planning, Auditor and Integrator. CLI WorkerResult remains blocked as before.
+- Added opt-in host-http-text backend for nonworker AI roles (explicit model, loopback URL and credential env variable); tool-free HTTP completion plus typed role schema, without model tools, subprocess or file-write access.
+- Added tests for default CLI denial, successful tool-free role response, invalid outputs and malicious configuration; documented operator requirements and unresolved context/bridge/OS proof.
+- Deliberately did not change orchestrator.yaml, model routing, user settings, acceptance state or historical T089 evidence; PR #9 Draft. Host CI remains required for this exact candidate SHA.
+
 ## 09/10/2026 - T090 WSL2 import-lint final remediation
 
 - Local host reported one remaining Ruff I001 in `tools/orchestrator/worker_sandbox.py`; Ruff formatter and production mypy had passed.
