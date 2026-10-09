@@ -296,3 +296,8 @@ T090 DONE or T089 accepted.
 - Added regression for concurrent Reviewer lanes receiving only changed source paths through the sealed bundle.
 - Source artifact and its digest are registered before dispatch. The final Auditor must match the candidate identity source digest, and the Integrator must match the previously audited digest.
 - Prior sealed-evidence CI runs R1/R2 test intermediate snapshots only; final candidate requires fresh full CI. T090 remains IN_PROGRESS and PR #9 remains Draft.
+
+### Sealed-evidence R1 formatting remediation
+
+- Immutable CI R1 on `4777d90308677883114e9377603002225c3562c7` failed `check-fast-active`: Ruff identified three formatting-only differences in `workflow.py` and `test_workflow.py`. Portable pytest and six other Phase A gates passed. CI artifact preserved in run `37882294933`.
+- Applied those three exact Ruff suggested changes on the current candidate. Intermediate R2/R3 are not evidence for this updated SHA. Fresh full CI required. No security behavior relaxed.
