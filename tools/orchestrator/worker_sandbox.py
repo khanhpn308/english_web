@@ -352,9 +352,17 @@ def run_host_mediated_worker(
         proposals.append(
             ProposedTextEdit(path, edit.expected_sha256, edit.replacement)
         )
-    # The host applies one file at a time. A local concurrent OS writer may
-    # still race this process; callers must own the workspace and enforce
-    # exclusive local write access for this phase.
+    # Preflight every edit before writing any path. Host worktrees must be
+    # exclusively owned during application; per-file atomic replacement is
+    # not a cross-file transaction in the face of an OS-level concurrent writer.
+    for proposal in proposals:
+        content = proposal.replacement.encode("utf-8")
+        if len(content) > _MAX_EDIT_BYTES or b"\\x00" in content:
+            raise HostEditRejected("Edit content violates size/text constraints")
+        target = _check_target(root, proposal.path)
+        existing = target.read_bytes() if target.is_file() else None
+        if (_digest(existing) if existing is not None else None) != proposal.expected_sha256:
+            raise HostEditRejected("Source changed before host edit publication")
     for proposal in proposals:
         apply_host_text_edit(root, allowlist, proposal)
     return WorkerResult(
