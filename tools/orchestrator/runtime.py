@@ -563,17 +563,9 @@ class SecureProvider:
         readonly: bool,
     ) -> Output:
         if not readonly:
-            # CliProvider itself rejects unaudited WorkerResult dispatch.
-            return CliProvider().run(
-                prompt,
-                cwd=cwd,
-                role=role,
-                timeout=timeout,
-                output=output,
-                artifacts=artifacts,
-                name=name,
-                readonly=False,
-            )
+            # Mutable Worker dispatch goes exclusively through host-http-edit
+            # in Pipeline.invoke; never use a CLI fallback from this router.
+            raise OrchestratorError("T090 BLOCKED: mutable CLI execution is forbidden")
         if (
             role.analysis_backend != "host-http-text"
             or role.allow_process
