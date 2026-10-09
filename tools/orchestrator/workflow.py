@@ -78,6 +78,7 @@ from tools.orchestrator.runtime import (
     AgentProvider,
     CliProvider,
     Git,
+    SecureProvider,
     LockBusy,
     execute,
     lock,
@@ -678,7 +679,7 @@ class Pipeline:
     ) -> None:
         self.repository = repository.resolve()
         self.config = config
-        self.provider = provider or CliProvider()
+        self.provider = provider if provider is not None else SecureProvider()
         self.git = Git(self.repository)
         self.runs = (self.repository / config.paths.run_dir).absolute()
         self.worktrees = (self.repository / config.paths.worktree_root).absolute()
