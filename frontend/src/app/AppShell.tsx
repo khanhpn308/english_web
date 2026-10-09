@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { AiConsentProvider } from '@/features/consent/AiConsentGate';
 import { AiConsentPanel } from '@/features/consent/AiConsentPanel';
 import { LookupPage } from '@/features/lookup/LookupPage';
+import { ReviewPage } from '@/features/review/ReviewPage';
 
 
 export interface RouteMatch {
@@ -319,7 +320,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
                 {matchedRoute.title}
               </h1>
               {matchedRoute.routeId === 'status' && <AiConsentPanel />}
-              {matchedRoute.routeId !== 'lookup' && <Card role="region" aria-label="Thông báo trạng thái tính năng">
+              {matchedRoute.routeId !== 'lookup' && matchedRoute.routeId !== 'review' && <Card role="region" aria-label="Thông báo trạng thái tính năng">
                 <CardHeader>
                   <CardTitle className="text-primary text-lg">Tính năng đang được xây dựng (chưa khả dụng) trong giai đoạn khởi tạo shell.</CardTitle>
                 </CardHeader>
@@ -357,6 +358,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
           )}
           {/* Keep the draft and operation identity during local route navigation. */}
           <LookupPage active={matchedRoute?.routeId === 'lookup'} />
+          <ReviewPage active={matchedRoute?.routeId === 'review'} />
           </AiConsentProvider>
         </ErrorBoundary>
       </main>
