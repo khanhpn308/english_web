@@ -43,6 +43,51 @@ workspace access, revalidate preimages, and retain failed partial candidate
 for host adjudication. Neither a text-only prompt nor SHA checks alone prove
 resistance against a concurrent local process with filesystem privileges.
 
+### T090: Semantic roles without executable CLI tools (opt-in)
+
+The production `Pipeline` now uses `SecureProvider` by default for its
+`prompt_engineer`, all concurrent `reviewer` calls (using the Auditor role),
+`auditor`, `fix` (Prompt Engineer), and `integrator` calls.
+A role that still selects `analysis_backend: "cli"` fails closed **before
+any model-owned CLI command is launched**. Existing explicit mock providers in
+unit tests are not production security evidence.
+
+To use the text-only backend for one semantic role, supply an explicit
+role configuration, with an independently verified local completion endpoint
+and model ID:
+
+    "provider": "agy",
+    "executable": "agy",
+    "model": "gemini-3.8-flash-high",
+    "analysis_backend": "host-http-text",
+    "host_text_endpoint": "http://127.0.0.1:8045/v1/chat/completions",
+    "host_text_api_key_env": "HOST_MEDIATED_AI_KEY"
+
+The same configuration must be applied independently to
+`prompt_engineer`, `auditor` (also used for parallel review), and
+`integrator`. Do **not** silently replace a Codex role/model with Gemini:
+that is an explicit owner choice requiring compatibility tests, source/evidence
+context review, and a pinned capability identity. This example is a template,
+not a change to `orchestrator.yaml`.
+
+`SecureProvider` uses the existing `LoopbackChatTransport`: it sends no
+tool definitions, sets `tool_choice: none`, disallows proxies and redirects,
+validates the returned role-specific JSON schema, and never launches AGY/Codex
+CLI for semantic inference. Worker still uses its separate
+`host-http-edit` route and fail-closed CLI guard. Invalid credentials or
+response data produce `T090 BLOCKED`; neither provider error nor model text
+can authorize a host gate, state transition, file write or Git operation.
+
+**Acceptance limitations:** a response without `tool_calls` and a green
+portable CI are not independent proof that the deployed bridge enforces an
+absence of hidden tools. No immutable endpoint identity or tool-broker
+attestation has been established. A tool-free analyst also cannot read local
+AGENTS/spec/source/diff files itself: the host must materialize and bind the
+minimum necessary task-approved evidence before semantic assessments can be
+reliable. Host verification of untrusted Worker-modified Python/JS likewise
+needs a separately reviewed OS execution boundary. Until those are addressed,
+all CLI analytical roles remain BLOCKED and T090 is IN_PROGRESS.
+
 ## Chế độ host verification tách biệt (T089 final remediation)
 
 Trong đường đi CLI, `run`, `resume`, `retry` và `schedule` kết thúc lượt
