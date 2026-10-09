@@ -553,12 +553,12 @@ class SecureProvider:
         self,
         prompt: str,
         *,
-        cwd: Path,
+        cwd: Path,  # noqa: ARG002 - Required AgentProvider keyword contract.
         role: Role,
         timeout: int | None,
         output: type[Output],
-        artifacts: Path,
-        name: str,
+        artifacts: Path,  # noqa: ARG002 - Required AgentProvider keyword contract.
+        name: str,  # noqa: ARG002 - Required AgentProvider keyword contract.
         readonly: bool,
     ) -> Output:
         if not readonly:
