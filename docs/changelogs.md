@@ -1,3 +1,10 @@
+## 09/10/2026 - T090 phase-2 CI R1 formatting remediation (Asia/Bangkok)
+
+- Historical failed host CI run 37809494529 at candidate 148d94836ced11066225b6b87e107b42baa896d1 retained unchanged: Ruff format check caused check-fast-active FAIL; portable pytest, frontend coverage, all three security gates and architecture PASS; dependent coverage gate not reached.
+- Reformatted three multiline calls in tests/orchestrator/test_worker_sandbox.py and one SHA validation conditional in tools/orchestrator/worker_sandbox.py to match pinned Ruff. Functional policy was not changed.
+- Updated T090 card with exact failure provenance. A fresh independent CI run is required before making any acceptance claim. AGY/Codex live command-denial proof remains BLOCKED, T089 reopened; WorkerResult fail-closed guard untouched.
+- No historical artifacts, product code, security thresholds, or default branch mutated.
+
 ## 08/10/2026 - T090 phase-2 historical-scope audit and host-mediated edit primitive (Asia/Bangkok)
 
 - Status: IN_PROGRESS; Worker AGY/Codex dispatch remains BLOCKED; T089 remains REOPENED_PENDING_T090. No live provider isolation PASS and no new merge authorization claimed.
