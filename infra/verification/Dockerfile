@@ -31,7 +31,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # SHA-256 pins fix the exact signed Release bytes and package index chain.
 # Candidate-only: this is NOT independent operator release approval.
 COPY debian-inrelease.sha256 /opt/locks/debian-inrelease.sha256
-RUN printf '%s\\n' \
+RUN printf '%s\n' \
       'Types: deb' \
       'URIs: https://snapshot.debian.org/archive/debian/20261008T000000Z/' \
       'Suites: bookworm bookworm-updates' \
