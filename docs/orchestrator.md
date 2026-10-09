@@ -1,5 +1,48 @@
 # Công cụ điều phối phát triển cục bộ Level 1 và Level 2
 
+
+## T090: Host-mediated text-only Worker (experimental; disabled by default)
+
+The default AGY CLI Worker remains blocked before process dispatch. A
+separately configured host-http-edit mode calls a local text-completion API
+without attaching executable model tools. The host itself reads only exact
+Contract.allowed_paths, pins their SHA-256 preimages, validates strict proposed
+replacement JSON, and writes only allowlisted files. It issues no Worker-origin
+shell, Git, Python, MCP, subprocess or subagent calls.
+
+The explicit Worker-only role configuration is:
+
+    "provider": "agy",
+    "executable": "agy",
+    "model": "gemini-3.8-flash-high",
+    "reasoning": "high",
+    "worker_access": "workspace-write",
+    "allow_process": false,
+    "worker_backend": "host-http-edit",
+    "host_edit_endpoint": "http://127.0.0.1:8045/v1/chat/completions",
+    "host_edit_api_key_env": "HOST_MEDIATED_AI_KEY"
+
+This keeps the existing model selection but does **not** invoke the AGY CLI
+for Worker. The host reads the named secret from its environment only; no
+authentication values, source text, prompts or raw responses belong in logs.
+Missing authentication blocks before model dispatch. Requests contain an
+explicit empty tools array, tool_choice none, no redirects, no proxy, and
+loopback-only URL validation. Invalid JSON, tool calls, unexpected output
+fields, out-of-scope paths, stale SHA and invalid UTF-8 edits fail closed.
+
+**This is not yet certified on AGY/Gemini or Codex**. Synthetic offline
+tests cannot establish whether the installed local model proxy honors
+tool_choice none or supplies hidden executable capabilities. Independently
+test a live synthetic endpoint and observe actual tool denial and legitimate
+source edits before switching from the default blocked mode. Reviewer,
+Auditor and Integrator CLI read-only roles also need independent command
+capability review; read-only filesystem access is not equivalent to no shell.
+
+Multi-file edit publication is not an OS-level transaction: enforce exclusive
+workspace access, revalidate preimages, and retain failed partial candidate
+for host adjudication. Neither a text-only prompt nor SHA checks alone prove
+resistance against a concurrent local process with filesystem privileges.
+
 ## Chế độ host verification tách biệt (T089 final remediation)
 
 Trong đường đi CLI, `run`, `resume`, `retry` và `schedule` kết thúc lượt
