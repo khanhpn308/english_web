@@ -513,6 +513,8 @@ def test_t090_docker_sandbox_host_constructs_fixed_arguments(
             assert "for entry in os.scandir('/source')" in command[-5]
             assert "shutil.copytree(src, dst, symlinks=True)" in command[-5]
             assert "source attestation mismatch" in command[-5]
+            assert "if os.path.lexists('/workspace/node_modules')" in command[-5]
+            assert "os.symlink('/node_modules', '/workspace/node_modules')" in command[-5]
             assert "os.execvp(sys.argv[2], sys.argv[2:])" in command[-5]
             mount = command[command.index("--mount") + 1]
             assert str(working) not in mount
