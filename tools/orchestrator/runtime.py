@@ -542,6 +542,62 @@ class CliProvider:
             raise OrchestratorError("Agent returned malformed or schema-invalid JSON") from error
 
 
+
+class SecureProvider:
+    """Production role router: no analyst/reviewer CLI command execution.
+
+    Explicitly injected AgentProvider instances remain test doubles used by
+    the orchestration regression suite; production Pipeline defaults here.
+    """
+
+    def run(
+        self,
+        prompt: str,
+        *,
+        cwd: Path,
+        role: Role,
+        timeout: int | None,
+        output: type[Output],
+        artifacts: Path,
+        name: str,
+        readonly: bool,
+    ) -> Output:
+        if not readonly:
+            # CliProvider itself rejects unaudited WorkerResult dispatch.
+            return CliProvider().run(
+                prompt,
+                cwd=cwd,
+                role=role,
+                timeout=timeout,
+                output=output,
+                artifacts=artifacts,
+                name=name,
+                readonly=False,
+            )
+        if role.analysis_backend != "host-http-text":
+            raise OrchestratorError(
+                "T090 BLOCKED: read-only CLI can execute commands; "
+                "configure a verified tool-free text provider"
+            )
+        from tools.orchestrator.worker_sandbox import (
+            HostEditRejected,
+            LoopbackChatTransport,
+        )
+
+        try:
+            if not role.model or not role.host_text_endpoint or not role.host_text_api_key_env:
+                raise HostEditRejected("Incomplete text-only semantic provider")
+            transport = LoopbackChatTransport(
+                role.host_text_endpoint, api_key_env=role.host_text_api_key_env
+            )
+            raw = transport.complete(prompt, model=role.model, timeout=timeout)
+            return output.model_validate_json(raw)
+        except (HostEditRejected, ValueError, TypeError) as error:
+            raise OrchestratorError(
+                "T090 BLOCKED: tool-free semantic inference rejected or schema invalid"
+            ) from error
+
+
 def is_worker_code_only(role: Role) -> bool:
     if role.allow_process:
         return False
