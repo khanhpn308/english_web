@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import sys
 from collections.abc import Iterator
@@ -25,15 +26,18 @@ from backend.app.application.source_write import (
     JournalRecord,
     JournalState,
     SourceWriteCoordinator,
+    _form_digest,
 )
 from backend.app.persistence.database import Database, migration_config
 from backend.app.review.models import ensure_card, record_review, reset_card_state
 from backend.app.vocabulary.models import ExampleSentence, MeaningVi, SourceFile
 from backend.app.vocabulary.repository import VocabularyRepository
 from backend.app.vocabulary.search_index import SearchIndex
+from backend.tests import test_save_word_family as save_tests
 from sqlalchemy import Connection
 from sqlalchemy.exc import IntegrityError
 
+save_harness = save_tests.harness
 VALID_MD = """# 29-09-2026
 
 ## Tra cứu nhanh
@@ -1545,3 +1549,219 @@ def test_cleanup_failure_degrades_without_deleting_any_source_or_history(
     assert temp.read_bytes() == b"external staged replacement"
     assert (fx.root / fx.source.relative_path).read_text() == fx.old
     fx.assert_effects(committed=False)
+
+
+def edit_arguments(fx: RealFixture, content: str, key: str = "edit-journal") -> dict[str, Any]:
+    """Build a real EDIT claim with the same preconditions used by T029."""
+    src = fx.repo.get_source_file(fx.source.id)
+    form = fx.repo.get_word_form(fx.form.id)
+    assert src is not None and form is not None and src.content_hash is not None
+    claim = fx.ledger.claim(
+        kind="EDIT", key=key, method="PATCH", path=f"/api/v1/word-forms/{form.id}",
+        body={"sourceId": src.id, "sourceRevision": src.revision, "content": content},
+        preconditions={"If-Match": src.etag},
+    )
+    fx.adapter.register_source(src)
+    return {
+        "operation_id": claim.operation.operation_id, "source_id": src.id,
+        "expected_old_hash": src.content_hash, "new_content": content,
+        "intended_projection_revision": src.revision + 1, "operation_ledger": fx.ledger,
+        "response_status": 200, "result_ref": claim.operation.operation_id,
+        "edit_context": {
+            "form_id": form.id, "form_revision": form.revision, "form_hash": _form_digest(form),
+            "etag": src.etag, "identities": [["robust", "robust", "ADJECTIVE"]],
+        },
+    }
+
+
+def test_edit_receipt_without_preview_is_frozen_before_publication(real_fixture: RealFixture) -> None:
+    fx = real_fixture
+    arguments = edit_arguments(fx, fx.new)
+
+    def crash(point: str) -> None:
+        if point == "AFTER_PREPARED":
+            raise InjectedCrash(point)
+
+    with pytest.raises(InjectedCrash):
+        fx.coordinator.write(**arguments, fault=crash)
+    journal = fx.coordinator.get(arguments["operation_id"])
+    assert journal is not None and journal.state == "PREPARED"
+    frozen = journal.effect_plan["receipt"]
+    assert frozen["wordForm"]["meaningsVi"][0]["text"] == "bền vững"
+    assert frozen["wordForm"]["card"] == {"id": "real-card", "state": "NEW", "dueAt": None}
+    assert frozen["sourceRevision"] == 2
+    assert journal.effect_plan["response_etag"] == f'"source-{fx.source.id}-r2"'
+    assert "save_context" not in journal.effect_plan
+    with fx.database.engine.connect() as connection:
+        assert connection.exec_driver_sql("SELECT count(*) FROM lookup_previews").scalar_one() == 0
+    with fx.database.engine.begin() as connection, pytest.raises(IntegrityError):
+        altered = {**journal.effect_plan, "receipt": {"operationId": "invented"}}
+        connection.exec_driver_sql(
+            "UPDATE source_write_journal SET effect_plan=? WHERE operation_id=?",
+            (json.dumps(altered), journal.operation_id),
+        )
+    retained = fx.coordinator.get(journal.operation_id)
+    assert retained is not None and retained.effect_plan == journal.effect_plan
+    assert (fx.root / fx.source.relative_path).read_text() == fx.old
+
+
+@pytest.mark.parametrize("point,committed", [
+    ("AFTER_PREPARED", False), ("AFTER_TEMP_FSYNC", False),
+    ("AFTER_ATOMIC_REPLACE", True), ("AFTER_SOURCE_REPLACED", True),
+    ("AFTER_PROJECTION", True), ("AFTER_CARD_RESET", True), ("AFTER_RECEIPT", True),
+])
+def test_edit_restart_recovers_original_receipt_and_history(
+    real_fixture: RealFixture, point: str, committed: bool,
+) -> None:
+    fx = real_fixture
+    arguments = edit_arguments(fx, fx.new)
+
+    def crash(actual: str) -> None:
+        if actual == point:
+            raise InjectedCrash(point)
+
+    with pytest.raises(InjectedCrash):
+        fx.coordinator.write(**arguments, fault=crash)
+    journal = fx.coordinator.get(arguments["operation_id"])
+    assert journal is not None
+    evidence = journal.effect_plan
+    recovery = fx.restart()
+    with patch.object(fx.adapter, "prepare_staged_write", side_effect=AssertionError("no rewrite")):
+        recovery.reconcile(operation_ledger=fx.ledger)
+        assert recovery.reconcile(operation_ledger=fx.ledger) == []
+    recovered = fx.coordinator.get(journal.operation_id)
+    operation = fx.ledger.get(journal.operation_id)
+    assert recovered is not None and operation is not None
+    assert recovered.state == ("COMMITTED" if committed else "ABORTED")
+    assert operation.status == ("SUCCEEDED" if committed else "FAILED")
+    assert recovered.effect_plan == evidence
+    with fx.database.engine.connect() as connection:
+        assert connection.exec_driver_sql("SELECT * FROM review_events").all() == fx.history
+        assert connection.exec_driver_sql(
+            "SELECT box,queue_revision FROM review_cards WHERE card_id='real-card'"
+        ).one() == ((0, 2) if committed else (1, 1))
+    if committed:
+        from backend.app.application.edit_word_form import EditWordFormService
+
+        service = EditWordFormService(fx.ledger, fx.coordinator)
+        assert service.receipt(journal.operation_id, fx.form.id, fx.source.id) == (
+            evidence["receipt"], evidence["response_etag"],
+        )
+
+
+def test_original_edit_snapshot_survives_later_write_and_restart(real_fixture: RealFixture) -> None:
+    fx = real_fixture
+    first_arguments = edit_arguments(fx, fx.new)
+    first = fx.coordinator.write(**first_arguments)
+    later_content = real_markdown("later edit")
+    second = fx.coordinator.write(**edit_arguments(fx, later_content, "edit-journal-b"))
+    assert second.effect_plan["receipt"]["sourceRevision"] == 3
+    fx.restart()
+    from backend.app.application.edit_word_form import EditWordFormService
+
+    service = EditWordFormService(fx.ledger, fx.coordinator)
+    with patch.object(fx.adapter, "prepare_staged_write", side_effect=AssertionError("no rewrite")):
+        for _ in range(3):
+            assert service.receipt(first.operation_id, fx.form.id, fx.source.id) == (
+                first.effect_plan["receipt"], first.effect_plan["response_etag"],
+            )
+    assert (fx.root / fx.source.relative_path).read_text() == later_content
+
+
+def test_save_context_still_requires_authorized_lookup_preview(real_fixture: RealFixture) -> None:
+    fx = real_fixture
+    with pytest.raises(AmbiguousSourceStateError):
+        run_write(
+            fx, apply_projection=None, reset_cards=None, response_status=201,
+            result_ref=fx.operation_id,
+            receipt_context={"lookup_id": "lookup_missing", "owner": "synthetic-owner",
+                             "identities": [["robust", "robust", "ADJECTIVE"]]},
+        )
+    journal = fx.coordinator.get(fx.operation_id)
+    assert journal is not None and journal.state == "DEGRADED"
+    operation = fx.ledger.get(fx.operation_id)
+    assert operation is not None and operation.status != "SUCCEEDED"
+    with fx.database.engine.connect() as connection:
+        assert connection.exec_driver_sql("SELECT * FROM review_events").all() == fx.history
+        assert connection.exec_driver_sql("SELECT * FROM review_cards").all() == fx.old_card
+
+
+def test_edit_refuses_mixed_save_context_without_mutation(real_fixture: RealFixture) -> None:
+    fx = real_fixture
+    arguments = edit_arguments(fx, fx.new)
+    with pytest.raises(JournalConflictError):
+        fx.coordinator.write(**arguments, receipt_context={"lookup_id": "invented"})
+    assert fx.coordinator.get(arguments["operation_id"]) is None
+    assert (fx.root / fx.source.relative_path).read_text() == fx.old
+
+
+def test_interrupted_edit_with_external_third_hash_stays_unknown(real_fixture: RealFixture) -> None:
+    fx = real_fixture
+    arguments = edit_arguments(fx, fx.new)
+
+    def crash(point: str) -> None:
+        if point == "AFTER_ATOMIC_REPLACE":
+            raise InjectedCrash(point)
+
+    with pytest.raises(InjectedCrash):
+        fx.coordinator.write(**arguments, fault=crash)
+    external = real_markdown("external third hash")
+    (fx.root / fx.source.relative_path).write_bytes(external.encode("utf-8"))
+    recovery = fx.restart()
+    recovered = recovery.reconcile(operation_ledger=fx.ledger)
+    assert recovered[0].state == "DEGRADED"
+    operation = fx.ledger.get(arguments["operation_id"])
+    assert operation is not None and operation.status == "UNKNOWN"
+    from backend.app.application.edit_word_form import EditConflict, EditWordFormService
+
+    with pytest.raises(EditConflict) as error:
+        EditWordFormService(fx.ledger, fx.coordinator).receipt(
+            arguments["operation_id"], fx.form.id, fx.source.id,
+        )
+    assert error.value.code == "IDEMPOTENCY_IN_FLIGHT"
+    assert (fx.root / fx.source.relative_path).read_text() == external
+    with fx.database.engine.connect() as connection:
+        assert connection.exec_driver_sql("SELECT * FROM review_events").all() == fx.history
+        assert connection.exec_driver_sql("SELECT * FROM review_cards").all() == fx.old_card
+
+
+@pytest.mark.parametrize("existing_source", [False, True])
+def test_legacy_preview_save_context_recovers_without_edit_marker(
+    save_harness: save_tests.Harness, existing_source: bool,
+) -> None:
+    h = save_harness
+    saved = None
+    if existing_source:
+        initial = h.post(h.preview("initial"))
+        assert initial.status_code == 201
+        saved = initial.json()
+    lookup_id = h.preview("interrupted")
+
+    def crash(point: str) -> None:
+        if point == "AFTER_ATOMIC_REPLACE":
+            raise InjectedCrash(point)
+
+    h.service.fault = crash
+    with pytest.raises(InjectedCrash):
+        h.post(lookup_id, key="legacy-save", source=saved)
+    with h.ledger.engine.connect() as connection:
+        operation_id = connection.exec_driver_sql(
+            "SELECT operation_id FROM source_write_journal WHERE state='PREPARED'"
+        ).scalar_one()
+        assert connection.exec_driver_sql(
+            "SELECT status FROM lookup_previews WHERE lookup_id=?", (lookup_id,),
+        ).scalar_one() == "PREVIEW"
+    journal = h.service.coordinator.get(operation_id)
+    assert journal is not None
+    assert "save_context" in journal.effect_plan and "edit_context" not in journal.effect_plan
+    evidence = journal.effect_plan
+    h.service.fault = None
+    h.ledger.recover_pending()
+    records = SourceRecovery(h.service.coordinator).reconcile(operation_ledger=h.ledger)
+    assert records[0].state == "COMMITTED" and records[0].effect_plan == evidence
+    replay = h.post(lookup_id, key="legacy-save", source=saved)
+    assert replay.status_code == 201 and replay.json() == evidence["receipt"]
+    with h.ledger.engine.connect() as connection:
+        assert connection.exec_driver_sql(
+            "SELECT status FROM lookup_previews WHERE lookup_id=?", (lookup_id,),
+        ).scalar_one() == "CONSUMED"

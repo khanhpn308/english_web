@@ -4,7 +4,8 @@ The filesystem adapter owns validation, staging, fsync and atomic replacement. T
 module only records intent and coordinates short SQLite transactions around it.
 Canonical vocabulary, search, card resets, receipt and the terminal marker share
 one writer transaction. Recovery reconstructs the effects from persisted identifiers
-and verified on-disk Markdown. Optional callbacks are fault-injection test seams.
+and verified on-disk Markdown. Edit publication shares the receipt transaction so
+reviews cannot invalidate its frozen card snapshot between publication and completion.
 """
 
 from __future__ import annotations
@@ -413,11 +414,15 @@ class SourceWriteCoordinator:
         _require_new: bool = False,
         creation: bool = False,
         receipt_context: dict[str, Any] | None = None,
+        edit_context: dict[str, Any] | None = None,
     ) -> JournalRecord:
         """Persist PREPARED intent before calling any filesystem replacement."""
         new_hash = _hash(new_content)
         OperationLedger.validate_receipt(response_status, result_ref)
         document = self._document(source_id, new_content)
+        if edit_context is not None and (creation or receipt_context is not None):
+            raise JournalConflictError("Edit and save contexts cannot be combined")
+        context = edit_context if edit_context is not None else receipt_context
         if expected_old_hash == new_hash:
             raise JournalConflictError("Replacement content is unchanged")
         if intended_projection_revision < 1:
@@ -494,7 +499,7 @@ class SourceWriteCoordinator:
                 raise JournalConflictError("Projection revision is stale")
             if document.note_date != source["note_date"]:
                 raise JournalConflictError("Source date changed")
-            if receipt_context is not None:
+            if context is not None:
                 date_sources = list(connection.exec_driver_sql(
                     "SELECT id FROM source_files WHERE note_date=?", (source["note_date"],),
                 ).scalars())
@@ -506,10 +511,49 @@ class SourceWriteCoordinator:
             if operation_status != "PENDING":
                 raise UnknownOperationError("A new source write requires a pending operation")
             plan = self._plan(connection, source_id, document)
+            # Source locks alone do not protect shared canonical forms across dates.
+            # Fence overlapping plans whenever either operation is an edit. Existing
+            # save-only entries retain their original lifecycle and response shape.
+            planned_ids = {effect["form_id"] for effect in plan["forms"]}
+            for row in connection.exec_driver_sql(
+                "SELECT effect_plan FROM source_write_journal "
+                "WHERE state IN ('PREPARED','SOURCE_REPLACED','DEGRADED')",
+            ):
+                active_plan = json.loads(row[0])
+                if (edit_context is not None or "edit_context" in active_plan) and (
+                    planned_ids & {effect["form_id"] for effect in active_plan["forms"]}
+                ):
+                    raise JournalBusyError("A shared form has an active source write")
             if creation:
                 plan["mutation"] = "CREATE"
-            if receipt_context is not None:
-                plan["save_context"] = receipt_context
+            if context is not None:
+                plan["edit_context" if edit_context is not None else "save_context"] = context
+                if edit_context is not None:
+                    target = next((effect for effect in plan["forms"]
+                                   if effect["form_id"] == context["form_id"]), None)
+                    operation_kind = connection.exec_driver_sql(
+                        "SELECT kind FROM operations WHERE operation_id=?", (operation_id,),
+                    ).scalar_one()
+                    canonical_source = self.repository.get_source_file(
+                        source_id, connection=connection,
+                    )
+                    if (
+                        operation_kind != "EDIT" or response_status != 200
+                        or result_ref != operation_id or target is None
+                        or target["form_id"] not in plan["links"]
+                        or target["base_revision"] != context["form_revision"]
+                        or target["base_hash"] != context["form_hash"]
+                        or canonical_source is None or canonical_source.etag != context["etag"]
+                        or len(context["identities"]) != 1 or plan["removed"]
+                        or any(effect["base_revision"] is None for effect in plan["forms"])
+                    ):
+                        raise JournalConflictError("Edit target or source preconditions changed")
+                    target_semantic = self._semantics(document)[target["key"]]
+                    if {tuple(identity) for identity in context["identities"]} != {(
+                        target_semantic.family_root, target_semantic.normalized_lemma,
+                        target_semantic.part_of_speech,
+                    )}:
+                        raise JournalConflictError("Edit target identity changed")
                 if not creation:
                     # A date note can retain an older snapshot of shared forms.
                     # Saving another preview owns only its selected identities;
@@ -520,7 +564,9 @@ class SourceWriteCoordinator:
                         raise JournalConflictError("Source bytes changed before preparation")
                     previous = self._semantics(self._document(source_id, previous_content))
                     proposed = self._semantics(document)
-                    selected = {tuple(identity) for identity in receipt_context["identities"]}
+                    selected = {tuple(identity) for identity in context["identities"]}
+                    if edit_context is not None and set(previous) != set(proposed):
+                        raise JournalConflictError("Edit changes source identities")
                     for effect in plan["forms"]:
                         semantic = proposed[effect["key"]]
                         identity = (semantic.family_root, semantic.normalized_lemma,
@@ -537,10 +583,19 @@ class SourceWriteCoordinator:
                             raise JournalConflictError("Save changes an unselected source form")
                         effect["preserve_canonical"] = True
                         effect["reset"] = False
-                plan["receipt"] = self._save_receipt(
+                snapshot = self._save_receipt(
                     connection, source_id, document, plan, operation_id,
-                    intended_projection_revision, receipt_context,
+                    intended_projection_revision, context,
                 )
+                if edit_context is None:
+                    plan["receipt"] = snapshot
+                else:
+                    plan["receipt"] = {
+                        "wordForm": snapshot["canonicalForms"][0],
+                        "operationId": operation_id,
+                        "sourceRevision": intended_projection_revision,
+                    }
+                    plan["response_etag"] = snapshot["sourceEtag"]
 
             now = _now()
             self._fault(fault, "BEFORE_PREPARED")
@@ -672,7 +727,10 @@ class SourceWriteCoordinator:
             or source.revision + 1 != journal.intended_projection_revision
         ):
             raise AmbiguousSourceStateError("Database source revision is ambiguous")
-        if "save_context" in journal.effect_plan:
+        mutation_context = journal.effect_plan.get("edit_context") or journal.effect_plan.get(
+            "save_context"
+        )
+        if mutation_context is not None:
             ids = list(connection.exec_driver_sql(
                 "SELECT id FROM source_files WHERE note_date=?", (source.note_date,),
             ).scalars())
@@ -719,11 +777,24 @@ class SourceWriteCoordinator:
             en, vi, examples, ipa_status, link_status = _projection_values(semantic, old)
             if "card_baseline" in effect:
                 baseline = connection.exec_driver_sql(
-                    "SELECT box,due_at,queue_revision FROM review_cards WHERE card_id=?",
-                    (effect["card_id"],),
+                    "SELECT box,due_at,queue_revision FROM review_cards "
+                    "WHERE card_id=? AND word_form_id=?",
+                    (effect["card_id"], effect["form_id"]),
                 ).first()
-                if (list(baseline) if baseline is not None else None) != effect["card_baseline"]:
-                    raise AmbiguousSourceStateError("Card changed since save preparation")
+                card_values = list(baseline) if baseline is not None else None
+                expected_card = effect["card_baseline"]
+                if "edit_context" not in journal.effect_plan or expected_card is None:
+                    if card_values != expected_card:
+                        raise AmbiguousSourceStateError("Card changed since save preparation")
+                elif card_values is None or card_values[2] < expected_card[2] or (
+                    card_values[2] == expected_card[2] and card_values != expected_card
+                ):
+                    raise AmbiguousSourceStateError("Edit card identity or revision changed")
+                # A published edit can await recovery while another review advances
+                # this same card. The canonical form baseline above still authenticates
+                # its learning content. Preserve those events and metadata schedules;
+                # apply a planned learning reset once to the current card. Its receipt
+                # remains the frozen original snapshot, just as after later reviews.
                 refs = (
                     sorted([sorted(ref.to_dict().items()) for ref in old.source_refs])
                     if old else []
@@ -732,9 +803,9 @@ class SourceWriteCoordinator:
                     raise AmbiguousSourceStateError("Source membership changed since preparation")
             preserve = effect.get("preserve_canonical", False)
             if preserve and (
-                old is None or "save_context" not in journal.effect_plan
+                old is None or mutation_context is None
                 or [semantic.family_root, semantic.normalized_lemma, semantic.part_of_speech]
-                in journal.effect_plan["save_context"]["identities"]
+                in mutation_context["identities"]
                 or effect["reset"]
             ):
                 raise AmbiguousSourceStateError("Preserved form intent is inconsistent")
@@ -850,6 +921,8 @@ class SourceWriteCoordinator:
         apply_projection: ProjectionApply | None,
         reset_cards: CardReset | None,
         fault: FaultInjector | None,
+        publish: ProjectionApply | None = None,
+        prepared_document: ParsedDocument | None = None,
     ) -> JournalRecord:
         if (response_status is not None and response_status != journal.response_status) or (
             result_ref is not None and result_ref != journal.result_ref
@@ -864,15 +937,22 @@ class SourceWriteCoordinator:
                 or canonical.relative_path != registered.relative_path
             ):
                 raise JournalConflictError("Filesystem registration differs from canonical source")
-            content = self.adapter.read_source_content(journal.source_id)
-            if _hash(content) != journal.new_hash:
-                raise AmbiguousSourceStateError("Source hash is ambiguous")
-            document = self._document(journal.source_id, content)
+            if publish is None:
+                content = self.adapter.read_source_content(journal.source_id)
+                if _hash(content) != journal.new_hash:
+                    raise AmbiguousSourceStateError("Source hash is ambiguous")
+                document = self._document(journal.source_id, content)
+            else:
+                if journal.state != "PREPARED" or prepared_document is None:
+                    raise JournalError("Edit publication is not prepared")
+                document = prepared_document
         except (SourceFileError, JournalConflictError, AmbiguousSourceStateError):
             self._transition(journal.operation_id, "DEGRADED")
             raise
 
         def local_write(connection: Connection) -> None:
+            if publish is not None:
+                publish(connection, journal)
             self._apply_local(
                 connection,
                 journal,
@@ -986,6 +1066,7 @@ class SourceWriteCoordinator:
         fault: FaultInjector | None = None,
         creation: bool = False,
         receipt_context: dict[str, Any] | None = None,
+        edit_context: dict[str, Any] | None = None,
     ) -> JournalRecord:
         """Run PREPARED → safe replacement → projection/card/receipt → COMMITTED."""
         operation_ledger = operation_ledger or OperationLedger(self.engine)
@@ -1064,6 +1145,7 @@ class SourceWriteCoordinator:
             _require_new=True,
             creation=creation,
             receipt_context=receipt_context,
+            edit_context=edit_context,
         )
         if journal.state == "COMMITTED":
             return journal
@@ -1080,6 +1162,68 @@ class SourceWriteCoordinator:
             self._fault(fault, "BEFORE_TEMP_HANDLE")
             self._record_stage(journal, staged.recovery_handle)
             self._fault(fault, "AFTER_TEMP_FSYNC")
+            if edit_context is not None:
+                # Freeze evidence in PREPARED first, then serialize publication and
+                # all completion effects inside T014's existing receipt transaction.
+                # A crash rolls SQLite back to PREPARED; recovery already recognizes
+                # the intended new hash and completes it without another replacement.
+                # This also closes the gap in which an ordinary review could change
+                # the frozen card after publication but before receipt completion.
+                staged_edit = staged
+                publication_context = journal.effect_plan["edit_context"]
+
+                def publish_edit(connection: Connection, record: JournalRecord) -> None:
+                    source = self.repository.get_source_file(source_id, connection=connection)
+                    ids = list(connection.exec_driver_sql(
+                        "SELECT id FROM source_files WHERE note_date=?",
+                        (source.note_date if source is not None else "",),
+                    ).scalars())
+                    if source is None or ids != [source_id] or (
+                        source.status != "VALID"
+                        or source.revision + 1 != intended_projection_revision
+                        or source.content_hash != expected_old_hash
+                        or source.etag != publication_context["etag"]
+                    ):
+                        raise SourceFileError("REVISION_CONFLICT", "Source preconditions changed")
+                    for effect in record.effect_plan["forms"]:
+                        form = self.repository.get_word_form(
+                            effect["form_id"], connection=connection,
+                        )
+                        if form is None or form.revision != effect["base_revision"] or (
+                            _form_digest(form) != effect["base_hash"]
+                        ):
+                            raise SourceFileError("REVISION_CONFLICT", "Form changed")
+                        if "card_baseline" in effect:
+                            card = connection.exec_driver_sql(
+                                "SELECT box,due_at,queue_revision FROM review_cards "
+                                "WHERE card_id=?", (effect["card_id"],),
+                            ).first()
+                            refs = sorted([
+                                sorted(ref.to_dict().items()) for ref in form.source_refs
+                            ])
+                            if (list(card) if card is not None else None) != (
+                                effect["card_baseline"]
+                            ) or json.dumps(refs, sort_keys=True) != effect["refs_baseline"]:
+                                raise SourceFileError("REVISION_CONFLICT", "Learning state changed")
+                    published = staged_edit.commit()
+                    self._fault(fault, "AFTER_ATOMIC_REPLACE")
+                    if published.new_content_hash != record.new_hash or (
+                        self.adapter.get_source_hash(source_id) != record.new_hash
+                    ):
+                        raise AmbiguousSourceStateError("Replacement hash could not be confirmed")
+                    connection.exec_driver_sql(
+                        "UPDATE source_write_journal SET state='SOURCE_REPLACED',updated_at=? "
+                        "WHERE operation_id=? AND state='PREPARED'",
+                        (_now(), operation_id),
+                    )
+                    self._fault(fault, "AFTER_SOURCE_REPLACED")
+
+                return self._complete(
+                    journal, operation_ledger=operation_ledger, response_status=response_status,
+                    result_ref=result_ref, apply_projection=apply_projection, reset_cards=reset_cards,
+                    fault=fault, publish=publish_edit,
+                    prepared_document=self._document(source_id, new_content),
+                )
             if receipt_context is not None:
                 with self._writer() as connection:
                     source = self.repository.get_source_file(source_id, connection=connection)

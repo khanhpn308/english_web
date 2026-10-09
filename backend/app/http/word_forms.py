@@ -1,14 +1,19 @@
-"""Protected POST save adapter; source paths and AI ports are never client inputs."""
+"""Protected save/edit adapters; source paths and AI ports are never client inputs."""
 
 from typing import Annotated, Any, Literal, Self
 
+from backend.app.application.edit_word_form import (
+    EditConflict,
+    EditWordFormIntent,
+    EditWordFormService,
+)
 from backend.app.application.operations import OperationConflict
 from backend.app.application.save_word_family import SaveConflict, SaveWordFamilyService
 from backend.app.http.errors import error_response
 from backend.app.http.lookups import IdempotencyKey, _session_fingerprint
 from backend.app.http.search import WordFormDetail
 from backend.app.http.session import COOKIE_NAME
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, Header, Path, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.responses import JSONResponse
@@ -79,10 +84,12 @@ _SAVE_MESSAGES = {
 }
 
 
-def _failure(error: OperationConflict) -> JSONResponse:
-    details = error.details if isinstance(error, SaveConflict) else None
+def _failure(error: OperationConflict, operation_kind: str = "SAVE") -> JSONResponse:
+    details = error.details if isinstance(error, (SaveConflict, EditConflict)) else None
     if details is None and error.operation_id is not None:
-        details = {"kind": "RETRY", "operationId": error.operation_id, "operationKind": "SAVE"}
+        details = {
+            "kind": "RETRY", "operationId": error.operation_id, "operationKind": operation_kind,
+        }
     if error.code == "SOURCE_EVIDENCE_MISMATCH":
         return error_response(409, "IDEMPOTENCY_IN_FLIGHT", details)
     if error.code in _SAVE_MESSAGES:
@@ -90,8 +97,11 @@ def _failure(error: OperationConflict) -> JSONResponse:
         # locally. T024 does not mutate the shared error taxonomy.
         from secrets import token_urlsafe
 
+        message = _SAVE_MESSAGES[error.code]
+        if operation_kind == "EDIT" and error.code == "CROSS_RESOURCE_MISMATCH":
+            message = "Source does not contain the selected word form"
         body: dict[str, Any] = {
-            "code": error.code, "message": _SAVE_MESSAGES[error.code],
+            "code": error.code, "message": message,
             "requestId": f"req_{token_urlsafe(12)}",
         }
         if details is not None:
@@ -139,5 +149,58 @@ def post_word_forms(
         })
     except OperationConflict as error:
         return _failure(error)
+    except (SQLAlchemyError, ValidationError):
+        return error_response(503, "STORAGE_BUSY")
+
+
+class PatchWordFormRequest(EditWordFormIntent):
+    """Canonical editable fields and selected-source preconditions."""
+
+
+class WordFormMutationResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    wordForm: WordFormDetail
+    operationId: str
+    sourceRevision: int = Field(ge=1)
+
+
+@router.patch(
+    "/{wordFormId}", response_model=WordFormMutationResult,
+    responses={
+        200: {"headers": {"ETag": {"schema": {"type": "string"}}}},
+        **{status: {"model": SaveErrorResponse} for status in [
+            400, 401, 403, 404, 409, 413, 422, 503,
+        ]},
+    },
+)
+def patch_word_form(
+    request: Request,
+    wordFormId: Annotated[str, Path(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")],
+    body: PatchWordFormRequest,
+    idempotency_key: IdempotencyKey,
+    if_match: Annotated[str, Header(alias="If-Match", min_length=1, max_length=128)],
+) -> JSONResponse:
+    if request.query_params or "if-none-match" in request.headers or any(
+        len(request.headers.getlist(name)) > 1 for name in ("idempotency-key", "if-match")
+    ):
+        return error_response(422, "VALIDATION_ERROR")
+    service = getattr(request.app.state, "edit_word_form_service", None)
+    if not isinstance(service, EditWordFormService):
+        return error_response(503, "CONFIGURATION_REQUIRED")
+    if not request.app.state.ready:
+        return error_response(503, "STORAGE_BUSY")
+    if request.cookies.get(COOKIE_NAME) is None:
+        return error_response(401, "SESSION_REQUIRED")
+    try:
+        result, etag = service.edit(
+            word_form_id=wordFormId, intent=body, idempotency_key=idempotency_key,
+            if_match=if_match,
+        )
+        validated = WordFormMutationResult.model_validate(result)
+        return JSONResponse(validated.model_dump(mode="json"), headers={
+            "ETag": etag, "Cache-Control": "no-store",
+        })
+    except OperationConflict as error:
+        return _failure(error, "EDIT")
     except (SQLAlchemyError, ValidationError):
         return error_response(503, "STORAGE_BUSY")
