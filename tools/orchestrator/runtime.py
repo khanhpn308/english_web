@@ -191,6 +191,19 @@ class DockerVerificationSandbox:
             *command,
         ]
 
+    @staticmethod
+    def _local_docker(argv: list[str]) -> list[str]:
+        # Host-owned Docker client uses a fixed local socket, no inherited
+        # DOCKER_HOST, user Docker context or credential-bearing HOME.
+        return [
+            "/usr/bin/env",
+            "-i",
+            "PATH=/usr/bin:/bin",
+            "HOME=/tmp",
+            "DOCKER_HOST=unix:///var/run/docker.sock",
+            *argv,
+        ]
+
     def run(self, command: list[str], workspace: Path) -> ProcessResult:
         """Run only in a disposable verification clone; never fall back to host."""
         resolved = self._workspace(workspace)
@@ -199,16 +212,18 @@ class DockerVerificationSandbox:
         with tempfile.TemporaryDirectory(prefix="t090-docker-config-") as temporary:
             config_dir = Path(temporary)
             inspect = execute(
-                [
-                    "/usr/bin/docker",
-                    "--config",
-                    str(config_dir),
-                    "image",
-                    "inspect",
-                    "--format",
-                    "{{.Id}}",
-                    self.policy.image,
-                ],
+                self._local_docker(
+                    [
+                        "/usr/bin/docker",
+                        "--config",
+                        str(config_dir),
+                        "image",
+                        "inspect",
+                        "--format",
+                        "{{.Id}}",
+                        self.policy.image,
+                    ]
+                ),
                 resolved,
                 timeout=20,
             )
@@ -219,7 +234,7 @@ class DockerVerificationSandbox:
             name = f"t090-verify-{uuid4().hex}"
             try:
                 result = execute(
-                    self._argv(command, resolved, name, config_dir),
+                    self._local_docker(self._argv(command, resolved, name, config_dir)),
                     resolved,
                     timeout=self.policy.timeout_seconds,
                 )
@@ -227,7 +242,9 @@ class DockerVerificationSandbox:
                 # Killing Docker CLI does not guarantee the daemon's container
                 # stopped. Remove by host-generated name with the same clean config.
                 cleanup = execute(
-                    ["/usr/bin/docker", "--config", str(config_dir), "rm", "-f", name],
+                    self._local_docker(
+                        ["/usr/bin/docker", "--config", str(config_dir), "rm", "-f", name]
+                    ),
                     resolved,
                     timeout=20,
                 )
