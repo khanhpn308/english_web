@@ -22,7 +22,6 @@ from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError
-
 from tools.orchestrator.core import WorkerResult
 
 
@@ -176,6 +175,7 @@ class _RejectRedirect(HTTPRedirectHandler):
     def redirect_request(
         self, req: Request, fp: Any, code: int, msg: str, headers: Any, newurl: str
     ) -> None:
+        del req, fp, code, msg, headers, newurl
         raise HostEditRejected("Model transport HTTP redirect is forbidden")
 
 
@@ -217,7 +217,10 @@ class LoopbackChatTransport:
                 "messages": [
                     {
                         "role": "system",
-                        "content": "Return a strict JSON WorkerEditResponse. You have NO tools and cannot run commands or edit files. Never include commands_run.",
+                        "content": (
+                            "Return a strict JSON WorkerEditResponse. You have NO tools "
+                            "and cannot run commands or edit files. Never include commands_run."
+                        ),
                     },
                     {"role": "user", "content": prompt},
                 ],
