@@ -222,7 +222,6 @@ def verify_registry_attestations(
     return statements[0], statements[1]
 
 
-
 def validate_candidate_osv_snapshot_source(snapshot_path: Path, pins_path: Path) -> dict[str, str]:
     """Validate candidate snapshot identity and expected archive checksums.
 

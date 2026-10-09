@@ -245,9 +245,7 @@ def test_t090_candidate_osv_snapshot_requires_immutable_signed_source_identity(
         "source_repository": "khanhpn308/english_web",
         "source_sha": "d" * 40,
         "source_ref": "refs/heads/feature/t090-provider-isolation-adjudication",
-        "signer_workflow": (
-            "khanhpn308/english_web/.github/workflows/t090-image-attestation.yml"
-        ),
+        "signer_workflow": ("khanhpn308/english_web/.github/workflows/t090-image-attestation.yml"),
         "osv_archive_sha256": hashes,
     }
     snapshot_file.write_text(json.dumps(valid))
