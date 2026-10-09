@@ -4070,3 +4070,47 @@ def test_t090_sealed_source_artifact_detects_tamper(
     artifact.write_text("CORRUPTED", encoding="utf-8")
     with pytest.raises(OrchestratorError):
         pipeline.check_artifacts(directory, state)
+
+
+def test_t090_secure_auditor_receives_sealed_evidence_without_file_tools(
+    repository: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from tools.orchestrator.core import Fix
+    from tools.orchestrator.runtime import SecureProvider
+    from tools.orchestrator.worker_sandbox import LoopbackChatTransport
+
+    config = configuration(integrate=False)
+    pipeline = Pipeline(repository, config, FakeAgents())
+    state = pipeline.start("T100", defer_verification=True)
+    directory = pipeline.run_path("T100", state.run_id)
+    config.roles["auditor"] = config.roles["auditor"].model_copy(
+        update={
+            "analysis_backend": "host-http-text",
+            "model": "gemini-3.8-flash-high",
+            "host_text_endpoint": "http://127.0.0.1:8045/v1/chat/completions",
+            "host_text_api_key_env": "T090_TEST_ONLY_KEY",
+        }
+    )
+    monkeypatch.setenv("T090_TEST_ONLY_KEY", "synthetic")
+    pipeline.provider = SecureProvider()
+    calls = []
+
+    def respond(
+        _self: LoopbackChatTransport, prompt: str, *, model: str, timeout: int | None
+    ) -> str:
+        assert _self.response_contract == "semantic-json"
+        assert model == "gemini-3.8-flash-high"
+        assert timeout == 30
+        assert "HOST-SEALED SOURCE/DIFF EVIDENCE" in prompt
+        assert "docs/changelogs.md" in prompt
+        assert "feature.txt" in prompt
+        assert "New synthetic entry" in prompt
+        assert "Historical entry" in prompt
+        calls.append(prompt)
+        return '{"fix_prompt":"KEEP_SAFE"}'
+
+    monkeypatch.setattr(LoopbackChatTransport, "complete", respond)
+    result = pipeline.invoke(directory, state, "auditor", Fix, "Read-only source review")
+    assert result.fix_prompt == "KEEP_SAFE"
+    assert len(calls) == 1
+    pipeline.check_artifacts(directory, state)
