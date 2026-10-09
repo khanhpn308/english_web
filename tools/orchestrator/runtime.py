@@ -1,10 +1,14 @@
 """Processes with opt-in deadlines, local locks, Git and replaceable CLI providers."""
 
+import hashlib
+import hmac
 import importlib
+import inspect
 import json
 import os
 import re
 import signal
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -65,9 +69,57 @@ class ProcessResult:
 
 
 _DOCKER_DIGEST_RE = re.compile(r"^[a-z0-9][a-z0-9._:/-]*@sha256:[a-f0-9]{64}$")
+def _docker_source_digest(root: str) -> str:
+    """Hash path, type, permissions and content, independent of directory root."""
+    root = os.path.realpath(root)
+    digest = hashlib.sha256(b"t090-tree-v1\n")
+    for parent, folders, files in os.walk(root, followlinks=False):
+        for name in sorted([*folders, *files]):
+            path = os.path.join(parent, name)
+            relative = os.path.relpath(path, root).replace(os.sep, "/")
+            before = os.lstat(path)
+            mode = before.st_mode
+            if stat.S_ISDIR(mode):
+                record = ["d", relative, mode & 0o777]
+            elif stat.S_ISLNK(mode):
+                link = os.readlink(path)
+                if os.path.isabs(link):
+                    raise ValueError("absolute source symlink forbidden")
+                target = os.path.realpath(path, strict=True)
+                if os.path.commonpath([root, target]) != root:
+                    raise ValueError("source symlink escapes tree")
+                record = ["l", relative, link]
+            elif stat.S_ISREG(mode):
+                if before.st_nlink != 1:
+                    raise ValueError("hardlinked source forbidden")
+                handle = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+                try:
+                    opened = os.fstat(handle)
+                    if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+                        raise ValueError("source path replaced during scan")
+                    file_hash = hashlib.sha256()
+                    while chunk := os.read(handle, 128 * 1024):
+                        file_hash.update(chunk)
+                    after = os.fstat(handle)
+                    if (
+                        (opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns)
+                        != (after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+                    ):
+                        raise ValueError("source modified during scan")
+                finally:
+                    os.close(handle)
+                record = ["f", relative, mode & 0o777, file_hash.hexdigest()]
+            else:
+                raise ValueError("special source file forbidden")
+            digest.update(json.dumps(record, separators=(",", ":")).encode())
+            digest.update(b"\n")
+    return digest.hexdigest()
+
+
 _DOCKER_TRUSTED_BOOTSTRAP = (
-    "import os, shutil, sys\n"
-    "for entry in os.scandir('/source'):\n"
+    "import hashlib, json, os, shutil, stat, sys\n"
+    + inspect.getsource(_docker_source_digest)
+    + "for entry in os.scandir('/source'):\n"
     "    src = entry.path\n"
     "    dst = os.path.join('/workspace', entry.name)\n"
     "    if entry.is_symlink():\n"
@@ -76,8 +128,14 @@ _DOCKER_TRUSTED_BOOTSTRAP = (
     "        shutil.copytree(src, dst, symlinks=True)\n"
     "    else:\n"
     "        shutil.copy2(src, dst)\n"
+    "try:\n"
+    "    attested = _docker_source_digest('/workspace') == sys.argv[1]\n"
+    "except (OSError, ValueError):\n"
+    "    attested = False\n"
+    "if not attested:\n"
+    "    raise SystemExit('T090 SANDBOX_BLOCKED: source attestation mismatch')\n"
     "os.chdir('/workspace')\n"
-    "os.execvp(sys.argv[1], sys.argv[1:])\n"
+    "os.execvp(sys.argv[2], sys.argv[2:])\n"
 )
 
 
@@ -158,8 +216,24 @@ class DockerVerificationSandbox:
         except (OSError, RuntimeError) as error:
             raise OrchestratorError("T090 SANDBOX_BLOCKED: unreadable workspace") from error
 
+    def source_digest(self, workspace: Path) -> str:
+        """Host must persist this digest at a trusted earlier source-freeze step."""
+        try:
+            return _docker_source_digest(str(self._workspace(workspace)))
+        except (OSError, ValueError) as error:
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: source digest unavailable") from error
+
+    def _attest_source(self, workspace: Path, expected: str) -> None:
+        if not hmac.compare_digest(self.source_digest(workspace), expected):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: source attestation mismatch")
+
     def _argv(
-        self, command: list[str], workspace: Path, container: str, config_dir: Path
+        self,
+        command: list[str],
+        workspace: Path,
+        container: str,
+        config_dir: Path,
+        expected_source_digest: str,
     ) -> list[str]:
         from tools.orchestrator.core import validate_command
 
@@ -211,6 +285,7 @@ class DockerVerificationSandbox:
             "-I",
             "-c",
             _DOCKER_TRUSTED_BOOTSTRAP,
+            expected_source_digest,
             *command,
         ]
 
@@ -227,60 +302,94 @@ class DockerVerificationSandbox:
             *argv,
         ]
 
-    def run(self, command: list[str], workspace: Path) -> ProcessResult:
-        """Run only in a disposable verification clone; never fall back to host."""
+    def run(
+        self,
+        command: list[str],
+        workspace: Path,
+        *,
+        expected_source_digest: str | None = None,
+    ) -> ProcessResult:
+        """Execute ONLY against a source digest supplied by a trusted Host freeze."""
         from tools.orchestrator.core import validate_command
 
         validate_command(command)
         if command[:2] == ["npm", "ci"]:
             raise OrchestratorError("T090 SANDBOX_BLOCKED: setup needs trusted dependencies")
+        if expected_source_digest is None or not re.fullmatch(
+            r"[a-f0-9]{64}", expected_source_digest
+        ):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: trusted source digest required")
         resolved = self._workspace(workspace)
         if not Path("/usr/bin/docker").is_file():
             raise OrchestratorError("T090 SANDBOX_BLOCKED: Docker executable unavailable")
-        with tempfile.TemporaryDirectory(prefix="t090-docker-config-") as temporary:
-            config_dir = Path(temporary)
-            inspect = execute(
-                self._local_docker(
-                    [
-                        "/usr/bin/docker",
-                        "--config",
-                        str(config_dir),
-                        "image",
-                        "inspect",
-                        "--format",
-                        "{{.Id}}",
-                        self.policy.image,
-                    ]
-                ),
-                resolved,
-                timeout=20,
-            )
-            if inspect.exit_code or not re.fullmatch(r"sha256:[a-f0-9]{64}\s*", inspect.stdout):
-                raise OrchestratorError("T090 SANDBOX_BLOCKED: pinned local image unavailable")
-            name = f"t090-verify-{uuid4().hex}"
+        self._attest_source(resolved, expected_source_digest)
+
+        # Docker binds a private Host-owned source seal, never the original candidate.
+        # Any mutation during copying or execution is checked against the frozen digest.
+        with tempfile.TemporaryDirectory(
+            prefix="verify-sealed-", dir=self.policy.verification_root
+        ) as sealed_root:
+            sealed = Path(sealed_root) / "workspace"
             try:
-                result = execute(
-                    self._local_docker(self._argv(command, resolved, name, config_dir)),
-                    resolved,
-                    timeout=self.policy.timeout_seconds,
-                )
-            finally:
-                # Killing Docker CLI does not guarantee the daemon's container
-                # stopped. Remove by host-generated name with the same clean config.
-                cleanup = execute(
+                shutil.copytree(resolved, sealed, symlinks=True)
+            except (OSError, shutil.Error) as error:
+                raise OrchestratorError("T090 SANDBOX_BLOCKED: source sealing failed") from error
+            self._attest_source(sealed, expected_source_digest)
+
+            with tempfile.TemporaryDirectory(prefix="t090-docker-config-") as temporary:
+                config_dir = Path(temporary)
+                inspected = execute(
                     self._local_docker(
-                        ["/usr/bin/docker", "--config", str(config_dir), "rm", "-f", name]
+                        [
+                            "/usr/bin/docker",
+                            "--config",
+                            str(config_dir),
+                            "image",
+                            "inspect",
+                            "--format",
+                            "{{.Id}}",
+                            self.policy.image,
+                        ]
                     ),
-                    resolved,
+                    sealed,
                     timeout=20,
                 )
-                if (
-                    cleanup.timed_out
-                    or cleanup.oversized
-                    or (cleanup.exit_code != 0 and "No such container" not in cleanup.stderr)
+                if inspected.exit_code or not re.fullmatch(
+                    r"sha256:[a-f0-9]{64}\s*", inspected.stdout
                 ):
-                    raise OrchestratorError("T090 SANDBOX_BLOCKED: cleanup not confirmed")
-            return result
+                    raise OrchestratorError("T090 SANDBOX_BLOCKED: pinned local image unavailable")
+
+                self._attest_source(sealed, expected_source_digest)
+                name = f"t090-verify-{uuid4().hex}"
+                try:
+                    result = execute(
+                        self._local_docker(
+                            self._argv(
+                                command, sealed, name, config_dir, expected_source_digest
+                            )
+                        ),
+                        sealed,
+                        timeout=self.policy.timeout_seconds,
+                    )
+                finally:
+                    cleanup = execute(
+                        self._local_docker(
+                            ["/usr/bin/docker", "--config", str(config_dir), "rm", "-f", name]
+                        ),
+                        sealed,
+                        timeout=20,
+                    )
+                    if (
+                        cleanup.timed_out
+                        or cleanup.oversized
+                        or (
+                            cleanup.exit_code != 0
+                            and "No such container" not in cleanup.stderr
+                        )
+                    ):
+                        raise OrchestratorError("T090 SANDBOX_BLOCKED: cleanup not confirmed")
+                self._attest_source(sealed, expected_source_digest)
+                return result
 
 
 class _StallExpired(Exception):
