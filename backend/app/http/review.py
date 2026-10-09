@@ -42,8 +42,37 @@ CardRevision = Annotated[
 ]
 
 
+def _review_request_schema(schema: dict[str, Any]) -> None:
+    properties = schema["properties"]
+    provenance = ("attemptId", "questionId")
+    schema["oneOf"] = [
+        {
+            "type": "object",
+            "properties": {
+                "source": {"type": "string", "const": "FLASHCARD"},
+                **{name: {"type": "null"} for name in provenance},
+            },
+            "required": ["source"],
+        },
+        {
+            "type": "object",
+            "properties": {
+                "source": {"type": "string", "const": "QUIZ"},
+                **{
+                    name: next(
+                        branch for branch in properties[name]["anyOf"]
+                        if branch.get("type") != "null"
+                    )
+                    for name in provenance
+                },
+            },
+            "required": ["source", *provenance],
+        },
+    ]
+
+
 class ReviewRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+    model_config = ConfigDict(extra="forbid", strict=True, json_schema_extra=_review_request_schema)
 
     rating: Rating
     source: Literal["FLASHCARD", "QUIZ"]

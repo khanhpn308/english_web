@@ -265,6 +265,78 @@
         "title": "AiDispatchRule",
         "type": "object"
       },
+      "Answer": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "maxLength": 4096,
+            "title": "Answer",
+            "type": "string"
+          },
+          "attemptId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Attemptid",
+            "type": "string"
+          },
+          "draftRevision": {
+            "minimum": 1.0,
+            "title": "Draftrevision",
+            "type": "integer"
+          },
+          "operationId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Operationid",
+            "type": "string"
+          },
+          "questionId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Questionid",
+            "type": "string"
+          },
+          "savedAt": {
+            "format": "date-time",
+            "title": "Savedat",
+            "type": "string"
+          },
+          "selfScore": {
+            "anyOf": [
+              {
+                "maximum": 4.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selfscore"
+          },
+          "state": {
+            "enum": [
+              "BLANK",
+              "DRAFT",
+              "SCORED"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "attemptId",
+          "questionId",
+          "answer",
+          "selfScore",
+          "draftRevision",
+          "savedAt",
+          "state",
+          "operationId"
+        ],
+        "title": "Answer",
+        "type": "object"
+      },
       "BootstrapExchange": {
         "additionalProperties": false,
         "properties": {
@@ -320,6 +392,152 @@
           "dueAt"
         ],
         "title": "CardView",
+        "type": "object"
+      },
+      "ClozeQuestion": {
+        "additionalProperties": false,
+        "properties": {
+          "answerPolicyVersion": {
+            "const": "cloze-answer-v1",
+            "title": "Answerpolicyversion",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "promptEn": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Prompten",
+            "type": "string"
+          },
+          "type": {
+            "const": "CLOZE",
+            "title": "Type",
+            "type": "string"
+          },
+          "wordFormId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Wordformid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "wordFormId",
+          "promptEn",
+          "answerPolicyVersion"
+        ],
+        "title": "ClozeQuestion",
+        "type": "object"
+      },
+      "ClozeQuestionResult": {
+        "additionalProperties": false,
+        "properties": {
+          "acceptedAnswers": {
+            "items": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Acceptedanswers",
+            "type": "array"
+          },
+          "explanationVi": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Explanationvi",
+            "type": "string"
+          },
+          "isCorrect": {
+            "title": "Iscorrect",
+            "type": "boolean"
+          },
+          "outcome": {
+            "enum": [
+              "CORRECT",
+              "INCORRECT",
+              "BLANK"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "questionId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Questionid",
+            "type": "string"
+          },
+          "rating": {
+            "enum": [
+              "AGAIN",
+              "HARD",
+              "GOOD",
+              "EASY"
+            ],
+            "title": "Rating",
+            "type": "string"
+          },
+          "type": {
+            "const": "CLOZE",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "questionId",
+          "type",
+          "outcome",
+          "isCorrect",
+          "rating",
+          "acceptedAnswers",
+          "explanationVi"
+        ],
+        "title": "ClozeQuestionResult",
+        "type": "object"
+      },
+      "ConsentDetails": {
+        "properties": {
+          "consentState": {
+            "enum": [
+              "NOT_GRANTED",
+              "GRANTED",
+              "REVOKED",
+              "STALE"
+            ],
+            "title": "Consentstate",
+            "type": "string"
+          },
+          "currentPolicyVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currentpolicyversion"
+          },
+          "kind": {
+            "const": "AI_CONSENT",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "consentState",
+          "currentPolicyVersion"
+        ],
+        "title": "ConsentDetails",
         "type": "object"
       },
       "ConsentError": {
@@ -389,6 +607,24 @@
         "title": "ConsentRetryDetails",
         "type": "object"
       },
+      "CreateQuizRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/QuizCounts"
+          },
+          "noteDate": {
+            "title": "Notedate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "noteDate",
+          "counts"
+        ],
+        "title": "CreateQuizRequest",
+        "type": "object"
+      },
       "CreateSyncRunRequest": {
         "additionalProperties": false,
         "properties": {
@@ -408,8 +644,73 @@
         "title": "CreateSyncRunRequest",
         "type": "object"
       },
+      "EditExample": {
+        "additionalProperties": false,
+        "properties": {
+          "english": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "English",
+            "type": "string"
+          },
+          "verificationStatus": {
+            "enum": [
+              "VERIFIED",
+              "UNVERIFIED",
+              "MISSING"
+            ],
+            "title": "Verificationstatus",
+            "type": "string"
+          },
+          "vietnamese": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Vietnamese",
+            "type": "string"
+          }
+        },
+        "required": [
+          "english",
+          "vietnamese",
+          "verificationStatus"
+        ],
+        "title": "EditExample",
+        "type": "object"
+      },
+      "EditMeaning": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "verificationStatus": {
+            "enum": [
+              "VERIFIED",
+              "UNVERIFIED",
+              "MISSING"
+            ],
+            "title": "Verificationstatus",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "verificationStatus"
+        ],
+        "title": "EditMeaning",
+        "type": "object"
+      },
       "ErrorDetails": {
         "anyOf": [
+          {
+            "$ref": "#/components/schemas/SourceConflictDetails"
+          },
+          {
+            "$ref": "#/components/schemas/RestoreDetails"
+          },
           {
             "properties": {
               "fields": {
@@ -567,6 +868,46 @@
           "verificationStatus"
         ],
         "title": "ExampleView",
+        "type": "object"
+      },
+      "FieldError": {
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "reason"
+        ],
+        "title": "FieldError",
+        "type": "object"
+      },
+      "FieldErrorDetails": {
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "kind": {
+            "const": "FIELD_ERRORS",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "fields"
+        ],
+        "title": "FieldErrorDetails",
         "type": "object"
       },
       "GrantAiConsent": {
@@ -876,6 +1217,137 @@
         "title": "LookupResult",
         "type": "object"
       },
+      "MCQOption": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "textEn": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Texten",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "textEn"
+        ],
+        "title": "MCQOption",
+        "type": "object"
+      },
+      "MCQQuestion": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/MCQOption"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Options",
+            "type": "array"
+          },
+          "promptEn": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Prompten",
+            "type": "string"
+          },
+          "type": {
+            "const": "MCQ",
+            "title": "Type",
+            "type": "string"
+          },
+          "wordFormId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Wordformid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "wordFormId",
+          "promptEn",
+          "options"
+        ],
+        "title": "MCQQuestion",
+        "type": "object"
+      },
+      "MCQQuestionResult": {
+        "additionalProperties": false,
+        "properties": {
+          "correctOptionId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Correctoptionid",
+            "type": "string"
+          },
+          "explanationVi": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Explanationvi",
+            "type": "string"
+          },
+          "isCorrect": {
+            "title": "Iscorrect",
+            "type": "boolean"
+          },
+          "outcome": {
+            "enum": [
+              "CORRECT",
+              "INCORRECT",
+              "BLANK"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "questionId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Questionid",
+            "type": "string"
+          },
+          "rating": {
+            "enum": [
+              "AGAIN",
+              "HARD",
+              "GOOD",
+              "EASY"
+            ],
+            "title": "Rating",
+            "type": "string"
+          },
+          "type": {
+            "const": "MCQ",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "questionId",
+          "type",
+          "outcome",
+          "isCorrect",
+          "rating",
+          "correctOptionId",
+          "explanationVi"
+        ],
+        "title": "MCQQuestionResult",
+        "type": "object"
+      },
       "MeaningView": {
         "additionalProperties": false,
         "properties": {
@@ -903,6 +1375,67 @@
           "verificationStatus"
         ],
         "title": "MeaningView",
+        "type": "object"
+      },
+      "ObjectiveScore": {
+        "additionalProperties": false,
+        "properties": {
+          "accuracy": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accuracy"
+          },
+          "attempted": {
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Attempted",
+            "type": "integer"
+          },
+          "correct": {
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Correct",
+            "type": "integer"
+          },
+          "total": {
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "attempted",
+          "correct",
+          "accuracy"
+        ],
+        "title": "ObjectiveScore",
+        "type": "object"
+      },
+      "ObjectiveScores": {
+        "additionalProperties": false,
+        "properties": {
+          "cloze": {
+            "$ref": "#/components/schemas/ObjectiveScore"
+          },
+          "mcq": {
+            "$ref": "#/components/schemas/ObjectiveScore"
+          }
+        },
+        "required": [
+          "mcq",
+          "cloze"
+        ],
+        "title": "ObjectiveScores",
         "type": "object"
       },
       "Operation": {
@@ -1053,6 +1586,1309 @@
         "title": "PaginationView",
         "type": "object"
       },
+      "PatchWordFormRequest": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "anyOf": [
+              {
+                "properties": {
+                  "cambridgeUrl": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Cambridgeurl"
+                  }
+                },
+                "required": [
+                  "cambridgeUrl"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "examples": {
+                    "items": {
+                      "$ref": "#/components/schemas/EditExample"
+                    },
+                    "maxItems": 100,
+                    "minItems": 1,
+                    "title": "Examples",
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "examples"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "ipaUs": {
+                    "anyOf": [
+                      {
+                        "maxLength": 128,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Ipaus"
+                  }
+                },
+                "required": [
+                  "ipaUs"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "meaningsEn": {
+                    "items": {
+                      "$ref": "#/components/schemas/EditMeaning"
+                    },
+                    "maxItems": 100,
+                    "minItems": 1,
+                    "title": "Meaningsen",
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "meaningsEn"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "meaningsVi": {
+                    "items": {
+                      "$ref": "#/components/schemas/EditMeaning"
+                    },
+                    "maxItems": 100,
+                    "minItems": 1,
+                    "title": "Meaningsvi",
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "meaningsVi"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        ],
+        "description": "Canonical editable fields and selected-source preconditions.",
+        "properties": {
+          "cambridgeUrl": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cambridgeurl"
+          },
+          "examples": {
+            "items": {
+              "$ref": "#/components/schemas/EditExample"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Examples",
+            "type": "array"
+          },
+          "ipaUs": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipaus"
+          },
+          "meaningsEn": {
+            "items": {
+              "$ref": "#/components/schemas/EditMeaning"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Meaningsen",
+            "type": "array"
+          },
+          "meaningsVi": {
+            "items": {
+              "$ref": "#/components/schemas/EditMeaning"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Meaningsvi",
+            "type": "array"
+          },
+          "sourceId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Sourceid",
+            "type": "string"
+          },
+          "sourceRevision": {
+            "minimum": 1.0,
+            "title": "Sourcerevision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sourceId",
+          "sourceRevision"
+        ],
+        "title": "PatchWordFormRequest",
+        "type": "object"
+      },
+      "QuizAttempt": {
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "properties": {
+              "result": {
+                "type": "null"
+              },
+              "status": {
+                "const": "IN_PROGRESS",
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "result"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "result": {
+                "$ref": "#/components/schemas/QuizResult"
+              },
+              "status": {
+                "const": "SUBMITTED",
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "result"
+            ],
+            "type": "object"
+          }
+        ],
+        "properties": {
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/Answer"
+            },
+            "maxItems": 30,
+            "title": "Answers",
+            "type": "array"
+          },
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "noteDate": {
+            "title": "Notedate",
+            "type": "string"
+          },
+          "questions": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "CLOZE": "#/components/schemas/ClozeQuestion",
+                  "MCQ": "#/components/schemas/MCQQuestion",
+                  "WRITING": "#/components/schemas/WritingQuestion"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/MCQQuestion"
+                },
+                {
+                  "$ref": "#/components/schemas/ClozeQuestion"
+                },
+                {
+                  "$ref": "#/components/schemas/WritingQuestion"
+                }
+              ]
+            },
+            "maxItems": 30,
+            "minItems": 5,
+            "title": "Questions",
+            "type": "array"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuizResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "savedAnswerCount": {
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Savedanswercount",
+            "type": "integer"
+          },
+          "snapshotRevision": {
+            "minimum": 1.0,
+            "title": "Snapshotrevision",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "IN_PROGRESS",
+              "SUBMITTED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "submissionRevision": {
+            "minimum": 0.0,
+            "title": "Submissionrevision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "noteDate",
+          "status",
+          "questions",
+          "answers",
+          "savedAnswerCount",
+          "snapshotRevision",
+          "submissionRevision",
+          "result"
+        ],
+        "title": "QuizAttempt",
+        "type": "object"
+      },
+      "QuizCounts": {
+        "additionalProperties": false,
+        "properties": {
+          "cloze": {
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Cloze",
+            "type": "integer"
+          },
+          "mcq": {
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Mcq",
+            "type": "integer"
+          },
+          "writing": {
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Writing",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mcq",
+          "cloze",
+          "writing"
+        ],
+        "title": "QuizCounts",
+        "type": "object"
+      },
+      "QuizError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "AI_CONSENT": "#/components/schemas/ConsentDetails",
+                    "FIELD_ERRORS": "#/components/schemas/FieldErrorDetails",
+                    "RESTORE": "#/components/schemas/RestoreDetails",
+                    "RETRY": "#/components/schemas/RetryDetails"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/RetryDetails"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ConsentDetails"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RestoreDetails"
+                  },
+                  {
+                    "$ref": "#/components/schemas/FieldErrorDetails"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "requestId": {
+            "title": "Requestid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "requestId"
+        ],
+        "title": "QuizError",
+        "type": "object"
+      },
+      "QuizErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/QuizError"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "QuizErrorResponse",
+        "type": "object"
+      },
+      "QuizResult": {
+        "additionalProperties": false,
+        "properties": {
+          "attemptId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Attemptid",
+            "type": "string"
+          },
+          "objectiveScores": {
+            "$ref": "#/components/schemas/ObjectiveScores"
+          },
+          "questionResults": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "CLOZE": "#/components/schemas/ClozeQuestionResult",
+                  "MCQ": "#/components/schemas/MCQQuestionResult",
+                  "WRITING": "#/components/schemas/WritingQuestionResult"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/MCQQuestionResult"
+                },
+                {
+                  "$ref": "#/components/schemas/ClozeQuestionResult"
+                },
+                {
+                  "$ref": "#/components/schemas/WritingQuestionResult"
+                }
+              ]
+            },
+            "maxItems": 30,
+            "minItems": 5,
+            "title": "Questionresults",
+            "type": "array"
+          },
+          "reviewHandoffs": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewHandoff"
+            },
+            "maxItems": 30,
+            "minItems": 1,
+            "title": "Reviewhandoffs",
+            "type": "array"
+          },
+          "status": {
+            "const": "SUBMITTED",
+            "title": "Status",
+            "type": "string"
+          },
+          "submissionRevision": {
+            "minimum": 0.0,
+            "title": "Submissionrevision",
+            "type": "integer"
+          },
+          "submittedAt": {
+            "format": "date-time",
+            "title": "Submittedat",
+            "type": "string"
+          },
+          "writingSelfScores": {
+            "items": {
+              "$ref": "#/components/schemas/WritingSelfScore"
+            },
+            "maxItems": 20,
+            "title": "Writingselfscores",
+            "type": "array"
+          }
+        },
+        "required": [
+          "attemptId",
+          "status",
+          "submissionRevision",
+          "objectiveScores",
+          "writingSelfScores",
+          "questionResults",
+          "reviewHandoffs",
+          "submittedAt"
+        ],
+        "title": "QuizResult",
+        "type": "object"
+      },
+      "RestoreDetails": {
+        "properties": {
+          "attemptId": {
+            "title": "Attemptid",
+            "type": "string"
+          },
+          "guidanceCode": {
+            "const": "QUIZ_RESTORE_REQUIRED",
+            "title": "Guidancecode",
+            "type": "string"
+          },
+          "kind": {
+            "const": "RESTORE",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "attemptId",
+          "guidanceCode"
+        ],
+        "title": "RestoreDetails",
+        "type": "object"
+      },
+      "RetryDetails": {
+        "properties": {
+          "kind": {
+            "const": "RETRY",
+            "title": "Kind",
+            "type": "string"
+          },
+          "operationId": {
+            "title": "Operationid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "operationId"
+        ],
+        "title": "RetryDetails",
+        "type": "object"
+      },
+      "ReviewCardView": {
+        "additionalProperties": false,
+        "properties": {
+          "cardId": {
+            "title": "Cardid",
+            "type": "string"
+          },
+          "dueAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dueat"
+          },
+          "lemma": {
+            "title": "Lemma",
+            "type": "string"
+          },
+          "noteDates": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notedates",
+            "type": "array"
+          },
+          "queueRevision": {
+            "minimum": 0.0,
+            "title": "Queuerevision",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "NEW",
+              "LEARNED"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "wordFormId": {
+            "title": "Wordformid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cardId",
+          "wordFormId",
+          "lemma",
+          "noteDates",
+          "state",
+          "dueAt",
+          "queueRevision"
+        ],
+        "title": "ReviewCardView",
+        "type": "object"
+      },
+      "ReviewError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "VALIDATION_ERROR",
+              "INVALID_QUERY",
+              "CURSOR_EXPIRED",
+              "MALFORMED_JSON",
+              "SESSION_REQUIRED",
+              "SESSION_INVALID",
+              "ORIGIN_FORBIDDEN",
+              "PAYLOAD_TOO_LARGE",
+              "NOT_FOUND",
+              "REVISION_CONFLICT",
+              "CROSS_RESOURCE_MISMATCH",
+              "IDEMPOTENCY_KEY_REUSED",
+              "IDEMPOTENCY_IN_FLIGHT",
+              "STORAGE_BUSY",
+              "CONFIGURATION_REQUIRED",
+              "INTERNAL_ERROR"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewRetryDetails"
+              },
+              {
+                "$ref": "#/components/schemas/ReviewFieldDetails"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "requestId": {
+            "title": "Requestid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "requestId"
+        ],
+        "title": "ReviewError",
+        "type": "object"
+      },
+      "ReviewErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ReviewError"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ReviewErrorResponse",
+        "type": "object"
+      },
+      "ReviewEventView": {
+        "additionalProperties": false,
+        "properties": {
+          "attemptId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attemptid"
+          },
+          "cardId": {
+            "title": "Cardid",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "nextDueAt": {
+            "title": "Nextdueat",
+            "type": "string"
+          },
+          "operationId": {
+            "title": "Operationid",
+            "type": "string"
+          },
+          "questionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Questionid"
+          },
+          "rating": {
+            "enum": [
+              "AGAIN",
+              "HARD",
+              "GOOD",
+              "EASY"
+            ],
+            "title": "Rating",
+            "type": "string"
+          },
+          "reviewedAt": {
+            "title": "Reviewedat",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "FLASHCARD",
+              "QUIZ"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "cardId",
+          "source",
+          "rating",
+          "reviewedAt",
+          "nextDueAt",
+          "operationId"
+        ],
+        "title": "ReviewEventView",
+        "type": "object"
+      },
+      "ReviewFieldDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewFieldError"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "kind": {
+            "const": "FIELD_ERRORS",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "fields"
+        ],
+        "title": "ReviewFieldDetails",
+        "type": "object"
+      },
+      "ReviewFieldError": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "reason"
+        ],
+        "title": "ReviewFieldError",
+        "type": "object"
+      },
+      "ReviewHandoff": {
+        "additionalProperties": false,
+        "properties": {
+          "cardId": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cardid"
+          },
+          "rating": {
+            "enum": [
+              "AGAIN",
+              "HARD",
+              "GOOD",
+              "EASY"
+            ],
+            "title": "Rating",
+            "type": "string"
+          },
+          "reviewEventId": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revieweventid"
+          },
+          "status": {
+            "enum": [
+              "APPLIED",
+              "SKIPPED_INACTIVE"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "wordFormId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Wordformid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "wordFormId",
+          "cardId",
+          "rating",
+          "reviewEventId",
+          "status"
+        ],
+        "title": "ReviewHandoff",
+        "type": "object"
+      },
+      "ReviewQueueView": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewCardView"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationView"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/ReviewSortView"
+          }
+        },
+        "required": [
+          "data",
+          "pagination",
+          "sort"
+        ],
+        "title": "ReviewQueueView",
+        "type": "object"
+      },
+      "ReviewRequest": {
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "properties": {
+              "attemptId": {
+                "type": "null"
+              },
+              "questionId": {
+                "type": "null"
+              },
+              "source": {
+                "const": "FLASHCARD",
+                "type": "string"
+              }
+            },
+            "required": [
+              "source"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "attemptId": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+                "type": "string"
+              },
+              "questionId": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+                "type": "string"
+              },
+              "source": {
+                "const": "QUIZ",
+                "type": "string"
+              }
+            },
+            "required": [
+              "source",
+              "attemptId",
+              "questionId"
+            ],
+            "type": "object"
+          }
+        ],
+        "properties": {
+          "attemptId": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attemptid"
+          },
+          "clientOccurredAt": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "format": "date-time",
+            "title": "Clientoccurredat"
+          },
+          "questionId": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Questionid"
+          },
+          "rating": {
+            "enum": [
+              "AGAIN",
+              "HARD",
+              "GOOD",
+              "EASY"
+            ],
+            "title": "Rating",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "FLASHCARD",
+              "QUIZ"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rating",
+          "source"
+        ],
+        "title": "ReviewRequest",
+        "type": "object"
+      },
+      "ReviewRetryDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "RETRY",
+            "title": "Kind",
+            "type": "string"
+          },
+          "operationId": {
+            "title": "Operationid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "operationId"
+        ],
+        "title": "ReviewRetryDetails",
+        "type": "object"
+      },
+      "ReviewSortView": {
+        "additionalProperties": false,
+        "properties": {
+          "by": {
+            "enum": [
+              "dueAt",
+              "lemma"
+            ],
+            "title": "By",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "ASC",
+              "DESC"
+            ],
+            "title": "Direction",
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "direction"
+        ],
+        "title": "ReviewSortView",
+        "type": "object"
+      },
+      "RubricDescriptor": {
+        "additionalProperties": false,
+        "properties": {
+          "score": {
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "integer"
+          },
+          "textVi": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Textvi",
+            "type": "string"
+          }
+        },
+        "required": [
+          "score",
+          "textVi"
+        ],
+        "title": "RubricDescriptor",
+        "type": "object"
+      },
+      "SaveErrorBody": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "SESSION_REQUIRED",
+              "SESSION_INVALID",
+              "ORIGIN_FORBIDDEN",
+              "VALIDATION_ERROR",
+              "NOT_FOUND",
+              "PAYLOAD_TOO_LARGE",
+              "CONFIGURATION_REQUIRED",
+              "REVISION_CONFLICT",
+              "SOURCE_MISSING",
+              "SOURCE_NOT_WRITABLE",
+              "CROSS_RESOURCE_MISMATCH",
+              "IDEMPOTENCY_KEY_REUSED",
+              "IDEMPOTENCY_IN_FLIGHT",
+              "STORAGE_BUSY",
+              "MALFORMED_JSON"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "CONFLICT": "#/components/schemas/SourceConflictDetails",
+                    "FIELD_ERRORS": "#/components/schemas/SourceFieldDetails",
+                    "RETRY": "#/components/schemas/SourceRetryDetails"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SourceConflictDetails"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SourceRetryDetails"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SourceFieldDetails"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "requestId": {
+            "title": "Requestid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "requestId"
+        ],
+        "title": "SaveErrorBody",
+        "type": "object"
+      },
+      "SaveErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/SaveErrorBody"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "SaveErrorResponse",
+        "type": "object"
+      },
+      "SaveResult": {
+        "additionalProperties": false,
+        "properties": {
+          "canonicalForms": {
+            "items": {
+              "$ref": "#/components/schemas/WordFormDetail"
+            },
+            "title": "Canonicalforms",
+            "type": "array"
+          },
+          "createdCardIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Createdcardids",
+            "type": "array"
+          },
+          "markdownSync": {
+            "const": "COMPLETED",
+            "title": "Markdownsync",
+            "type": "string"
+          },
+          "noteDate": {
+            "title": "Notedate",
+            "type": "string"
+          },
+          "operationId": {
+            "title": "Operationid",
+            "type": "string"
+          },
+          "reusedCardIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reusedcardids",
+            "type": "array"
+          },
+          "savedForms": {
+            "items": {
+              "$ref": "#/components/schemas/SavedForm"
+            },
+            "title": "Savedforms",
+            "type": "array"
+          },
+          "sourceEtag": {
+            "title": "Sourceetag",
+            "type": "string"
+          },
+          "sourceId": {
+            "title": "Sourceid",
+            "type": "string"
+          },
+          "sourceRevision": {
+            "minimum": 1.0,
+            "title": "Sourcerevision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "operationId",
+          "sourceId",
+          "sourceRevision",
+          "sourceEtag",
+          "noteDate",
+          "savedForms",
+          "canonicalForms",
+          "createdCardIds",
+          "reusedCardIds",
+          "markdownSync"
+        ],
+        "title": "SaveResult",
+        "type": "object"
+      },
+      "SaveWordFormsRequest": {
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "properties": {
+              "sourceId": {
+                "allOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sourceRevision": {
+                "allOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "type": "object"
+          },
+          {
+            "properties": {
+              "sourceId": {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "title": "Sourceid",
+                "type": "string"
+              },
+              "sourceRevision": {
+                "minimum": 1.0,
+                "title": "Sourcerevision",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "sourceId",
+              "sourceRevision"
+            ],
+            "type": "object"
+          }
+        ],
+        "properties": {
+          "lookupId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Lookupid",
+            "type": "string"
+          },
+          "noteDate": {
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Notedate",
+            "type": "string"
+          },
+          "sourceId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Sourceid",
+            "type": "string"
+          },
+          "sourceRevision": {
+            "minimum": 1.0,
+            "title": "Sourcerevision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "lookupId",
+          "noteDate"
+        ],
+        "title": "SaveWordFormsRequest",
+        "type": "object"
+      },
+      "SavedForm": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "revision": {
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "revision"
+        ],
+        "title": "SavedForm",
+        "type": "object"
+      },
       "SortView": {
         "additionalProperties": false,
         "properties": {
@@ -1079,6 +2915,86 @@
           "direction"
         ],
         "title": "SortView",
+        "type": "object"
+      },
+      "SourceConflictDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "currentRevision": {
+            "minimum": 1.0,
+            "title": "Currentrevision",
+            "type": "integer"
+          },
+          "expectedRevision": {
+            "minimum": 1.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "CONFLICT",
+            "title": "Kind",
+            "type": "string"
+          },
+          "resourceId": {
+            "title": "Resourceid",
+            "type": "string"
+          },
+          "resourceType": {
+            "const": "SOURCE",
+            "title": "Resourcetype",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "expectedRevision",
+          "currentRevision",
+          "resourceType",
+          "resourceId"
+        ],
+        "title": "SourceConflictDetails",
+        "type": "object"
+      },
+      "SourceFieldDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/SourceFieldError"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "kind": {
+            "const": "FIELD_ERRORS",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "fields"
+        ],
+        "title": "SourceFieldDetails",
+        "type": "object"
+      },
+      "SourceFieldError": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "reason"
+        ],
+        "title": "SourceFieldError",
         "type": "object"
       },
       "SourceFilePage": {
@@ -1199,6 +3115,35 @@
           "status"
         ],
         "title": "SourceReferenceView",
+        "type": "object"
+      },
+      "SourceRetryDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "RETRY",
+            "title": "Kind",
+            "type": "string"
+          },
+          "operationId": {
+            "title": "Operationid",
+            "type": "string"
+          },
+          "operationKind": {
+            "enum": [
+              "SAVE",
+              "EDIT"
+            ],
+            "title": "Operationkind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "operationId",
+          "operationKind"
+        ],
+        "title": "SourceRetryDetails",
         "type": "object"
       },
       "StorageStatus": {
@@ -1490,6 +3435,30 @@
         "title": "WordFormDetail",
         "type": "object"
       },
+      "WordFormMutationResult": {
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "title": "Operationid",
+            "type": "string"
+          },
+          "sourceRevision": {
+            "minimum": 1.0,
+            "title": "Sourcerevision",
+            "type": "integer"
+          },
+          "wordForm": {
+            "$ref": "#/components/schemas/WordFormDetail"
+          }
+        },
+        "required": [
+          "wordForm",
+          "operationId",
+          "sourceRevision"
+        ],
+        "title": "WordFormMutationResult",
+        "type": "object"
+      },
       "WordFormSummary": {
         "additionalProperties": false,
         "properties": {
@@ -1545,6 +3514,158 @@
           "updatedAt"
         ],
         "title": "WordFormSummary",
+        "type": "object"
+      },
+      "WritingQuestion": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "promptEn": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Prompten",
+            "type": "string"
+          },
+          "rubric": {
+            "$ref": "#/components/schemas/WritingRubric"
+          },
+          "rubricVersion": {
+            "const": "writing-rubric-v1",
+            "title": "Rubricversion",
+            "type": "string"
+          },
+          "targetLemma": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Targetlemma",
+            "type": "string"
+          },
+          "type": {
+            "const": "WRITING",
+            "title": "Type",
+            "type": "string"
+          },
+          "wordFormId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Wordformid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "wordFormId",
+          "promptEn",
+          "targetLemma",
+          "rubricVersion",
+          "rubric"
+        ],
+        "title": "WritingQuestion",
+        "type": "object"
+      },
+      "WritingQuestionResult": {
+        "additionalProperties": false,
+        "properties": {
+          "outcome": {
+            "const": "SELF_SCORED",
+            "title": "Outcome",
+            "type": "string"
+          },
+          "questionId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Questionid",
+            "type": "string"
+          },
+          "rating": {
+            "enum": [
+              "AGAIN",
+              "HARD",
+              "GOOD",
+              "EASY"
+            ],
+            "title": "Rating",
+            "type": "string"
+          },
+          "selfScore": {
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Selfscore",
+            "type": "integer"
+          },
+          "type": {
+            "const": "WRITING",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "questionId",
+          "type",
+          "outcome",
+          "selfScore",
+          "rating"
+        ],
+        "title": "WritingQuestionResult",
+        "type": "object"
+      },
+      "WritingRubric": {
+        "additionalProperties": false,
+        "properties": {
+          "descriptors": {
+            "items": {
+              "$ref": "#/components/schemas/RubricDescriptor"
+            },
+            "maxItems": 5,
+            "minItems": 5,
+            "title": "Descriptors",
+            "type": "array"
+          }
+        },
+        "required": [
+          "descriptors"
+        ],
+        "title": "WritingRubric",
+        "type": "object"
+      },
+      "WritingSelfScore": {
+        "additionalProperties": false,
+        "properties": {
+          "questionId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Questionid",
+            "type": "string"
+          },
+          "rating": {
+            "enum": [
+              "AGAIN",
+              "HARD",
+              "GOOD",
+              "EASY"
+            ],
+            "title": "Rating",
+            "type": "string"
+          },
+          "selfScore": {
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Selfscore",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "questionId",
+          "selfScore",
+          "rating"
+        ],
+        "title": "WritingSelfScore",
         "type": "object"
       }
     }
@@ -1964,6 +4085,174 @@
         ]
       }
     },
+    "/api/v1/cards/{cardId}/reviews": {
+      "post": {
+        "operationId": "post_review_api_v1_cards__cardId__reviews_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cardId",
+            "required": true,
+            "schema": {
+              "title": "Cardid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[\\x20-\\x7e]+$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Individual card queueRevision, as decimal digits or quoted decimal digits.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "Individual card queueRevision, as decimal digits or quoted decimal digits.",
+              "maxLength": 21,
+              "minLength": 1,
+              "pattern": "^(?:[0-9]{1,19}|\"[0-9]{1,19}\")$",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewEventView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Post Review",
+        "tags": [
+          "review"
+        ]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "description": "Return application health summary with Cache-Control: no-store.",
@@ -2350,6 +4639,513 @@
         "summary": "Get Operation",
         "tags": [
           "operations"
+        ]
+      }
+    },
+    "/api/v1/quiz-attempts": {
+      "post": {
+        "operationId": "post_quiz_api_v1_quiz_attempts_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[\\x20-\\x7e]+$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateQuizRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizAttempt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Post Quiz",
+        "tags": [
+          "assessments"
+        ]
+      }
+    },
+    "/api/v1/quiz-attempts/{attemptId}": {
+      "get": {
+        "operationId": "get_quiz_api_v1_quiz_attempts__attemptId__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attemptId",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "title": "Attemptid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizAttempt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Quiz",
+        "tags": [
+          "assessments"
+        ]
+      }
+    },
+    "/api/v1/review-queue": {
+      "get": {
+        "operationId": "get_queue_api_v1_review_queue_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "noteDate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Notedate"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dueOnly",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Dueonly",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cardState",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "NEW",
+                    "LEARNED"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cardstate"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "required": false,
+            "schema": {
+              "default": "dueAt",
+              "enum": [
+                "dueAt",
+                "lemma"
+              ],
+              "title": "Sortby",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "required": false,
+            "schema": {
+              "default": "ASC",
+              "enum": [
+                "ASC",
+                "DESC",
+                "asc",
+                "desc"
+              ],
+              "title": "Sortorder",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewQueueView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Queue",
+        "tags": [
+          "review"
         ]
       }
     },
@@ -3149,6 +5945,196 @@
         "tags": [
           "word-forms"
         ]
+      },
+      "post": {
+        "operationId": "post_word_forms_api_v1_word_forms_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[\\x20-\\x7e]+$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required source ETag when sourceId and sourceRevision are supplied. Omit for a new-date save and send If-None-Match: * instead. The backend enforces these body/header alternatives together.",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Required source ETag when sourceId and sourceRevision are supplied. Omit for a new-date save and send If-None-Match: * instead. The backend enforces these body/header alternatives together.",
+              "minLength": 1,
+              "title": "If-Match"
+            }
+          },
+          {
+            "description": "Required as * for a new-date save with sourceId and sourceRevision omitted. Omit when those source fields are supplied and send If-Match instead. The backend enforces these body/header alternatives together.",
+            "in": "header",
+            "name": "If-None-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "const": "*",
+              "description": "Required as * for a new-date save with sourceId and sourceRevision omitted. Omit when those source fields are supplied and send If-Match instead. The backend enforces these body/header alternatives together.",
+              "title": "If-None-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveWordFormsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveResult"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Post Word Forms",
+        "tags": [
+          "word-forms"
+        ]
       }
     },
     "/api/v1/word-forms/{wordFormId}": {
@@ -3278,6 +6264,179 @@
           }
         },
         "summary": "Get Word Form",
+        "tags": [
+          "word-forms"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_word_form_api_v1_word_forms__wordFormId__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "wordFormId",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "title": "Wordformid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[\\x20-\\x7e]+$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchWordFormRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WordFormMutationResult"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Patch Word Form",
         "tags": [
           "word-forms"
         ]

@@ -34,6 +34,8 @@ def build_contract() -> dict:
         "discriminator": {"propertyName": "kind"},
         "required": ["kind"],
         "anyOf": [
+            {"$ref": "#/components/schemas/SourceConflictDetails"},
+            {"$ref": "#/components/schemas/RestoreDetails"},
             {
                 "type": "object",
                 "properties": {
