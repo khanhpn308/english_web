@@ -276,3 +276,9 @@ T090 DONE or T089 accepted.
 
 - Immutable host CI R3: https://github.com/khanhpn308/english_web/actions/runs/37879458653 on `a8c6dc27443fea41f41249fd6c359087aa73410d` = FAIL. Host artifact `11593633554` reports one Ruff format blank-line defect in `tests/orchestrator/test_runtime.py:302`; frontend coverage, portable pytest, secrets, code security, dependencies and architecture all PASS. Dependent coverage gate not reached.
 - Corrected exactly the test-format blank line, preserving all model/tool security logic. Full R4 verification on a new frozen SHA is mandatory; no prior CI result has been rewritten or counted as PASS for the new source.
+
+### Bridge listener identity and semantic system-contract remediation (09/10/2026)
+
+- Owner read-only Windows PowerShell audit of TCP port 8045 observed a listener bound to IPv4 `127.0.0.1:8045` with executable name `antigravity-tools.exe`, PID `22304`, parent PID `9172`, and executable SHA-256 `92E1C3504813E9D9E5BD8B17B1839F7E5805DD3051F1D0195E0D5CAD6328CD36`. This is a process/file identity *observation at audit time*, not a code-signature/trust proof; it does not cover IPv6 interfaces or the internal tool broker. No credentials or full user-specific home path recorded.
+- Source review found `LoopbackChatTransport` reused the Worker-only system instruction `WorkerEditResponse` even for semantic role schemas. Live `Fix` success was insufficient to guarantee correct `Audit`, `ReviewShard`, `Plan`, or `IntegrationReview` output. Added an explicit `semantic-json` transport contract selected only by `SecureProvider`, preserving the existing worker-edit default, explicit `tools=[]` and `tool_choice=none`. Added synthetic payload and provider-role assertions.
+- Still unverified: actual Bridge no-hidden-tool enforcement, publisher signature, bounded host-sealed source/diff materialization for review, and host execution sandbox. No automatic semantic-role enablement; PR remains Draft, T090 IN_PROGRESS.
