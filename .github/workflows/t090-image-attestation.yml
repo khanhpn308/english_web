@@ -271,6 +271,15 @@ jobs:
           root.mkdir()
           workspace = root / "verify-real-checkout" / "workspace"
           workspace.parent.mkdir()
+          # Resolve main through trusted CI Git metadata; no network is ever
+          # made available to the untrusted verification container.
+          Git(repo).run(
+              "fetch", "--no-tags", "origin",
+              "+refs/heads/main:refs/remotes/origin/main",
+          )
+          baseline_sha = Git(repo).run("rev-parse", "refs/remotes/origin/main")
+          assert len(baseline_sha) == 40
+          Git(repo).run("update-ref", "refs/heads/main", baseline_sha)
           Git(repo).run("clone", "--no-local", "--no-checkout", str(repo), str(workspace))
           sha = Git(repo).sha()
           Git(workspace).run("checkout", "--detach", sha)

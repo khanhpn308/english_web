@@ -236,7 +236,12 @@ _DOCKER_TRUSTED_BOOTSTRAP = (
     "    raise SystemExit('T090 SANDBOX_BLOCKED: untrusted node_modules in source')\n"
     "if not os.path.isfile('/node_modules/typescript/lib/typescript.js'):\n"
     "    raise SystemExit('T090 SANDBOX_BLOCKED: trusted Node toolchain missing')\n"
-    "os.symlink('/node_modules', '/workspace/node_modules')\n"
+    # Expose immutable image dependencies via symlinks, but keep Vite's
+    # cache writable only inside the disposable workspace tmpfs.
+    "os.mkdir('/workspace/node_modules')\n"
+    "for package in os.scandir('/node_modules'):\n"
+    "    os.symlink(package.path, os.path.join('/workspace/node_modules', package.name))\n"
+    "os.mkdir('/workspace/node_modules/.vite-temp', mode=0o700)\n"
     "os.chdir('/workspace')\n"
     "os.execvp(sys.argv[2], sys.argv[2:])\n"
 )

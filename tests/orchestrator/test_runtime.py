@@ -514,7 +514,8 @@ def test_t090_docker_sandbox_host_constructs_fixed_arguments(
             assert "shutil.copytree(src, dst, symlinks=True)" in command[-5]
             assert "source attestation mismatch" in command[-5]
             assert "if os.path.lexists('/workspace/node_modules')" in command[-5]
-            assert "os.symlink('/node_modules', '/workspace/node_modules')" in command[-5]
+            assert "os.mkdir('/workspace/node_modules/.vite-temp', mode=0o700)" in command[-5]
+            assert "for package in os.scandir('/node_modules')" in command[-5]
             assert "os.execvp(sys.argv[2], sys.argv[2:])" in command[-5]
             mount = command[command.index("--mount") + 1]
             assert str(working) not in mount
