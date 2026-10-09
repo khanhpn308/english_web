@@ -2,8 +2,8 @@
 
 import hashlib
 import json
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 import pytest
 from tools.orchestrator.core import Config, OrchestratorError, Role
@@ -159,6 +159,7 @@ class FakeToolFreeTransport:
 
     def complete(self, prompt: str, *, model: str, timeout: int | None) -> str:
         assert model == "gemini-3.8-flash-high"
+        assert timeout is None
         self.prompt = prompt
         return json.dumps(self.response)
 
@@ -391,6 +392,7 @@ def test_transport_rejects_any_model_tool_call(
             return None
 
         def read(self, amount: int) -> bytes:
+            assert amount == 4 * 1024 * 1024 + 1
             return json.dumps(
                 {
                     "choices": [
@@ -408,6 +410,8 @@ def test_transport_rejects_any_model_tool_call(
 
     class FakeOpener:
         def open(self, request: Any, timeout: int) -> BadHTTPResponse:
+            assert request.get_method() == "POST"
+            assert timeout == 5
             return BadHTTPResponse()
 
     monkeypatch.setattr(client, "_opener", FakeOpener())
