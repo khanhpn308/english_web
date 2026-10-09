@@ -135,6 +135,9 @@ class Role(Model):
     reasoning: Literal["low", "medium", "high", "xhigh"] | None = None
     worker_access: Literal["workspace-write", "full-access"] = "workspace-write"
     allow_process: StrictBool = False
+    worker_backend: Literal["cli", "host-http-edit"] = "cli"
+    host_edit_endpoint: str | None = None
+    host_edit_api_key_env: str | None = None
     stall_timeout_seconds: Annotated[StrictInt, Field(ge=1, le=86400)] | None = None
     stall_confirm_seconds: Annotated[StrictInt, Field(ge=1, le=3600)] = 30
     max_stall_retries: Annotated[StrictInt, Field(ge=0, le=10)] = 1
@@ -163,6 +166,31 @@ class Config(Model):
         for name, role in self.roles.items():
             if name != "worker" and (role.worker_access == "full-access" or role.allow_process):
                 raise OrchestratorError("Elevated execution permissions belong to Worker only")
+            if name != "worker" and (
+                role.worker_backend != "cli"
+                or role.host_edit_endpoint is not None
+                or role.host_edit_api_key_env is not None
+            ):
+                raise OrchestratorError("Host-mediated editing belongs to Worker only")
+            if role.worker_backend == "host-http-edit":
+                if (
+                    name != "worker"
+                    or role.provider not in {"agy", "codex"}
+                    or role.allow_process
+                    or role.worker_access != "workspace-write"
+                    or not role.model
+                    or not role.host_edit_endpoint
+                    or not role.host_edit_api_key_env
+                ):
+                    raise OrchestratorError("Unsafe or incomplete host-mediated Worker configuration")
+                # Validate fully before any model invocation or filesystem change.
+                from tools.orchestrator.worker_sandbox import LoopbackChatTransport
+
+                LoopbackChatTransport(
+                    role.host_edit_endpoint, api_key_env=role.host_edit_api_key_env
+                )
+            elif role.host_edit_endpoint is not None or role.host_edit_api_key_env is not None:
+                raise OrchestratorError("Host-edit settings require host-http-edit backend")
         for command in self.verification:
             validate_command(command)
         if any(command != ["npm", "ci"] for command in self.setup_commands):
