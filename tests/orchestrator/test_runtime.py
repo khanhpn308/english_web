@@ -413,3 +413,158 @@ def test_t090_secure_provider_rejects_invalid_host_context(tmp_path: Path, inval
             name="" if invalid == "name" else "test",
             readonly=True,
         )
+
+
+def test_t090_docker_sandbox_rejects_unpinned_image_and_bad_limits(tmp_path: Path) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import DockerVerificationPolicy
+
+    valid = "docker.io/verified/t090@sha256:" + "a" * 64
+    for image in (
+        "python:3.12-slim",
+        "docker.io/python@sha256:" + "z" * 64,
+        "python:3.12; rm -rf /",
+    ):
+        with pytest.raises(OrchestratorError, match="pinned sha256"):
+            DockerVerificationPolicy(image, tmp_path)
+    for field, value in (
+        ("memory_mib", 1),
+        ("cpu_millicores", 0),
+        ("pids_limit", 1000),
+        ("timeout_seconds", 0),
+    ):
+        with pytest.raises(OrchestratorError, match="SANDBOX_BLOCKED"):
+            DockerVerificationPolicy(valid, tmp_path, **{field: value})
+
+
+def test_t090_docker_sandbox_host_constructs_fixed_arguments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.runtime import (
+        DockerVerificationPolicy,
+        DockerVerificationSandbox,
+        ProcessResult,
+    )
+
+    root = tmp_path / "runs"
+    working = root / "verify-t090-abc" / "workspace"
+    working.mkdir(parents=True)
+    (working / "sample.py").write_text("print('synthetic')\\n")
+    policy = DockerVerificationPolicy(
+        "docker.io/verified/t090@sha256:" + "a" * 64,
+        root,
+        timeout_seconds=45,
+    )
+    seen: list[list[str]] = []
+
+    def fake_execute(
+        command: list[str], cwd: Path, *, timeout: int | float | None = None
+    ) -> ProcessResult:
+        assert cwd == working
+        assert command[:6] == [
+            "/usr/bin/env",
+            "-i",
+            "PATH=/usr/bin:/bin",
+            "HOME=/tmp",
+            "DOCKER_HOST=unix:///var/run/docker.sock",
+            "/usr/bin/docker",
+        ]
+        assert "--config" in command
+        seen.append(command)
+        if "inspect" in command:
+            assert timeout == 20
+            return ProcessResult(
+                tuple(command), str(cwd), "start", "end", 0,
+                "sha256:" + "b" * 64 + "\\n", "",
+            )
+        if "run" in command:
+            assert timeout == 45
+            for flag in (
+                "--pull=never", "--network=none", "--read-only",
+                "--cap-drop=ALL", "--security-opt=no-new-privileges",
+                "--pids-limit", "--memory", "--memory-swap",
+                "--cpus", "--user", "--workdir=/workspace",
+            ):
+                assert flag in command
+            assert command[-4:] == [
+                "docker.io/verified/t090@sha256:" + "a" * 64,
+                "python", "-m", "pytest",
+            ]
+            assert str(working) in command[command.index("--mount") + 1]
+            assert str(tmp_path / "secret") not in " ".join(command)
+            return ProcessResult(tuple(command), str(cwd), "start", "end", 0, "PASS", "")
+        assert "rm" in command
+        assert timeout == 20
+        return ProcessResult(tuple(command), str(cwd), "start", "end", 0, "", "")
+
+    monkeypatch.setattr("tools.orchestrator.runtime.execute", fake_execute)
+    monkeypatch.setattr("tools.orchestrator.runtime.os.geteuid", lambda: 1000)
+    result = DockerVerificationSandbox(policy).run(["python", "-m", "pytest"], working)
+    assert result.exit_code == 0
+    assert len(seen) == 3
+    assert seen[1][seen[1].index("--name") + 1] == seen[2][-1]
+
+
+@pytest.mark.parametrize("mode", ["outside", "symlink", "special", "root"])
+def test_t090_docker_sandbox_denies_invalid_workspace_before_docker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    import socket
+
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+
+    root = tmp_path / "verification"
+    workspace = root / "verify-t090-abc" / "workspace"
+    workspace.mkdir(parents=True)
+    if mode == "outside":
+        workspace = tmp_path / "other" / "workspace"
+        workspace.mkdir(parents=True)
+    elif mode == "symlink":
+        (workspace / "bad").symlink_to(tmp_path)
+    elif mode == "special":
+        sock = socket.socket(socket.AF_UNIX)
+        sock.bind(str(workspace / "control.socket"))
+    else:
+        monkeypatch.setattr("tools.orchestrator.runtime.os.geteuid", lambda: 0)
+
+    policy = DockerVerificationPolicy("example.com/t090@sha256:" + "b" * 64, root)
+
+    def forbidden_execute(*args: object, **kwargs: object) -> None:
+        raise AssertionError("Docker must not run for invalid workspaces")
+
+    monkeypatch.setattr("tools.orchestrator.runtime.execute", forbidden_execute)
+    try:
+        with pytest.raises(OrchestratorError, match="SANDBOX_BLOCKED"):
+            DockerVerificationSandbox(policy).run(["python", "-m", "pytest"], workspace)
+    finally:
+        if mode == "special":
+            sock.close()
+
+
+def test_t090_docker_sandbox_blocks_missing_pinned_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import (
+        DockerVerificationPolicy, DockerVerificationSandbox, ProcessResult,
+    )
+
+    root = tmp_path / "verification"
+    workspace = root / "verify-t090" / "workspace"
+    workspace.mkdir(parents=True)
+    monkeypatch.setattr("tools.orchestrator.runtime.os.geteuid", lambda: 1000)
+    seen: list[list[str]] = []
+
+    def fail_inspect(
+        argv: list[str], cwd: Path, *, timeout: int | float | None = None
+    ) -> ProcessResult:
+        seen.append(argv)
+        return ProcessResult(tuple(argv), str(cwd), "start", "end", 1, "", "image missing")
+
+    monkeypatch.setattr("tools.orchestrator.runtime.execute", fail_inspect)
+    policy = DockerVerificationPolicy("example.com/t090@sha256:" + "1" * 64, root)
+    with pytest.raises(OrchestratorError, match="pinned local image unavailable"):
+        DockerVerificationSandbox(policy).run(["python", "-m", "pytest"], workspace)
+    assert len(seen) == 1
+    assert "inspect" in seen[0]
