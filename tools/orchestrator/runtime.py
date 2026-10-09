@@ -389,9 +389,8 @@ class DockerVerificationSandbox:
             f"type=bind,src={workspace},dst=/source,readonly,bind-propagation=rprivate",
             f"--tmpfs=/workspace:rw,nosuid,nodev,size={self.policy.workspace_tmpfs_mib}m,mode=0700,uid={uid},gid={gid}",
             f"--tmpfs=/tmp:rw,nosuid,nodev,size={self.policy.temp_tmpfs_mib}m,mode=1777",
-            # Only the OSV extraction cache is writable; the vetted DB ZIPs
-            # remain read-only in /opt/osv-db/osv-scanner inside the image.
-            f"--tmpfs=/opt/osv-db/osv-scalibr:rw,nosuid,nodev,size=512m,mode=0700,uid={uid},gid={gid}",
+            # Offline OSV ZIPs are immutable image content (osv-scalibr
+            # symlinks to osv-scanner archives); do not overlay with tmpfs.
             "--ulimit=core=0:0",
             "--env=HOME=/tmp",
             "--env=TMPDIR=/tmp",

@@ -102,6 +102,45 @@ jobs:
           '
 
 
+      - name: Validate offline OSV DB within read-only network-disabled container
+        shell: bash
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          docker run --rm --pull=never \
+            --network=none --read-only --cap-drop=ALL \
+            --security-opt=no-new-privileges \
+            --memory=2048m --memory-swap=2048m \
+            --cpus=2 --pids-limit=64 \
+            --user=65534:65534 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=128m,mode=1777 \
+            --tmpfs /workspace:rw,nosuid,nodev,size=64m,mode=1777 \
+            --entrypoint=/usr/local/bin/python3 \
+            t090-verifier:candidate -I -c '
+          import json, os, subprocess
+          assert os.environ["T090_OSV_OFFLINE"] == "1"
+          for ecosystem in ("npm", "PyPI"):
+              db = f"/opt/osv-db/osv-scalibr/{ecosystem}/all.zip"
+              assert os.path.isfile(db), f"Missing offline DB for {ecosystem}"
+          command = [
+              "/usr/local/bin/osv-scanner", "scan", "source",
+              "--offline", "--format=json",
+              "--lockfile=:/opt/toolchain/package-lock.json",
+              "--lockfile=requirements.txt:/opt/locks/requirements-dev.lock",
+          ]
+          result = subprocess.run(
+              command, capture_output=True, text=True, timeout=180,
+          )
+          if result.returncode not in (0, 1):
+              raise SystemExit(
+                  f"T090 OSV offline scan failed: {result.returncode}: "
+                  + result.stderr[-800:]
+              )
+          report = json.loads(result.stdout)
+          assert isinstance(report, dict)
+          print("T090_OSV_OFFLINE_READONLY_DB_PASS")
+          '
+
       - name: Exercise actual DockerVerificationSandbox against a synthetic source
         shell: bash
         run: |
