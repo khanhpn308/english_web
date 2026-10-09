@@ -233,3 +233,12 @@ T090 DONE or T089 accepted.
 - Downloaded host artifact `11564726690` pinpoints `ruff format --check .` as the failure: three formatting-only changes needed in `tests/orchestrator/test_worker_sandbox.py`, one in `tools/orchestrator/worker_sandbox.py`.
 - Applied those four formatting corrections without changing intended behavior. A fresh CI run and independent host gates on the new candidate SHA are required; previous R1 remains a retained FAIL, not rewritten evidence.
 - Live AGY/Codex isolation evidence is still absent; PR #9 must remain Draft and T090 `IN_PROGRESS`.
+
+### Host-mediated Worker execution path — implementation candidate (09/10/2026)
+
+- Role now supports an explicit, opt-in host-http-edit backend, with required pinned loopback endpoint and credential environment name; current orchestrator.yaml remains AGY CLI + fail-closed, with no silent provider fallback.
+- tools/orchestrator/worker_sandbox.py provides local text-completion transport with no model tools, HTTP redirects or proxy, strict model edit schema, host source materialization restricted to exact contract allowlist and SHA-256 pinned host writes. Every edit is preflighted before first write.
+- tools/orchestrator/workflow.py invokes the host broker only when explicitly configured. The CLI path continues to block WorkerResult; host still owns candidate scope checks, changelog verification and deferred authoritative verification. A model-reported BLOCKED is a truthful BLOCKED state, not IMPLEMENTED.
+- tests/orchestrator/test_worker_sandbox.py and test_workflow.py add synthetic adversarial edit, no-tool request and Pipeline handoff checks. Documentation explains the opt-in settings and the live attestation requirement.
+- **Not accepted:** No test has been performed against the real AGY CLI or the deployed local completion bridge, and Reviewer/Auditor CLI tool-denial remains unverified. Model API compatibility, actual denied tool calls and OS-exclusive workspace boundary need live synthetic tests. No T090 DONE/T089 PASS or PR merge authorization is implied.
+- Await final candidate CI results; do not count the earlier R2 PASS as passing for these new implementation changes.
