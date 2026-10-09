@@ -4216,3 +4216,96 @@ def test_t090_sealed_source_rename_cannot_hide_deleted_path(
     assert files[0]["after"] is None
     assert files[1]["before"] is None
     assert files[1]["after"] == "good\n"
+
+
+def test_t090_git_frozen_source_binding_matches_authoritative_snapshot(
+    repository: Path, tmp_path: Path
+) -> None:
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+    from tools.orchestrator.workflow import freeze_verification_source_binding
+
+    base = Git(repository).sha()
+    frozen = Git(repository).snapshot(base)
+    root = tmp_path / "verify-root"
+    verification = root / "verify-binding" / "workspace"
+    verification.parent.mkdir(parents=True)
+    Git(repository).run(
+        "clone", "--no-local", "--no-checkout", str(repository), str(verification)
+    )
+    Git(verification).run("checkout", "--detach", base)
+    broker = DockerVerificationSandbox(
+        DockerVerificationPolicy("example.org/t090@sha256:" + "a" * 64, root)
+    )
+    binding = freeze_verification_source_binding(
+        working=repository,
+        verification_workspace=verification,
+        base_sha=base,
+        expected_git_snapshot=frozen,
+        sandbox=broker,
+    )
+    assert binding.base_sha == base
+    assert binding.git_snapshot == frozen
+    assert binding.docker_source_digest == broker.source_digest(verification)
+    assert binding.verification_root == verification.resolve()
+
+
+def test_t090_git_frozen_binding_rejects_tampered_clone_before_docker(
+    repository: Path, tmp_path: Path
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+    from tools.orchestrator.workflow import freeze_verification_source_binding
+
+    base = Git(repository).sha()
+    frozen = Git(repository).snapshot(base)
+    root = tmp_path / "verify-root"
+    verification = root / "verify-binding" / "workspace"
+    verification.parent.mkdir(parents=True)
+    Git(repository).run(
+        "clone", "--no-local", "--no-checkout", str(repository), str(verification)
+    )
+    Git(verification).run("checkout", "--detach", base)
+    (verification / "feature.txt").write_text("tampered after frozen baseline\n")
+    broker = DockerVerificationSandbox(
+        DockerVerificationPolicy("example.org/t090@sha256:" + "a" * 64, root)
+    )
+
+    with pytest.raises(OrchestratorError, match="Git snapshot does not match freeze"):
+        freeze_verification_source_binding(
+            working=repository,
+            verification_workspace=verification,
+            base_sha=base,
+            expected_git_snapshot=frozen,
+            sandbox=broker,
+        )
+
+
+def test_t090_git_frozen_binding_rejects_changed_authoritative_source(
+    repository: Path, tmp_path: Path
+) -> None:
+    from tools.orchestrator.core import OrchestratorError
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+    from tools.orchestrator.workflow import freeze_verification_source_binding
+
+    base = Git(repository).sha()
+    frozen = Git(repository).snapshot(base)
+    root = tmp_path / "verify-root"
+    verification = root / "verify-binding" / "workspace"
+    verification.parent.mkdir(parents=True)
+    Git(repository).run(
+        "clone", "--no-local", "--no-checkout", str(repository), str(verification)
+    )
+    Git(verification).run("checkout", "--detach", base)
+    (repository / "feature.txt").write_text("tampered authoritative source\n")
+    broker = DockerVerificationSandbox(
+        DockerVerificationPolicy("example.org/t090@sha256:" + "a" * 64, root)
+    )
+    with pytest.raises(OrchestratorError, match="Git snapshot does not match freeze"):
+        freeze_verification_source_binding(
+            working=repository,
+            verification_workspace=verification,
+            base_sha=base,
+            expected_git_snapshot=frozen,
+            sandbox=broker,
+        )
+

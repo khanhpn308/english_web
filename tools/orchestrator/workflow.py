@@ -12,6 +12,7 @@ import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager, nullcontext
+from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
@@ -78,6 +79,7 @@ from tools.orchestrator.probes import (
 )
 from tools.orchestrator.runtime import (
     AgentProvider,
+    DockerVerificationSandbox,
     Git,
     LockBusy,
     SecureProvider,
@@ -321,6 +323,54 @@ def build_integrator_prompt(
         ]
     )
     return "\n\n".join(s for s in sections if s) + "\n"
+
+
+@dataclass(frozen=True)
+class FrozenVerificationSourceBinding:
+    """A Host-only crosswalk between authoritative Git state and Docker tree bytes."""
+
+    base_sha: str
+    git_snapshot: str
+    docker_source_digest: str
+    verification_root: Path
+
+
+def freeze_verification_source_binding(
+    *,
+    working: Path,
+    verification_workspace: Path,
+    base_sha: str,
+    expected_git_snapshot: str,
+    sandbox: DockerVerificationSandbox,
+) -> FrozenVerificationSourceBinding:
+    """Bind already-frozen Git evidence to verified sandbox bytes before dispatch.
+
+    Caller must acquire expected_git_snapshot at the authoritative freeze step;
+    this helper MUST NOT derive the expected snapshot after source mutation.
+    """
+    if not re.fullmatch(r"[a-f0-9]{64}", expected_git_snapshot):
+        raise OrchestratorError("T090 SANDBOX_BLOCKED: frozen Git snapshot required")
+    if working.resolve() == verification_workspace.resolve():
+        raise OrchestratorError("T090 SANDBOX_BLOCKED: source and verifier are not independent")
+    source_git = Git(working)
+    clone_git = Git(verification_workspace)
+    if source_git.sha() != base_sha or clone_git.sha() != base_sha:
+        raise OrchestratorError("T090 SANDBOX_BLOCKED: Git HEAD diverged")
+    for git in (source_git, clone_git):
+        if git.snapshot(base_sha) != expected_git_snapshot:
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: Git snapshot does not match freeze")
+    tree_digest = sandbox.source_digest(verification_workspace)
+    for git in (source_git, clone_git):
+        if git.snapshot(base_sha) != expected_git_snapshot:
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: Git source changed during sealing")
+    if sandbox.source_digest(verification_workspace) != tree_digest:
+        raise OrchestratorError("T090 SANDBOX_BLOCKED: sealed source changed during binding")
+    return FrozenVerificationSourceBinding(
+        base_sha=base_sha,
+        git_snapshot=expected_git_snapshot,
+        docker_source_digest=tree_digest,
+        verification_root=verification_workspace.resolve(),
+    )
 
 
 def verification_command_argv(cwd: Path, command: list[str]) -> list[str]:
