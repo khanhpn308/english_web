@@ -1354,7 +1354,6 @@ class Pipeline:
         context: str | AuditorContextV1 | IntegratorContextV1,
         *,
         cwd: Path | None = None,
-        worker_contract: Contract | None = None,
     ) -> BaseModel:
         working = cwd or Path(state.worktree_path)
         self.check_artifacts(directory, state)
@@ -1466,8 +1465,9 @@ class Pipeline:
             rejected_result: Plan | Audit | None = None
             try:
                 if role_name == "worker" and role.worker_backend == "host-http-edit":
-                    if worker_contract is None or output is not WorkerResult:
+                    if output is not WorkerResult:
                         raise OrchestratorError("Host Worker requires a pinned source contract")
+                    worker_contract = self.contract(directory, state)
                     from tools.orchestrator.worker_sandbox import (
                         HostEditRejected,
                         LoopbackChatTransport,
@@ -2592,7 +2592,6 @@ class Pipeline:
                         context
                         + json.dumps(contract.model_dump(mode="json"))
                         + prompt_path.read_text(),
-                        worker_contract=contract,
                     )
                 )
                 self.contract(directory, state)
