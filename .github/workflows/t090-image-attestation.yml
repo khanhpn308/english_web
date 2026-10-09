@@ -50,7 +50,9 @@ jobs:
             tools/orchestrator/workflow.py \
             tests/orchestrator/test_runtime.py \
             tests/orchestrator/test_workflow.py \
-            scripts/security_checks.py
+            scripts/security_checks.py \
+            scripts/t090_supply_chain.py \
+            tests/orchestrator/test_supply_chain.py
 
       - name: Validate and pull fixed base-image digests
         shell: bash
@@ -97,6 +99,72 @@ jobs:
           echo "T090_OSV_NPM_SHA256=${osv_pins[0]}" >> "$GITHUB_ENV"
           echo "T090_OSV_PYPI_SHA256=${osv_pins[1]}" >> "$GITHUB_ENV"
 
+      - name: Authenticate GHCR before immutable snapshot pull
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify signed OCI snapshot identity and lock OSV bytes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "$RUNNER_TEMP/t090-snapshot-values.txt"
+          from pathlib import Path
+          from scripts.t090_supply_chain import validate_candidate_osv_snapshot_source
+          values = validate_candidate_osv_snapshot_source(
+              Path("infra/verification/osv-snapshot-source.json").resolve(),
+              Path("infra/verification/osv-db-pins.json").resolve(),
+          )
+          for key in ("image", "repository", "source_sha", "source_ref", "signer_workflow"):
+              print(values[key])
+          PY
+          mapfile -t source_values < "$RUNNER_TEMP/t090-snapshot-values.txt"
+          [[ "${#source_values[@]}" -eq 5 ]]
+          image="${source_values[0]}"
+          repository="${source_values[1]}"
+          source_sha="${source_values[2]}"
+          source_ref="${source_values[3]}"
+          workflow="${source_values[4]}"
+          # Verify the OIDC issuer, workflow, commit and exact image subject for
+          # BOTH signed predicates before referencing it in the next Docker build.
+          for predicate in https://slsa.dev/provenance/v1 https://spdx.dev/Document/v2.3; do
+            gh attestation verify "oci://$image" \
+              --repo "$repository" --signer-workflow "$workflow" \
+              --source-digest "$source_sha" --source-ref "$source_ref" \
+              --predicate-type "$predicate" --format json \
+              > "$RUNNER_TEMP/t090-snapshot-attestation.json"
+            T090_EXPECTED_IMAGE="$image" T090_EXPECTED_PREDICATE="$predicate" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          results = json.loads((Path(os.environ["RUNNER_TEMP"]) / "t090-snapshot-attestation.json").read_text())
+          image = os.environ["T090_EXPECTED_IMAGE"]
+          name, digest = image.rsplit("@sha256:", 1)
+          predicate = os.environ["T090_EXPECTED_PREDICATE"]
+          assert isinstance(results, list) and results
+          assert any(
+              isinstance(record, dict)
+              and isinstance(record.get("verificationResult"), dict)
+              and isinstance(record["verificationResult"].get("statement"), dict)
+              and record["verificationResult"]["statement"].get("predicateType") == predicate
+              and any(
+                  isinstance(subject, dict)
+                  and subject.get("name") == name
+                  and isinstance(subject.get("digest"), dict)
+                  and subject["digest"].get("sha256") == digest
+                  for subject in record["verificationResult"]["statement"].get("subject", [])
+              )
+              for record in results
+          ), "T090: signed OCI snapshot predicate/subject mismatch"
+          PY
+          done
+          docker pull --platform linux/amd64 "$image"
+          echo "T090_OSV_SNAPSHOT_IMAGE=$image" >> "$GITHUB_ENV"
+          echo "T090_SIGNED_IMMUTABLE_OSV_CANDIDATE_VERIFIED_NOT_APPROVED"
+
       - name: Build with only allowlisted trusted inputs
         shell: bash
         run: |
@@ -108,6 +176,7 @@ jobs:
           docker build --progress=plain --pull=false \
             --build-arg "PYTHON_BASE_IMAGE=$T090_PYTHON_BASE" \
             --build-arg "NODE_BASE_IMAGE=$T090_NODE_BASE" \
+            --build-arg "OSV_SNAPSHOT_IMAGE=$T090_OSV_SNAPSHOT_IMAGE" \
             --build-arg "OSV_NPM_SHA256=$T090_OSV_NPM_SHA256" \
             --build-arg "OSV_PYPI_SHA256=$T090_OSV_PYPI_SHA256" \
             -t t090-verifier:candidate \

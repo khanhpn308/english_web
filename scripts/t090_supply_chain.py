@@ -223,6 +223,61 @@ def verify_registry_attestations(
 
 
 
+def validate_candidate_osv_snapshot_source(snapshot_path: Path, pins_path: Path) -> dict[str, str]:
+    """Validate candidate snapshot identity and expected archive checksums.
+
+    This rejects mutable or unpinned snapshots. It is not an independent
+    operator approval or a substitute for verifying registry attestations.
+    """
+    try:
+        snapshot = json.loads(_trusted_file(snapshot_path))
+        pins = json.loads(_trusted_file(pins_path))
+    except (ValueError, TypeError, UnicodeError) as error:
+        raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: invalid snapshot JSON") from error
+    if not isinstance(snapshot, dict) or not isinstance(pins, dict):
+        raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: invalid snapshot document")
+    image = snapshot.get("image_reference")
+    repository = snapshot.get("source_repository")
+    source_sha = snapshot.get("source_sha")
+    source_ref = snapshot.get("source_ref")
+    workflow = snapshot.get("signer_workflow")
+    archive_hashes = snapshot.get("osv_archive_sha256")
+    expected_hashes = pins.get("archive_sha256")
+    if (
+        snapshot.get("schema_version") != 1
+        or snapshot.get("scope") != "candidate-only"
+        or snapshot.get("approved") is not False
+        or pins.get("schema_version") != 1
+        or pins.get("scope") != "candidate-only"
+        or pins.get("approved") is not False
+        or not isinstance(image, str)
+        or _IMAGE.fullmatch(image) is None
+        or repository != "khanhpn308/english_web"
+        or not isinstance(source_sha, str)
+        or re.fullmatch(r"[0-9a-f]{40}", source_sha) is None
+        or source_ref != "refs/heads/feature/t090-provider-isolation-adjudication"
+        or workflow != repository + "/.github/workflows/t090-image-attestation.yml"
+        or not isinstance(archive_hashes, dict)
+        or not isinstance(expected_hashes, dict)
+        or any(
+            not isinstance(archive_hashes.get(name), str)
+            or _SHA.fullmatch(archive_hashes[name]) is None
+            or archive_hashes[name] != expected_hashes.get(name)
+            for name in ("npm", "PyPI")
+        )
+    ):
+        raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: snapshot source/pins mismatch")
+    return {
+        "image": image,
+        "repository": repository,
+        "source_sha": source_sha,
+        "source_ref": source_ref,
+        "signer_workflow": workflow,
+        "npm_sha256": archive_hashes["npm"],
+        "pypi_sha256": archive_hashes["PyPI"],
+    }
+
+
 def require_production_build_inputs(
     *,
     requirements: Path,

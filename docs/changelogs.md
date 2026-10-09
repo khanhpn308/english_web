@@ -1,3 +1,10 @@
+## 10/10/2026 - T090 R6-B1.2 immutable candidate OSV snapshot and production-input guard
+
+- Replaced mutable OSV all.zip downloads in the candidate Dockerfile with digest-locked OCI snapshot copying from signed GHCR candidate image 60add569; checked archive SHA-256 values remain unchanged and fail closed on mismatch.
+- Before Docker build, candidate CI validates snapshot identity against pinned OSV metadata and verifies both GitHub OIDC SLSA provenance and SPDX/SBOM attestations tied to exact source commit, workflow and OCI subject. Candidate image remains unapproved; this is NOT independent operator trust or OSV publisher authorization.
+- Added negative snapshot metadata tests and production-input admission guard for hash-incomplete Python wheels, unapproved OSV/base pins, and OS package snapshot deficiencies. Guard is a separate Host prerequisite, not active production routing.
+- Existing Python/Semgrep wheel hashes and Debian OS package snapshots are incomplete. Never claim B1 production acceptance, do not flip approved=false, merge PR #9, or unblock untrusted verification paths.
+
 ## 09/10/2026 - T090 R6-B1.2 pinned offline vulnerability databases
 
 - Recorded exact offline npm and PyPI OSV ZIP SHA-256 values from completed same-SHA candidate run 37961597747, whose signed provenance/SBOM verification PASSED. Source evidence is preserved as GitHub Actions artifact `t090-supply-chain-candidate-37961597747`.

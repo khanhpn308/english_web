@@ -156,22 +156,36 @@ def test_t090_production_inputs_reject_candidate_pins_and_missing_os_snapshot(
     osv = tmp_path / "osv.json"
     snapshot = tmp_path / "os-packages.json"
     requirements.write_text("pytest==9.1.1 --hash=sha256:" + "a" * 64 + "\n")
-    npm.write_text('{"packages":{"":{"name":"demo"},"node_modules/demo":{"integrity":"sha512-abc"}}}')
-    bases.write_text(json.dumps({
-        "platform": "linux/amd64",
-        "approval": "candidate-only",
-        "python": "python@sha256:" + "b" * 64,
-        "node": "node@sha256:" + "c" * 64,
-    }))
-    osv.write_text(json.dumps({
-        "approved": False,
-        "archive_sha256": {"npm": "d" * 64, "PyPI": "e" * 64},
-    }))
-    snapshot.write_text(json.dumps({
-        "approved": True,
-        "snapshot_sha256": "f" * 64,
-        "packages": {"curl": {"version": "1.0", "artifact_sha256": "0" * 64}},
-    }))
+    npm.write_text(
+        '{"packages":{"":{"name":"demo"},"node_modules/demo":{"integrity":"sha512-abc"}}}'
+    )
+    bases.write_text(
+        json.dumps(
+            {
+                "platform": "linux/amd64",
+                "approval": "candidate-only",
+                "python": "python@sha256:" + "b" * 64,
+                "node": "node@sha256:" + "c" * 64,
+            }
+        )
+    )
+    osv.write_text(
+        json.dumps(
+            {
+                "approved": False,
+                "archive_sha256": {"npm": "d" * 64, "PyPI": "e" * 64},
+            }
+        )
+    )
+    snapshot.write_text(
+        json.dumps(
+            {
+                "approved": True,
+                "snapshot_sha256": "f" * 64,
+                "packages": {"curl": {"version": "1.0", "artifact_sha256": "0" * 64}},
+            }
+        )
+    )
     kwargs = {
         "requirements": requirements,
         "npm": npm,
@@ -190,11 +204,75 @@ def test_t090_production_inputs_reject_candidate_pins_and_missing_os_snapshot(
     snapshot.write_text(snapshot.read_text().replace('"artifact_sha256":', '"invalid_digest":'))
     with pytest.raises(SupplyChainBlocked, match="OS package snapshot incomplete"):
         require_production_build_inputs(**kwargs)
-    snapshot.write_text(json.dumps({
-        "approved": True, "snapshot_sha256": "f" * 64,
-        "packages": {"curl": {"version": "1.0", "artifact_sha256": "0" * 64}},
-    }))
+    snapshot.write_text(
+        json.dumps(
+            {
+                "approved": True,
+                "snapshot_sha256": "f" * 64,
+                "packages": {"curl": {"version": "1.0", "artifact_sha256": "0" * 64}},
+            }
+        )
+    )
     require_production_build_inputs(**kwargs)
     requirements.write_text("pytest==9.1.1\n")
     with pytest.raises(SupplyChainBlocked, match="Python wheel hashes"):
         require_production_build_inputs(**kwargs)
+
+
+def test_t090_candidate_osv_snapshot_requires_immutable_signed_source_identity(
+    tmp_path: Path,
+) -> None:
+    from scripts.t090_supply_chain import validate_candidate_osv_snapshot_source
+
+    snapshot_file = tmp_path / "snapshot.json"
+    pins_file = tmp_path / "pins.json"
+    hashes = {"npm": "a" * 64, "PyPI": "b" * 64}
+    pins_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "scope": "candidate-only",
+                "approved": False,
+                "archive_sha256": hashes,
+            }
+        )
+    )
+    valid = {
+        "schema_version": 1,
+        "scope": "candidate-only",
+        "approved": False,
+        "image_reference": "ghcr.io/khanhpn308/english_web/t090-verifier@sha256:" + "c" * 64,
+        "source_repository": "khanhpn308/english_web",
+        "source_sha": "d" * 40,
+        "source_ref": "refs/heads/feature/t090-provider-isolation-adjudication",
+        "signer_workflow": (
+            "khanhpn308/english_web/.github/workflows/t090-image-attestation.yml"
+        ),
+        "osv_archive_sha256": hashes,
+    }
+    snapshot_file.write_text(json.dumps(valid))
+    verified = validate_candidate_osv_snapshot_source(snapshot_file, pins_file)
+    assert verified["image"] == valid["image_reference"]
+    for bad in (
+        {**valid, "image_reference": "ghcr.io/demo:latest"},
+        {**valid, "approved": True},
+        {**valid, "source_sha": "0" * 64},
+        {**valid, "signer_workflow": "attacker/workflow.yml"},
+        {**valid, "osv_archive_sha256": {**hashes, "PyPI": "f" * 64}},
+    ):
+        snapshot_file.write_text(json.dumps(bad))
+        with pytest.raises(SupplyChainBlocked, match="snapshot source/pins mismatch"):
+            validate_candidate_osv_snapshot_source(snapshot_file, pins_file)
+    snapshot_file.write_text(json.dumps(valid))
+    pins_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "scope": "candidate-only",
+                "approved": False,
+                "archive_sha256": {**hashes, "npm": "e" * 64},
+            }
+        )
+    )
+    with pytest.raises(SupplyChainBlocked, match="snapshot source/pins mismatch"):
+        validate_candidate_osv_snapshot_source(snapshot_file, pins_file)

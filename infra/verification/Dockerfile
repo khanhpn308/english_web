@@ -4,7 +4,10 @@
 # dependency hashes, offline database digests, and live isolation tests pass.
 ARG PYTHON_BASE_IMAGE
 ARG NODE_BASE_IMAGE
+ARG OSV_SNAPSHOT_IMAGE
 FROM $NODE_BASE_IMAGE AS node_toolchain
+# Snapshot source must be an immutable, separately attested OCI digest.
+FROM $OSV_SNAPSHOT_IMAGE AS osv_snapshot
 FROM $PYTHON_BASE_IMAGE AS verifier
 
 SHELL ["/bin/sh", "-eu", "-c"]
@@ -67,18 +70,14 @@ RUN curl --fail --location --silent --show-error \
     && echo 'ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108  /usr/local/bin/osv-scanner' | sha256sum -c - \
     && chmod 0755 /usr/local/bin/osv-scanner
 
-# Offline DB download happens during trusted image BUILD, never during Worker tests.
-# These observed candidate hashes MUST be checked before any downloaded DB is used.
-# Candidate pins are not an independent operator approval.
+# Immutable, content-addressed candidate snapshot: no mutable network download.
+# Host CI verifies signature/source identity, then Docker verifies exact ZIP bytes.
+# Neither the snapshot nor these hashes represents operator approval.
 ARG OSV_NPM_SHA256
 ARG OSV_PYPI_SHA256
-RUN for ecosystem in npm PyPI; do \
-      mkdir -p "/opt/osv-db/osv-scanner/$ecosystem"; \
-      curl --fail --location --silent --show-error \
-        "https://osv-vulnerabilities.storage.googleapis.com/$ecosystem/all.zip" \
-        --output "/opt/osv-db/osv-scanner/$ecosystem/all.zip"; \
-    done \
-    && test -n "$OSV_NPM_SHA256" \
+COPY --from=osv_snapshot /opt/osv-db/osv-scanner/npm/all.zip /opt/osv-db/osv-scanner/npm/all.zip
+COPY --from=osv_snapshot /opt/osv-db/osv-scanner/PyPI/all.zip /opt/osv-db/osv-scanner/PyPI/all.zip
+RUN test -n "$OSV_NPM_SHA256" \
     && test -n "$OSV_PYPI_SHA256" \
     && printf '%s  %s\n' "$OSV_NPM_SHA256" /opt/osv-db/osv-scanner/npm/all.zip | sha256sum -c - \
     && printf '%s  %s\n' "$OSV_PYPI_SHA256" /opt/osv-db/osv-scanner/PyPI/all.zip | sha256sum -c - \

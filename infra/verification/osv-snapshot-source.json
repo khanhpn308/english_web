@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "scope": "candidate-only",
+  "approved": false,
+  "image_reference": "ghcr.io/khanhpn308/english_web/t090-verifier@sha256:60add569782ebaea2234346de3b272840dcdb10632ccb3c5b4d7f2af4e10ab5f",
+  "source_repository": "khanhpn308/english_web",
+  "source_sha": "4e5102a59f6d9936d8b4f202a28f0612b9e9246e",
+  "source_ref": "refs/heads/feature/t090-provider-isolation-adjudication",
+  "signer_workflow": "khanhpn308/english_web/.github/workflows/t090-image-attestation.yml",
+  "source_ci_run_id": 37961597747,
+  "osv_archive_sha256": {
+    "npm": "bf0f7a94be4f062ca0fa1453a13364e00fc756132a81140389ebc4893a03a8d5",
+    "PyPI": "52add114b6c83e9efe976a7c9b704062c9f29b96f6afde76b34dc2e7eea77440"
+  },
+  "note": "Candidate fixture only: OCI content-addressed snapshot with CI signed attestations; no independent operator approval of OSV publisher/source."
+}
