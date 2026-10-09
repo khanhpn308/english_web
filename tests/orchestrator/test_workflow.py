@@ -4302,3 +4302,117 @@ def test_t090_git_frozen_binding_rejects_changed_authoritative_source(
             expected_git_snapshot=frozen,
             sandbox=broker,
         )
+
+
+def test_t090_admitted_collector_uses_only_docker_and_binds_git(
+    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.core import FrozenEvidenceIdentity, VerificationRequest
+    from tools.orchestrator.runtime import (
+        DockerVerificationPolicy,
+        DockerVerificationSandbox,
+        ProcessResult,
+        VerificationImageAdmission,
+    )
+    from tools.orchestrator.workflow import (
+        collect_verification_admitted,
+        freeze_verification_source_binding,
+    )
+
+    base = Git(repository).sha()
+    snapshot = Git(repository).snapshot(base)
+    root = tmp_path / "verification-root"
+    clone = root / "verify-fixture" / "workspace"
+    clone.parent.mkdir(parents=True)
+    Git(repository).run("clone", "--no-local", "--no-checkout", str(repository), str(clone))
+    Git(clone).run("checkout", "--detach", base)
+    image = "example.org/verified@sha256:" + "a" * 64
+    broker = DockerVerificationSandbox(DockerVerificationPolicy(image, root))
+    binding = freeze_verification_source_binding(
+        working=repository,
+        verification_workspace=clone,
+        base_sha=base,
+        expected_git_snapshot=snapshot,
+        sandbox=broker,
+    )
+    command = ("python", "-m", "pytest", "-q")
+    request = VerificationRequest(
+        clone,
+        (command,),
+        30,
+        FrozenEvidenceIdentity.freeze("T100", base, "feature/t100", snapshot, (command,)),
+    )
+    approval = VerificationImageAdmission(image, "b" * 64, "sha256:" + "c" * 64, "sha256:" + "d" * 64)
+    captured: list[tuple[str, ...]] = []
+
+    def fake_broker(
+        _self: DockerVerificationSandbox,
+        argv: list[str],
+        _workspace: Path,
+        *,
+        expected_source_digest: str | None = None,
+    ) -> ProcessResult:
+        assert _workspace == clone
+        assert expected_source_digest == binding.docker_source_digest
+        captured.append(tuple(argv))
+        return ProcessResult(tuple(argv), str(clone), "start", "end", 0, "", "")
+
+    monkeypatch.setattr(DockerVerificationSandbox, "run", fake_broker)
+    collection = collect_verification_admitted(
+        request,
+        source_worktree=repository,
+        binding=binding,
+        image_admission=approval,
+        sandbox=broker,
+    )
+    assert not collection.failed and collection.setup_error is None
+    assert captured == [command]
+    assert collection.results[0]["execution_backend"] == "docker-sandbox"
+    assert collection.results[0]["image_policy_digest"] == approval.policy_sha256
+
+
+def test_t090_admitted_collector_denies_without_policy_before_docker(
+    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator.core import FrozenEvidenceIdentity, OrchestratorError, VerificationRequest
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+    from tools.orchestrator.workflow import (
+        collect_verification_admitted,
+        freeze_verification_source_binding,
+    )
+
+    base = Git(repository).sha()
+    snapshot = Git(repository).snapshot(base)
+    root = tmp_path / "verification-root"
+    clone = root / "verify-fixture" / "workspace"
+    clone.parent.mkdir(parents=True)
+    Git(repository).run("clone", "--no-local", "--no-checkout", str(repository), str(clone))
+    Git(clone).run("checkout", "--detach", base)
+    broker = DockerVerificationSandbox(
+        DockerVerificationPolicy("example.org/verified@sha256:" + "a" * 64, root)
+    )
+    binding = freeze_verification_source_binding(
+        working=repository,
+        verification_workspace=clone,
+        base_sha=base,
+        expected_git_snapshot=snapshot,
+        sandbox=broker,
+    )
+    command = ("python", "-m", "pytest", "-q")
+    request = VerificationRequest(
+        clone,
+        (command,),
+        30,
+        FrozenEvidenceIdentity.freeze("T100", base, "feature/t100", snapshot, (command,)),
+    )
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("Docker or Host subprocess must not run")
+
+    monkeypatch.setattr(DockerVerificationSandbox, "run", forbidden)
+    with pytest.raises(OrchestratorError, match="trusted image admission required"):
+        collect_verification_admitted(
+            request, source_worktree=repository, binding=binding,
+            image_admission=None, sandbox=broker,
+        )
+

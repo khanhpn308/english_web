@@ -81,6 +81,7 @@ from tools.orchestrator.runtime import (
     AgentProvider,
     DockerVerificationSandbox,
     Git,
+    VerificationImageAdmission,
     LockBusy,
     SecureProvider,
     execute,
@@ -371,6 +372,70 @@ def freeze_verification_source_binding(
         docker_source_digest=tree_digest,
         verification_root=verification_workspace.resolve(),
     )
+
+
+def collect_verification_admitted(
+    request: VerificationRequest,
+    *,
+    source_worktree: Path,
+    binding: FrozenVerificationSourceBinding,
+    image_admission: VerificationImageAdmission | None,
+    sandbox: DockerVerificationSandbox,
+) -> VerificationCollection:
+    """Candidate-only admitted runner; no Host execution or silent fallback.
+
+    Admission is deliberately explicit. The legacy callsites MUST be removed
+    before claiming enforcement; this helper does not enable the pipeline.
+    """
+    if image_admission is None or image_admission.image != sandbox.policy.image:
+        raise OrchestratorError("T090 SANDBOX_BLOCKED: trusted image admission required")
+    if (
+        request.identity.base_sha != binding.base_sha
+        or request.identity.source_digest != binding.git_snapshot
+        or request.cwd.resolve() != binding.verification_root
+        or source_worktree.resolve() == binding.verification_root
+    ):
+        raise OrchestratorError("T090 SANDBOX_BLOCKED: frozen verification identity mismatch")
+
+    def attest_git() -> None:
+        if (
+            Git(source_worktree).snapshot(binding.base_sha) != binding.git_snapshot
+            or Git(request.cwd).snapshot(binding.base_sha) != binding.git_snapshot
+        ):
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: Git snapshot changed")
+
+    attest_git()
+    if sandbox.source_digest(request.cwd) != binding.docker_source_digest:
+        raise OrchestratorError("T090 SANDBOX_BLOCKED: source digest changed")
+    results: list[dict[str, object]] = []
+    for index, command in enumerate(request.commands):
+        attest_git()
+        started = time.monotonic_ns()
+        try:
+            result = sandbox.run(
+                list(command),
+                request.cwd,
+                expected_source_digest=binding.docker_source_digest,
+            )
+        except (OrchestratorError, OSError) as error:
+            # A failed admission never triggers Host execute as fallback.
+            detail = str(error) if isinstance(error, OrchestratorError) else type(error).__name__
+            return VerificationCollection(
+                request.identity,
+                tuple(results),
+                setup_error=f"SETUP_FAILED: audit_checks: {detail}",
+            )
+        metadata = result.metadata()
+        metadata["command"] = [Path(command[0]).name, "<arguments withheld>"]
+        metadata["declaration_digest"] = command_declaration_digest(command)
+        metadata["duration_ns"] = time.monotonic_ns() - started
+        metadata["execution_backend"] = "docker-sandbox"
+        metadata["image_policy_digest"] = image_admission.policy_sha256
+        results.append({**metadata, "command_index": index})
+        if result.exit_code or result.timed_out or result.oversized:
+            return VerificationCollection(request.identity, tuple(results), failed=True)
+    attest_git()
+    return VerificationCollection(request.identity, tuple(results))
 
 
 def verification_command_argv(cwd: Path, command: list[str]) -> list[str]:
