@@ -1,0 +1,99 @@
+name: T090 verifier image candidate (non-production)
+
+on:
+  push:
+    branches:
+      - feature/t090-provider-isolation-adjudication
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t090-image-candidate
+  cancel-in-progress: true
+
+jobs:
+  candidate-image:
+    name: Build isolated candidate, never approve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate candidate is explicitly unapproved
+        run: |
+          python3 - <<'PY'
+          import json
+          with open('infra/verification/image-policy.json', encoding='utf-8') as stream:
+              policy = json.load(stream)
+          assert policy['schema_version'] == 1
+          assert policy['approved'] is False
+          assert policy['image_reference'] is None
+          PY
+
+      - name: Check changed Python formatting without disabling gates
+        run: |
+          python3 -m pip install --disable-pip-version-check 'ruff==0.16.9'
+          python3 -m ruff format --check \
+            tools/orchestrator/runtime.py \
+            tools/orchestrator/workflow.py \
+            tests/orchestrator/test_runtime.py \
+            tests/orchestrator/test_workflow.py \
+            scripts/security_checks.py
+
+      - name: Resolve and record immutable upstream image identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull python:3.12-slim-bookworm
+          docker pull node:22-bookworm-slim
+          py_ref="$(docker image inspect --format '{{index .RepoDigests 0}}' python:3.12-slim-bookworm)"
+          node_ref="$(docker image inspect --format '{{index .RepoDigests 0}}' node:22-bookworm-slim)"
+          [[ "$py_ref" == *@sha256:* ]]
+          [[ "$node_ref" == *@sha256:* ]]
+          echo "T090_PYTHON_BASE=$py_ref" >> "$GITHUB_ENV"
+          echo "T090_NODE_BASE=$node_ref" >> "$GITHUB_ENV"
+          printf 'Python base: %s\nNode base: %s\n' "$py_ref" "$node_ref"
+
+      - name: Build with only allowlisted trusted inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          context="$RUNNER_TEMP/t090-image-input"
+          mkdir -p "$context"
+          cp infra/verification/Dockerfile "$context/Dockerfile"
+          cp package.json package-lock.json requirements-dev.lock "$context/"
+          docker build --progress=plain --pull=false \
+            --build-arg "PYTHON_BASE_IMAGE=$T090_PYTHON_BASE" \
+            --build-arg "NODE_BASE_IMAGE=$T090_NODE_BASE" \
+            -t t090-verifier:candidate \
+            "$context"
+          docker image inspect --format='Candidate local image ID: {{.Id}}' t090-verifier:candidate
+
+      - name: Isolated image smoke without source mounts
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --pull=never \
+            --network=none --read-only --cap-drop=ALL \
+            --security-opt=no-new-privileges \
+            --memory=512m --memory-swap=512m \
+            --cpus=1 --pids-limit=64 \
+            --user=65534:65534 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=64m,mode=1777 \
+            --tmpfs /workspace:rw,nosuid,nodev,size=64m,mode=1777 \
+            --entrypoint=/usr/local/bin/python3 \
+            t090-verifier:candidate -I -c '
+          import os, shutil, subprocess
+          import pytest, ruff, mypy
+          assert not os.path.exists("/root/.ssh")
+          assert os.path.exists("/node_modules/.bin/vitest")
+          assert os.path.exists("/opt/osv-db/archive.sha256")
+          assert os.environ["T090_OSV_OFFLINE"] == "1"
+          assert subprocess.check_output(["node", "--version"], text=True).startswith("v22.")
+          assert shutil.which("gitleaks") and shutil.which("osv-scanner")
+          print("T090_IMAGE_BASIC_SMOKE_PASS: not a security attestation")
+          '
