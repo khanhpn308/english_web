@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAiConsent } from '@/features/consent/AiConsentGate';
 import { ApiError, MutationUnknownError, apiClient } from '@/shared/api/client';
 import type { components } from '@/shared/api/generated';
 import { LookupResult } from './LookupResult';
+import { AudioButton } from './AudioButton';
+import { SavePreview } from './SavePreview';
 
 type Preview = components['schemas']['LookupResult'];
 type Operation = components['schemas']['Operation'];
@@ -53,6 +55,16 @@ export function LookupPage({ active = true }: { active?: boolean }) {
   const consent = useAiConsent();
   const [term, setTerm] = useState('');
   const [view, setView] = useState<View>({ phase: 'idle', message: 'Nhập từ hoặc cụm từ để tra cứu.' });
+  const [saveLocked, setSaveLocked] = useState(false);
+  const [saved, setSaved] = useState<{ lookupId: string; noteDate: string } | null>(null);
+  const saveLock = useRef(false);
+  const updateSaveLock = useCallback((locked: boolean) => { saveLock.current = locked; setSaveLocked(locked); }, []);
+  const confirmSave = useCallback((lookupId: string, receipt: components['schemas']['SaveResult']) => {
+    setSaved({ lookupId, noteDate: receipt.noteDate });
+    setView(current => current.preview?.lookupId === lookupId ? {
+      ...current, message: `Backend đã xác nhận lưu bản xem trước vào ngày ${receipt.noteDate}.`,
+    } : current);
+  }, []);
   const input = useRef<HTMLInputElement>(null);
   const status = useRef<HTMLParagraphElement>(null);
   const alive = useRef(true);
@@ -156,7 +168,7 @@ export function LookupPage({ active = true }: { active?: boolean }) {
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (busy.current || intent.current || !visible.current) return;
+    if (busy.current || intent.current || saveLock.current || !visible.current) return;
     const normalized = normalizedTerm(term);
     if (!normalized) { show({ phase: 'validation', message: 'Nhập từ có 1–80 ký tự Unicode sau chuẩn hóa, không có ký tự điều khiển.' }); return; }
     busy.current = true;
@@ -212,10 +224,10 @@ export function LookupPage({ active = true }: { active?: boolean }) {
             className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
             onChange={event => {
               setTerm(event.target.value); editVersion.current += 1; actionVersion.current += 1;
-              if (!busy.current && !intent.current) show({ phase: 'idle', message: 'Nhập từ hoặc cụm từ để tra cứu.' });
+              if (!busy.current && !intent.current && !saveLock.current) show({ phase: 'idle', message: 'Nhập từ hoặc cụm từ để tra cứu.' });
             }} />
           <p id="lookup-help" className="text-sm text-muted-foreground">Tối đa 80 ký tự sau chuẩn hóa. Tra cứu chỉ tạo bản xem trước; chưa lưu vào kho học.</p>
-          <Button type="submit" className="min-h-11" disabled={waiting || !!intent.current || consent.pending || !!consent.unresolved}>
+          <Button type="submit" className="min-h-11" disabled={saveLocked || waiting || !!intent.current || consent.pending || !!consent.unresolved}>
             {view.phase === 'terminal' ? 'Thử lại' : 'Tra cứu'}
           </Button>
         </form>
@@ -234,6 +246,18 @@ export function LookupPage({ active = true }: { active?: boolean }) {
         </div>}
       </CardContent>
     </Card>
-    {view.preview && <LookupResult preview={view.preview} />}
+    {view.preview && <>
+      <LookupResult preview={view.preview} savedNoteDate={saved?.lookupId === view.preview.lookupId ? saved.noteDate : undefined} />
+      <Card role="region" aria-label="Phát âm cục bộ">
+        <CardHeader><CardTitle><h2 className="m-0 text-xl">Phát âm cục bộ</h2></CardTitle></CardHeader>
+        <CardContent className="space-y-4 min-w-0">
+          {view.preview.forms.map(form => <div key={form.formId} className="space-y-2">
+            <p className="text-sm text-muted-foreground">{form.partOfSpeech}</p>
+            <AudioButton key={`${view.preview?.lookupId}-${form.formId}`} text={form.lemma} active={active} />
+          </div>)}
+        </CardContent>
+      </Card>
+    </>}
+    <SavePreview preview={view.preview} active={active && !waiting && !intent.current} onLockChange={updateSaveLock} onConfirmed={confirmSave} />
   </section>;
 }
