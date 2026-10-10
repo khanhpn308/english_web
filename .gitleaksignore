@@ -1,0 +1,5 @@
+# Verified false positive: non-sensitive sessionStorage key.
+# Source: frontend/src/features/lookup/SavePreview.tsx
+# Rule: generic-api-key; no broad rule or path exemption.
+/home/khanh/projects/vocabularies-t012-gitleaks-reconcile/frontend/src/features/lookup/SavePreview.tsx:generic-api-key:28
+a6b93aa19709b7c1a267d2999f70163d2f2f79df:frontend/src/features/lookup/SavePreview.tsx:generic-api-key:28
