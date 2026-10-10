@@ -321,12 +321,12 @@ def _git_has_head(repo: Path) -> bool:
 def run_secrets(repo: Path, report_dir: Path, *, runner: Runner = run_command) -> GateResult:
     binary = _tool_binary("GITLEAKS_BIN", "gitleaks")
     _verify_version("gitleaks", binary, GITLEAKS_VERSION, repo, runner)
-    scopes: list[tuple[str, list[str]]] = [("working-tree", ["dir", str(repo)])]
+    scopes: list[tuple[str, list[str]]] = [("working-tree", ["dir", "."])]
     if _git_has_head(repo):
         scopes.extend(
             [
-                ("staged", ["git", "--staged", str(repo)]),
-                ("history", ["git", "--log-opts=HEAD", str(repo)]),
+                ("staged", ["git", "--staged", "."]),
+                ("history", ["git", "--log-opts=HEAD", "."]),
             ]
         )
     findings: list[Finding] = []

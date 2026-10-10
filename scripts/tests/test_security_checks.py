@@ -106,10 +106,10 @@ def test_secret_gate_scans_worktree_staged_and_history_when_head_exists(tmp_path
     (repo / "tracked.txt").write_text("clean\n", encoding="utf-8")
     subprocess.run(["git", "add", "tracked.txt"], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo, check=True)
-    calls: list[list[str]] = []
+    calls: list[tuple[list[str], Path]] = []
 
-    def runner(command: Sequence[str], _cwd: Path) -> subprocess.CompletedProcess[str]:
-        calls.append(list(command))
+    def runner(command: Sequence[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+        calls.append((list(command), cwd))
         if "--version" in command:
             return completed(command, stdout="gitleaks version 8.30.1\n")
         report_path = Path(command[command.index("--report-path") + 1])
@@ -117,13 +117,71 @@ def test_secret_gate_scans_worktree_staged_and_history_when_head_exists(tmp_path
         return completed(command)
 
     result = security_checks.run_secrets(repo, tmp_path / "reports", runner=runner)
-    scan_calls = [call for call in calls if "--report-path" in call]
+    scan_calls = [call for call in calls if "--report-path" in call[0]]
 
     assert result.exit_code == security_checks.EXIT_CLEAN
-    assert [call[1] for call in scan_calls] == ["dir", "git", "git"]
-    assert "--staged" in scan_calls[1]
-    assert "--staged" not in scan_calls[2]
-    assert "--log-opts=HEAD" in scan_calls[2]
+    assert len(scan_calls) == 3
+
+    assert scan_calls[0][0][1:3] == ["dir", "."]
+    assert scan_calls[0][1] == repo
+
+    assert scan_calls[1][0][1:4] == ["git", "--staged", "."]
+    assert scan_calls[1][1] == repo
+
+    assert scan_calls[2][0][1:4] == ["git", "--log-opts=HEAD", "."]
+    assert scan_calls[2][1] == repo
+
+
+def test_identical_scanner_arguments_across_different_worktrees(tmp_path: Path) -> None:
+    repo1 = tmp_path / "repo1"
+    repo1.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo1, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "fixture@example.invalid"], cwd=repo1, check=True
+    )
+    subprocess.run(["git", "config", "user.name", "Fixture"], cwd=repo1, check=True)
+    (repo1 / "tracked.txt").write_text("clean\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=repo1, check=True)
+    subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo1, check=True)
+
+    repo2 = tmp_path / "other" / "nested" / "repo2"
+    repo2.parent.mkdir(parents=True)
+    repo2.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo2, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "fixture@example.invalid"], cwd=repo2, check=True
+    )
+    subprocess.run(["git", "config", "user.name", "Fixture"], cwd=repo2, check=True)
+    (repo2 / "tracked.txt").write_text("clean\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=repo2, check=True)
+    subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo2, check=True)
+
+    def extract_gitleaks_commands(repo: Path) -> list[list[str]]:
+        calls: list[list[str]] = []
+
+        def runner(command: Sequence[str], _cwd: Path) -> subprocess.CompletedProcess[str]:
+            calls.append(list(command))
+            if "--version" in command:
+                return completed(command, stdout="gitleaks version 8.30.1\n")
+            report_path = Path(command[command.index("--report-path") + 1])
+            report_path.write_text("[]", encoding="utf-8")
+            return completed(command)
+
+        security_checks.run_secrets(repo, tmp_path / "reports", runner=runner)
+        # We strip the --report-path argument itself and its value,
+        # as it contains the temp_dir which will differ.
+        normalized = []
+        for call in calls:
+            if "--report-path" in call:
+                idx = call.index("--report-path")
+                normalized.append(call[:idx] + call[idx + 2 :])
+        return normalized
+
+    commands1 = extract_gitleaks_commands(repo1)
+    commands2 = extract_gitleaks_commands(repo2)
+
+    assert commands1 == commands2
+    assert len(commands1) == 3
 
 
 @pytest.mark.parametrize("severity", ["HIGH", "CRITICAL", "UNRECOGNIZED"])
