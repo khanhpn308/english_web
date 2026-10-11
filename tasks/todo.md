@@ -80,7 +80,7 @@
 - [x] [T087](t087-concurrent-audit-preparation.md): `DONE` — concurrent executable verification and parallel read-only review fan-out integrated; R4 independent audit `PASS_FOR_INTEGRATION`, no unresolved HIGH/CRITICAL findings.
 - [x] [T088](t088-deterministic-evidence-bundle.md): Deterministic host evidence collection and versioned EvidenceBundle — `DONE`; authoritative host verification PASS: EvidenceBundle focused 21 passed, concurrent_audit 43 passed, parallel_review 25 passed, scheduler 48 passed, full orchestrator 398 passed; Ruff, Ruff format, Mypy and `git diff --check` PASS.
 - [ ] [T089](t089-evidence-bundle-reviewer-probe-protocol.md): `REOPENED_PENDING_T090` — code previously merged via PR #5; owner revoked auto-process waiver. Completion/acceptance blocked until independently proven T090 code-only Worker isolation. Historic CI PASS remains preserved.
-- [ ] [T090](t090-host-worker-isolation-scope-adjudication.md): `IN_PROGRESS` — enforce code-only Worker (edit permitted task files, deny shell/process/Git/MCP escalation) with genuine provider/OS-level proof; current Worker dispatch must fail closed until validated.
+- [x] [T090](t090-host-worker-isolation-scope-adjudication.md): `DONE` (code implementation) — R6-B3 Docker-only verification paths implemented; formal CI reconciliation, security assurance, live Worker/OS proof and system-wide audit explicitly `AUDIT_DEFERRED` until all 90 tasks are coded. No production image approval, Worker CLI activation or Host fallback.
 
 ## Checkpoints
 
