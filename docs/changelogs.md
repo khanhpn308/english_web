@@ -1,3 +1,9 @@
+## 11/10/2026 - T049 coding integrated; FINAL_VERIFICATION_DEFERRED
+
+- Merged T049 Writing Feedback API via [PR #14](https://github.com/khanhpn308/english_web/pull/14) at `8a72534499c556bc142bf0864e3e3ca6d3d68515`; preserved T012/T050 source and task-completion states on `main`.
+- Marked T049 `DONE` for **coding completion only**, per owner approval. Production feedback service/routes, append-only `0011_feedback` migration and existing synthetic test code are integrated. No new tests or audits were initiated for the merge.
+- `FINAL_VERIFICATION_DEFERRED`: generated OpenAPI/TypeScript DTO reconciliation, historical contract failures, 7 previously reported broad regression failures, remaining quality/security/coverage gates and Windows/real-provider acceptance remain open. Previously reported test outcomes are historical evidence, not final release PASS.
+
 ## 11/10/2026 - T049 writing feedback implementation (Asia/Bangkok)
 
 - Implemented canonical-answer advisory feedback POST/GET, strict writing-feedback-v1 schema, durable paginated history and approved 0011 migration. Reused admission/consent/bridge and operation receipts; preserved learning data, explicit retry identity, UNKNOWN blocking, cancellation cleanup and the 30-second deadline.
