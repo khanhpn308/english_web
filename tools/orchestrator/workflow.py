@@ -904,6 +904,109 @@ class Pipeline:
         self.runs = self.runs.resolve()
         self.worktrees = self.worktrees.resolve()
 
+    def _verification_authority(
+        self,
+    ) -> tuple[VerificationImageAdmission, DockerVerificationSandbox]:
+        """Resolve operator-owned signed admission; never trust repository configuration.
+
+        These Host environment variables are provisioned outside Worker runtime.
+        Missing/unsigned/unpinned material blocks BEFORE any source check executes.
+        """
+        required = (
+            "T090_IMAGE_POLICY_PATH",
+            "T090_IMAGE_POLICY_SHA256",
+            "T090_IMAGE_APPROVAL_SIGNATURE_PATH",
+            "T090_IMAGE_TRUSTED_PUBLIC_KEY_PATH",
+            "T090_IMAGE_TRUSTED_PUBLIC_KEY_SHA256",
+        )
+        values = [os.environ.get(key) for key in required]
+        if any(not value for value in values):
+            raise OrchestratorError(
+                "T090 SANDBOX_BLOCKED: independent signed Host image authority not configured"
+            )
+        policy_path, policy_sha, signature_path, key_path, key_sha = values
+        assert all(isinstance(value, str) for value in values)
+        admission = admit_verification_image(
+            Path(str(policy_path)),
+            expected_policy_sha256=str(policy_sha),
+            authoritative_repository=self.repository,
+            approval_signature_path=Path(str(signature_path)),
+            trusted_public_key_path=Path(str(key_path)),
+            expected_public_key_sha256=str(key_sha),
+        )
+        deadline = self.config.timeout_seconds or 1200
+        sandbox = DockerVerificationSandbox(
+            DockerVerificationPolicy(
+                image=admission.image,
+                verification_root=self.worktrees,
+                timeout_seconds=min(1200, deadline),
+            )
+        )
+        return admission, sandbox
+
+    @contextmanager
+    def docker_verification_workspace(
+        self,
+        working: Path,
+        snapshot: str,
+        base_sha: str,
+        task_id: str,
+        run_id: str,
+    ) -> Iterator[tuple[Path, Git]]:
+        """Materialize code in a private clone WITHOUT host venv or node_modules."""
+        working_git = Git(working)
+        pinned_head = working_git.sha()
+        if working_git.snapshot(base_sha) != snapshot:
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: source changed before clone")
+        self.worktrees.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(
+            prefix=f"docker-verify-{task_id}-{run_id}-",
+            dir=self.worktrees,
+        ) as temporary:
+            clone = Path(temporary) / "workspace"
+            self.git.run(
+                "clone", "--no-local", "--no-checkout",
+                str(self.repository), str(clone),
+            )
+            verifier_git = Git(clone)
+            verifier_git.run("checkout", "--detach", pinned_head)
+            materialize_candidate(working, clone, pinned_head)
+            if (
+                verifier_git.snapshot(base_sha) != snapshot
+                or working_git.sha() != pinned_head
+                or working_git.snapshot(base_sha) != snapshot
+            ):
+                raise OrchestratorError("T090 SANDBOX_BLOCKED: frozen clone diverged")
+            for filename in (".venv", "node_modules"):
+                if os.path.lexists(clone / filename):
+                    raise OrchestratorError(
+                        "T090 SANDBOX_BLOCKED: untrusted dependency directory in clone"
+                    )
+            yield clone, verifier_git
+
+    def _collect_docker_verification(
+        self,
+        request: VerificationRequest,
+        working: Path,
+        snapshot: str,
+        admission: VerificationImageAdmission,
+        sandbox: DockerVerificationSandbox,
+    ) -> VerificationCollection:
+        binding = freeze_verification_source_binding(
+            working=working,
+            verification_workspace=request.cwd,
+            base_sha=request.identity.base_sha,
+            expected_git_snapshot=snapshot,
+            sandbox=sandbox,
+        )
+        return collect_verification_admitted(
+            request,
+            source_worktree=working,
+            binding=binding,
+            image_admission=admission,
+            sandbox=sandbox,
+        )
+
     @classmethod
     def load(cls, directory: Path, config_path: Path | None = None) -> "Pipeline":
         # This resolves shared repository identity, not the invoking Python module version.
