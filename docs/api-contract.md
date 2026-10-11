@@ -356,6 +356,48 @@ details: { kind: FIELD_ERRORS, fields: [{field, reason}] }
 
 The bootstrap token is a technical local-session credential, not an app account or password. It is single-use, valid while `now < issuedAt + 60s`, omitted from logs, read only by the trusted bootstrap page, cleared from the URL before the main app loads, and never exposed to application components. The browser session is non-sliding, valid for less than 28,800s (8 hours) and only in the issuing backend process. Refresh/second tabs share its original expiry; shutdown/crash/restart invalidate it. Missing cookie → `401 SESSION_REQUIRED`; expired/invalid cookie → `401 SESSION_INVALID`. Fresh rebootstrap restores acknowledged durable drafts/history/consent through reads, without replaying AI operations. ADR-0005 C013-09 defines exact expiry and replay fixtures.
 
+### T039 Windows launcher in-process handoff (owner-approved)
+
+This is the normative Windows launcher ↔ existing FastAPI backend handoff for T039, approved by the owner on 11/10/2026. It adds no HTTP endpoint, login/authentication scheme, environment variable, or bridge credential flow and does not change existing T006/T066 session rules. T040 owns first-run provisioning and DPAPI. T056 owns packaging.
+
+**Process ownership and startup**
+
+1. One Windows launcher process owns the existing FastAPI application, an in-process Uvicorn server (for example on a managed thread), its storage lifecycle, and the primary-instance synchronization primitives. It MUST use backend.app.main.create_app(settings=AppSettings(...), markdown_root=...), not the module-level default app=create_app() that has no configured storage path.
+2. Bind only 127.0.0.1 on an OS-assigned free TCP port. Reserve the port with a pre-bound socket, create AppSettings(port=actual_bound_port), and hand the same socket to Uvicorn without a close-and-rebind window. This preserves SessionGuard Host/Origin agreement. Never bind LAN, guess the port, silently attach to a foreign process or spawn another backend after duplicate launch.
+3. Allow up to 10 seconds from the serving startup to observe HTTP 200 from GET /api/v1/health with readiness=true. HTTP 200 with readiness=false, a malformed response, a server exit, missing bootstrap/static build assets or timeout is not success. Show native remediation and do not open a browser onto a false-empty dashboard. Do not delete/recreate storage to mask migration or integrity errors.
+4. Normal shutdown stops Uvicorn, invokes existing FastAPI lifespan cleanup including SessionStore invalidation, releases the bound socket and mutex/event handles. A crashed backend loses its process-local sessions; a new session can be issued only after a successful new startup.
+
+**Version-1 existing launcher configuration**
+
+- Read %LOCALAPPDATA%\VocabularyApp\config.toml using Python 3.12 tomllib in the native launcher. T039 consumes existing configuration only: T040 creates/provisions it and handles the current-user protected bridge-key reference. Missing/malformed/unprovisioned configuration is native CONFIGURATION_REQUIRED, not permission to invent key material, bypass consent, or fall back to default AppSettings.
+- The exact v1 root keys are: schema_version (integer 1), data_root (absolute Windows directory), storage_path (absolute SQLite file within data_root), and markdown_root (absolute selected/validated Windows directory). The suggested default data root is %USERPROFILE%\Documents\VocabularyApp; persist a resolved absolute path, not a literal variable expression. TOML literal-string example:
+
+      schema_version = 1
+      data_root = 'C:\Users\Example\Documents\VocabularyApp'
+      storage_path = 'C:\Users\Example\Documents\VocabularyApp\vocabulary.sqlite3'
+      markdown_root = 'C:\Users\Example\Documents\VocabularyApp\notes'
+
+- Reject unknown schema versions, unsafe relative paths, UNC/network data paths, and untrusted reparse-point traversal. Validate canonical path containment, current-user access and writable permissions without changing or replacing user files. No credentials, session cookies or one-time tokens belong in TOML or diagnostics.
+- Configure AppSettings.host=127.0.0.1, AppSettings.port=the bound port, AppSettings.storage_path=validated storage_path and markdown_root=validated markdown_root. Keep version and bridge URL under existing backend policy. The DPAPI key reference remains %LOCALAPPDATA%\VocabularyApp\secrets\bridge-key.dpapi (T040); missing AI bridge/key must not fabricate AI readiness or by itself disable otherwise healthy local learning.
+
+**Trusted browser bootstrap**
+
+- Only after the same FastAPI/Uvicorn application reports ready, call exactly that application's app.state.sessions.issue_bootstrap_token() inside the launcher process. The backend exchange handler must consult that very same SessionStore. A separate SessionStore and any HTTP token-issuance route are prohibited.
+- Open the default browser once with a fragment URI of the form http://127.0.0.1:<actual_port>/bootstrap#token=<opaque_token>. The existing T066 page clears the fragment promptly; POST /bootstrap/exchange atomically consumes a one-time token within 60 seconds and issues the existing HttpOnly SameSite=Strict cookie. Never put the token in query strings, logs, diagnostics, persistent IPC, settings, or learning UI. The one-time URI is passed transiently only to the OS browser-open facility; do not persist or print it.
+- Do not set session cookies directly in the launcher, bypass SessionGuard, send bridge keys to the browser, or use unapproved browser automation/debugging interfaces.
+
+**Single-instance and focus signalling**
+
+- The primary acquires and owns mutex Global\VocabularyApp-v1. A second invocation never binds a port, spawns a backend, issues a token or opens another browser tab. Instead it signals primary-owned auto-reset Windows event Global\VocabularyApp-v1-focus (no payload), then exits.
+- Limit these synchronization objects to the intended current Windows user and required SYSTEM access. Reject or explicitly handle foreign-owner/pre-created objects, wrong sessions and API failures; do not assume possession of a globally named object authenticates its owner.
+- The primary handles the event and attempts to activate the known, validated browser window for this instance using permitted Win32 foreground APIs, without matching arbitrary window titles or launching an extra tab. A named-event signal alone does NOT prove the tab was focused.
+- If the browser window is unknown or Windows forbids foreground activation, show actionable native remediation without starting a second backend/tab. Record focus outcome as PENDING_WINDOWS_EVIDENCE and do not claim successful exact-tab focus. Native browser/window focus constraints must be checked during T057 Windows acceptance.
+
+**Implementation scope and acceptance**
+
+- T039 implementation files: launcher/src/main.py, launcher/src/windows_mutex.py and docs/runbooks/api-unavailable.md, plus T039 bookkeeping and this approved contract. No required source edits to backend/app/main.py, backend/app/platform/config.py or backend/app/http/session.py; no generated API or DTO updates.
+- During the owner's CODING_ONLY phase, no test creation/execution, build, lint, typecheck, audit, benchmark, runtime PASS or release claim. Unsupported Windows prerequisites and exact-tab focus remain PENDING until system-wide acceptance.
+
 ### AI consent singleton — ADR-0003
 
 These are local-only operations: they must work without internet/bridge, independently of `/capabilities` being unavailable. The same local session and mutation Origin/CSRF checks apply. There is one record for this installation, not a client-supplied user/resource ID. No pagination, filtering or sorting applies; query parameters/unknown body fields are rejected with `422`. Versioning follows `/api/v1`.
