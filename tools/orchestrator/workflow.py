@@ -412,6 +412,8 @@ def collect_verification_admitted(
     results: list[dict[str, object]] = []
     for index, command in enumerate(request.commands):
         attest_git()
+        if sandbox.source_digest(request.cwd) != binding.docker_source_digest:
+            raise OrchestratorError("T090 SANDBOX_BLOCKED: verifier bytes changed")
         started = time.monotonic_ns()
         try:
             result = sandbox.run(
@@ -437,6 +439,8 @@ def collect_verification_admitted(
         if result.exit_code or result.timed_out or result.oversized:
             return VerificationCollection(request.identity, tuple(results), failed=True)
     attest_git()
+    if sandbox.source_digest(request.cwd) != binding.docker_source_digest:
+        raise OrchestratorError("T090 SANDBOX_BLOCKED: verifier bytes changed")
     return VerificationCollection(request.identity, tuple(results))
 
 
@@ -1436,7 +1440,15 @@ class Pipeline:
         )
         if state.state not in {State.DONE, State.BLOCKED, State.FAILED}:
             state.blocked_from = state.state
-            self.move(directory, state, State.FAILED)
+            # Security-admission refusal is BLOCKED, not a test regression;
+            # there is never a retry on the bare Host.
+            destination = (
+                State.BLOCKED
+                if isinstance(error, OrchestratorError)
+                and "T090 SANDBOX_BLOCKED" in str(error)
+                else State.FAILED
+            )
+            self.move(directory, state, destination)
         self.report(directory, state)
         print(f"ERROR {state.task_id}: {state.last_error}")
         return state
