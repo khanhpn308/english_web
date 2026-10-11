@@ -72,7 +72,7 @@
 - [ ] [T043](t043-accessibility-evidence.md): WCAG 2.2 AA browser/manual evidence
 - [ ] [T055](t055-ai-content-evidence.md): Human-reviewed semantic fixture và optional AI smoke
 - [ ] [T056](t056-windows-package.md): Reproducible Windows package và shortcut
-- [ ] [T044](t044-release-contract-audit.md): Generated contract and cross-doc audit — `IMPLEMENTED_UNVERIFIED`; static checker and report checkpoint added; no audit/tests/generator executed, focused audit test creation and CP22 acceptance pending.
+- [x] [T044](t044-release-contract-audit.md): Generated contract and cross-doc audit tooling — `DONE (CODING_ONLY)`; PR #22 merged (`4418434`), deterministic static checker and unexecuted implementation checkpoint integrated; `FINAL_VERIFICATION_DEFERRED` by owner (focused tests, actual audit, pinned generator comparison and CP22 acceptance pending).
 - [x] [T045](t045-git-release-hygiene.md): Git hooks, branch and commit hygiene — `DONE (CODING_ONLY)`; source commit `5a06042` already integrated into `main`; `FINAL_VERIFICATION_DEFERRED` by owner (hook, Windows and negative security checks pending).
 - [ ] [T057](t057-release-verification.md): Windows/offline release evidence matrix
 
