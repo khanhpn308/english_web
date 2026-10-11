@@ -73,7 +73,7 @@
 - [ ] [T055](t055-ai-content-evidence.md): Human-reviewed semantic fixture và optional AI smoke
 - [ ] [T056](t056-windows-package.md): Reproducible Windows package và shortcut
 - [ ] [T044](t044-release-contract-audit.md): Generated contract and cross-doc audit
-- [ ] [T045](t045-git-release-hygiene.md): Git hooks, branch and commit hygiene
+- [x] [T045](t045-git-release-hygiene.md): Git hooks, branch and commit hygiene — `DONE (CODING_ONLY)`; source commit `5a06042` already integrated into `main`; `FINAL_VERIFICATION_DEFERRED` by owner (hook, Windows and negative security checks pending).
 - [ ] [T057](t057-release-verification.md): Windows/offline release evidence matrix
 
 - [x] [T086](t086-parallel-review-fanout.md): `DONE` — intra-task parallel read-only review fan-out integrated into main; three reviewer perspectives execute concurrently with deterministic fan-in and authoritative final Audit. Independent audit PASS_FOR_INTEGRATION; focused 25 PASS, scheduler 48 PASS, full orchestrator 321 PASS; scheduler/runtime/product semantics preserved.
