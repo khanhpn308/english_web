@@ -1,3 +1,9 @@
+## 11/10/2026 — T090 supply-chain pinned-CLI TOCTOU and hash-lock hardening
+
+- Verified GitHub attestation CLI bytes are now copied to a private, SHA-256-rechecked executable for both provenance and SBOM checks; the original mutable path is not executed after hashing. Added an adversarial replacement test.
+- The Python wheel hash-lock verifier now requires an exact whole-line distribution/version and SHA-256-only declarations; disallows injected pip options and malformed trailing content. Added regression coverage.
+- No security policy relaxation, production image approval, CLI Worker re-enablement or merge. Final CI and independent acceptance still required. T090 stays IN_PROGRESS; PR #9 stays Draft.
+
 ## 10/10/2026 — T090 pinned signed Debian snapshot and immutable Chromium candidate
 
 - Date-locked Debian package repositories (bookworm, bookworm-updates and bookworm-security) to `20261008T000000Z`. APT authenticates original `InRelease` Debian signatures against base-image Debian keyring and checks three explicit SHA-256 pins for signed Release metadata before installing system packages. Their hash-linked `Packages` metadata verifies each `.deb` archive during APT download, with no moving Debian mirrors.
