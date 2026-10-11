@@ -1,3 +1,9 @@
+## 11/10/2026 - T039 owner-approved coding-only merge and closure (Asia/Bangkok)
+
+- Owner-approved [PR #20](https://github.com/khanhpn308/english_web/pull/20) merged T039 Windows Launcher into `main` (`9e2adfa`). Source includes the in-process backend launcher, reserved loopback port, same-backend bootstrap session, mutex/focus signalling, native remediation and bounded shutdown; the task card and checklist are `DONE (CODING_ONLY)`.
+- Static-assets documentation was corrected before merge: Vite and FastAPI both resolve to repository-root `frontend/dist` in the current source layout; final packaged layout remains T056.
+- `FINAL_VERIFICATION_DEFERRED` by owner. No tests, builds, lint/typecheck, Windows execution, security scan, benchmark or audit executed in this integration. Exact-tab focus, URI handling, native ACLs and crash behavior remain pending Windows evidence. T040 first-run/DPAPI provisioning and T056 packaging are separate tasks.
+
 ## 11/10/2026 - T039 Windows launcher production source (Asia/Bangkok)
 
 - Created `launcher/src/main.py` and `launcher/src/windows_mutex.py` against owner-approved contract commit `bb4fa4a`. Implemented validated existing four-field Windows TOML, one configured in-process FastAPI/Uvicorn server, exclusive reserved loopback socket, 10-second health readiness, same-app one-time fragment bootstrap, native failures and bounded shutdown with session invalidation and no destructive data cleanup.
