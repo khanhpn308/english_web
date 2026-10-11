@@ -295,7 +295,7 @@ export const QuizResult: React.FC<QuizResultProps> = ({ attemptId, onNavigate })
                     {question.type === 'WRITING' ? (
                       <div className="flex items-center gap-2">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                          Điểm tự chấm: {ans?.selfScore ?? 0}/4
+                          Điểm tự chấm: {ans?.selfScore ?? '—'}/4
                         </span>
                         {qResult?.type === 'WRITING' && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
@@ -424,7 +424,7 @@ export const QuizResult: React.FC<QuizResultProps> = ({ attemptId, onNavigate })
                       <div className="flex flex-wrap items-center gap-3 p-3 rounded-md bg-muted/40 border border-border text-sm">
                         <div>
                           <span className="font-medium text-foreground">Điểm tự chấm: </span>
-                          <span className="font-bold text-primary">{ans?.selfScore ?? 0} / 4</span>
+                          <span className="font-bold text-primary">{ans?.selfScore ?? '—'} / 4</span>
                         </div>
                         {qResult?.type === 'WRITING' && qResult.rating && (
                           <div className="border-l border-border pl-3">
@@ -436,23 +436,26 @@ export const QuizResult: React.FC<QuizResultProps> = ({ attemptId, onNavigate })
 
                       {question.rubric?.descriptors && (
                         <div className="text-xs text-muted-foreground">
-                          {question.rubric.descriptors.find((d) => d.score === (ans?.selfScore ?? 0))?.textVi && (
+                          {question.rubric.descriptors.find((d) => d.score === (ans?.selfScore ?? '—'))?.textVi && (
                             <p className="italic">
-                              Mô tả mức điểm {ans?.selfScore ?? 0}/4:{' '}
-                              {question.rubric.descriptors.find((d) => d.score === (ans?.selfScore ?? 0))?.textVi}
+                              Mô tả mức điểm {ans?.selfScore ?? '—'}/4:{' '}
+                              {question.rubric.descriptors.find((d) => d.score === (ans?.selfScore ?? '—'))?.textVi}
                             </p>
                           )}
                         </div>
                       )}
 
                       {/* SECTION 6 — AI WRITING FEEDBACK */}
-                      <FeedbackPanel
-                        attemptId={attemptId}
-                        question={question as WritingQuestion}
-                        savedAnswer={ans?.answer || ''}
-                        answerRevision={ans?.draftRevision ?? 1}
-                        selfScore={ans?.selfScore ?? 0}
-                      />
+                      {ans && ans.selfScore !== null && ans.selfScore !== undefined &&
+                        ans.draftRevision >= 1 && (
+                        <FeedbackPanel
+                          attemptId={attemptId}
+                          question={question as WritingQuestion}
+                          savedAnswer={ans.answer}
+                          answerRevision={ans.draftRevision}
+                          selfScore={ans.selfScore}
+                        />
+                      )}
                     </div>
                   )}
                 </CardContent>

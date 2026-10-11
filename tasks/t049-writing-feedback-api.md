@@ -2,8 +2,8 @@
 
 **Task ID:** `T049`  
 **Title:** Writing feedback API và history retry  
-**Status:** `DONE`
-**Completion scope:** `CODING_ONLY` — PR #14 merged (`8a72534499c556bc142bf0864e3e3ca6d3d68515`); `FINAL_VERIFICATION_DEFERRED`
+**Status:** `DONE`  
+**Completion scope:** `CODING_ONLY` — PR #14 merged (`8a72534499c556bc142bf0864e3e3ca6d3d68515`); `FINAL_VERIFICATION_DEFERRED`  
 **Goal:** Request/store/read schema-validated feedback, preserving user answer and score through failure.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.

@@ -246,7 +246,11 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
     }
   };
 
-  const submissionStateRef = useRef<Record<string, { inFlight: boolean; idempotencyKey: string }>>({});
+  const submissionStateRef = useRef<Record<string, {
+    inFlight: boolean;
+    idempotencyKey: string;
+    sentRevision?: number;
+  }>>({});
 
   const handleSubmitQuiz = async (attemptId: string) => {
     const current = submissionStateRef.current[attemptId];
@@ -286,7 +290,15 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
         }
       }
 
-      const stableKey = submissionStateRef.current[attemptId].idempotencyKey;
+      const submissionIntent = submissionStateRef.current[attemptId];
+      if (submissionIntent.sentRevision !== undefined &&
+          submissionIntent.sentRevision !== attempt.submissionRevision) {
+        // Reusing an idempotency key with a different revision is a different
+        // fingerprint. The original outcome must be reconciled, not replaced.
+        throw new Error('Phiên bản bài nộp đã thay đổi. Hãy kiểm tra kết quả yêu cầu trước.');
+      }
+      submissionIntent.sentRevision = attempt.submissionRevision;
+      const stableKey = submissionIntent.idempotencyKey;
       const result = await apiClient<QuizResultType>(
         `/api/v1/quiz-attempts/${encodeURIComponent(attemptId)}/submissions`,
         {
@@ -314,6 +326,11 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
         }
       }
     } catch (error) {
+      if (error instanceof ApiError && error.code === 'REVISION_CONFLICT') {
+        // Server rejected this attempt before writing a terminal result.
+        // A fresh explicit submit may use the new authoritative revision.
+        delete submissionStateRef.current[attemptId];
+      }
       if (error instanceof ApiError && error.code === 'ALREADY_SUBMITTED') {
         const verify = await apiClient<QuizAttempt>(
           `/api/v1/quiz-attempts/${encodeURIComponent(attemptId)}`,

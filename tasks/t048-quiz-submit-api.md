@@ -2,8 +2,8 @@
 
 **Task ID:** `T048`  
 **Title:** Quiz submission và atomic SRS handoff  
-**Status:** `DONE`
-**Completion scope:** `CODING_ONLY` — PR #15 merged (`c67d9e9872b3d73dcfa31431eff5f68f3476c615`); `FINAL_VERIFICATION_DEFERRED`
+**Status:** `DONE`  
+**Completion scope:** `CODING_ONLY` — PR #15 merged (`c67d9e9872b3d73dcfa31431eff5f68f3476c615`); `FINAL_VERIFICATION_DEFERRED`  
 **Goal:** Nộp quiz, chấm objective/self score và cập nhật SRS đúng một lần trong transaction.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.

@@ -76,11 +76,12 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
   const [isReconciling, setIsReconciling] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [unknownIntent, setUnknownIntent] = useState<{ key: string; retryOpId?: string } | null>(null);
+  const [unknownIntent, setUnknownIntent] = useState<{ key: string; body: FeedbackRequest } | null>(null);
   const [showHistoryList, setShowHistoryList] = useState(false);
 
   const alive = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
+  const requestLock = useRef(false);
 
   useEffect(() => {
     alive.current = true;
@@ -91,8 +92,8 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
   }, []);
 
   const loadHistory = useCallback(
-    async (cursor?: string) => {
-      if (!alive.current) return;
+    async (cursor?: string): Promise<boolean> => {
+      if (!alive.current) return false;
       setLoadingHistory(true);
       try {
         const params: Record<string, string> = {
@@ -111,14 +112,17 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
           }
         );
 
-        if (!alive.current) return;
-        if (response && Array.isArray(response.data)) {
+        if (!alive.current) return false;
+        if (response && Array.isArray(response.data) && response.pagination) {
           setHistory((prev) => (cursor ? [...prev, ...response.data] : response.data));
           setHistoryCursor(response.pagination?.nextCursor ?? null);
-          setHistoryHasMore(Boolean(response.pagination?.hasMore));
+          setHistoryHasMore(Boolean(response.pagination.hasMore));
+          return true;
         }
+        return false;
       } catch {
-        // If history endpoint fails or is deferred, maintain current local state without crashing
+        // Preserve acknowledged history and all unresolved mutation identity.
+        return false;
       } finally {
         if (alive.current) {
           setLoadingHistory(false);
@@ -135,29 +139,34 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
   const latestFeedback = history[0] || null;
 
   const handleRequestFeedback = useCallback(
-    async (explicitRetryOpId?: string) => {
-      if (isRequesting || isReconciling) return;
+    async (explicitRetryOpId?: string, replay?: { key: string; body: FeedbackRequest }) => {
+      // A possibly dispatched request is never replaced by a fresh key until resolved.
+      if (requestLock.current || isRequesting || isReconciling || (unknownIntent && !replay)) return;
+      requestLock.current = true;
       setErrorMessage(null);
       setStatusMessage(null);
 
-      // Determine retryOfOperationId if retrying terminal failed feedback
-      const targetRetryOpId =
-        explicitRetryOpId ?? (latestFeedback?.status === 'FAILED' ? latestFeedback.operationId : undefined);
+      // Same-key replay must use the exact original body/fingerprint.
+      const targetRetryOpId = replay
+        ? replay.body.retryOfOperationId
+        : explicitRetryOpId ?? (latestFeedback?.status === 'FAILED' ? latestFeedback.operationId : undefined);
 
-      // Consent gate: checked before every request.
-      // Granting consent does NOT auto-dispatch; user must confirm or have granted.
+      // Granting consent must not dispatch automatically.
+      let authorizedCallbackStarted = false;
+      try {
       await consent.requestPermission(async () => {
+        authorizedCallbackStarted = true;
         if (!alive.current) return;
         setIsRequesting(true);
         setStatusMessage('Đang gửi yêu cầu nhận xét tới AI bridge...');
 
-        const idempotencyKey = crypto.randomUUID();
+        const idempotencyKey = replay?.key ?? crypto.randomUUID();
         const controller = new AbortController();
         abortRef.current = controller;
         const timeoutId = setTimeout(() => controller.abort(), 30_000); // 30s deadline per contract
 
-        const body: FeedbackRequest = {
-          rubricVersion: question.rubricVersion || 'writing-rubric-v1',
+        const body: FeedbackRequest = replay?.body ?? {
+          rubricVersion: question.rubricVersion,
           answerRevision,
           ...(targetRetryOpId ? { retryOfOperationId: targetRetryOpId } : {}),
         };
@@ -196,10 +205,10 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
 
           if (err instanceof DOMException && err.name === 'AbortError') {
             setErrorMessage('Yêu cầu nhận xét vượt quá thời gian chờ (30 giây). Hãy kiểm tra lại sau.');
-            setUnknownIntent({ key: idempotencyKey, retryOpId: targetRetryOpId });
+            setUnknownIntent({ key: idempotencyKey, body });
           } else if (err instanceof MutationUnknownError) {
             setErrorMessage('Chưa xác định kết quả nhận xét từ AI. Hãy kiểm tra kết quả trước khi gửi lại.');
-            setUnknownIntent({ key: idempotencyKey, retryOpId: targetRetryOpId });
+            setUnknownIntent({ key: idempotencyKey, body });
           } else if (err instanceof ApiError) {
             if (err.code === 'AI_CONSENT_REQUIRED') {
               setErrorMessage('Quyền gửi dữ liệu AI đã bị thu hồi hoặc hết hạn. Vui lòng kiểm tra lại quyền.');
@@ -210,7 +219,7 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
               setErrorMessage('Lỗi xác thực với AI bridge. Vui lòng kiểm tra cấu hình hệ thống.');
             } else if (err.code === 'IDEMPOTENCY_IN_FLIGHT') {
               setErrorMessage('Một yêu cầu nhận xét đang được xử lý. Vui lòng đợi.');
-              setUnknownIntent({ key: idempotencyKey, retryOpId: targetRetryOpId });
+              setUnknownIntent({ key: idempotencyKey, body });
             } else {
               setErrorMessage(`Lỗi yêu cầu nhận xét (${err.code}): ${err.message}`);
             }
@@ -220,13 +229,18 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
         } finally {
           clearTimeout(timeoutId);
           abortRef.current = null;
+          requestLock.current = false;
           if (alive.current) {
             setIsRequesting(false);
           }
         }
       });
+      } finally {
+        // Consent was absent: no callback and no AI dispatch.
+        if (!authorizedCallbackStarted) requestLock.current = false;
+      }
     },
-    [answerRevision, consent, isReconciling, isRequesting, latestFeedback, question.id, question.rubricVersion]
+    [answerRevision, consent, isReconciling, isRequesting, latestFeedback, question.id, question.rubricVersion, unknownIntent]
   );
 
   const handleReconcile = useCallback(async () => {
@@ -235,10 +249,15 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
     setStatusMessage('Đang kiểm tra kết quả nhận xét từ máy chủ...');
     setErrorMessage(null);
     try {
-      await loadHistory();
+      const loaded = await loadHistory();
       if (!alive.current) return;
-      setUnknownIntent(null);
-      setStatusMessage('Đã cập nhật trạng thái nhận xét từ máy chủ.');
+      if (!loaded) {
+        setErrorMessage('Không tải được lịch sử. Kết quả yêu cầu trước vẫn chưa xác định.');
+        return;
+      }
+      // History alone cannot prove the idempotency identity of a lost response.
+      // Keep the original key/body for an explicit same-intent replay.
+      setStatusMessage('Đã tải lịch sử. Nếu yêu cầu trước chưa được xác nhận, hãy tiếp tục bằng cùng khóa.');
     } catch {
       if (!alive.current) return;
       setErrorMessage('Không thể đối soát kết quả. Bạn có thể kiểm tra lại sau.');
@@ -282,6 +301,7 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
             disabled={
               isRequesting ||
               isReconciling ||
+              Boolean(unknownIntent) ||
               consent.pending ||
               Boolean(consent.unresolved) ||
               isAnswerBlank ||
@@ -302,15 +322,26 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
           </Button>
 
           {unknownIntent && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={isReconciling}
-              onClick={() => void handleReconcile()}
-            >
-              {isReconciling ? 'Đang đối soát...' : 'Kiểm tra kết quả nhận xét'}
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isReconciling || isRequesting}
+                onClick={() => void handleReconcile()}
+              >
+                {isReconciling ? 'Đang đối soát...' : 'Kiểm tra kết quả nhận xét'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isReconciling || isRequesting || consent.pending}
+                onClick={() => void handleRequestFeedback(undefined, unknownIntent)}
+              >
+                Tiếp tục yêu cầu cũ (cùng khóa)
+              </Button>
+            </>
           )}
 
           <span className="text-xs text-muted-foreground">
