@@ -194,12 +194,12 @@ Giới hạn 5–30 câu, mỗi loại 0–20 và đủ dạng từ nguồn theo
 ### 6.5. `progress-dashboard`
 
 - **FR-DASH-01:** Dashboard MUST hiển thị số thẻ đến hạn.
-- **FR-DASH-02:** Dashboard MUST hiển thị streak theo timezone `Asia/Bangkok`: ngày có thẻ đến hạn cần hoàn thành toàn bộ thẻ hợp lệ; ngày không có thẻ đến hạn cần một thẻ mới hoặc quiz hoàn tất; nguồn lỗi bị loại khỏi mẫu số.
+- **FR-DASH-02:** Dashboard MUST hiển thị streak theo timezone `Asia/Bangkok`: ngày có thẻ đến hạn cần hoàn thành toàn bộ thẻ hợp lệ; ngày không có thẻ đến hạn cần một thẻ mới hoặc quiz hoàn tất; nguồn lỗi bị loại khỏi mẫu số. Eligibility MUST use recorded committed SQLite source/link/card state. Missing or ambiguous history MUST remain unknown, and the response MUST use `streak.currentDays: null` rather than zero.
 - **FR-DASH-03:** Dashboard MUST tách ít nhất ba nhóm kết quả: tự đánh giá flashcard; độ chính xác trắc nghiệm/điền từ; điểm tự chấm viết câu.
 - **FR-DASH-04:** Số từ đã thêm MAY hiển thị như chỉ số phụ và MUST không được dùng thay cho các chỉ số kết quả học.
 - **FR-DASH-05:** Dashboard MUST hoạt động khi offline với dữ liệu đã lưu.
 
-Dashboard formulas, no-attempt null accuracy and four-week success measurement follow ADR-0004; source invalidation never erases historical result counts.
+Dashboard formulas, no-attempt null accuracy and four-week success measurement follow ADR-0004. The inclusive Bangkok metric range defaults to today minus 27 days through today and accepts at most 366 days. Current due cards use the captured server time and current valid-source state. Historical result metrics survive later source loss and resets. Streak reconstruction, today/yesterday anchoring, and nullability follow ADR-0009.
 
 ### 6.6. `offline-local-runtime`
 

@@ -1,3 +1,9 @@
+## 11/10/2026 - T037-R1 SQLite study history and dashboard continuation (Asia/Bangkok)
+
+- Completed the dashboard consumer for the H1 SQLite ledger. Known eligibility windows replay committed source, link, card, schedule, reset, and journal facts after the opening snapshot; missing or ambiguous intervals remain unknown.
+- Dashboard reads metrics, history, review events, and terminal quiz evidence in one caller-owned SQLite read transaction and returns HTTP 200 with nullable `streak.currentDays` when exact history is unavailable.
+- No additional migration was needed. Generated contracts and executable verification remain deferred; T037 task cards stay unchanged.
+
 ## 11/10/2026 - T045 code integrated into local main; FINAL_VERIFICATION_DEFERRED
 
 - Fast-forwarded local `main` to T045 implementation commit `5a06042c835313edff0a41ae11931c9eb9ec9605`, retaining the six T051 commits already recorded in `origin/main`. T045 changed only its five approved paths; `.githooks/pre-commit` now has Git mode `100755`.
@@ -10,7 +16,31 @@
 - Reused the actual `check:fast:active` and `security:secrets` composition of `check:fast`, including the existing floor guard. Documented task branches/worktrees, atomic commits, explicit hook activation/removal, separate implementation/testing/merge/release statuses and remote protection ownership.
 - Status: `IMPLEMENTED_UNVERIFIED`; `CODING_DONE` with `FINAL_VERIFICATION_DEFERRED`. Only read-only inspection and allowed source edits occurred. No tests, lint, typecheck, build, security scan, hook, CI, audit, Git mutation, commit or push. T045 acceptance checklist and `tasks/todo.md` remain unchanged; previous changelog history is preserved.
 - Host actions: record hook executable mode before staging, integrate only with authorization, and defer executable verification under the owner's Coding First policy. Windows junction cleanup, partial/no-HEAD staging and failure behavior are unverified. Hook activation is explicit; release tag/version approval remains with the release owner.
+## 11/10/2026 - T037 merges T037-H1 study history ledger (Asia/Bangkok)
 
+- Merged the authorized T037-H1 branch into `feature/t037-dashboard-summary-api` after preserving its uncommitted implementation in commit `3a407f8` and resolving the `main.py` and bookkeeping conflicts. The merge includes the append-only study-history migration/reader, sync/lifecycle hooks and H1 handoff.
+- Preserved the T037 dashboard formulas/router, T051 integration already present on the H1 ancestry, and the pre-merge T037 handoff. T037 remains `PARTIAL_UNVERIFIED / BLOCKED_DEPENDENCY`; T037-R1 still owns authoritative replay, nullable streak behavior and generated-contract reconciliation.
+- No tests, audits, security verification, generators, migrations or runtime checks were run.
+
+## 11/10/2026 - T037 independent dashboard source implemented; historical streak dependency open (Asia/Bangkok)
+
+- Created `backend/app/dashboard/formulas.py` and `backend/app/http/dashboard.py`, and wired the dashboard read service/router into `backend/app/main.py`. Implemented current eligible due count, FLASHCARD-only half-up rating buckets, separate terminal MCQ/CLOZE total/attempted/accuracy and final writing-score aggregates with explicit zero/null semantics, in one read snapshot.
+- Applied the owner's approved inclusive Bangkok date ranges: default 28 days including today, defined one-sided defaults, strict date/query validation and maximum 366 inclusive days. Added pure completion/streak helpers that preserve unknown inputs. Current historical persistence cannot supply a trustworthy streak; valid GET requests return typed 503 CONFIGURATION_REQUIRED until Host integration can honestly assemble the required summary.
+- Updated `tasks/t037-dashboard-formulas.md` and unchecked `tasks/todo.md` to distinguish independent source `CODE_IMPLEMENTED_UNVERIFIED` from the dependent `BLOCKED_IMPLEMENTATION` portion. Recorded the owner-authorized Host task scope for immutable historical eligibility/link/reset evidence and unavailable-history rules. Canonical API/ADR amendments and generated DTO reconciliation remain Host-owned follow-ups.
+- Tests, test source, audits, scans, builds, formatters and executable verification remain deferred. No migrations, sync/review/SRS internals, dependencies, specifications/generated files, learning data, task-plan dependencies or Git state were changed; no subagents were launched or DONE status claimed.
+
+## 11/10/2026 - T037 historical persistence and dashboard contract blockers (Asia/Bangkok)
+
+- Recorded `BLOCKED_IMPLEMENTATION` in `tasks/t037-dashboard-formulas.md` and the unchecked T037 entry in `tasks/todo.md`. Source inspection found that sync overwrites source validity, deletes removed links and resets schedules without a complete historical transition record; exact historical daily due denominators cannot be reconstructed under ADR-0004.
+- Documented the missing flashcard bucket averaging policy, the dashboard correct/total shape versus attempted/null-accuracy requirements, and unspecified optional date-range defaults/boundaries. These require Host clarification and a separate persistence scope, including treatment of already missing history.
+- Production dashboard paths and `backend/app/main.py` remain untouched under the owner's explicit stop conditions. No tests, test source, quality/security gates, audits, builds, generators, subagents or Git mutations were performed. T037 is not DONE; production integration is blocked.
+
+## 11/10/2026 - T037-H1 historical study ledger coding checkpoint, Asia/Bangkok
+
+- Added `backend/migrations/versions/0012_study_history.py` after source inspection of the sole existing head `0011_feedback`. One append-only ledger retains opening observations, source statuses/links, card schedules and resets, review references, journal transitions and coverage evidence. Existing migrations, user data, review events and SRS rules remain untouched.
+- Added `backend/app/dashboard/history.py` with typed Bangkok-date facts, bounded SQL-observation windows, deduplicated candidate cards and explicit UNKNOWN coverage. Polling does not establish continuous file validity; the authoritative streak denominator stays `None`, including empty days. No public dashboard schema was selected or changed.
+- Added only sync/lifecycle uncertainty hooks in `backend/app/application/sync.py` and `backend/app/main.py`. Business facts share existing projection/review/receipt transactions through SQLite triggers. Offline/deferred/recovery changes are observed without fabricated effective times or history deletion.
+- Recorded H1/T037-R1 ownership, schema/retention/coverage limits and exact deferred checks in the task cards and unchecked T037 todo entry. Status is `CODE_IMPLEMENTED_UNVERIFIED`; no tests, builds, migration runs, lint/types, security/coverage scans, audits, review agents, commit/push/PR/merge/rebase or DONE action. Only four approved production paths changed; final acceptance is deferred by owner.
 ## 11/10/2026 - T051 coding integrated; FINAL_VERIFICATION_DEFERRED
 
 - Merged T051 Quiz Submission/Result/AI Writing Feedback UI via [PR #16](https://github.com/khanhpn308/english_web/pull/16) at `c2b0a7b`; three production frontend files integrated into `main`.

@@ -638,7 +638,7 @@ If bridge timeout/auth/quota/schema validation fails, the application first pers
 |---|---|---|---|---|
 | dashboard summary | `GET` | `/api/v1/dashboard` | `from`, `to` optional | `200 DashboardSummary` |
 
-The response keeps flashcard self-rating, objective MCQ/cloze accuracy, writing self-score, due count and streak as separate fields. Formula details and four-week observation window follow ADR-0004; no-attempt accuracy is `null`.
+The response keeps flashcard self-rating, objective MCQ/cloze accuracy, writing self-score, due count and streak as separate fields. `streak.currentDays` is a required nullable nonnegative integer. `null` means the committed SQLite history needed for an exact streak is unknown; it is not zero. Unknown streak history does not block HTTP 200 when storage and the independent metrics are available. `streak.asOf` is the Bangkok evaluation date of the captured server cutoff. Formula details, inclusive Bangkok `from`/`to` dates, the default 28-day metric window, and no-attempt null accuracy follow ADR-0004 and ADR-0009. Historical result metrics remain readable after later source loss or reset.
 
 ## 5. Validation and error semantics
 
