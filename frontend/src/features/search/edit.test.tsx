@@ -125,8 +125,10 @@ describe('T030 Edit Form', () => {
     await click('Lưu thay đổi');
 
     expect(isPatch).toBe(true);
-    expect(host.textContent).toContain('Xung đột dữ liệu');
-    expect(host.textContent).toContain('phiên bản hiện tại trên máy chủ: 8');
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.textContent).toContain('Xung đột dữ liệu');
+    expect(dialog?.textContent).toContain('phiên bản hiện tại trên máy chủ: 8');
 
     // Dismiss dialog by choosing to keep draft and reload source
     const reloadSourceResponse = {
@@ -135,10 +137,15 @@ describe('T030 Edit Form', () => {
     };
     mockFetch = async (url) => url.includes('/sources') ? json(reloadSourceResponse) : json({});
 
-    await click('Cập nhật mã phiên bản để lưu đè');
+    await act(async () => {
+      const reloadButton = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
+        .find(button => button.textContent === 'Cập nhật mã phiên bản để lưu đè');
+      if (!reloadButton) throw new Error('Missing conflict dialog reload button');
+      reloadButton.click();
+    });
 
-    // Dialog closes, draft still shows the edited text
-    expect(host.textContent).not.toContain('Xung đột dữ liệu');
+    // Portal is closed and the form draft remains intact.
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
     const input = [...host.querySelectorAll('input')].find(i => i.value === 'vững chắc được sửa');
     expect(input).toBeDefined();
 
