@@ -2,6 +2,12 @@ import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import type { components } from '../../src/shared/api/generated';
 
+declare global {
+  interface Window {
+    __syntheticAudio: { spoken: string[]; cancelled: number };
+  }
+}
+
 type View = components['schemas']['AiConsentView'];
 type Preview = components['schemas']['LookupResult'];
 const policy: NonNullable<View['policy']> = {
@@ -92,17 +98,13 @@ for (const mode of ['local', 'remote', 'absent'] as const) {
       await expect(playback).toBeEnabled();
       await playback.press('Enter');
       await page.getByRole('button', { name: 'Phát âm Mỹ robustly', exact: true }).press('Enter');
-      expect(await page.evaluate(() => (window as Window & {
-        __syntheticAudio: { spoken: string[] };
-      }).__syntheticAudio.spoken)).toEqual(['robust', 'robust', 'robustly']);
+      expect(await page.evaluate(() => window.__syntheticAudio.spoken)).toEqual(['robust', 'robust', 'robustly']);
       const scan = await new AxeBuilder({ page }).withTags(['wcag22aa', 'wcag2aa']).analyze();
       expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
     } else {
       await expect(playback).toBeDisabled();
       await expect(audioRegion).toContainText('Không có giọng en-US được xác nhận chạy cục bộ');
-      expect(await page.evaluate(() => (window as Window & {
-        __syntheticAudio: { spoken: string[] };
-      }).__syntheticAudio.spoken)).toEqual([]);
+      expect(await page.evaluate(() => window.__syntheticAudio.spoken)).toEqual([]);
     }
     expect(requests).toEqual(before); expect(external).toEqual([]);
     for (const width of [320, 768, 1024, 1440]) {
@@ -110,13 +112,9 @@ for (const mode of ['local', 'remote', 'absent'] as const) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
     }
     if (mode === 'local') {
-      const beforeCancel = await page.evaluate(() => (window as Window & {
-        __syntheticAudio: { cancelled: number };
-      }).__syntheticAudio.cancelled);
+      const beforeCancel = await page.evaluate(() => window.__syntheticAudio.cancelled);
       await page.getByRole('link', { name: 'Ôn tập', exact: true }).click();
-      expect(await page.evaluate(() => (window as Window & {
-        __syntheticAudio: { cancelled: number };
-      }).__syntheticAudio.cancelled)).toBeGreaterThan(beforeCancel);
+      expect(await page.evaluate(() => window.__syntheticAudio.cancelled)).toBeGreaterThan(beforeCancel);
     }
   });
 }

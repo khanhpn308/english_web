@@ -179,6 +179,9 @@ describe('apiClient', () => {
         id: `q_${index}`, type: 'MCQ' as const, wordFormId: `wf_${index}`,
         promptEn: 'Choose the synthetic word.', options: [{ id: 'option_a', textEn: 'synthetic' }],
       })),
+      answerPreconditions: Array.from({ length: 5 }, (_, index) => ({
+        questionId: `q_${index}`, draftRevision: 0, etag: '"synthetic-draft-etag"',
+      })),
       answers: [], savedAnswerCount: 0, snapshotRevision: 1, submissionRevision: 0, result: null,
     };
     const result: components['schemas']['QuizResult'] = {
