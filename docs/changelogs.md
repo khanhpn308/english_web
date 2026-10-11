@@ -1,3 +1,9 @@
+## 12/10/2026 - T044 contract tooling coding-only checkpoint (Asia/Bangkok)
+
+- Added `scripts/audit_contract.py` with AST-only production route/model extraction, documentation/OpenAPI/DTO drift checks, represented examples and approved bounds, redacted privacy categories, FR/AC/task/test/evidence indices and deterministic Markdown/JSON reporting. Default mode writes stdout; explicit report output is confined to `docs/reviews/contract-conformance-003.md`. No application import/construction, provider call, source repair or new dependency.
+- Created report 003 as `IMPLEMENTED_UNVERIFIED` with dependency source references, pending T037/T046/T061/runtime/generator evidence and source-inspection candidates. Updated T044 task/todo without marking acceptance complete or changing another REVIEW_STATUS.
+- Coding only: no audit execution, tests/test creation, build, lint, typecheck, security scan, installation, OpenAPI/DTO regeneration or Git mutation. Missing focused audit tests and full pinned-generator/platform verification are explicitly deferred. Application source, tests, specs, ADRs, thresholds, snapshots, CI, dependency cards and user data remain untouched; the existing worktree and all unrelated state are preserved.
+
 ## 11/10/2026 - T045 coding-only task closure (Asia/Bangkok)
 
 - Recorded already-integrated Git hygiene source commit `5a06042c835313edff0a41ae11931c9eb9ec9605` as `DONE (CODING_ONLY)` in T045 task card and checklist. `.gitattributes`, `.githooks/pre-commit`, `.github/pull_request_template.md`, and `docs/git-workflow.md` already reside in `main`; no duplicate worker implementation started.
