@@ -140,9 +140,7 @@ python -m pytest test_app.py -q
         self: Pipeline,
     ) -> tuple[VerificationImageAdmission, DockerVerificationSandbox]:
         return (
-            VerificationImageAdmission(
-                image, "b" * 64, "sha256:" + "c" * 64, "sha256:" + "d" * 64
-            ),
+            VerificationImageAdmission(image, "b" * 64, "sha256:" + "c" * 64, "sha256:" + "d" * 64),
             DockerVerificationSandbox(DockerVerificationPolicy(image, self.worktrees)),
         )
 
@@ -4454,9 +4452,7 @@ def test_t090_legacy_host_collector_always_rejects(
         repository,
         cmds,
         30,
-        FrozenEvidenceIdentity.freeze(
-            "T100", base, "main", Git(repository).snapshot(base), cmds
-        ),
+        FrozenEvidenceIdentity.freeze("T100", base, "main", Git(repository).snapshot(base), cmds),
     )
     with pytest.raises(OrchestratorError, match="legacy Host verification"):
         workflow.collect_verification(request)
@@ -4513,9 +4509,7 @@ def test_t090_pipeline_verify_calls_attested_docker_collector_not_legacy_host(
     from tools.orchestrator.runtime import DockerVerificationSandbox
 
     pipeline = Pipeline(repository, configuration(integrate=False), FakeAgents())
-    monkeypatch.setattr(
-        Pipeline, "_collect_docker_verification", _PRODUCTION_DOCKER_COLLECTION
-    )
+    monkeypatch.setattr(Pipeline, "_collect_docker_verification", _PRODUCTION_DOCKER_COLLECTION)
     observed: list[tuple[str, ...]] = []
 
     def docker_only(
@@ -4528,9 +4522,7 @@ def test_t090_pipeline_verify_calls_attested_docker_collector_not_legacy_host(
         assert expected_source_digest == self.source_digest(workspace)
         assert workspace != repository
         observed.append(tuple(command))
-        return ProcessResult(
-            tuple(command), str(workspace), "start", "end", 0, "", ""
-        )
+        return ProcessResult(tuple(command), str(workspace), "start", "end", 0, "", "")
 
     def no_host_verification(
         command: list[str], cwd: Path, *, timeout: int | None = None
