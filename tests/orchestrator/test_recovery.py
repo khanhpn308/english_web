@@ -282,9 +282,7 @@ python -m pytest test_app.py -q
             VerificationImageAdmission(
                 synthetic_image, "b" * 64, "sha256:" + "c" * 64, "sha256:" + "d" * 64
             ),
-            DockerVerificationSandbox(
-                DockerVerificationPolicy(synthetic_image, self.worktrees)
-            ),
+            DockerVerificationSandbox(DockerVerificationPolicy(synthetic_image, self.worktrees)),
         )
 
     def synthetic_collection(
@@ -314,6 +312,7 @@ python -m pytest test_app.py -q
 
     monkeypatch.setattr(Pipeline, "_verification_authority", synthetic_authority)
     monkeypatch.setattr(Pipeline, "_collect_docker_verification", synthetic_collection)
+
     def synthetic_workspace(
         self: Pipeline,
         working: Path,
@@ -323,12 +322,8 @@ python -m pytest test_app.py -q
         run_id: str,
     ) -> AbstractContextManager[tuple[Path, Git]]:
         if Git(working).sha() != base_sha:
-            return _PRODUCTION_DOCKER_WORKSPACE(
-                self, working, snapshot, base_sha, task_id, run_id
-            )
-        return Pipeline.verification_workspace(
-            self, working, snapshot, base_sha, task_id, run_id
-        )
+            return _PRODUCTION_DOCKER_WORKSPACE(self, working, snapshot, base_sha, task_id, run_id)
+        return Pipeline.verification_workspace(self, working, snapshot, base_sha, task_id, run_id)
 
     monkeypatch.setattr(Pipeline, "docker_verification_workspace", synthetic_workspace)
     return pipeline, source, workgit.snapshot(source.base_sha)
