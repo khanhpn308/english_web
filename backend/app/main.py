@@ -45,6 +45,7 @@ from backend.app.http.status import router as status_router
 from backend.app.http.telemetry import RouteSpanMiddleware, TelemetryFastAPI
 from backend.app.http.word_forms import router as word_forms_router
 from backend.app.persistence.database import Database, StorageError
+from backend.app.platform.alerts import LocalAlerts
 from backend.app.platform.config import AppSettings
 from backend.app.platform.metrics import LocalMetrics, MeteredTelemetry
 from backend.app.platform.telemetry import LocalJsonSink, Telemetry, default_log_directory
@@ -144,6 +145,9 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
                     signing_key=app.state.cursor_signing_key,
                 )
                 await run_in_threadpool(app.state.feedback_service.recover)
+                await run_in_threadpool(
+                    SyncService.observe_alert_sources, database.engine, app.state.telemetry,
+                )
 
                 markdown_root = app.state.markdown_root
                 if markdown_root is not None:
@@ -339,6 +343,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.started_at = None
         telemetry.span_retention_failed = True
     try:
+        app.state.alerts = LocalAlerts(telemetry)
+        telemetry.alerts = app.state.alerts
+    except Exception:
+        app.state.alerts = None
+        telemetry.span_retention_failed = True
+    try:
         async with _application_lifespan(app):
             try:
                 telemetry.emit("app_started")
@@ -357,6 +367,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             except Exception:
                 telemetry.span_retention_failed = True
             app.state.started_at = None
+            telemetry.alerts = None
+            app.state.alerts = None
 
 
 class RequestBudgetMiddleware:
@@ -491,6 +503,7 @@ def create_app(
         app.state.telemetry = Telemetry(version=app_settings.app_version)
         app.state.telemetry.span_retention_failed = True
     app.state.settings = app_settings
+    app.state.alerts = None
     app.state.started_at = None
     app.state.bridge = None
     app.state.markdown_root = markdown_root

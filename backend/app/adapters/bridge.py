@@ -19,6 +19,14 @@ MAX_RESPONSE_BYTES = 4_194_304
 BRIDGE_BASE_URL = "http://127.0.0.1:8045/v1"
 
 
+class _BridgeTimeout(BridgeUnavailableError):
+    """Bounded timeout classification without inspecting exception text."""
+
+
+class _BridgeQuota(BridgeUnavailableError):
+    """HTTP 429 is the only supported quota observation."""
+
+
 class _TraceIsolatingTransport(httpx.AsyncBaseTransport):
     """Last app-owned boundary, after HTTPX auth and request event hooks.
 
@@ -77,6 +85,12 @@ class BridgeAdapter(BridgePort):
             except BridgeInvalidResponseError:
                 outcome.invalid_response = True
                 raise
+            except (BridgeAuthError, _BridgeTimeout, _BridgeQuota):
+                outcome.qualifying_failure = True
+                raise
+            except (BridgeConfigError, BridgeUnavailableError):
+                outcome.qualifying_failure = False
+                raise
             finally:
                 try:
                     self._last_observation = (monotonic(), succeeded)
@@ -94,7 +108,7 @@ class BridgeAdapter(BridgePort):
     def _get_timeout(self, deadline: float) -> httpx.Timeout:
         remaining = deadline - self._clock()
         if remaining <= 0:
-            raise BridgeUnavailableError("Operation deadline exceeded")
+            raise _BridgeTimeout("Operation deadline exceeded")
         return httpx.Timeout(remaining)
 
     def _get_client(self) -> httpx.AsyncClient:
@@ -135,6 +149,8 @@ class BridgeAdapter(BridgePort):
                 async with client.stream(
                     "GET", "/models", headers={}, timeout=self._get_timeout(deadline)
                 ) as response:
+                    if response.status_code == 429:
+                        raise _BridgeQuota("Proxy quota unavailable")
                     if response.status_code == 200:
                         raise BridgeConfigError("Unsafe proxy configuration (no key required)")
                     if response.status_code in (301, 302, 303, 307, 308):
@@ -154,6 +170,8 @@ class BridgeAdapter(BridgePort):
                     headers={"Authorization": f"Bearer {self._api_key}"},
                     timeout=self._get_timeout(deadline),
                 ) as response:
+                    if response.status_code == 429:
+                        raise _BridgeQuota("Proxy quota unavailable")
                     if response.status_code in (401, 403):
                         raise BridgeAuthError("Proxy rejected credentials")
                     if response.status_code >= 300:
@@ -168,7 +186,9 @@ class BridgeAdapter(BridgePort):
 
             return BridgeProfile(models=data["data"], raw_response=data)
 
-        except (httpx.RequestError, httpx.TimeoutException) as e:
+        except httpx.TimeoutException as e:
+            raise _BridgeTimeout("Proxy timed out") from e
+        except httpx.RequestError as e:
             raise BridgeUnavailableError("Proxy connection failed or timed out") from e
         except (UnicodeDecodeError, json.JSONDecodeError) as e:
             raise BridgeInvalidResponseError("Malformed JSON response") from e
@@ -188,6 +208,8 @@ class BridgeAdapter(BridgePort):
                     timeout=self._get_timeout(deadline),
                 ) as response,
             ):
+                if response.status_code == 429:
+                    raise _BridgeQuota("Proxy quota unavailable")
                 if response.status_code in (401, 403):
                     raise BridgeAuthError("Proxy rejected credentials")
                 if response.status_code >= 300:
@@ -200,7 +222,9 @@ class BridgeAdapter(BridgePort):
 
             return data
 
-        except (httpx.RequestError, httpx.TimeoutException) as e:
+        except httpx.TimeoutException as e:
+            raise _BridgeTimeout("Proxy timed out") from e
+        except httpx.RequestError as e:
             raise BridgeUnavailableError("Proxy connection failed or timed out") from e
         except (UnicodeDecodeError, json.JSONDecodeError) as e:
             raise BridgeInvalidResponseError("Malformed JSON response") from e

@@ -7,15 +7,19 @@ import re
 import stat
 import sys
 from collections import deque
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from threading import Lock
+from threading import Lock, RLock
 from time import monotonic
+from typing import TYPE_CHECKING
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    from backend.app.platform.alerts import LocalAlerts
 
 MAX_LOG_BYTES = 10 * 1024 * 1024
 MAX_LOG_FILES = 5  # active telemetry.jsonl and telemetry.jsonl.1 through .4
@@ -41,6 +45,7 @@ _SOURCE_STATUSES = frozenset({"VALID", "INVALID", "MISSING"})
 _ROUTES = frozenset({
     "GET /api/v1/health", "POST /bootstrap/exchange", "GET /bootstrap",
     "GET /api/v1/status", "GET /api/v1/dashboard",
+    "GET /api/v1/runbooks/{runbookId}",
     "POST /api/v1/quiz-attempts/{attemptId}/submit",
     "POST /api/v1/quiz-questions/{questionId}/feedback",
     "GET /api/v1/quiz-questions/{questionId}/feedback",
@@ -139,6 +144,7 @@ class DependencyOutcome:
     result: str = "success"
     invalid_response: bool = False
     duration_ms: float | None = None
+    qualifying_failure: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -322,6 +328,38 @@ class Telemetry:
             maxlen=max(1, min(MAX_SPANS, span_capacity))
         )
         self._lock = Lock()
+        self.alerts: LocalAlerts | None = None
+        self._alert_lock = RLock()
+        self._alert_sequence = 0
+
+    def _observe_alert(self, observation: Callable[["LocalAlerts", int, float], None]) -> None:
+        """Serialize sequence allocation and evaluation; diagnostics cannot fail study."""
+        engine = self.alerts
+        if engine is None:
+            return
+        try:
+            with self._alert_lock:
+                if self._alert_sequence == 2**63 - 1:
+                    raise ValueError("Alert sequence capacity reached")
+                self._alert_sequence += 1
+                observation(engine, self._alert_sequence, monotonic())
+                engine.evaluate()
+        except Exception:
+            engine.failed = True
+            self.span_retention_failed = True
+
+    def record_integrity(self, success: bool) -> None:
+        self._observe_alert(lambda alerts, sequence, at: alerts.record_integrity(
+            success, observation_id=sequence, observed_at=at,
+        ))
+
+    def record_sources(self, statuses: Mapping[str, str]) -> None:
+        self._observe_alert(lambda alerts, sequence, at: alerts.record_sources(
+            statuses, observation_id=sequence, observed_at=at,
+        ))
+
+    def sources_unavailable(self) -> None:
+        self._observe_alert(lambda alerts, _sequence, _at: alerts.sources_unavailable())
 
     def current_context(self) -> SpanContext | None:
         return self._context.get()
@@ -333,6 +371,10 @@ class Telemetry:
         try:
             if type(event) is not str or event not in _EVENTS:
                 return False
+            if event in {"http_request_completed", "http_request_failed"} and type(fields) is EventFields:
+                self._observe_alert(lambda alerts, sequence, at: alerts.record_http(
+                    fields, observation_id=sequence, observed_at=at,
+                ))
             context = self.current_context()
             record: dict[str, str | float] = {
                 "timestamp": datetime.now(UTC).isoformat(timespec="milliseconds"),
@@ -367,17 +409,29 @@ class Telemetry:
     def record_dependency(
         self, dependency: str, operation: str, result: str,
         duration_ms: float | None = None, *, invalid_response: bool = False,
+        qualifying_failure: bool | None = None,
     ) -> None:
         if dependency == "bridge":
+            self._observe_alert(lambda alerts, sequence, at: alerts.record_bridge(
+                DependencyOutcome(result, invalid_response, duration_ms),
+                observation_id=sequence, observed_at=at, qualifying_failure=qualifying_failure,
+            ))
             event = "bridge_call_completed" if result == "success" else "bridge_call_failed"
             self.emit(event, fields=EventFields(result, duration_ms=duration_ms))
             if invalid_response:
                 self.emit("bridge_response_rejected", level="warn", fields=EventFields("rejected"))
         elif dependency == "markdown":
             self.emit("markdown_sync_completed", fields=EventFields(result, duration_ms=duration_ms))
+        elif dependency == "sqlite":
+            self._observe_alert(lambda alerts, sequence, at: alerts.record_transaction(
+                result, observation_id=sequence, observed_at=at,
+            ))
 
     def record_storage_failure(self, category: str, *, check: str = "database") -> None:
         if category in {"BUSY", "INTEGRITY_FAILED"}:
+            self._observe_alert(lambda alerts, sequence, at: alerts.record_storage_failure(
+                category, check=check, observation_id=sequence, observed_at=at,
+            ))
             self.emit(
                 "storage_busy" if category == "BUSY" else "storage_integrity_failed",
                 level="warn" if category == "BUSY" else "error",
@@ -408,6 +462,7 @@ class Telemetry:
                         dependency, operation, outcome.result,
                         outcome.duration_ms,
                         invalid_response=outcome.invalid_response,
+                        qualifying_failure=outcome.qualifying_failure,
                     )
                 except Exception:
                     self.span_retention_failed = True

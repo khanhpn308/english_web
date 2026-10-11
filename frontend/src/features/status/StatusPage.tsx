@@ -14,6 +14,21 @@ export type StorageStatus = components['schemas']['StorageStatus'];
 export type OfflineCapabilities = components['schemas']['OfflineCapabilities'];
 export type LocalMetricsSummary = components['schemas']['LocalMetricsSummary'];
 export type SourceCounts = components['schemas']['SourceCounts'];
+type LocalAlert = components['schemas']['LocalAlert'];
+const alertLabels: Record<LocalAlert['category'], string> = {
+  api_unavailable: 'API không phản hồi', api_error_rate: 'Tỷ lệ lỗi API',
+  search_latency: 'Độ trễ tìm kiếm trên fixture', bridge_failure: 'Lỗi AI bridge',
+  storage_contention: 'Tranh chấp SQLite', source_parse_failure: 'Nguồn Markdown không hợp lệ',
+  integrity_failure: 'Lỗi toàn vẹn dữ liệu',
+};
+const runbookIds = ['api-unavailable', 'api-error-rate', 'search-performance', 'bridge-failure',
+  'storage-integrity', 'source-sync', 'first-run-and-restore'];
+const alertStateLabels: Record<LocalAlert['state'], string> = {
+  ACTIVE: 'Đang cảnh báo', RESOLVED: 'Đã phục hồi', INACTIVE: 'Không có cảnh báo đang hoạt động', UNKNOWN: 'Chưa xác định',
+};
+const observationLabels: Record<LocalAlert['observation'], string> = {
+  MEASURED: 'Có quan sát', NO_DATA: 'Chưa có dữ liệu, không phải kết quả đạt', INCOMPLETE: 'Quan sát không đầy đủ, chưa xác nhận phục hồi',
+};
 
 function isObject(val: unknown): val is Record<string, unknown> {
   return typeof val === 'object' && val !== null && !Array.isArray(val);
@@ -30,6 +45,22 @@ export function isValidStatusSummary(data: unknown): data is StatusSummary {
   if (typeof data.requestId !== 'string') return false;
   if (!isObject(data.offlineCapabilities)) return false;
   if (!isObject(data.localMetrics)) return false;
+  if (data.localAlerts !== null) {
+    if (!isObject(data.localAlerts) || typeof data.localAlerts.diagnosticsDegraded !== 'boolean'
+      || !Array.isArray(data.localAlerts.items) || data.localAlerts.items.length !== 7) return false;
+    const categories = new Set<string>();
+    for (const alert of data.localAlerts.items) {
+      if (!isObject(alert) || typeof alert.category !== 'string' || !Object.hasOwn(alertLabels, alert.category)
+        || categories.has(alert.category) || !['ticket', 'page-equivalent'].includes(alert.severity as string)
+        || !Object.hasOwn(alertStateLabels, alert.state as string) || !Object.hasOwn(observationLabels, alert.observation as string)
+        || !runbookIds.includes(alert.runbookId as string) || typeof alert.summary !== 'string' || alert.summary.length > 240
+        || typeof alert.sampleCount !== 'number' || !Number.isInteger(alert.sampleCount) || alert.sampleCount < 0 || alert.sampleCount > 16384) return false;
+      for (const timestamp of [alert.startedAt, alert.updatedAt]) {
+        if (timestamp !== null && (typeof timestamp !== 'string' || timestamp.length > 40 || !Number.isFinite(Date.parse(timestamp)))) return false;
+      }
+      categories.add(alert.category);
+    }
+  }
   if (data.sourceCounts !== null && !isObject(data.sourceCounts)) return false;
   return true;
 }
@@ -455,6 +486,35 @@ export const StatusPage: React.FC = () => {
       {/* Successful Status Display */}
       {data && readinessInfo && bridgeInfo && storageInfo && (
         <div className="space-y-6">
+          <Card role="region" aria-labelledby="status-alerts-heading">
+            <CardHeader>
+              <CardTitle><h2 id="status-alerts-heading" className="text-xl font-semibold m-0">Cảnh báo vận hành cục bộ</h2></CardTitle>
+              <CardDescription>Quan sát thiếu dữ liệu không xác nhận hệ thống khỏe hoặc đạt chuẩn hiệu năng.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {data.localAlerts === null ? (
+                <p role="status">Không thể đánh giá cảnh báo. Quyền AI vẫn được quản lý độc lập bên dưới.</p>
+              ) : (
+                <>
+                  {data.localAlerts.diagnosticsDegraded && <p role="status">Quan sát vận hành đang suy giảm; xem trạng thái từng cảnh báo.</p>}
+                  <ul className="space-y-4 list-none pl-0">
+                    {data.localAlerts.items.map((alert) => (
+                      <li key={alert.category} className="border rounded-md p-4 space-y-2" aria-labelledby={`alert-${alert.category}`}>
+                        <h3 id={`alert-${alert.category}`} className="font-semibold">{alertLabels[alert.category]}</h3>
+                        <p>Mức độ khi kích hoạt: {alert.severity === 'page-equivalent' ? 'Khẩn cấp (page-equivalent)' : 'Cần xử lý (ticket)'}. {alertStateLabels[alert.state]}</p>
+                        <p>{observationLabels[alert.observation]} · {alert.sampleCount} quan sát</p>
+                        <p>Hướng xử lý khi gặp sự cố: {alert.summary}</p>
+                        {alert.updatedAt !== null && <p>Cập nhật chuyển trạng thái: {formatDateTime(alert.updatedAt)}</p>}
+                        <a className="text-primary underline" href={`/api/v1/runbooks/${alert.runbookId}`}>
+                          Hướng dẫn xử lý: {alertLabels[alert.category]}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </CardContent>
+          </Card>
           {/* Card 1: System Readiness & Overview */}
           <Card role="region" aria-labelledby="status-readiness-heading">
             <CardHeader>
@@ -766,22 +826,22 @@ export const StatusPage: React.FC = () => {
             <CardContent>
               <ul className="space-y-2 text-sm text-muted-foreground list-disc pl-5 m-0">
                 <li>
-                  <strong className="text-foreground">Máy chủ API không phản hồi:</strong> Khởi động lại ứng dụng nếu 2 lần thăm dò liên tiếp thất bại. Không làm mất cơ sở dữ liệu SQLite. (<code className="font-mono text-xs">docs/runbooks/api-unavailable.md</code>)
+                  <a className="text-primary underline" href="/api/v1/runbooks/api-unavailable">Máy chủ API không phản hồi: hướng dẫn launcher và bảo toàn dữ liệu</a>
                 </li>
                 <li>
-                  <strong className="text-foreground">Tỷ lệ lỗi API &gt; 1%:</strong> Kiểm tra mã yêu cầu (requestId) trong nhật ký cục bộ. (<code className="font-mono text-xs">docs/runbooks/api-error-rate.md</code>)
+                  <a className="text-primary underline" href="/api/v1/runbooks/api-error-rate">Tỷ lệ lỗi API &gt; 1%: kiểm tra nhật ký cục bộ</a>
                 </li>
                 <li>
-                  <strong className="text-foreground">AI bridge không kết nối:</strong> Chỉ tạm dừng các chức năng cần AI; ôn tập và tra cứu cục bộ tiếp tục hoạt động. (<code className="font-mono text-xs">docs/runbooks/bridge-failure.md</code>)
+                  <a className="text-primary underline" href="/api/v1/runbooks/bridge-failure">AI bridge: khôi phục an toàn, giữ học tập cục bộ khả dụng</a>
                 </li>
                 <li>
-                  <strong className="text-foreground">Lỗi toàn vẹn cơ sở dữ liệu:</strong> Ngừng các thao tác ghi và làm theo hướng dẫn khôi phục dữ liệu an toàn. (<code className="font-mono text-xs">docs/runbooks/storage-integrity.md</code>)
+                  <a className="text-primary underline" href="/api/v1/runbooks/storage-integrity">SQLite: tranh chấp ghi và khôi phục toàn vẹn dữ liệu</a>
                 </li>
                 <li>
-                  <strong className="text-foreground">Tệp nguồn Markdown không hợp lệ:</strong> Sửa định dạng tệp bị lỗi hoặc khôi phục từ bản sao lưu. (<code className="font-mono text-xs">docs/runbooks/source-sync.md</code>)
+                  <a className="text-primary underline" href="/api/v1/runbooks/source-sync">Nguồn Markdown: sửa và đồng bộ nguồn không hợp lệ</a>
                 </li>
                 <li>
-                  <strong className="text-foreground">Hiệu năng tìm kiếm từ vựng suy giảm:</strong> Kiểm tra chỉ mục n-gram và kích thước cơ sở dữ liệu. (<code className="font-mono text-xs">docs/runbooks/search-performance.md</code>)
+                  <a className="text-primary underline" href="/api/v1/runbooks/search-performance">Hiệu năng tìm kiếm: quy trình benchmark trên fixture được phê duyệt</a>
                 </li>
               </ul>
             </CardContent>

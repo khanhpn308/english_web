@@ -265,7 +265,10 @@ FeedbackPage { data: Feedback[], pagination }
 StatusSummary { readiness, appVersion, uptimeSeconds, storageStatus, schemaRevision, sourceCounts,
                 bridgeStatus, selectedModelFamily, searchIndexStatus, lastSyncAt, lastSyncDurationMs,
                 lastIntegrityCheckAt, sqliteFileSizeBytes, sqliteBusyCount, offlineCapabilities,
-                consentState, policyVersion, localMetrics: { requestErrorRate, p50Ms, p95Ms, p99Ms, sampledAt }, requestId }
+                consentState, policyVersion, localMetrics: { requestErrorRate, p50Ms, p95Ms, p99Ms, sampledAt },
+                localAlerts: LocalAlertSummary | null, requestId }
+LocalAlertSummary { diagnosticsDegraded: boolean, items: LocalAlert[7] }
+LocalAlert { category, severity, state, observation, startedAt, updatedAt, sampleCount, runbookId, summary }
 Operation { operationId, kind, status: PENDING | SUCCEEDED | FAILED | UNKNOWN,
             resultRef?, errorCategory?, createdAt, updatedAt,
             aiProvenance?: { consentRevision, policyVersion, policyDigest,
@@ -347,6 +350,7 @@ details: { kind: FIELD_ERRORS, fields: [{field, reason}] }
 | bootstrap exchange | `POST` | `/bootstrap/exchange` | `{token}` in body; one-time, valid for less than 60s | `204` plus `HttpOnly; SameSite=Strict` launch-session cookie; replay/expiry → `401 SESSION_INVALID` |
 | health | `GET` | `/api/v1/health` | none | `200 HealthSummary`, `Cache-Control: no-store` |
 | status summary | `GET` | `/api/v1/status` | none | `200 StatusSummary`, `Cache-Control: no-store`; UI polls every 30s while visible and after mutations |
+| local runbook | `GET` | `/api/v1/runbooks/{runbookId}` | none | `200 text/html`, escaped bundled documentation; same session/origin boundary, no-store |
 | capabilities | `GET` | `/api/v1/capabilities` | none | `200 Capabilities` with the required defaults above, or `503 CONFIGURATION_REQUIRED` |
 | operation status | `GET` | `/api/v1/operations/{operationId}` | path ID | `200 Operation` |
 
@@ -688,6 +692,7 @@ explicit JSON null, never omitted. Numbers are finite. Timestamps are UTC RFC333
 | `consentState` | Existing `NOT_GRANTED`, `GRANTED`, `REVOKED`, `STALE`, plus `UNKNOWN` for unavailable/unreliable observation or storage. Uses the same policy identity/eligibility rules as the consent service through a dedicated read-only accessor. UNKNOWN never grants permission; AI dispatch still uses the existing admission fence. |
 | `policyVersion` | Existing PolicyVersion string pattern and maximum 80 characters, or null if no validated current policy is observable. No disclosure text or credential is included. |
 | `localMetrics` | Required `{requestErrorRate: number|null, p50Ms: number|null, p95Ms: number|null, p99Ms: number|null, sampledAt: timestamp|null}` as defined below. |
+| `localAlerts` | Required `LocalAlertSummary|null`. Null means the evaluator is absent or evaluation failed; it never means no active alerts. A present summary has `diagnosticsDegraded: boolean` and exactly seven fixed category items described below. |
 | `requestId` | The current T011 request correlation ID, equal to the response X-Request-ID. Never a metric label. |
 
 `localMetrics.requestErrorRate` is the exact HTTP 5xx response count divided by
@@ -732,7 +737,8 @@ categories are `startup`, `database`. No content, raw URL/path, credential or
 request ID becomes a label. Existing T011 five-file/10 MiB/14-day log rotation
 still owns diagnostic persistence. Metrics remain bounded process-local data.
 
-Example before storage initialization, after session bootstrap:
+Example without storage initialization and with unavailable alert evaluation,
+after session bootstrap:
 
 ```json
 {
@@ -746,9 +752,71 @@ Example before storage initialization, after session bootstrap:
   "consentState": "UNKNOWN", "policyVersion": null,
   "localMetrics": {"requestErrorRate": null, "p50Ms": null, "p95Ms": null,
     "p99Ms": null, "sampledAt": null},
+  "localAlerts": null,
   "requestId": "req_00000000000000000000000000000000"
 }
 ```
+
+### Local symptom alerts and runbook viewer (T061)
+
+Each item has required fields, with explicit null for absent timestamps:
+
+| Field | Meaning |
+|---|---|
+| `category` | `api_unavailable`, `api_error_rate`, `search_latency`, `bridge_failure`, `storage_contention`, `source_parse_failure`, `integrity_failure`. One item per category. |
+| `severity` | `page-equivalent` for API-unavailable/integrity, otherwise `ticket`. Local severity only; no pager or exporter. |
+| `state` | `ACTIVE` retains the current episode; `RESOLVED` retains the latest recovered episode; `INACTIVE` means no activation was recorded; `UNKNOWN` means no authoritative state is known. State must always be read with observation completeness. |
+| `observation` | `MEASURED`, `NO_DATA`, `INCOMPLETE`. NO_DATA never establishes PASS or a healthy denominator. INCOMPLETE preserves an active episode rather than inventing recovery. |
+| `startedAt`, `updatedAt` | UTC timestamps of the latest episode's activation and activation/resolution respectively, or null before any episode. Derived from a per-lifespan UTC/monotonic anchor; timestamps are diagnostic, not durable receipts. Repeated polling does not change transition times. |
+| `sampleCount` | Integer 0..16,384 retained observations. Rate denominators count completed calls/transactions; source count is retained invalid sources, health at most two probes, integrity at most one authoritative outcome. Incomplete counts are not a complete denominator. |
+| `runbookId` | Fixed local identifier from the mappings below. Clients link to `/api/v1/runbooks/{runbookId}`; no filesystem path or arbitrary URL is in an alert. |
+| `summary` | Fixed human recovery guidance, at most 240 characters, without request/learning/provider content. Render as text. |
+
+| Category | Exact condition | Runbook ID |
+|---|---|---|
+| `api_unavailable` | Two consecutive failed external health probes; backend has NO_DATA without authoritative launcher observations. | `api-unavailable` |
+| `api_error_rate` | Actual 5xx / completed HTTP responses > 1% in `(now-300s, now]`; 4xx only contributes to denominator. | `api-error-rate` |
+| `search_latency` | Nearest-rank p95 > 1 second over 300 seconds, exclusively on the approved benchmark fixture. Ordinary production requests remain unqualified and this category is NO_DATA. | `search-performance` |
+| `bridge_failure` | Timeout/auth/quota/invalid-response transport outcomes > 20% over 600 seconds. Preflight/chat each count once. HTTP 429, typed auth errors, deadline/HTTPX timeouts and transport response rejection qualify; other classified transport/configuration failures do not. Unclassified failure yields INCOMPLETE. | `bridge-failure` |
+| `storage_contention` | Timestamped BUSY/LOCKED observations / completed SQLite transactions > 1% over 300 seconds. No lifetime-counter arithmetic or empty-denominator alert. | `storage-integrity` |
+| `source_parse_failure` | Any invalid source in a committed authoritative snapshot; resolves only when a newer complete snapshot contains none. Failed source reads are INCOMPLETE, not recovery. | `source-sync` |
+| `integrity_failure` | Any startup integrity/FK failure, with observed driver corruption also retained as an authoritative storage failure; resolves only after successful storage initialization checks. | `storage-integrity` |
+
+Threshold equality never activates the four strict numerical conditions. Windows
+and rendered-search benchmark gates remain independent of alert evaluation.
+There is one evaluator per application lifespan. Existing HTTP completion,
+dependency and storage boundaries forward observations once; committed source
+snapshots are captured at startup and after sync, including partially committed
+failed runs. Evaluation occurs on those observations and Status reads, including
+window eviction. There is no periodic backend worker; an idle window's resolution
+is recorded on the next observation/read. UI keeps its existing visible-only
+30-second polling. Source/integrity states do not expire with rate windows.
+
+HTTP/bridge/busy/transaction retention is at most 16,384 events per window,
+benchmark search 1,024, source snapshots 1,024 IDs and alert history one latest
+episode per category. Truncated windows are INCOMPLETE until lost evidence
+expires; over-capacity source snapshots remain INCOMPLETE until a complete
+snapshot is available. Missing collectors, missed diagnostic observations and
+sink failures degrade observability without authorizing AI or disabling study.
+Bridge consumer-specific semantic validation remains outside the existing T046
+transport observation; it is not inferred from API error responses.
+
+`GET /api/v1/runbooks/{runbookId}` accepts only the six alert runbook IDs above,
+plus `first-run-and-restore` referenced by storage recovery. The GET has no body
+or query parameters. Unknown IDs/body/query return typed 422 VALIDATION_ERROR;
+unmatched routes retain typed 404 NOT_FOUND. Session/origin/size errors retain
+the existing 401/403/413 JSON envelope. A missing, unsafe, unreadable, non-UTF-8
+or larger-than-64-KiB bundled document returns 503 CONFIGURATION_REQUIRED;
+unexpected errors retain the existing typed 500 behavior. No directory listing,
+user Markdown, path input or unauthenticated file server is exposed.
+
+Success is `text/html; charset=utf-8`, `Cache-Control: no-store`, with escaped
+documentation text, a Status link and fixed same-origin runbook navigation. Raw
+Markdown HTML and links are never executed or reflected as destinations. Existing
+SessionGuard provides the session, origin and security headers. Trusted bundled
+documentation must be shipped at the existing repository-relative docs location;
+Windows packaging is deferred to its owner. Example: navigate to
+`/api/v1/runbooks/storage-integrity` from Status in the current browser session.
 
 ## 5. Validation and error semantics
 

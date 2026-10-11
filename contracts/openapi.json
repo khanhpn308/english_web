@@ -1467,6 +1467,136 @@
         "title": "HealthSummary",
         "type": "object"
       },
+      "LocalAlert": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "enum": [
+              "api_unavailable",
+              "api_error_rate",
+              "search_latency",
+              "bridge_failure",
+              "storage_contention",
+              "source_parse_failure",
+              "integrity_failure"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "observation": {
+            "enum": [
+              "MEASURED",
+              "NO_DATA",
+              "INCOMPLETE"
+            ],
+            "title": "Observation",
+            "type": "string"
+          },
+          "runbookId": {
+            "enum": [
+              "api-unavailable",
+              "api-error-rate",
+              "search-performance",
+              "bridge-failure",
+              "storage-integrity",
+              "source-sync",
+              "first-run-and-restore"
+            ],
+            "title": "Runbookid",
+            "type": "string"
+          },
+          "sampleCount": {
+            "maximum": 16384.0,
+            "minimum": 0.0,
+            "title": "Samplecount",
+            "type": "integer"
+          },
+          "severity": {
+            "enum": [
+              "ticket",
+              "page-equivalent"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "state": {
+            "enum": [
+              "ACTIVE",
+              "RESOLVED",
+              "INACTIVE",
+              "UNKNOWN"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "summary": {
+            "maxLength": 240,
+            "title": "Summary",
+            "type": "string"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat"
+          }
+        },
+        "required": [
+          "category",
+          "severity",
+          "state",
+          "observation",
+          "startedAt",
+          "updatedAt",
+          "sampleCount",
+          "runbookId",
+          "summary"
+        ],
+        "title": "LocalAlert",
+        "type": "object"
+      },
+      "LocalAlertSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "diagnosticsDegraded": {
+            "title": "Diagnosticsdegraded",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LocalAlert"
+            },
+            "maxItems": 7,
+            "minItems": 7,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "diagnosticsDegraded",
+          "items"
+        ],
+        "title": "LocalAlertSummary",
+        "type": "object"
+      },
       "LocalMetricsSummary": {
         "additionalProperties": false,
         "properties": {
@@ -3955,6 +4085,16 @@
             ],
             "title": "Lastsyncdurationms"
           },
+          "localAlerts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocalAlertSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "localMetrics": {
             "$ref": "#/components/schemas/LocalMetricsSummary"
           },
@@ -4108,6 +4248,7 @@
           "consentState",
           "policyVersion",
           "localMetrics",
+          "localAlerts",
           "requestId"
         ],
         "title": "StatusSummary",
@@ -6980,6 +7121,148 @@
         "summary": "Get Queue",
         "tags": [
           "review"
+        ]
+      }
+    },
+    "/api/v1/runbooks/{runbookId}": {
+      "get": {
+        "description": "Serve only trusted, escaped bundled documents through SessionGuard.",
+        "operationId": "get_runbook_api_v1_runbooks__runbookId__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runbookId",
+            "required": true,
+            "schema": {
+              "enum": [
+                "api-unavailable",
+                "api-error-rate",
+                "search-performance",
+                "bridge-failure",
+                "storage-integrity",
+                "source-sync",
+                "first-run-and-restore"
+              ],
+              "title": "Runbookid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Runbook",
+        "tags": [
+          "status"
         ]
       }
     },
