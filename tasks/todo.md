@@ -54,7 +54,7 @@
 - [x] [T036](t036-quiz-ui.md): Quiz builder UI dùng generation API
 - [x] [T047](t047-quiz-autosave-api.md): Quiz answer draft API với revision
 - [x] [T050](t050-quiz-runner-ui.md): Quiz runner và revision-aware autosave UI — DONE (PR #12 merged `c68540ff`; coding-only, release acceptance deferred; GitHub Actions #81 FAIL recorded).
-- [ ] [T048](t048-quiz-submit-api.md): Quiz submission và atomic SRS handoff
+- [ ] [T048](t048-quiz-submit-api.md): Quiz submission và atomic SRS handoff — source IMPLEMENTED on branch; PR #15 pending coding-only merge; `FINAL_VERIFICATION_DEFERRED`.
 - [x] [T049](t049-writing-feedback-api.md): Writing feedback API và history retry — DONE (coding-only, PR #14 merged `8a725344`; `FINAL_VERIFICATION_DEFERRED`; generated OpenAPI/DTO synchronization, regression/security and release acceptance deferred).
 - [ ] [T051](t051-quiz-result-feedback-ui.md): Submit/result và writing feedback UI
 - [ ] [T037](t037-dashboard-formulas.md): Dashboard summary API và streak formulas

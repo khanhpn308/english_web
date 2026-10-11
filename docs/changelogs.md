@@ -1,3 +1,10 @@
+## 11/10/2026 - T048 local quiz submission and atomic SRS handoff (Asia/Bangkok)
+
+- Added `backend/app/application/submit_quiz.py` and `backend/app/http/quiz_submissions.py`; registered their lifecycle and route in `backend/app/main.py`. Submission reuses deterministic scoring and commits terminal result/state, one weakest-rating review per eligible form and the operation receipt in one SQLite transaction. Inactive forms preserve results without new schedules.
+- Added `backend/tests/test_quiz_submission.py` with 49 production-factory regressions for scoring, revision/idempotency conflicts, concurrency, rollback, restart/lost responses, session/privacy guards and transient storage failures before/after commit. Committed results remain readable and replayable without AI or consent.
+- Regenerated only the owner-approved `contracts/openapi.json` and `frontend/src/shared/api/generated.ts` with T017's generator. Additions contain only the submission endpoint and request schema. T049 artifact reconciliation remains an integration action.
+- Recorded the standalone handoff in `tasks/t048-quiz-submit-api.md`, unchecked `tasks/todo.md` and `docs/reviews/t048-standalone-verification.md`. All 49 focused tests pass; the full Python suite returns 2,207 passed and 30 failed. Inherited repository-wide findings, native Windows checks and an unresolved full-run lookup deadline failure block acceptance. No unrelated fixes, suppressions, threshold changes, commit, merge, push or DONE action.
+
 ## 11/10/2026 - T049 coding integrated; FINAL_VERIFICATION_DEFERRED
 
 - Merged T049 Writing Feedback API via [PR #14](https://github.com/khanhpn308/english_web/pull/14) at `8a72534499c556bc142bf0864e3e3ca6d3d68515`; preserved T012/T050 source and task-completion states on `main`.
