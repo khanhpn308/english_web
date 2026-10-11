@@ -1,3 +1,10 @@
+## 10/10/2026 - T012: Core CI Pipeline implementation (Asia/Bangkok)
+
+- Status: `IMPLEMENTED`. Created `.github/workflows/ci.yml` restricting execution to `ubuntu-24.04`, locking third-party Actions to exact verified SHAs, and setting dependency cache policies.
+- Configured CI pipeline to run fast checks, frontend coverage, security gates (Gitleaks, OSV-Scanner, Semgrep pinned and isolated), API contract checks, and frontend build.
+- Updated `docs/toolchain.md` explicitly defining workflow triggers, gate ordering, execution environment constraints, fail-closed diagnostic policy, and limitations of CI evidence relative to Windows-native or provider runtime scenarios.
+- All artifact extractions are minimized and do not cache sensitive data (e.g. SQLite database or raw provider contents). No actual CI was invoked during this change, test results are PENDING host execution. Intentionally untouched existing workflow `.github/workflows/t089-host-ci.yml`, application source, lockfiles, and quality constraints.
+
 ## 09/10/2026 - T028 approved shell test extension and final source review (Asia/Bangkok)
 
 - Preserved the existing Search/detail implementation and the existing T028 `frontend/src/app/AppShell.tsx` delta. Updated `frontend/src/app/AppShell.test.tsx` and `frontend/tests/e2e/shell.spec.ts` under the owner-approved extension. Replaced obsolete Search/detail placeholder and raw-ID expectations with real UI/API assertions, retained placeholder Card/parameter coverage on the unimplemented quiz route, and selected the shell announcement independently from Search status messages.

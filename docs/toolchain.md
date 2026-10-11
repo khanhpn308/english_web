@@ -212,3 +212,39 @@ Công thức cài đặt phải giữ tool ngoài dependency/runtime của ứng
 - **T053 (Hoàn thành)**: Changed coverage, total ratchet và floor guard được kiểm chứng.
 - **T063 (Hoàn thành)**: Pinned scanner wrappers, redacted reports, severity gates, negative probes, no-HEAD/staged/current-history scopes và dependency lock audit đều có executable evidence; ba security commands clean.
 - **T062 (Chưa chạy)**: Architecture gate vẫn `SETUP_PENDING` đúng owner/dependencies.
+
+## 10. Core CI Pipeline (T012)
+
+Pipeline CI chính thức (`.github/workflows/ci.yml`) quy định environment, triggers và report behavior cho mã nguồn.
+
+### 10.1. Workflow Triggers và Execution Environment
+- **Triggers:** Chạy tự động khi push hoặc pull_request vào `main`, và cho phép chạy thủ công qua `workflow_dispatch`.
+- **Environment:** Runner `ubuntu-24.04` do GitHub cung cấp. Không cấp quyền ghi (chỉ `contents: read`). Có timeout giới hạn (30 phút) và concurrency control để hủy tự động khi branch có thay đổi mới.
+
+### 10.2. Gate Ordering và Command Ownership
+- Phụ thuộc hoàn toàn vào các local scripts đã có (`package.json` và `.agent/scripts/run-gates.sh`).
+- **Thứ tự thực thi:** Install dependencies, cài đặt scanners -> `npm run test:contract` (API contract) -> `npm run check:task:portable` (lint, typecheck, pytest, frontend coverage, architecture, security) -> `npm run build` (frontend bundle).
+- Không tự phát minh script CI song song, duy trì sự nhất quán giữa máy dev và CI.
+
+### 10.3. Dependency/Cache Policy
+- **Python:** Sử dụng action `setup-python` với cache `pip` dựa trên file `requirements-dev.lock`.
+- **Node:** Sử dụng action `setup-node` với cache `npm` qua `package-lock.json`.
+- Các Action của bên thứ ba được gắn chặt (pinned) vào SHA commit đầy đủ để phòng tránh supply chain attack. Tránh cache `.env`, SQLite DB, file cá nhân người dùng hoặc credentials.
+
+### 10.4. Report và Failure Behavior (Fail-closed)
+- Mọi step thoát (exit) với code khác `0` đều làm pipeline thất bại (fail-closed behavior). Không sử dụng cơ chế `continue-on-error: true`.
+- Nếu dependency thiếu hoặc coverage không đạt yêu cầu, workflow sẽ bị block.
+- Mọi diagnostic/coverage logs được publish thành artifacts (`coverage.xml`, `htmlcov/`, `logs/**`) ở bước cuối bất kể thành công hay thất bại. Report không bao gồm nội dung cá nhân, prompts hay responses đầy đủ của AI.
+
+### 10.5. Limitations của CI Evidence
+- **Hạn chế OS:** CI chạy trên Linux Ubuntu; do đó nó không đo lường được những bugs đặc thù (Windows-native file system, single-instance restrictions).
+- **Thiếu Provider/Harness:** Không kết nối đến mạng loopback/bridge thực thụ hoặc inference qua LLMs. Thiếu provider-specific execution cho production backend, cũng như accessibility/e2e trên browser thật (`playwright`). Những check như thế yêu cầu pipeline riêng, runner cấp quyền đặc biệt hoặc phải check thủ công.
+
+### 10.6. Local Equivalent Host Verification Commands
+Có thể tái lập luồng kiểm thử tương tự CI bằng các lệnh:
+```bash
+actionlint .github/workflows/ci.yml
+npm run test:contract
+npm run check:task:portable
+npm run build
+```
