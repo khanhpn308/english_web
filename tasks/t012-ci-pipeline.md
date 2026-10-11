@@ -2,7 +2,7 @@
 
 **Task ID:** `T012`  
 **Title:** CI lõi cho build và tests  
-**Status:** `TODO`  
+**Status:** `DONE` (implementation merged in PR #13, commit `9a6e548`; final acceptance deferred)  
 **Goal:** CI lõi cho build và tests. CI chạy lint/types/unit/contract/build và publish safe reports; mọi exit lỗi làm job fail.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -69,6 +69,15 @@ npm run check:task
 - Focused commands đạt kết quả/exit code ghi trong criteria; negative probe phải fail đúng reason. Documentation tasks có conformance report thay cho application-test pass.
 - Evidence ghi command, exit code, môi trường và artifact. Thiếu Windows/browser/provider environment là PENDING; không hoàn tất gate thiếu evidence.
 - Handoff ghi files sửa, files chủ ý không sửa, kết quả, risk còn lại và next task. Chỉ cập nhật `DONE`/checklist sau verification; commit khi đã được ủy quyền.
+
+## Coding completion and deferred release acceptance (11/10/2026)
+
+- **Coding status:** DONE under the owner policy in `tasks/todo.md`. PR #13 merged commit `9a6e548` into `main`, preserving T050 and earlier integrations.
+- **Implemented:** `.github/workflows/ci.yml` with pinned GitHub Actions, least-privilege `contents: read`, locked install, contract tests, portable quality/security gates, fail-closed execution and bounded verification artifacts; toolchain documentation; contract/Gitleaks reconciliations.
+- **Focused evidence (Host):** `actionlint` PASS; contract tests 78/78 PASS; Gitleaks security regression tests 21/21 PASS, real scanner 0 findings, and three synthetic scope-negative probes PASS.
+- **Deferred evidence:** GitHub Actions PR #11 core CI attempt `38114628839` FAILED. Repository-wide Python, Ruff formatting, frontend/browser coverage, architecture and end-to-end verification are NOT claimed green; final audit and fixes are explicitly deferred until coding completion of all 90 tasks. Draft PR #11 is an evidence branch and was **not** merged.
+- **Quality policy unchanged:** Do not waive, skip, downgrade, or misreport any failed gate. Credential exposure, data-loss risk, and Worker isolation/security constraints remain immediate stop conditions.
+- Acceptance-criteria checkboxes below reflect outstanding **full release verification**, not unfinished T012 source implementation.
 
 ## Risk
 

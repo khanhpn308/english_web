@@ -33,7 +33,7 @@
 - [x] [T009](t009-lookup-ui-vertical-slice.md): Lookup UI gọi API thật qua client — DONE (merged `aca6afc04`; final acceptance pending)
 - [x] [T010](t010-error-handling-recovery.md): Typed UI recovery cho common error codes — DONE (merged `aeaaa322e`; final acceptance pending)
 - [x] [T011](t011-observability-instrumentation.md): Local JSON logs, correlation và span boundary
-- [ ] [T012](t012-ci-pipeline.md): CI lõi cho build và tests
+- [x] [T012](t012-ci-pipeline.md): CI lõi cho build và tests — DONE (PR #13 merged `9a6e548`; coding-only, final system acceptance deferred; known CI failures retained)
 - [x] [T020](t020-markdown-parser.md): Lossless Markdown parser/serializer
 - [x] [T026](t026-search-projection.md): Vietnamese normalized n-gram projection
 - [x] [T031](t031-review-schema.md): Review/card schema và deterministic SRS — DONE: 60 SRS cases, 226 targeted/424 full Python tests; owner-authorized legacy-head maintenance preserves lineage/history; coverage, architecture, security and check:task all exit 0.

@@ -1,3 +1,10 @@
+## 11/10/2026 - T012 coding integrated; release audit deferred
+
+- Merged T012 source into `main` via PR #13 at `9a6e548` after reviewing exactly seven changed files; retained T050 implementation on `main`.
+- Marked T012 `DONE` for **coding completion only**, following owner policy. The T012 card retains unresolved end-to-end acceptance criteria rather than falsely claiming CI success.
+- Focused Host evidence: actionlint PASS, 78 contract tests PASS, 21 Gitleaks unit tests PASS, portable real Gitleaks and synthetic working-tree/staged/history negative probes PASS.
+- Deferred failed GitHub Actions full-gate run `38114628839` (Ruff format, Python tests, frontend coverage/browser, architecture) and related issues to the final 90-task integration/audit cycle; no gates or security restrictions relaxed. Experimental verification PR #11 was not merged.
+
 ## 10/10/2026 - T012: Core CI Pipeline implementation (Asia/Bangkok)
 
 - Status: `IMPLEMENTED`. Created `.github/workflows/ci.yml` restricting execution to `ubuntu-24.04`, locking third-party Actions to exact verified SHAs, and setting dependency cache policies.
