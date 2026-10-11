@@ -2,7 +2,7 @@
 
 **Task ID:** `T046`  
 **Title:** Local RED metrics và operational Status API  
-**Status:** `CODE_IMPLEMENTED_UNVERIFIED` (11/10/2026; resumed under owner-approved contract/scope clarification; verification deferred; not DONE)  
+**Status:** `DONE (CODING_ONLY)` — `FINAL_VERIFICATION_DEFERRED` (11/10/2026; owner-approved PR #18 merged into `main`; not runtime-verified)  
 **Goal:** Local RED metrics và operational Status API. Status required fields typed/no-store include current readiness/offline/consent, no fake-ready fields.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -339,3 +339,10 @@ Ready for Host code integration: YES, as unverified source only. Next work requi
 separate authorization for metrics/status and telemetry/database/consent failure
 tests, contract comparison/determinism, and applicable project gates. Merge/release
 acceptance is not established by this handoff.
+
+## Owner-approved coding-only closure — T046 (11/10/2026)
+
+- Final status: **`DONE (CODING_ONLY)`**; **`FINAL_VERIFICATION_DEFERRED`** by explicit repository-owner authorization. Earlier `BLOCKED_CONTRACT`, `CODE_IMPLEMENTED_UNVERIFIED` and `not DONE` checkpoints above describe historical stages and are superseded for implementation closure only.
+- [PR #18](https://github.com/khanhpn308/english_web/pull/18) merged `feature/t046-operational-status-api` into `main` at merge commit `2c4b18ef9e62fcf7c46d94a1ab69b4a8a0aae177`.
+- Integrated production `GET /api/v1/status`, bounded local RED metrics, HTTP status class and five-minute 5xx-only error rate, consent read-only observation, bridge/sync/SQLite dependency instrumentation, typed API contract and regenerated OpenAPI/TypeScript DTOs. The merge reconciled existing T037/T038 changes and retained Dashboard/Feedback/Status API contracts.
+- **Verification status:** tests, builds, lint, typecheck, security scanning, runtime/Windows/browser checks and audit were **not executed** for this closure. Existing task acceptance checkboxes and any release/performance evidence remain deferred to the owner-approved system-wide final verification; this status is not `VERIFIED`, `PASSED` or `RELEASE_READY`.
