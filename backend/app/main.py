@@ -41,10 +41,12 @@ from backend.app.http.review import router as review_router
 from backend.app.http.search import router as search_router
 from backend.app.http.session import SessionGuard, SessionStore
 from backend.app.http.sources import router as sources_router
+from backend.app.http.status import router as status_router
 from backend.app.http.telemetry import RouteSpanMiddleware, TelemetryFastAPI
 from backend.app.http.word_forms import router as word_forms_router
 from backend.app.persistence.database import Database, StorageError
 from backend.app.platform.config import AppSettings
+from backend.app.platform.metrics import LocalMetrics, MeteredTelemetry
 from backend.app.platform.telemetry import LocalJsonSink, Telemetry, default_log_directory
 from backend.app.review.queue import ReviewService
 from backend.app.vocabulary.models import SourceFile
@@ -53,6 +55,7 @@ from backend.app.vocabulary.search_service import SearchService
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
+from fastapi.routing import APIRoute, iter_route_contexts
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
@@ -69,7 +72,10 @@ _DETAIL_ROUTES = re.compile(r"(?:word-forms/[^/]+|quiz/[^/]+(?:/result)?)\Z")
 async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Keep readiness false until storage checks and migrations finish."""
     settings: AppSettings = app.state.settings
-    database = Database(settings.storage_path) if settings.storage_path is not None else None
+    database = (
+        Database(settings.storage_path, telemetry=app.state.telemetry)
+        if settings.storage_path is not None else None
+    )
     history_started = False
     app.state.database = database
     app.state.ready = False
@@ -116,9 +122,10 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
                     ledger=ledger,
                     conflict_type=OperationConflict,
                 )
+                app.state.bridge = BridgeAdapter(api_key=None, telemetry=app.state.telemetry)
                 admission_coordinator = AiAdmissionCoordinator(
                     app.state.consent_service,
-                    BridgeAdapter(api_key=None),
+                    app.state.bridge,
                     lambda: app.state.active_ai_policy,
                 )
                 app.state.lookup_service = LookupService(
@@ -193,7 +200,8 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
                         app.state.save_word_family_service = SaveWordFamilyService(ledger, coordinator)
                         app.state.edit_word_form_service = EditWordFormService(ledger, coordinator)
                         sync_service = SyncService(
-                            database.engine, markdown_root, operation_ledger=ledger
+                            database.engine, markdown_root, operation_ledger=ledger,
+                            telemetry=app.state.telemetry,
                         )
                         app.state.sync_service = sync_service
 
@@ -318,12 +326,18 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
                             finally:
                                 await run_in_threadpool(database.close)
                         app.state.database = None
+                        app.state.bridge = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Delegate all learning lifecycle work; diagnostics never mask its failures."""
     telemetry: Telemetry = app.state.telemetry
+    try:
+        app.state.started_at = monotonic()
+    except Exception:
+        app.state.started_at = None
+        telemetry.span_retention_failed = True
     try:
         async with _application_lifespan(app):
             try:
@@ -342,6 +356,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     telemetry.sink.close()
             except Exception:
                 telemetry.span_retention_failed = True
+            app.state.started_at = None
 
 
 class RequestBudgetMiddleware:
@@ -463,14 +478,21 @@ def create_app(
         lifespan=lifespan,
     )
 
+    app.state.metrics = None
     try:
+        metrics = LocalMetrics()
+        app.state.metrics = metrics
         log_directory = default_log_directory()
         sink = LocalJsonSink(log_directory) if log_directory is not None else None
-        app.state.telemetry = Telemetry(sink=sink, version=app_settings.app_version)
+        app.state.telemetry = MeteredTelemetry(metrics, sink=sink, version=app_settings.app_version)
     except Exception:
+        if app.state.metrics is not None:
+            app.state.metrics.failed = True
         app.state.telemetry = Telemetry(version=app_settings.app_version)
         app.state.telemetry.span_retention_failed = True
     app.state.settings = app_settings
+    app.state.started_at = None
+    app.state.bridge = None
     app.state.markdown_root = markdown_root
     app.state.ready = False
     app.state.database = None
@@ -541,6 +563,7 @@ def create_app(
         return error_response(exc.status_code, "VALIDATION_ERROR")
 
     app.include_router(health_router)
+    app.include_router(status_router)
     app.include_router(bootstrap_router)
     app.include_router(operations_router)
     app.include_router(search_router)
@@ -580,6 +603,14 @@ def create_app(
             return error_response(503, "CONFIGURATION_REQUIRED")
         return FileResponse(page)
 
+    if app.state.metrics is not None:
+        try:
+            app.state.metrics.routes = frozenset({"unmatched"}) | frozenset(
+                route.original_route.path for route in iter_route_contexts(app.routes)
+                if isinstance(route.original_route, APIRoute)
+            )
+        except Exception:
+            app.state.metrics.failed = True
     return app
 
 

@@ -265,7 +265,7 @@ FeedbackPage { data: Feedback[], pagination }
 StatusSummary { readiness, appVersion, uptimeSeconds, storageStatus, schemaRevision, sourceCounts,
                 bridgeStatus, selectedModelFamily, searchIndexStatus, lastSyncAt, lastSyncDurationMs,
                 lastIntegrityCheckAt, sqliteFileSizeBytes, sqliteBusyCount, offlineCapabilities,
-                consentState, policyVersion?, localMetrics: { requestErrorRate, p50Ms, p95Ms, p99Ms, sampledAt }, requestId }
+                consentState, policyVersion, localMetrics: { requestErrorRate, p50Ms, p95Ms, p99Ms, sampledAt }, requestId }
 Operation { operationId, kind, status: PENDING | SUCCEEDED | FAILED | UNKNOWN,
             resultRef?, errorCategory?, createdAt, updatedAt,
             aiProvenance?: { consentRevision, policyVersion, policyDigest,
@@ -649,6 +649,106 @@ The response keeps flashcard self-rating, objective MCQ/cloze accuracy, writing 
 - Complete today anchors counting today; known incomplete today anchors yesterday; unknown today or an unknown boundary before a known incomplete day yields null. Streak is independent of `from`/`to`. `asOf` stays today under either anchor. Today's recorded prefix is sufficient; the unelapsed remainder is not a gap.
 
 Unavailable history success explicitly includes `streak: {"currentDays": null, "asOf": "2026-10-11"}` and `Cache-Control: no-store`, alongside normal metrics. No public coverage/reason field is exposed. Missing service/configuration and storage readiness/busy failures remain typed failures; corrupt data and programming errors are not successful null-streak responses. Session/origin and correlation guards are unchanged. All reads use the same explicit SQLite read transaction and aware cutoff. ADR-0009 records the pre-commit effective-time convention and its distinction from physical commit time.
+
+### Operational status, T046 owner clarification
+
+`GET /api/v1/status` observes the production application through the existing
+local session/origin guards. It accepts no query parameters and no request body.
+Either is rejected with `422 VALIDATION_ERROR`; the normal typed session/origin,
+body-limit and internal-error envelopes still apply. Every response has
+`Cache-Control: no-store`. Dependency failures normally produce a degraded 200
+summary with independent unavailable fields rather than hide local study state.
+This endpoint performs no bridge/cloud request, integrity scan, source scan,
+index rebuild, consent mutation or durable write.
+Observation uses the existing NullPool SQLAlchemy engine with SQLite URI mode=ro
+for this request's connections. A disappeared file fails instead of being created
+by the normal writer connection factory. Connection-local PRAGMAs and in-memory
+diagnostic counters do not change canonical learning/consent state.
+
+All StatusSummary fields and nested fields are required. Nullable fields are
+explicit JSON null, never omitted. Numbers are finite. Timestamps are UTC RFC3339.
+
+| Field | Exact type and observation meaning |
+|---|---|
+| `readiness` | `NOT_READY`, `SYNCING`, `READY`, `DEGRADED`, `UNKNOWN`. NOT_READY means the production ready flag is false; SYNCING means the source worker holds its sync lock; UNKNOWN means no authoritative ready flag. READY requires local storage/readiness, known source counts with no excluded source, compatible search index, known consent observation, recent healthy bridge and functioning diagnostics. Otherwise a locally ready process is DEGRADED. A user's NOT_GRANTED/REVOKED/STALE choice alone does not make local study unready. |
+| `appVersion` | String from existing server settings. |
+| `uptimeSeconds` | Nonnegative number of monotonic seconds since this lifespan began, including startup, or null if no start was recorded. |
+| `storageStatus` | Existing `OK`/`NOT_READY`, plus existing storage failure categories `BUSY`, `READ_ONLY`, `INTEGRITY_FAILED`, `SCHEMA_MISMATCH`, `UNAVAILABLE`, and `UNKNOWN`. OK means startup safety initialization completed and the current read observes the schema. It does not claim a new write or integrity probe occurred. Known integrity/read-only/schema failures remain visible until initialization reconciles them. |
+| `schemaRevision` | String of at most 80 characters from the current single Alembic revision matching completed startup initialization, or null on unavailable/inconsistent/uninitialized storage. |
+| `sourceCounts` | `{VALID: integer >= 0, INVALID: integer >= 0, MISSING: integer >= 0}` from a read transaction over stored source state, or null if the database/read is unavailable. The sync service's read-only observer also works without a configured watcher. A counted empty table yields measured zero in all categories. Missing storage never yields invented zero. |
+| `bridgeStatus` | Reuses HealthSummary's `NOT_CHECKED`, `OK`, `NOT_READY`. Missing credentials or a failed observed transport operation means NOT_READY. A successful preflight/chat observation less than 300 seconds old means OK. Without such evidence, including an expired observation, it is NOT_CHECKED. This is transport evidence, never AI dispatch authorization. |
+| `selectedModelFamily` | `gemini-3.8-flash-high` or null. Present only when the currently resolved authoritative policy has this sole approved model; do not expose arbitrary provider metadata. |
+| `searchIndexStatus` | `READY`, `NOT_READY`, `UNAVAILABLE`, `UNKNOWN`. READY means the stored index version matches the existing projection version; NOT_READY means absent/incompatible version; UNAVAILABLE means a failed read; UNKNOWN means no service. It does not certify benchmark latency or index freshness. |
+| `lastSyncAt` | UTC timestamp of the latest durable successful SYNC_RUN receipt, or null. Failed attempts do not replace this success time. |
+| `lastSyncDurationMs` | Nonnegative milliseconds measured for that same successful operation during this process, including lock wait, or null. Never derive duration from receipt timestamps or assign another run's timing. Tied second-resolution receipt times cannot establish the latest operation's identity and yield null duration. Historical duration is not persisted. |
+| `lastIntegrityCheckAt` | UTC timestamp of the last successful startup integrity/FK validation observed in this process, or null. Historical check time is not persisted; status does not run the check. |
+| `sqliteFileSizeBytes` | Nonnegative integer size of the configured main SQLite file, excluding WAL/SHM, or null if unavailable. No path is returned. |
+| `sqliteBusyCount` | Nonnegative integer count of observed SQLITE_BUSY/SQLITE_LOCKED failures since this Database instance began, or null if collection/storage observation is unavailable. An active reliable observer with no failures reports measured zero. It is not a lifetime or five-minute count. |
+| `offlineCapabilities` | Required `{search: boolean|null, review: boolean|null, dashboard: boolean|null, createdQuiz: boolean|null, lookup: false, newQuiz: false, feedback: false, audio: boolean|null}`. True means the corresponding local backend capability is wired with usable local storage, plus compatible projection for search. False means known unavailable or requires inference/network. Unknown storage/readiness yields null for local capabilities. Audio is null because browser SpeechSynthesis availability is not observed by the backend. This matrix never triggers a capability probe. |
+| `consentState` | Existing `NOT_GRANTED`, `GRANTED`, `REVOKED`, `STALE`, plus `UNKNOWN` for unavailable/unreliable observation or storage. Uses the same policy identity/eligibility rules as the consent service through a dedicated read-only accessor. UNKNOWN never grants permission; AI dispatch still uses the existing admission fence. |
+| `policyVersion` | Existing PolicyVersion string pattern and maximum 80 characters, or null if no validated current policy is observable. No disclosure text or credential is included. |
+| `localMetrics` | Required `{requestErrorRate: number|null, p50Ms: number|null, p95Ms: number|null, p99Ms: number|null, sampledAt: timestamp|null}` as defined below. |
+| `requestId` | The current T011 request correlation ID, equal to the response X-Request-ID. Never a metric label. |
+
+`localMetrics.requestErrorRate` is the exact HTTP 5xx response count divided by
+all completed HTTP responses in `(now - 300 seconds, now]`. HTTP 4xx responses
+have their own bounded status-class counter and never enter the numerator.
+Responses with an exception use the HTTP status already sent, or the production
+500 outcome if no response began; each request is counted once. The current
+status response enters collection only after it finishes. Before five minutes
+of uptime, the window contains only actual observations since startup. A zero
+denominator returns null. Retention holds at most 16,384 response outcomes; if
+an observation in the window had to be evicted, error rate remains null until
+that evicted observation expires, without presenting a truncated estimate.
+
+Latency percentiles are nearest-rank p50/p95/p99 of the newest at most 1,024
+retained HTTP duration observations within that same five-minute window,
+converted from seconds to milliseconds. No sample returns null; a measured
+zero remains zero. `sampledAt` is the aggregation timestamp only when retained
+HTTP observations exist. Collector failure/absence returns all five null fields
+and degrades observability independently of study. Overflow makes only the
+error-rate/count calculation unavailable while retained percentiles remain real,
+and degrades overall diagnostics/readiness.
+
+General local counters reset with a recorded collection epoch at restart or
+after 14 days. Histograms retain at most 1,024 exact observations per series;
+there are at most 1,024 metric series. Dependency instrumentation uses the T011
+local span/event boundary, with no exporter or worker. SQLite transaction
+outcomes are recorded after the DBAPI commit/rollback completes; read transaction
+cleanup is success, discarded writes and failed transactions are failure. Busy
+and corruption categories are observed once per actual driver failure; startup
+integrity/FK failures also increment the integrity counter. Bridge preflight and
+chat are separate transport operations, with malformed transport responses
+counted as validation failures. Schema validation in application-owned AI
+consumers remains outside this adapter's observation. Sync counts returned
+FAILED outcomes as failures, including partial source effects already committed.
+A failed source sync keeps overall readiness degraded until a later successful
+sync, without rewriting local study outcomes or stored source categories.
+Only reviewed route templates, methods, status classes 2xx/3xx/4xx/5xx,
+operations, dependency/provider, source status and bounded result/failure/check
+categories are retained. The additional dependency operation categories are
+`read`, `write`, `unknown`; failure class is `invalid_response`; integrity check
+categories are `startup`, `database`. No content, raw URL/path, credential or
+request ID becomes a label. Existing T011 five-file/10 MiB/14-day log rotation
+still owns diagnostic persistence. Metrics remain bounded process-local data.
+
+Example before storage initialization, after session bootstrap:
+
+```json
+{
+  "readiness": "NOT_READY", "appVersion": "0.1.0", "uptimeSeconds": 1.2,
+  "storageStatus": "NOT_READY", "schemaRevision": null, "sourceCounts": null,
+  "bridgeStatus": "NOT_CHECKED", "selectedModelFamily": null,
+  "searchIndexStatus": "UNKNOWN", "lastSyncAt": null, "lastSyncDurationMs": null,
+  "lastIntegrityCheckAt": null, "sqliteFileSizeBytes": null, "sqliteBusyCount": null,
+  "offlineCapabilities": {"search": false, "review": false, "dashboard": false,
+    "createdQuiz": false, "lookup": false, "newQuiz": false, "feedback": false, "audio": null},
+  "consentState": "UNKNOWN", "policyVersion": null,
+  "localMetrics": {"requestErrorRate": null, "p50Ms": null, "p95Ms": null,
+    "p99Ms": null, "sampledAt": null},
+  "requestId": "req_00000000000000000000000000000000"
+}
+```
 
 ## 5. Validation and error semantics
 
