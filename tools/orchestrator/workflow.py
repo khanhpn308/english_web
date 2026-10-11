@@ -2248,7 +2248,8 @@ class Pipeline:
         branch = git.branch()
         raw_commands = contract.required_verification + self.config.verification
         commands = tuple(tuple(cmd) for cmd in raw_commands)
-        workspace_context = self.verification_workspace(
+        admission, sandbox = self._verification_authority()
+        workspace_context = self.docker_verification_workspace(
             working, snapshot, state.base_sha, state.task_id, state.run_id
         )
         with workspace_context as (verify_path, verify_git):
@@ -2260,7 +2261,9 @@ class Pipeline:
                     state.task_id, state.base_sha, branch, snapshot, commands
                 ),
             )
-            collection = collect_verification(request)
+            collection = self._collect_docker_verification(
+                request, working, snapshot, admission, sandbox
+            )
             if verify_git is not None and verify_git.snapshot(state.base_sha) != snapshot:
                 raise OrchestratorError("Verification mutated source; evidence invalidated")
             if git.snapshot(state.base_sha) != snapshot:
@@ -2381,8 +2384,11 @@ class Pipeline:
         shards = []
         failures = []
         collection = None
+        admission, sandbox = (
+            self._verification_authority() if commands is not None else (None, None)
+        )
         workspace_context = (
-            self.verification_workspace(
+            self.docker_verification_workspace(
                 working, snapshot, state.base_sha, state.task_id, state.run_id
             )
             if commands is not None
@@ -2405,7 +2411,16 @@ class Pipeline:
                 max_workers=len(jobs) + int(request is not None), thread_name_prefix="audit-prepare"
             ) as pool:
                 verification_future = (
-                    pool.submit(collect_verification, request) if request is not None else None
+                    pool.submit(
+                        self._collect_docker_verification,
+                        request,
+                        working,
+                        snapshot,
+                        admission,
+                        sandbox,
+                    )
+                    if request is not None and admission is not None and sandbox is not None
+                    else None
                 )
                 futures = [
                     pool.submit(
