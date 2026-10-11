@@ -1,3 +1,12 @@
+## 11/10/2026 - T038 Learning Dashboard UI implemented (Asia/Bangkok)
+
+- Implemented `DashboardPage` in `frontend/src/features/dashboard/DashboardPage.tsx` using canonical shadcn/ui primitives (`Card`, `Button`) and Tailwind CSS v4 semantic tokens.
+- Structured separate panels: Due cards count (linking to `/review`), Bangkok-anchored streak summary, and 3 distinct learning-result groups: Flashcard self-rating (with ADR-0005 rating buckets and ordinal rounding explanation), MCQ objective accuracy (correct/attempted with progress bar), Cloze objective accuracy, and Writing rubric self-scores (average 0–4).
+- Preserved strict zero vs. null / insufficient history semantics across all metrics (`null` rendered as "Chưa xác định" or "Chưa làm câu nào", not false 0 or 0%).
+- Integrated into `frontend/src/app/AppShell.tsx` at route `/`, replacing the placeholder card while preserving navigation landmarks, keyboard focus, and ErrorBoundary recovery.
+- Wired invalidation on `vocabulary:invalidate` custom events (including `review-recorded` from Flashcard reviews, `quiz-submitted` from quiz completion in AppShell) and window `focus`. Handled `STORAGE_BUSY` (`isSyncing`) with dedicated non-destructive recovery status.
+- Status: `IMPLEMENTED_UNVERIFIED` (coding-only session; tests, builds, lint, and Git commits deferred). Acceptance criteria checkboxes remain unchecked pending host integration verification.
+
 ## 11/10/2026 - T083 authorized bookkeeping commit and worktree closure (Asia/Bangkok)
 
 - Owner authorized committing the three T083 bookkeeping files and closing `/home/khanh/projects/vocabularies-t083-codex`. The worktree had no tracked, untracked or ignored changes; its tip `5153c0c` is already an ancestor of `main`. `git worktree remove` completed without force; branch `fix/t083-dag-metadata-remediation` remains available.
