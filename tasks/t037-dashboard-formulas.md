@@ -2,7 +2,7 @@
 
 **Task ID:** `T037`  
 **Title:** Dashboard summary API và streak formulas  
-**Status:** `PARTIAL_UNVERIFIED / BLOCKED_DEPENDENCY` (11/10/2026; independent source `CODE_IMPLEMENTED_UNVERIFIED`; T037-H1 integrated, T037-R1 pending; not DONE)  
+**Status:** `DONE (CODING_ONLY)` — `FINAL_VERIFICATION_DEFERRED` (owner-approved 11/10/2026; backend source, H1/R1 integration, API contract and generated DTOs present on `main`; not runtime-verified)  
 **Goal:** Dashboard summary API và streak formulas. Due/streak/three learning metrics response match contract và fixtures.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -234,3 +234,11 @@ Streak history is independent of the selected `from`/`to` metric range and its 3
 - TESTS: `DEFERRED_BY_OWNER`; AUDIT: `DEFERRED_BY_OWNER`; SECURITY_VERIFICATION: `DEFERRED_BY_OWNER`; GENERATED_CONTRACT: `HOST_INTEGRATION_PENDING`. No PASS or final acceptance claimed.
 - Known unverified risks: endpoint success is unavailable, execution/performance remain unverified, historical range scans lack global time indexes, and Host must preserve newer main/H1 lifecycle changes during integration.
 - READY_FOR_HOST_INTEGRATION: `NO` for complete T037; T037-R1 must integrate the authoritative reader into the dashboard transaction, record the approved public nullability policy, then reconcile generated contracts. Do not mark T037 DONE.
+
+## Owner-approved coding-only closure (11/10/2026)
+
+- **Final task status:** `DONE (CODING_ONLY)`; `FINAL_VERIFICATION_DEFERRED` by explicit owner approval. Older `BLOCKED_*` handoffs above are historical checkpoints, superseded for code completion by the present source and this closure.
+- `main` contains `DashboardService` integrated with `StudyHistoryReader`, study-history migrations `0012`/`0013`, production `/api/v1/dashboard` route, an explicit nullable `streak.currentDays`, the Bangkok streak anchor/unknown-history policy, and the updated API contract/ADR.
+- T017 generator outputs `contracts/openapi.json` and `frontend/src/shared/api/generated.ts` were regenerated and pushed on `main` in commit `4ec7bd3` (the generated contract also reflects another previously implemented feedback endpoint). No endpoints were removed in the user's local path comparison.
+- **Acceptance/runtime:** No tests, browser/Windows verification, build, lint, typecheck, security scans, migrations or final audit were run for this closure. All associated evidence and acceptance checkboxes remain deferred; this status is NOT `VERIFIED` or `RELEASE_READY`.
+- Existing implementation limitations and previous cautionary notes remain as historical handoffs; follow-up correctness/performance/coverage checks belong to system-wide final verification, not a prerequisite for `DONE (CODING_ONLY)`.
