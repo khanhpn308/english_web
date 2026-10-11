@@ -2423,7 +2423,11 @@ def concurrent_audit_pipeline(
     pipeline = AuthorityProbePipeline(repository, config, agents)
     agents.pipeline = pipeline
     from tools.orchestrator.core import VerificationCollection, VerificationRequest
-    from tools.orchestrator.runtime import execute as original_execute
+    from tools.orchestrator.runtime import (
+        DockerVerificationSandbox,
+        VerificationImageAdmission,
+        execute as original_execute,
+    )
 
     collect = Pipeline._collect_docker_verification
 
@@ -2432,8 +2436,8 @@ def concurrent_audit_pipeline(
         request: VerificationRequest,
         working: Path,
         snapshot: str,
-        admission: object,
-        sandbox: object,
+        admission: VerificationImageAdmission,
+        sandbox: DockerVerificationSandbox,
     ) -> VerificationCollection:
         assert threading.get_ident() != pipeline.owner
         agents.enter(rendezvous=False)
