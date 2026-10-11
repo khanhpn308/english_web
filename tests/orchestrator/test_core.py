@@ -1653,6 +1653,56 @@ def test_no_task_id_specific_scheduler_or_runtime_exceptions() -> None:
             assert task_id not in text, f"Hardcoded task ID {task_id} in {path.name}"
 
 
+def _t090_synthetic_admitted_collection(
+    tmp_path: Path,
+    commands: tuple[tuple[str, ...], ...],
+) -> tuple[object, Path, object, object, object]:
+    """Real Git sealing plus fake Docker execution; never a live isolation claim."""
+    from tools.orchestrator.core import VerificationRequest
+    from tools.orchestrator.runtime import (
+        DockerVerificationPolicy,
+        DockerVerificationSandbox,
+        VerificationImageAdmission,
+    )
+    from tools.orchestrator.workflow import freeze_verification_source_binding
+
+    source = tmp_path / "source"
+    source.mkdir()
+    git = Git(source)
+    git.run("init", "-b", "main")
+    git.run("config", "user.email", "fixture@example.invalid")
+    git.run("config", "user.name", "Fixture")
+    (source / "source.txt").write_text("synthetic source\n")
+    git.run("add", ".")
+    git.run("commit", "-m", "synthetic baseline")
+    base = git.sha()
+    snapshot = git.snapshot(base)
+    root = tmp_path / "verifier-root"
+    clone = root / "verify-fixture" / "workspace"
+    clone.parent.mkdir(parents=True)
+    git.run("clone", "--no-local", "--no-checkout", str(source), str(clone))
+    Git(clone).run("checkout", "--detach", base)
+    image = "example.invalid/verified@sha256:" + "a" * 64
+    sandbox = DockerVerificationSandbox(DockerVerificationPolicy(image, root))
+    binding = freeze_verification_source_binding(
+        working=source,
+        verification_workspace=clone,
+        base_sha=base,
+        expected_git_snapshot=snapshot,
+        sandbox=sandbox,
+    )
+    request = VerificationRequest(
+        clone,
+        commands,
+        None,
+        FrozenEvidenceIdentity.freeze("T100", base, "main", snapshot, commands),
+    )
+    admission = VerificationImageAdmission(
+        image, "b" * 64, "sha256:" + "c" * 64, "sha256:" + "d" * 64
+    )
+    return request, source, binding, admission, sandbox
+
+
 @pytest.mark.parametrize("mode", ["success", "exit", "timeout", "oversized", "setup", "oserror"])
 def test_concurrent_audit_collection_detached_inputs_and_failure_semantics(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
@@ -1660,16 +1710,14 @@ def test_concurrent_audit_collection_detached_inputs_and_failure_semantics(
     from dataclasses import FrozenInstanceError, fields
 
     from tools.orchestrator.core import VerificationRequest
-    from tools.orchestrator.runtime import ProcessResult
-    from tools.orchestrator.workflow import collect_verification
+    from tools.orchestrator.runtime import DockerVerificationSandbox, ProcessResult
+    from tools.orchestrator.workflow import collect_verification_admitted
 
     commands = (("python", "-m", "pytest"), ("python", "-m", "ruff"), ("git", "diff", "--check"))
-    request = VerificationRequest(
-        tmp_path,
-        commands,
-        None,
-        FrozenEvidenceIdentity.freeze("T100", "a" * 64, "feature/test", "a" * 64, commands),
+    request, source, binding, admission, sandbox = _t090_synthetic_admitted_collection(
+        tmp_path, commands
     )
+    assert isinstance(request, VerificationRequest)
     assert {field.name for field in fields(request)} == {
         "cwd",
         "commands",
@@ -1681,8 +1729,15 @@ def test_concurrent_audit_collection_detached_inputs_and_failure_semantics(
             setattr(request, field.name, getattr(request, field.name))
     executed: list[tuple[str, ...]] = []
 
-    def executing(command: list[str], cwd: Path, *, timeout: int | None = None) -> ProcessResult:
-        assert cwd == tmp_path and timeout is None
+    def executing(
+        self: DockerVerificationSandbox,
+        command: list[str],
+        workspace: Path,
+        *,
+        expected_source_digest: str | None = None,
+    ) -> ProcessResult:
+        assert workspace == request.cwd
+        assert expected_source_digest == binding.docker_source_digest
         executed.append(tuple(command))
         failing = len(executed) == 2 and mode != "success"
         if failing and mode == "setup":
@@ -1691,7 +1746,7 @@ def test_concurrent_audit_collection_detached_inputs_and_failure_semantics(
             raise PermissionError("synthetic-private-os-error-sentinel")
         return ProcessResult(
             command=tuple(command),
-            cwd=str(cwd),
+            cwd=str(workspace),
             started_at="start",
             ended_at="end",
             exit_code=9 if failing and mode == "exit" else 0,
@@ -1701,18 +1756,16 @@ def test_concurrent_audit_collection_detached_inputs_and_failure_semantics(
             oversized=failing and mode == "oversized",
         )
 
-    monkeypatch.setattr("tools.orchestrator.workflow.execute", executing)
-    collection = collect_verification(request)
+    monkeypatch.setattr(DockerVerificationSandbox, "run", executing)
+    collection = collect_verification_admitted(
+        request,
+        source_worktree=source,
+        binding=binding,
+        image_admission=admission,
+        sandbox=sandbox,
+    )
     expected_cmds = list(commands)[: 3 if mode == "success" else 2]
-    assert len(executed) == len(expected_cmds)
-    for exec_cmd, orig_cmd in zip(executed, expected_cmds, strict=True):
-        if exec_cmd[0].endswith("env"):
-            assert exec_cmd[1].startswith("PATH=")
-            assert str(tmp_path / ".venv") in exec_cmd[1]
-            assert str(tmp_path / "node_modules/.bin") in exec_cmd[1]
-            assert list(exec_cmd[2:]) == list(orig_cmd)
-        else:
-            assert list(exec_cmd) == list(orig_cmd)
+    assert executed == expected_cmds
     setup = mode in {"setup", "oserror"}
     assert collection.failed is (mode in {"exit", "timeout", "oversized"})
     assert (collection.setup_error is not None) is setup
@@ -1726,32 +1779,37 @@ def test_concurrent_audit_collection_detached_inputs_and_failure_semantics(
         digest(f"synthetic-{index}".encode()) for index in range(1, len(collection.results) + 1)
     ]
     assert all("stdout" not in result and "stderr" not in result for result in collection.results)
-    assert not list(tmp_path.iterdir())  # Collector cannot persist/register evidence.
+    assert all(result["execution_backend"] == "docker-sandbox" for result in collection.results)
+    assert all(result["image_policy_digest"] == admission.policy_sha256 for result in collection.results)
+    assert not list(request.cwd.glob("*.json"))
 
 
 def test_concurrent_audit_transient_output_isolated_from_request_evidence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from tools.orchestrator.core import VerificationRequest
-    from tools.orchestrator.runtime import ProcessResult
-    from tools.orchestrator.workflow import collect_verification
+    from tools.orchestrator.runtime import DockerVerificationSandbox, ProcessResult
+    from tools.orchestrator.workflow import collect_verification_admitted
 
     commands = (("python", "-m", "pytest"),)
-    request = VerificationRequest(
-        tmp_path,
-        commands,
-        None,
-        FrozenEvidenceIdentity.freeze("T100", "b" * 64, "feature/test", "b" * 64, commands),
+    request, source, binding, admission, sandbox = _t090_synthetic_admitted_collection(
+        tmp_path, commands
     )
+    tmpfs = tmp_path / "synthetic-container-tmpfs"
 
-    def executing(command: list[str], cwd: Path, *, timeout: int | None = None) -> ProcessResult:
-        assert cwd == tmp_path and timeout is None
-        cache_dir = cwd / ".pytest_cache"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        (cache_dir / "transient").write_text("transient pytest cache content")
+    def executing(
+        self: DockerVerificationSandbox,
+        command: list[str],
+        workspace: Path,
+        *,
+        expected_source_digest: str | None = None,
+    ) -> ProcessResult:
+        assert workspace == request.cwd
+        assert expected_source_digest == binding.docker_source_digest
+        tmpfs.mkdir()
+        (tmpfs / "transient").write_text("isolated pytest cache content")
         return ProcessResult(
             command=tuple(command),
-            cwd=str(cwd),
+            cwd=str(workspace),
             started_at="start",
             ended_at="end",
             exit_code=0,
@@ -1761,13 +1819,20 @@ def test_concurrent_audit_transient_output_isolated_from_request_evidence(
             oversized=False,
         )
 
-    monkeypatch.setattr("tools.orchestrator.workflow.execute", executing)
-    collection = collect_verification(request)
-    assert not collection.failed
+    monkeypatch.setattr(DockerVerificationSandbox, "run", executing)
+    collection = collect_verification_admitted(
+        request,
+        source_worktree=source,
+        binding=binding,
+        image_admission=admission,
+        sandbox=sandbox,
+    )
+    assert not collection.failed and collection.setup_error is None
     assert len(collection.results) == 1
     assert "transient" not in json.dumps(collection.results[0])
     assert ".pytest_cache" not in json.dumps(collection.results[0])
-    assert (tmp_path / ".pytest_cache/transient").is_file()
+    assert (tmpfs / "transient").is_file()
+    assert not (request.cwd / ".pytest_cache").exists()
 
 
 def test_concurrent_audit_toolchain_backlink_validation_rules(tmp_path: Path) -> None:
