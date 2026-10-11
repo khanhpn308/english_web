@@ -1,3 +1,20 @@
+## 11/10/2026 — T090 R6-B3 Docker-only authoritative verification candidate
+
+- Removed direct Host execution from `collect_verification()` and routed the
+  authoritative baseline/integration checks, candidate re-verification and
+  concurrent audit preparation through signed Host image admission and sealed
+  `DockerVerificationSandbox` workspaces; no retry/fallback to Host commands.
+- Added source-HEAD-aware private verifier clones without `.venv`/`node_modules`,
+  repeated byte/source attestation, external Host policy inputs and security
+  BLOCKED status for rejected admission. Cleared legacy `npm ci` from default
+  setup: all application dependencies must be preprovisioned in a trusted image.
+- Added explicit synthetic unit-test adapter for inherited functional tests
+  and separate Docker-routing/missing-admission negative regressions. Historical
+  synthetic tests are not real provider or OS isolation proof.
+- Kept `infra/verification/image-policy.json` `approved:false`, PR #9 Draft,
+  Worker CLI fail-closed and `main` unchanged. Candidate awaiting final CI,
+  independent signed operator approval and live on-host isolation proof.
+
 ## 11/10/2026 — T090 supply-chain pinned-CLI TOCTOU and hash-lock hardening
 
 - Verified GitHub attestation CLI bytes are now copied to a private, SHA-256-rechecked executable for both provenance and SBOM checks; the original mutable path is not executed after hashing. Added an adversarial replacement test.
