@@ -5,6 +5,7 @@ import re
 import shlex
 import shutil
 import sys
+from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Literal, TypeVar
 from uuid import uuid4
@@ -46,6 +47,7 @@ from tools.orchestrator.skills import SkillManifest, SkillReference
 from tools.orchestrator.workflow import Pipeline
 
 Output = TypeVar("Output", bound=BaseModel)
+_PRODUCTION_DOCKER_WORKSPACE = Pipeline.docker_verification_workspace
 
 
 class HistoricalArtifact(BaseModel):
@@ -312,9 +314,23 @@ python -m pytest test_app.py -q
 
     monkeypatch.setattr(Pipeline, "_verification_authority", synthetic_authority)
     monkeypatch.setattr(Pipeline, "_collect_docker_verification", synthetic_collection)
-    monkeypatch.setattr(
-        Pipeline, "docker_verification_workspace", Pipeline.verification_workspace
-    )
+    def synthetic_workspace(
+        self: Pipeline,
+        working: Path,
+        snapshot: str,
+        base_sha: str,
+        task_id: str,
+        run_id: str,
+    ) -> AbstractContextManager[tuple[Path, Git]]:
+        if Git(working).sha() != base_sha:
+            return _PRODUCTION_DOCKER_WORKSPACE(
+                self, working, snapshot, base_sha, task_id, run_id
+            )
+        return Pipeline.verification_workspace(
+            self, working, snapshot, base_sha, task_id, run_id
+        )
+
+    monkeypatch.setattr(Pipeline, "docker_verification_workspace", synthetic_workspace)
     return pipeline, source, workgit.snapshot(source.base_sha)
 
 
