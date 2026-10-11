@@ -58,7 +58,7 @@
 - [x] [T049](t049-writing-feedback-api.md): Writing feedback API và history retry — DONE (coding-only, PR #14 merged `8a725344`; `FINAL_VERIFICATION_DEFERRED`; generated OpenAPI/DTO synchronization, regression/security and release acceptance deferred).
 - [x] [T051](t051-quiz-result-feedback-ui.md): Submit/result và writing feedback UI — DONE (coding-only, PR #16 merged `c2b0a7b`; `FINAL_VERIFICATION_DEFERRED`).
 - [x] [T037](t037-dashboard-formulas.md): Dashboard summary API và streak formulas — `DONE (CODING_ONLY)`; H1/R1 source, API contract and T017 generated DTOs integrated on `main`; `FINAL_VERIFICATION_DEFERRED` by owner.
-- [ ] [T046](t046-metrics-alerts-runbooks.md): Local RED metrics và operational Status API — CODE_IMPLEMENTED_UNVERIFIED; owner-approved status contract, read-only consent, HTTP 5xx window and bridge/sync/SQLite metrics implemented; OpenAPI/DTO generated; verification deferred by owner; not DONE.
+- [x] [T046](t046-metrics-alerts-runbooks.md): Local RED metrics và operational Status API — `DONE (CODING_ONLY)`; PR #18 merged (`2c4b18e`), typed Status API/RED metrics and T017 generated contracts integrated; `FINAL_VERIFICATION_DEFERRED` by owner.
 - [ ] [T060](t060-status-ui.md): Operational Status screen và consent integration
 - [x] [T038](t038-dashboard-ui.md): Learning Dashboard UI — `DONE (CODING_ONLY)`; PR #17 merged (`5e97b2a`); `FINAL_VERIFICATION_DEFERRED` by owner.
 - [ ] [T061](t061-alerts-runbooks.md): Local symptom alerts và runbook links
