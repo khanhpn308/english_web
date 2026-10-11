@@ -1,3 +1,9 @@
+## 12/10/2026 - T044 merged (coding only)
+
+- PR #22 merged into main, commit 4418434f528cca94883bab47d3b7727f284997bd. T044 is DONE (CODING_ONLY); FINAL_VERIFICATION_DEFERRED.
+- Static contract tooling integrated without running audit, tests, build, lint or typecheck. Report 003 is an implementation checkpoint, not a passing audit.
+- Audit execution, focused tests, pinned generator reproducibility, CP22 and final release acceptance remain pending.
+
 ## 12/10/2026 - T044 contract tooling coding-only checkpoint (Asia/Bangkok)
 
 - Added `scripts/audit_contract.py` with AST-only production route/model extraction, documentation/OpenAPI/DTO drift checks, represented examples and approved bounds, redacted privacy categories, FR/AC/task/test/evidence indices and deterministic Markdown/JSON reporting. Default mode writes stdout; explicit report output is confined to `docs/reviews/contract-conformance-003.md`. No application import/construction, provider call, source repair or new dependency.
