@@ -1,3 +1,9 @@
+## 11/10/2026 - T060 coding-only completion on main (Asia/Bangkok)
+
+- T060 Operational Status UI committed directly to `main` at `e76f6e4`, adding `StatusPage.tsx`, integrating the actual `/status` route through `AppShell.tsx`, and recording typed readiness/offline/consent/metrics presentation and visibility-bound 30-second polling in the implementation handoff.
+- Owner coding-first policy records T060 as `DONE (CODING_ONLY)` in its task card and checklist; `FINAL_VERIFICATION_DEFERRED` pending project-wide verification.
+- No unit/E2E tests, builds, lint, typecheck, runtime validation, security scan or audit were executed as part of this closure. T061 and T039 are now unlocked for implementation, conditional on task-specific prerequisites and fresh worktree sync.
+
 ## 11/10/2026 - T060 Operational Status screen và consent integration implemented (Asia/Bangkok)
 
 - Implemented `StatusPage` in `frontend/src/features/status/StatusPage.tsx` consuming the documented `StatusSummary` contract from `GET /api/v1/status`.
