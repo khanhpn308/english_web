@@ -392,6 +392,6 @@ describe('T033 server-authoritative flashcard review', () => {
     readDetail = async () => response({ ...detail(), cambridgeUrl: url }); await mount();
     expect(container.querySelector('a[target="_blank"]')).toBeNull(); await click('Lật thẻ');
     const link = container.querySelector<HTMLAnchorElement>('a[target="_blank"]')!;
-    expect(link.href).toBe(url); expect(link.rel).toBe('noopener noreferrer'); expect(link.referrerPolicy).toBe('no-referrer');
+    expect(link.href).toBe(url); expect(link.rel).toBe('noopener noreferrer'); expect(link.getAttribute('referrerpolicy')).toBe('no-referrer');
   });
 });

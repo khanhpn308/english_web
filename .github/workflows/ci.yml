@@ -71,6 +71,11 @@ jobs:
           echo "GITLEAKS_BIN=$RUNNER_TEMP/bin/gitleaks" >> "$GITHUB_ENV"
           echo "OSV_SCANNER_BIN=$RUNNER_TEMP/bin/osv-scanner" >> "$GITHUB_ENV"
           echo "SEMGREP_BIN=$RUNNER_TEMP/semgrep-venv/bin/semgrep" >> "$GITHUB_ENV"
+      - name: Install locked Playwright Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/playwright install chromium
       - name: API contract tests
         run: npm run test:contract
       - name: Core CI gates (lint, types, tests, security, architecture, coverage)

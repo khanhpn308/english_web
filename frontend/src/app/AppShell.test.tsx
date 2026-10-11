@@ -101,6 +101,11 @@ describe('Route Map & v1 Screens', () => {
       expect(html).toContain('Quay lại kết quả tìm kiếm');
       expect(html).toContain('Đang tải chi tiết');
       expect(html).not.toContain('Tính năng đang được xây dựng (chưa khả dụng)');
+    } else if (path === '/quiz/new') {
+      expect(html).toContain('for="noteDate"');
+      expect(html).toContain('id="quiz-status"');
+      expect(html).toContain('Tạo Bài Kiểm Tra Bằng AI');
+      expect(html).not.toContain('Tính năng đang được xây dựng (chưa khả dụng)');
     } else {
       // Unimplemented routes still explain their availability.
       expect(html).toContain('Tính năng đang được xây dựng (chưa khả dụng)');
