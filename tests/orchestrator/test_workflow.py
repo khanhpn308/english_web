@@ -4515,6 +4515,37 @@ def test_t090_pipeline_verify_blocks_missing_operator_policy_before_execution(
     assert not state.artifacts
 
 
+def test_t090_start_blocks_before_dispatch_without_signed_image_authority(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(Pipeline, "_verification_authority", _PRODUCTION_IMAGE_AUTHORITY)
+    for key in (
+        "T090_IMAGE_POLICY_PATH",
+        "T090_IMAGE_POLICY_SHA256",
+        "T090_IMAGE_APPROVAL_SIGNATURE_PATH",
+        "T090_IMAGE_TRUSTED_PUBLIC_KEY_PATH",
+        "T090_IMAGE_TRUSTED_PUBLIC_KEY_SHA256",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    agents = FakeAgents()
+    result = Pipeline(repository, configuration(integrate=False), agents).start("T100")
+    assert result.state == State.BLOCKED
+    assert "T090 SANDBOX_BLOCKED" in (result.last_error or "")
+    assert agents.calls == []
+
+
+def test_t090_inherited_npm_ci_setup_cannot_fall_back_to_host(
+    repository: Path
+) -> None:
+    agents = FakeAgents()
+    config = configuration(integrate=False)
+    config.setup_commands = [["npm", "ci"]]
+    result = Pipeline(repository, config, agents).start("T100")
+    assert result.state == State.BLOCKED
+    assert "preprovisioned in trusted image" in (result.last_error or "")
+    assert agents.calls == []
+
+
 def test_t090_pipeline_verify_calls_attested_docker_collector_not_legacy_host(
     repository: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
