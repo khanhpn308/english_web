@@ -32,7 +32,6 @@ def test_t090_supply_chain_candidate_lock_does_not_claim_version_pin_is_hash(
     assert inspect_candidate_locks(requirements, npm)["python_artifact_hashes_pinned"]
 
 
-
 def test_t090_hash_lock_parser_rejects_pip_option_injection(tmp_path: Path) -> None:
     requirements = tmp_path / "requirements.lock"
     npm = tmp_path / "package-lock.json"
