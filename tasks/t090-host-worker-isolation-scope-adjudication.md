@@ -386,3 +386,30 @@ Run 37961597747 created a real GHCR candidate image, SPDX SBOM (1,177 observed c
 - Tightened `python_lock_is_hash_complete()`: the entire requirement must be an exact pinned version followed solely by one or more SHA-256 hash flags. Reject pip option injection, extra index/host flags and unexpected trailing tokens; synthetic negative tests added.
 - Host image candidate build initially failed strict Ruff format on newly changed lines. Formatting has been corrected without suppressing any quality gate. The exact final commit must still complete Host and image CI before claiming checks green.
 - **No release promotion:** `infra/verification/image-policy.json` is still `approved: false`; PR #9 stays Draft. Independent Host trust roots, registry/SBOM/OSV approval, real worker-denial attestation, and migration of the two active Host verification callsites to admitted Docker-only execution are still required. Do not mark T090 DONE or T089 accepted based on the new tests.
+
+### R6-B3 production callsite migration candidate (2026-10-11)
+
+- Retired the direct Host `collect_verification()` implementation. Active
+  `Pipeline.verify()`, `reverify_candidate()`, and concurrent verification
+  now request signed external Host image authority, freeze Git evidence and
+  run checks exclusively via `collect_verification_admitted()` /
+  `DockerVerificationSandbox`. Denials are `T090 SANDBOX_BLOCKED` without
+  Host fallback; image/tool policy is not loaded from the repository.
+- Private verifier clones check out the source HEAD (supporting post-merge
+  candidates), materialize only frozen code changes, and reject inherited
+  `.venv` / `node_modules`. Source Git snapshot and Docker digest are
+  attested before dispatch and across commands. Host retains trusted Git
+  control-plane operations but no longer runs configured application tests.
+- `orchestrator.yaml` removes `npm ci` setup; older config declarations are
+  rejected until migrated, not executed on Host or substituted with an
+  untrusted network install. Missing external signed admission blocks normal
+  task progression; the candidate policy is intentionally unapproved.
+- Functional tests include an explicitly injected **synthetic test-only**
+  adapter for historical deterministic pipeline assertions. New negative
+  tests exercise the production missing-policy refusal and the disabled
+  legacy collector; a positive synthetic Docker path tests sealed binding.
+  These mocks do NOT attest live Docker or AGY/Codex command denial.
+- Status: **IMPLEMENTED_CANDIDATE_UNVERIFIED**, pending final-source-sha full
+  CI, a genuine independent operator image admission, live Docker-only source
+  and no-bypass tests on the deployed OS, and live AGY/Codex Worker tool-denial
+  probes. T090 remains IN_PROGRESS, PR #9 remains Draft and T089 reopened.
