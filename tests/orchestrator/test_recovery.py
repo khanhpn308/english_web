@@ -167,7 +167,7 @@ python -m pytest test_app.py -q
             name: Role(provider="codex", executable="unused-local-fixture")
             for name in ("prompt_engineer", "worker", "auditor", "integrator")
         },
-        setup_commands=[["npm", "ci"]],
+        setup_commands=[],
         verification=[["git", "diff", "--check"]],
         timeout_seconds=30,
         integrate=False,
@@ -257,6 +257,64 @@ python -m pytest test_app.py -q
         return execute(command, cwd, timeout=30)
 
     monkeypatch.setattr(workflow, "execute", local_setup)
+    # Legacy synthetic recovery fixtures predate R6-B3. Their functional
+    # verification is deliberately emulated in tests, not on the production
+    # execution path, which now rejects missing signed Docker admission.
+    from tools.orchestrator.core import (
+        VerificationCollection,
+        VerificationRequest,
+        command_declaration_digest,
+    )
+    from tools.orchestrator.runtime import (
+        DockerVerificationPolicy,
+        DockerVerificationSandbox,
+        VerificationImageAdmission,
+    )
+
+    synthetic_image = "example.invalid/recovery-synthetic@sha256:" + "a" * 64
+
+    def synthetic_authority(
+        self: Pipeline,
+    ) -> tuple[VerificationImageAdmission, DockerVerificationSandbox]:
+        return (
+            VerificationImageAdmission(
+                synthetic_image, "b" * 64, "sha256:" + "c" * 64, "sha256:" + "d" * 64
+            ),
+            DockerVerificationSandbox(
+                DockerVerificationPolicy(synthetic_image, self.worktrees)
+            ),
+        )
+
+    def synthetic_collection(
+        self: Pipeline,
+        request: VerificationRequest,
+        source_worktree: Path,
+        snapshot: str,
+        admission: VerificationImageAdmission,
+        sandbox: DockerVerificationSandbox,
+    ) -> VerificationCollection:
+        assert Git(source_worktree).snapshot(request.identity.base_sha) == snapshot
+        assert admission.image == sandbox.policy.image
+        reports: list[dict[str, object]] = []
+        for index, command in enumerate(request.commands):
+            executed = workflow.execute(
+                workflow.verification_command_argv(request.cwd, list(command)),
+                request.cwd,
+                timeout=request.timeout,
+            )
+            meta = executed.metadata()
+            meta["declaration_digest"] = command_declaration_digest(command)
+            meta["execution_backend"] = "synthetic-recovery-fixture-not-docker"
+            reports.append({**meta, "command_index": index})
+            if executed.exit_code or executed.timed_out or executed.oversized:
+                return VerificationCollection(request.identity, tuple(reports), failed=True)
+        return VerificationCollection(request.identity, tuple(reports))
+
+    monkeypatch.setattr(Pipeline, "_verification_authority", synthetic_authority)
+    monkeypatch.setattr(Pipeline, "_collect_docker_verification", synthetic_collection)
+    monkeypatch.setattr(
+        Pipeline, "docker_verification_workspace", Pipeline.verification_workspace
+    )
     return pipeline, source, workgit.snapshot(source.base_sha)
 
 
