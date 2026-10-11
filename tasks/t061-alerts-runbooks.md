@@ -2,7 +2,7 @@
 
 **Task ID:** `T061`  
 **Title:** Local symptom alerts và runbook links  
-**Status:** `CODE_IMPLEMENTED_UNVERIFIED` (11/10/2026; owner-approved R1/R2 production integration; all verification deferred)  
+**Status:** `DONE (CODING_ONLY)` — `FINAL_VERIFICATION_DEFERRED` (11/10/2026; owner-approved PR #21 merge; runtime/performance verification pending)  
 **Goal:** Đánh giá symptom windows và hiển thị alert có hướng xử lý đã kiểm chứng.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -168,3 +168,10 @@ Historical initial narrow-scope handoff, superseded by the R1/R2 resumption belo
 - Detailed producer paths, contract/status behavior, tool limitations and pending
   negative/privacy/accessibility/Windows checks are in the observability evidence.
   All acceptance checkboxes and CP18 remain pending; T061 is not DONE.
+
+## Owner-approved T061 coding-only closure (11/10/2026)
+
+- Owner approved merging PR #21 into `main` in merge commit `24e916a76e91850cc27d288e90dab2f48bbcc9dd`. This closes source implementation as **`DONE (CODING_ONLY)` — `FINAL_VERIFICATION_DEFERRED`**. The preceding BLOCKED_SCOPE/CODE_IMPLEMENTED_UNVERIFIED notes are historical worker-stage handoffs, not the current task status.
+- Merged code connects the bounded in-process alert engine to available HTTP/bridge/SQLite/source observations and exposes typed alerts through the existing Status API and Status UI with fixed-ID same-origin runbook links. Seven rule definitions exist; **search p95** intentionally remains `NO_DATA` because the approved benchmark-qualified producer is absent. The external two-failed-health-probe detector remains with T039/Windows launcher, not the stopped backend.
+- The worker regenerated OpenAPI and TypeScript DTOs using available cached `openapi-typescript 7.13.0`, while package.json declares `7.4.2`. Exact pinned-toolchain regeneration and reproducibility evidence remain outstanding; this closure does not assert generated-contract verification passed.
+- No tests, builds, lint, typechecks, benchmark execution, runtime/Windows checks, security scans or audits were performed for coding-only integration. Existing acceptance checkboxes remain **unchecked** and CP18/final end-to-end verification remains pending. Production operational safety and complete alert accuracy are not release-verified.
