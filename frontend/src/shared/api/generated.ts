@@ -40,6 +40,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Dashboard */
+        get: operations["get_dashboard_api_v1_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -162,6 +179,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quiz-questions/{questionId}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Feedback */
+        get: operations["get_feedback_api_v1_quiz_questions__questionId__feedback_get"];
+        put?: never;
+        /** Post Feedback */
+        post: operations["post_feedback_api_v1_quiz_questions__questionId__feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/review-queue": {
         parameters: {
             query?: never;
@@ -188,6 +223,23 @@ export interface paths {
         };
         /** Get Sources */
         get: operations["get_sources_api_v1_sources_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Status */
+        get: operations["get_status_api_v1_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -534,6 +586,74 @@ export interface components {
              */
             reason: "STARTUP" | "MANUAL" | "WATCHER";
         };
+        /** Criterion */
+        Criterion: {
+            /** Commentvi */
+            commentVi: string;
+            /**
+             * Criterion
+             * @enum {string}
+             */
+            criterion: "TARGET_WORD_USAGE" | "GRAMMAR" | "CLARITY";
+        };
+        /** DashboardError */
+        DashboardError: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "INVALID_QUERY" | "VALIDATION_ERROR" | "SESSION_REQUIRED" | "SESSION_INVALID" | "ORIGIN_FORBIDDEN" | "CONFIGURATION_REQUIRED" | "STORAGE_BUSY" | "INTERNAL_ERROR";
+            /** Message */
+            message: string;
+            /** Requestid */
+            requestId: string;
+        };
+        /** DashboardErrorResponse */
+        DashboardErrorResponse: {
+            error: components["schemas"]["DashboardError"];
+        };
+        /** DashboardObjectiveAccuracy */
+        DashboardObjectiveAccuracy: {
+            cloze: components["schemas"]["DashboardObjectiveScore"];
+            mcq: components["schemas"]["DashboardObjectiveScore"];
+        };
+        /** DashboardObjectiveScore */
+        DashboardObjectiveScore: {
+            /** Accuracy */
+            accuracy: number | null;
+            /** Attempted */
+            attempted: number;
+            /** Correct */
+            correct: number;
+            /** Total */
+            total: number;
+        };
+        /** DashboardStreak */
+        DashboardStreak: {
+            /**
+             * Asof
+             * Format: date
+             */
+            asOf: string;
+            /** Currentdays */
+            currentDays: number | null;
+        };
+        /** DashboardSummary */
+        DashboardSummary: {
+            /** Duecards */
+            dueCards: number;
+            flashcardSelfRating: components["schemas"]["FlashcardSelfRating"];
+            objectiveAccuracy: components["schemas"]["DashboardObjectiveAccuracy"];
+            streak: components["schemas"]["DashboardStreak"];
+            writingSelfScore: components["schemas"]["DashboardWritingSelfScore"];
+        };
+        /** DashboardWritingSelfScore */
+        DashboardWritingSelfScore: {
+            /** Average */
+            average: number | null;
+            /** Scored */
+            scored: number;
+        };
         /** EditExample */
         EditExample: {
             /** English */
@@ -596,6 +716,69 @@ export interface components {
             /** Vietnamese */
             vietnamese: string;
         };
+        /** Feedback */
+        Feedback: {
+            /** Answerrevision */
+            answerRevision: number;
+            /** Attemptid */
+            attemptId: string;
+            /** Createdat */
+            createdAt: string;
+            /** Criteria */
+            criteria?: components["schemas"]["Criterion"][] | null;
+            /** Errorcategory */
+            errorCategory?: string | null;
+            /** Feedbackid */
+            feedbackId: string;
+            /**
+             * Model
+             * @constant
+             */
+            model: "gemini-3.8-flash-high";
+            /** Operationid */
+            operationId: string;
+            /**
+             * Promptversion
+             * @constant
+             */
+            promptVersion: "writing-feedback-v1";
+            /**
+             * Provider
+             * @constant
+             */
+            provider: "Antigravity/Google";
+            /** Questionid */
+            questionId: string;
+            /** Retryofoperationid */
+            retryOfOperationId?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "REQUESTED" | "VALIDATED" | "FAILED";
+            /** Summaryvi */
+            summaryVi?: string | null;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** FeedbackPage */
+        FeedbackPage: {
+            /** Data */
+            data: components["schemas"]["Feedback"][];
+            pagination: components["schemas"]["PaginationView"];
+        };
+        /** FeedbackRequest */
+        FeedbackRequest: {
+            /** Answerrevision */
+            answerRevision: number;
+            /** Retryofoperationid */
+            retryOfOperationId?: string | null;
+            /**
+             * Rubricversion
+             * @constant
+             */
+            rubricVersion: "writing-rubric-v1";
+        };
         /** FieldError */
         FieldError: {
             /** Field */
@@ -612,6 +795,13 @@ export interface components {
              * @enum {string}
              */
             kind: "FIELD_ERRORS";
+        };
+        /** FlashcardSelfRating */
+        FlashcardSelfRating: {
+            /** Averagebucket */
+            averageBucket: ("AGAIN" | "HARD" | "GOOD" | "EASY") | null;
+            /** Count */
+            count: number;
         };
         /** GrantAiConsent */
         GrantAiConsent: {
@@ -636,6 +826,19 @@ export interface components {
             storageStatus: components["schemas"]["StorageStatus"];
             /** Version */
             version: string;
+        };
+        /** LocalMetricsSummary */
+        LocalMetricsSummary: {
+            /** P50Ms */
+            p50Ms: number | null;
+            /** P95Ms */
+            p95Ms: number | null;
+            /** P99Ms */
+            p99Ms: number | null;
+            /** Requesterrorrate */
+            requestErrorRate: number | null;
+            /** Sampledat */
+            sampledAt: string | null;
         };
         /** LookupExample */
         LookupExample: {
@@ -811,6 +1014,34 @@ export interface components {
         ObjectiveScores: {
             cloze: components["schemas"]["ObjectiveScore"];
             mcq: components["schemas"]["ObjectiveScore"];
+        };
+        /** OfflineCapabilities */
+        OfflineCapabilities: {
+            /** Audio */
+            audio: boolean | null;
+            /** Createdquiz */
+            createdQuiz: boolean | null;
+            /** Dashboard */
+            dashboard: boolean | null;
+            /**
+             * Feedback
+             * @constant
+             */
+            feedback: false;
+            /**
+             * Lookup
+             * @constant
+             */
+            lookup: false;
+            /**
+             * Newquiz
+             * @constant
+             */
+            newQuiz: false;
+            /** Review */
+            review: boolean | null;
+            /** Search */
+            search: boolean | null;
         };
         /** Operation */
         Operation: {
@@ -1273,6 +1504,15 @@ export interface components {
              */
             resourceType: "SOURCE";
         };
+        /** SourceCounts */
+        SourceCounts: {
+            /** Invalid */
+            INVALID: number;
+            /** Missing */
+            MISSING: number;
+            /** Valid */
+            VALID: number;
+        };
         /** SourceFieldDetails */
         SourceFieldDetails: {
             /** Fields */
@@ -1345,6 +1585,65 @@ export interface components {
              * @enum {string}
              */
             operationKind: "SAVE" | "EDIT";
+        };
+        /** StatusError */
+        StatusError: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "VALIDATION_ERROR" | "SESSION_REQUIRED" | "SESSION_INVALID" | "ORIGIN_FORBIDDEN" | "PAYLOAD_TOO_LARGE" | "CONFIGURATION_REQUIRED" | "INTERNAL_ERROR";
+            /** Message */
+            message: string;
+            /** Requestid */
+            requestId: string;
+        };
+        /** StatusErrorResponse */
+        StatusErrorResponse: {
+            error: components["schemas"]["StatusError"];
+        };
+        /** StatusSummary */
+        StatusSummary: {
+            /** Appversion */
+            appVersion: string;
+            bridgeStatus: components["schemas"]["BridgeStatus"];
+            /** Consentstate */
+            consentState: ("NOT_GRANTED" | "GRANTED" | "REVOKED" | "STALE") | "UNKNOWN";
+            /** Lastintegritycheckat */
+            lastIntegrityCheckAt: string | null;
+            /** Lastsyncat */
+            lastSyncAt: string | null;
+            /** Lastsyncdurationms */
+            lastSyncDurationMs: number | null;
+            localMetrics: components["schemas"]["LocalMetricsSummary"];
+            offlineCapabilities: components["schemas"]["OfflineCapabilities"];
+            /** Policyversion */
+            policyVersion: string | null;
+            /**
+             * Readiness
+             * @enum {string}
+             */
+            readiness: "NOT_READY" | "SYNCING" | "READY" | "DEGRADED" | "UNKNOWN";
+            /** Requestid */
+            requestId: string;
+            /** Schemarevision */
+            schemaRevision: string | null;
+            /**
+             * Searchindexstatus
+             * @enum {string}
+             */
+            searchIndexStatus: "READY" | "NOT_READY" | "UNAVAILABLE" | "UNKNOWN";
+            /** Selectedmodelfamily */
+            selectedModelFamily: "gemini-3.8-flash-high" | null;
+            sourceCounts: components["schemas"]["SourceCounts"] | null;
+            /** Sqlitebusycount */
+            sqliteBusyCount: number | null;
+            /** Sqlitefilesizebytes */
+            sqliteFileSizeBytes: number | null;
+            /** Storagestatus */
+            storageStatus: components["schemas"]["StorageStatus"] | ("BUSY" | "READ_ONLY" | "INTEGRITY_FAILED" | "SCHEMA_MISMATCH" | "UNAVAILABLE" | "UNKNOWN");
+            /** Uptimeseconds */
+            uptimeSeconds: number | null;
         };
         /**
          * StorageStatus
@@ -2006,6 +2305,119 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+        };
+    };
+    get_dashboard_api_v1_dashboard_get: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardErrorResponse"];
                 };
             };
         };
@@ -2806,6 +3218,241 @@ export interface operations {
             };
         };
     };
+    get_feedback_api_v1_quiz_questions__questionId__feedback_get: {
+        parameters: {
+            query?: {
+                attemptId?: string | null;
+                questionId?: string | null;
+                pageSize?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackPage"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+        };
+    };
+    post_feedback_api_v1_quiz_questions__questionId__feedback_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Feedback"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+        };
+    };
     get_queue_api_v1_review_queue_get: {
         parameters: {
             query?: {
@@ -3037,6 +3684,116 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_status_api_v1_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusSummary"];
+                };
+            };
+            /** @description Error Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusErrorResponse"];
                 };
             };
         };

@@ -1,11 +1,13 @@
 """HTTP correlation surrounding the complete production ASGI middleware stack."""
 
+import re
 from time import monotonic
 
 from backend.app.platform.telemetry import (
     EventFields,
     Telemetry,
     _duration,
+    operation_context,
     request_context,
     validated_request_id,
 )
@@ -41,10 +43,24 @@ class TelemetryMiddleware:
             nonlocal status
             if message["type"] == "http.response.start":
                 status = message["status"]
-                MutableHeaders(scope=message)["X-Request-ID"] = identifier
+                headers = MutableHeaders(scope=message)
+                headers["X-Request-ID"] = identifier
+                if scope.get("path") == "/api/v1/status":
+                    headers["Cache-Control"] = "no-store"
             await send(message)
 
-        with request_context(identifier), self.telemetry.span(
+        path = scope.get("path", "")
+        operation = (
+            "lookup" if path == "/api/v1/lookups"
+            else "quiz" if path == "/api/v1/quiz-attempts"
+            else "feedback" if re.fullmatch(r"/api/v1/quiz-questions/[^/]+/feedback", path)
+            else "sync" if path == "/api/v1/sync-runs"
+            else "search" if path == "/api/v1/word-forms" and scope.get("method") == "GET"
+            else "review" if path == "/api/v1/review-queue" or re.fullmatch(r"/api/v1/cards/[^/]+/reviews", path)
+            else "save" if path.startswith("/api/v1/word-forms")
+            else "unknown"
+        )
+        with request_context(identifier), operation_context(operation), self.telemetry.span(
             "http_request", request_id=identifier,
         ):
             try:
@@ -61,8 +77,10 @@ class TelemetryMiddleware:
                     status="failure" if failed or status >= 400 else "success",
                 )
                 try:
-                    duration = _duration(start) if start is not None else None
-                    fields = EventFields(fields.status, fields.route, duration)
+                    duration = _duration(start, strict=True) if start is not None else None
+                    fields = EventFields(
+                        fields.status, fields.route, duration, f"{status // 100}xx", scope.get("method"),
+                    )
                     self.telemetry.emit(
                         "http_request_failed" if failed or status >= 400
                         else "http_request_completed", fields=fields,
