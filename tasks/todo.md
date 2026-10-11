@@ -33,7 +33,7 @@
 - [x] [T009](t009-lookup-ui-vertical-slice.md): Lookup UI gọi API thật qua client — DONE (merged `aca6afc04`; final acceptance pending)
 - [x] [T010](t010-error-handling-recovery.md): Typed UI recovery cho common error codes — DONE (merged `aeaaa322e`; final acceptance pending)
 - [x] [T011](t011-observability-instrumentation.md): Local JSON logs, correlation và span boundary
-- [ ] [T012](t012-ci-pipeline.md): CI lõi cho build và tests
+- [x] [T012](t012-ci-pipeline.md): CI lõi cho build và tests — DONE (PR #13 merged `9a6e548`; coding-only, final system acceptance deferred; known CI failures retained)
 - [x] [T020](t020-markdown-parser.md): Lossless Markdown parser/serializer
 - [x] [T026](t026-search-projection.md): Vietnamese normalized n-gram projection
 - [x] [T031](t031-review-schema.md): Review/card schema và deterministic SRS — DONE: 60 SRS cases, 226 targeted/424 full Python tests; owner-authorized legacy-head maintenance preserves lineage/history; coverage, architecture, security and check:task all exit 0.
@@ -53,9 +53,9 @@
 - [x] [T035](t035-quiz-api.md): Quiz creation và snapshot retrieval API — DONE (merged `877f44813`; final acceptance pending)
 - [x] [T036](t036-quiz-ui.md): Quiz builder UI dùng generation API
 - [x] [T047](t047-quiz-autosave-api.md): Quiz answer draft API với revision
-- [ ] [T050](t050-quiz-runner-ui.md): Quiz runner và revision-aware autosave UI
-- [ ] [T048](t048-quiz-submit-api.md): Quiz submission và atomic SRS handoff. Implemented in standalone worktree; acceptance BLOCKED_VERIFICATION, see task report; no DONE authorization.
-- [ ] [T049](t049-writing-feedback-api.md): Writing feedback API và history retry
+- [x] [T050](t050-quiz-runner-ui.md): Quiz runner và revision-aware autosave UI — DONE (PR #12 merged `c68540ff`; coding-only, release acceptance deferred; GitHub Actions #81 FAIL recorded).
+- [ ] [T048](t048-quiz-submit-api.md): Quiz submission và atomic SRS handoff — source IMPLEMENTED on branch; PR #15 pending coding-only merge; `FINAL_VERIFICATION_DEFERRED`.
+- [x] [T049](t049-writing-feedback-api.md): Writing feedback API và history retry — DONE (coding-only, PR #14 merged `8a725344`; `FINAL_VERIFICATION_DEFERRED`; generated OpenAPI/DTO synchronization, regression/security and release acceptance deferred).
 - [ ] [T051](t051-quiz-result-feedback-ui.md): Submit/result và writing feedback UI
 - [ ] [T037](t037-dashboard-formulas.md): Dashboard summary API và streak formulas
 - [ ] [T046](t046-metrics-alerts-runbooks.md): Local RED metrics và operational Status API

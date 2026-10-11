@@ -5,6 +5,36 @@
 - Regenerated only the owner-approved `contracts/openapi.json` and `frontend/src/shared/api/generated.ts` with T017's generator. Additions contain only the submission endpoint and request schema. T049 artifact reconciliation remains an integration action.
 - Recorded the standalone handoff in `tasks/t048-quiz-submit-api.md`, unchecked `tasks/todo.md` and `docs/reviews/t048-standalone-verification.md`. All 49 focused tests pass; the full Python suite returns 2,207 passed and 30 failed. Inherited repository-wide findings, native Windows checks and an unresolved full-run lookup deadline failure block acceptance. No unrelated fixes, suppressions, threshold changes, commit, merge, push or DONE action.
 
+## 11/10/2026 - T049 coding integrated; FINAL_VERIFICATION_DEFERRED
+
+- Merged T049 Writing Feedback API via [PR #14](https://github.com/khanhpn308/english_web/pull/14) at `8a72534499c556bc142bf0864e3e3ca6d3d68515`; preserved T012/T050 source and task-completion states on `main`.
+- Marked T049 `DONE` for **coding completion only**, per owner approval. Production feedback service/routes, append-only `0011_feedback` migration and existing synthetic test code are integrated. No new tests or audits were initiated for the merge.
+- `FINAL_VERIFICATION_DEFERRED`: generated OpenAPI/TypeScript DTO reconciliation, historical contract failures, 7 previously reported broad regression failures, remaining quality/security/coverage gates and Windows/real-provider acceptance remain open. Previously reported test outcomes are historical evidence, not final release PASS.
+
+## 11/10/2026 - T049 writing feedback implementation (Asia/Bangkok)
+
+- Implemented canonical-answer advisory feedback POST/GET, strict writing-feedback-v1 schema, durable paginated history and approved 0011 migration. Reused admission/consent/bridge and operation receipts; preserved learning data, explicit retry identity, UNKNOWN blocking, cancellation cleanup and the 30-second deadline.
+- Added production-factory fake-provider tests for schemas, failures, retries, concurrency, revocation, migration preservation, restart and score/history preservation. Recorded final review and exact verification classification in the task card. T049 stays TODO awaiting Host verification; generated contracts, inherited quality/security findings and historical head assertions require Host reconciliation. No commit, push, dependency installation or real inference.
+
+## 11/10/2026 - T049 standalone preflight and approved path correction (Asia/Bangkok)
+
+- Corrected `tasks/t049-writing-feedback-api.md` to allow `backend/migrations/versions/0011_feedback.py` after verifying single head `0010_quiz_answer_receipts` and its ancestry. Recorded exact baseline checks, scope conflicts and a BLOCKED_SCOPE handoff; T049 remains TODO.
+- Updated `tasks/todo.md` with the pending owner/Host action. The approved writing-feedback prompt/schema is absent, the existing T047 latest-head assertion conflicts with adding 0011, and unrelated baseline quality/security gates fail or lack tools. Application code, tests, migrations, generated files and learning data remain untouched; no commit, merge, push, install or inference.
+
+## 11/10/2026 - T012 coding integrated; release audit deferred
+
+- Merged T012 source into `main` via PR #13 at `9a6e548` after reviewing exactly seven changed files; retained T050 implementation on `main`.
+- Marked T012 `DONE` for **coding completion only**, following owner policy. The T012 card retains unresolved end-to-end acceptance criteria rather than falsely claiming CI success.
+- Focused Host evidence: actionlint PASS, 78 contract tests PASS, 21 Gitleaks unit tests PASS, portable real Gitleaks and synthetic working-tree/staged/history negative probes PASS.
+- Deferred failed GitHub Actions full-gate run `38114628839` (Ruff format, Python tests, frontend coverage/browser, architecture) and related issues to the final 90-task integration/audit cycle; no gates or security restrictions relaxed. Experimental verification PR #11 was not merged.
+
+## 10/10/2026 - T012: Core CI Pipeline implementation (Asia/Bangkok)
+
+- Status: `IMPLEMENTED`. Created `.github/workflows/ci.yml` restricting execution to `ubuntu-24.04`, locking third-party Actions to exact verified SHAs, and setting dependency cache policies.
+- Configured CI pipeline to run fast checks, frontend coverage, security gates (Gitleaks, OSV-Scanner, Semgrep pinned and isolated), API contract checks, and frontend build.
+- Updated `docs/toolchain.md` explicitly defining workflow triggers, gate ordering, execution environment constraints, fail-closed diagnostic policy, and limitations of CI evidence relative to Windows-native or provider runtime scenarios.
+- All artifact extractions are minimized and do not cache sensitive data (e.g. SQLite database or raw provider contents). No actual CI was invoked during this change, test results are PENDING host execution. Intentionally untouched existing workflow `.github/workflows/t089-host-ci.yml`, application source, lockfiles, and quality constraints.
+
 ## 09/10/2026 - T028 approved shell test extension and final source review (Asia/Bangkok)
 
 - Preserved the existing Search/detail implementation and the existing T028 `frontend/src/app/AppShell.tsx` delta. Updated `frontend/src/app/AppShell.test.tsx` and `frontend/tests/e2e/shell.spec.ts` under the owner-approved extension. Replaced obsolete Search/detail placeholder and raw-ID expectations with real UI/API assertions, retained placeholder Card/parameter coverage on the unimplemented quiz route, and selected the shell announcement independently from Search status messages.
