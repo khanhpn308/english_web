@@ -35,6 +35,7 @@ from backend.app.application.source_write import (
     _projection_values,
     _semantic_key,
 )
+from backend.app.dashboard.history import record_coverage
 from backend.app.markdown_sync.parser import ParsedDocument, parse_markdown
 from backend.app.review.models import ensure_card, reset_card_state
 from backend.app.vocabulary.models import SourceFile, WordForm
@@ -577,6 +578,7 @@ class SyncService:
                         "UPDATE operations SET result_ref=?, updated_at=? WHERE operation_id=?",
                         (initial_result_ref, started_at, op_id),
                     )
+                record_coverage(conn, "SYNC_STARTED", operation_id=op_id)
 
             sources_scanned = 0
             sources_invalid = 0
@@ -1187,6 +1189,7 @@ class SyncService:
                     ).all()
                     for row in active_journals:
                         _protected_journal_forms(row[0])
+                    record_coverage(connection, "SYNC_FINISHED", operation_id=op_id)
 
                 finished_at = _now()
                 current_agg_rev = self._get_aggregate_source_revision()
@@ -1243,6 +1246,7 @@ class SyncService:
                             "UPDATE operations SET result_ref=?, updated_at=? WHERE operation_id=?",
                             (failed_result_ref, finished_at, op_id),
                         )
+                        record_coverage(conn, "SYNC_FAILED", operation_id=op_id)
                     self.operation_ledger.record_failure(
                         op_id,
                         error_category="INTERNAL_ERROR",

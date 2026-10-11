@@ -1,3 +1,10 @@
+## 11/10/2026 - T037-H1 historical study ledger coding checkpoint, Asia/Bangkok
+
+- Added `backend/migrations/versions/0012_study_history.py` after source inspection of the sole existing head `0011_feedback`. One append-only ledger retains opening observations, source statuses/links, card schedules and resets, review references, journal transitions and coverage evidence. Existing migrations, user data, review events and SRS rules remain untouched.
+- Added `backend/app/dashboard/history.py` with typed Bangkok-date facts, bounded SQL-observation windows, deduplicated candidate cards and explicit UNKNOWN coverage. Polling does not establish continuous file validity; the authoritative streak denominator stays `None`, including empty days. No public dashboard schema was selected or changed.
+- Added only sync/lifecycle uncertainty hooks in `backend/app/application/sync.py` and `backend/app/main.py`. Business facts share existing projection/review/receipt transactions through SQLite triggers. Offline/deferred/recovery changes are observed without fabricated effective times or history deletion.
+- Recorded H1/T037-R1 ownership, schema/retention/coverage limits and exact deferred checks in the task cards and unchecked T037 todo entry. Status is `CODE_IMPLEMENTED_UNVERIFIED`; no tests, builds, migration runs, lint/types, security/coverage scans, audits, review agents, commit/push/PR/merge/rebase or DONE action. Only four approved production paths changed; final acceptance is deferred by owner.
+
 ## 11/10/2026 - T051 coding integrated; FINAL_VERIFICATION_DEFERRED
 
 - Merged T051 Quiz Submission/Result/AI Writing Feedback UI via [PR #16](https://github.com/khanhpn308/english_web/pull/16) at `c2b0a7b`; three production frontend files integrated into `main`.

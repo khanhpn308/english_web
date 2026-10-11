@@ -2,7 +2,7 @@
 
 **Task ID:** `T037`  
 **Title:** Dashboard summary API và streak formulas  
-**Status:** `TODO`  
+**Status:** `TODO` — T037-H1 code implemented unverified; T037-R1 integration pending; not DONE  
 **Goal:** Dashboard summary API và streak formulas. Due/streak/three learning metrics response match contract và fixtures.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -24,6 +24,7 @@
 - [T048](t048-quiz-submit-api.md)
 - [T011](t011-observability-instrumentation.md)
 - [T017](t017-typed-api-client.md)
+- [T037-H1](t037-h1-study-history-ledger.md), owner-approved historical persistence subtask; `CODE_IMPLEMENTED_UNVERIFIED`, 11/10/2026.
 
 Mọi dependency phải có evidence hoàn tất. Task ID không biểu thị thứ tự chạy; dùng [task-plan.md](../docs/task-plan.md).
 
@@ -90,3 +91,11 @@ npm run test:contract
 ## Commit message đề xuất
 
 `feat(T037): dashboard summary api và streak formulas`
+
+## T037-H1 dependency handoff, 11/10/2026
+
+Historical evidence is implemented in the dedicated H1 worktree, with additive `0012_study_history` after the source-inspected single head `0011_feedback`. It uses transaction-scoped SQLite triggers for source status/links, card creation/scheduling/reset, immutable review pointers and journal transitions, plus narrow lifecycle/sync uncertainty hooks. Source changes and learning history are retained without changing SRS rules or dashboard source.
+
+T037-R1 must use `StudyHistoryReader(engine).for_date(study_date, as_of=server_now)` and its `eligible_due_card_ids`, not its observed candidate set. Current polling cannot prove full-day source continuity, so the authoritative denominator is `None`, coverage is `UNKNOWN`, and even an empty day remains unknown. The existing streak helpers preserve that uncertainty; public unavailable-history behavior remains T037-R1/owner work. Facts and observation windows are bounded and read-only, with reset/source/link evidence retained.
+
+The independent checkpoint on `feature/t037-dashboard-summary-api` was read without changes. Host must combine its `main.py` dashboard wiring with H1 startup/shutdown hooks and preserve existing T048/T049 initialization. No public contract/schema, formulas, HTTP source, tests or generated artifacts were changed by H1. Tests, audits, security, migration and coverage verification remain `DEFERRED_BY_OWNER`; neither task is DONE. See the [H1 handoff](t037-h1-study-history-ledger.md) for scope, exact reader semantics and deferred checks.
