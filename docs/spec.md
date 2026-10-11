@@ -201,6 +201,10 @@ Giới hạn 5–30 câu, mỗi loại 0–20 và đủ dạng từ nguồn theo
 
 Dashboard formulas, no-attempt null accuracy and four-week success measurement follow ADR-0004. The inclusive Bangkok metric range defaults to today minus 27 days through today and accepts at most 366 days. Current due cards use the captured server time and current valid-source state. Historical result metrics survive later source loss and resets. Streak reconstruction, today/yesterday anchoring, and nullability follow ADR-0009.
 
+Historical eligibility MUST reconstruct opening committed SQLite state and complete transaction-grouped source/link/card/schedule/reset changes from the prospective checkpoint. Offline Markdown edit times MUST NOT be inferred. Pre-checkpoint history, missing predecessor or transaction evidence, clock ambiguity, and evidence/work limits MUST remain UNKNOWN. KNOWN empty MUST be distinguished from missing evidence. Today's recorded prefix through the cutoff is sufficient; future days remain UNKNOWN.
+
+Completion MUST use durable server-timestamped reviews and terminal stored quiz results. Each applicable obligation requires a review after activation/reset; historical box=0 immediately before an applied review establishes NEW activity. Drafts, AI feedback, and replay MUST NOT create activity. Complete today anchors today; KNOWN incomplete today anchors yesterday. UNKNOWN today or a run reaching UNKNOWN before a KNOWN incomplete day MUST yield `currentDays=null`, with HTTP 200 and independent metrics when usable. `asOf` MUST remain the cutoff's Bangkok date, and streak MUST be independent of the metric range. All metrics/history/completion reads MUST share one explicit read transaction without sync, filesystem, or bridge work.
+
 ### 6.6. `offline-local-runtime`
 
 - **FR-RUN-01:** App MUST hoạt động trên một máy Windows và mở bằng biểu tượng vào tab trình duyệt.

@@ -25,7 +25,7 @@ from backend.app.application.source_write import SourceWriteCoordinator
 from backend.app.application.submit_quiz import SubmitQuizService
 from backend.app.application.sync import SyncService
 from backend.app.dashboard.formulas import DashboardService
-from backend.app.dashboard.history import observe_lifecycle
+from backend.app.dashboard.history import install_history_capture, observe_lifecycle
 from backend.app.enrichment.lookup import LookupService
 from backend.app.http.bootstrap import router as bootstrap_router
 from backend.app.http.dashboard import router as dashboard_router
@@ -97,6 +97,7 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
                 # Sources: https://fastapi.tiangolo.com/advanced/events/
                 # https://www.starlette.dev/threadpool/
                 app.state.storage_info = await run_in_threadpool(database.initialize)
+                install_history_capture(database.engine)
                 await run_in_threadpool(observe_lifecycle, database.engine, "STARTUP")
                 history_started = True
                 ledger = OperationLedger(database.engine)

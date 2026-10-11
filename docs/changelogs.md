@@ -1,3 +1,9 @@
+## 11/10/2026 - T037-R1 transaction evidence and completion ordering correction (Asia/Bangkok)
+
+- Added conditional additive `0013_study_history_commits` after unchanged `0012_study_history`. H1 rollback safety alone cannot identify transaction boundaries. Prospective immutable commit markers and terminal-quiz metadata establish grouped final SQLite projections; older history stays UNKNOWN. This supersedes the earlier R1 statement that no migration was necessary.
+- Updated `backend/app/dashboard/history.py`, `backend/app/dashboard/formulas.py`, and narrow `backend/app/main.py` lifecycle wiring. Writer-only pre-commit markers share the business transaction; savepoint/root rollback, crash, and replay retain atomicity. Dashboard reads share one caller-owned snapshot and cutoff. Completion joins applied reviews to historical predecessors and ordered obligations; known empty, unknown boundaries, and bounded work remain distinct.
+- Updated Dashboard API/spec semantics and ADR-0009 with the effective-time convention, nullable HTTP 200 streak, canonical independent metrics, and deferred Host migration/contract work. Existing H1 triggers, source-write/SRS/scoring, task cards, generated contracts, frontend, and all tests were left unchanged. Status: IMPLEMENTED_UNVERIFIED; no tests, audit, build, typecheck, lint, scan, runtime/database probe, or migrations executed.
+
 ## 11/10/2026 - T037-R1 SQLite study history and dashboard continuation (Asia/Bangkok)
 
 - Completed the dashboard consumer for the H1 SQLite ledger. Known eligibility windows replay committed source, link, card, schedule, reset, and journal facts after the opening snapshot; missing or ambiguous intervals remain unknown.
