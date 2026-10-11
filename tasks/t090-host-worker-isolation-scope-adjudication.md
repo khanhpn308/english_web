@@ -413,3 +413,31 @@ Run 37961597747 created a real GHCR candidate image, SPDX SBOM (1,177 observed c
   CI, a genuine independent operator image admission, live Docker-only source
   and no-bypass tests on the deployed OS, and live AGY/Codex Worker tool-denial
   probes. T090 remains IN_PROGRESS, PR #9 remains Draft and T089 reopened.
+
+### R6-B3 Host CI regression audit (2026-10-11)
+
+- Independent GitHub Full Portable Host run
+  https://github.com/khanhpn308/english_web/actions/runs/38116572298
+  on commit `ff3b362fddc3b3d90b0455ce88f04a01ba016e74` returned
+  **FAIL**, not PASS: `check-fast-active` failed Ruff formatting and
+  `portable-pytest` recorded **72 failed / 1,348 passed**. Frontend coverage,
+  secret scan, code-security scan, dependency scan and architecture gate passed.
+  Saved original CI artifact ID `11693224995`; historical evidence is retained.
+- A real integration error was found: Docker clone directory name did not
+  satisfy `DockerVerificationSandbox._workspace()`'s `verify-` prefix.
+  Corrected the clone prefix to `verify-docker-` without weakening the
+  verifier's allowlist/root checks.
+- Corrections also distinguish inherited synthetic test fixtures from real
+  Host deployment: historical concurrent-flow tests now explicitly select
+  their previous private toolchain workspace, while the production
+  `docker_verification_workspace()` remains dependency-free. Added
+  production-collector restoration in the new routing test.
+- Old direct-Host collector tests and independently spawned synthetic
+  scheduler/recovery tests need contract-aware migration to an explicit
+  test-only adapter; never re-enable legacy Host execution to make them PASS.
+  Existing legacy `npm ci` configurations are correctly BLOCKED until
+  preprovisioned-image admission is configured.
+- Follow-on run https://github.com/khanhpn308/english_web/actions/runs/38116973976
+  rechecks a newer candidate, but it is **not** final-head approval.
+  Do not claim R6-B3 acceptance until the final commit passes gates and the
+  remaining operator/provenance/provider proofs are independently observed.
