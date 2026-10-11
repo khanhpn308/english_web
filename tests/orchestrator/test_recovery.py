@@ -1177,7 +1177,7 @@ def test_each_liveness_field_individually_permits_recovery(
         ("model", lambda cfg: setattr(cfg.roles["worker"], "model", "gemini-3.8-flash-high")),
         ("reasoning", lambda cfg: setattr(cfg.roles["worker"], "reasoning", "high")),
         ("verification", lambda cfg: setattr(cfg, "verification", [["python", "-m", "pytest"]])),
-        ("setup_commands", lambda cfg: setattr(cfg, "setup_commands", [])),
+        ("setup_commands", lambda cfg: setattr(cfg, "setup_commands", [["npm", "ci"]])),
         ("timeout_seconds", lambda cfg: setattr(cfg, "timeout_seconds", 90)),
         ("max_fix_cycles", lambda cfg: setattr(cfg, "max_fix_cycles", 1)),
         ("executable", lambda cfg: setattr(cfg.roles["worker"], "executable", "custom-exec")),
