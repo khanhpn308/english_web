@@ -57,10 +57,10 @@
 - [x] [T048](t048-quiz-submit-api.md): Quiz submission và atomic SRS handoff — DONE (coding-only, PR #15 merged `c67d9e9`; `FINAL_VERIFICATION_DEFERRED`; T049-generated API contract reconciliation and project-wide regression/security/release acceptance deferred).
 - [x] [T049](t049-writing-feedback-api.md): Writing feedback API và history retry — DONE (coding-only, PR #14 merged `8a725344`; `FINAL_VERIFICATION_DEFERRED`; generated OpenAPI/DTO synchronization, regression/security and release acceptance deferred).
 - [x] [T051](t051-quiz-result-feedback-ui.md): Submit/result và writing feedback UI — DONE (coding-only, PR #16 merged `c2b0a7b`; `FINAL_VERIFICATION_DEFERRED`).
-- [ ] [T037](t037-dashboard-formulas.md): Dashboard summary API và streak formulas — [T037-H1](t037-h1-study-history-ledger.md) `CODE_IMPLEMENTED_UNVERIFIED` (coding only); T037-R1 integration/unavailable-history behavior pending; tests/audits/security/coverage deferred by owner; not DONE.
+- [x] [T037](t037-dashboard-formulas.md): Dashboard summary API và streak formulas — `DONE (CODING_ONLY)`; H1/R1 source, API contract and T017 generated DTOs integrated on `main`; `FINAL_VERIFICATION_DEFERRED` by owner.
 - [ ] [T046](t046-metrics-alerts-runbooks.md): Local RED metrics và operational Status API — CODE_IMPLEMENTED_UNVERIFIED; owner-approved status contract, read-only consent, HTTP 5xx window and bridge/sync/SQLite metrics implemented; OpenAPI/DTO generated; verification deferred by owner; not DONE.
 - [ ] [T060](t060-status-ui.md): Operational Status screen và consent integration
-- [ ] [T038](t038-dashboard-ui.md): Learning Dashboard UI
+- [x] [T038](t038-dashboard-ui.md): Learning Dashboard UI — `DONE (CODING_ONLY)`; PR #17 merged (`5e97b2a`); `FINAL_VERIFICATION_DEFERRED` by owner.
 - [ ] [T061](t061-alerts-runbooks.md): Local symptom alerts và runbook links
 - [ ] [T039](t039-launcher.md): Windows launcher single-instance/bootstrap
 - [ ] [T040](t040-first-run-recovery.md): Native first-run configuration và protected key store

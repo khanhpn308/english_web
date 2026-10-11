@@ -11,6 +11,21 @@
 - Status remains BLOCKED_CONTRACT: the normative StatusSummary does not define several required types/unknown values; consent's existing effective read can mutate policy history. No status DTO, endpoint, fabricated readiness or guessed fallback was introduced. Dependency samples and HTTP status-class instrumentation require narrow scope outside the permitted source paths.
 - Updated only the T046 card and unchecked todo entry with exact scope, dependency evidence and Host follow-up. Tests/test source, generated contracts, specs, migrations, UI, dependency source and real data remain untouched. No tests, audits, builds, typecheck, lint, scans, installation or Git mutation occurred; independent metrics are IMPLEMENTED_UNVERIFIED and complete T046 is not ready for integration.
 
+## 11/10/2026 - T037/T038 owner-approved coding-only closure (Asia/Bangkok)
+
+- T037 marked `DONE (CODING_ONLY)` after integration of H1/R1 dashboard source and SQLite historical evidence, canonical nullable-streak response, plus generated OpenAPI/TypeScript DTO synchronization on `main` at `4ec7bd3`.
+- T038 merged into `main` via PR #17 (`5e97b2a`); marked `DONE (CODING_ONLY)` with Dashboard UI, AppShell integration and invalidation wiring.
+- `FINAL_VERIFICATION_DEFERRED` for both tasks. No tests, builds, lint/typecheck, audits, security scans or runtime claims were performed as part of this closure; task acceptance evidence remains pending the final verification phase.
+
+## 11/10/2026 - T038 Learning Dashboard UI implemented (Asia/Bangkok)
+
+- Implemented `DashboardPage` in `frontend/src/features/dashboard/DashboardPage.tsx` using canonical shadcn/ui primitives (`Card`, `Button`) and Tailwind CSS v4 semantic tokens.
+- Structured separate panels: Due cards count (linking to `/review`), Bangkok-anchored streak summary, and 3 distinct learning-result groups: Flashcard self-rating (with ADR-0005 rating buckets and ordinal rounding explanation), MCQ objective accuracy (correct/attempted with progress bar), Cloze objective accuracy, and Writing rubric self-scores (average 0–4).
+- Preserved strict zero vs. null / insufficient history semantics across all metrics (`null` rendered as "Chưa xác định" or "Chưa làm câu nào", not false 0 or 0%).
+- Integrated into `frontend/src/app/AppShell.tsx` at route `/`, replacing the placeholder card while preserving navigation landmarks, keyboard focus, and ErrorBoundary recovery.
+- Wired invalidation on `vocabulary:invalidate` custom events (including `review-recorded` from Flashcard reviews, `quiz-submitted` from quiz completion in AppShell) and window `focus`. Handled `STORAGE_BUSY` (`isSyncing`) with dedicated non-destructive recovery status.
+- Status: `IMPLEMENTED_UNVERIFIED` (coding-only session; tests, builds, lint, and Git commits deferred). Acceptance criteria checkboxes remain unchecked pending host integration verification.
+
 ## 11/10/2026 - T083 authorized bookkeeping commit and worktree closure (Asia/Bangkok)
 
 - Owner authorized committing the three T083 bookkeeping files and closing `/home/khanh/projects/vocabularies-t083-codex`. The worktree had no tracked, untracked or ignored changes; its tip `5153c0c` is already an ancestor of `main`. `git worktree remove` completed without force; branch `fix/t083-dag-metadata-remediation` remains available.
