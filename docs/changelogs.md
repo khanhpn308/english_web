@@ -1,3 +1,9 @@
+## 11/10/2026 - T064 coding-only merge and closure (Asia/Bangkok)
+
+- Owner-approved [PR #19](https://github.com/khanhpn308/english_web/pull/19) merged T064 Lighthouse harness into `main` (merge commit `0fb3226`). `scripts/ui_performance.py`, `npm run benchmark:ui`, and pending-evidence documentation are integrated.
+- Marked T064 `DONE (CODING_ONLY)` in task card and `tasks/todo.md`; `FINAL_VERIFICATION_DEFERRED` by owner.
+- No tests, build, lint, typecheck, security scan, Lighthouse benchmark or audit executed during merge/closure. No LCP/CLS PASS or release-readiness claim.
+
 ## 11/10/2026 - T064 Local Lighthouse performance harness implemented (Asia/Bangkok)
 
 - Implemented `scripts/ui_performance.py` as a deterministic local UI performance runner utilizing T052's loopback preview boundary (`frontend/tests/support/test_server.py`) with bounded startup/readiness/teardown lifecycle management.
