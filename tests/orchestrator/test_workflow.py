@@ -2445,7 +2445,10 @@ def concurrent_audit_pipeline(
         admission: VerificationImageAdmission,
         sandbox: DockerVerificationSandbox,
     ) -> VerificationCollection:
-        if pipeline.live_state is None or pipeline.live_state.current_agent != "concurrent_audit_preparation":
+        if (
+            pipeline.live_state is None
+            or pipeline.live_state.current_agent != "concurrent_audit_preparation"
+        ):
             return collect(self, request, working, snapshot, admission, sandbox)
         assert threading.get_ident() != pipeline.owner
         agents.enter(rendezvous=False)
