@@ -215,6 +215,35 @@ describe('T050 QuizRunner', () => {
     expect(screen.getByLabelText('Điểm 0')).toBeDisabled();
   });
 
+  it('flushes pending answers before invoking the future T051 submit handler', async () => {
+    const onSubmit = vi.fn(async () => {});
+    client.mockResolvedValueOnce(attempt() as never);
+    client.mockResolvedValueOnce(receipt(1, 'ready') as never);
+    render(<QuizRunner attemptId="att-123" onSubmit={onSubmit} />);
+    await screen.findByText('CLOZE Prompt');
+    fireEvent.change(screen.getByLabelText('Câu trả lời:'), { target: { value: 'ready' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Nộp bài' }));
+    });
+    expect(putCalls()).toHaveLength(1);
+    expect(onSubmit).toHaveBeenCalledOnce();
+    expect(onSubmit).toHaveBeenCalledWith('att-123');
+  });
+
+  it('rejects submit when a draft receipt remains unresolved', async () => {
+    const onSubmit = vi.fn();
+    client.mockResolvedValueOnce(attempt() as never);
+    client.mockImplementationOnce(() => new Promise<never>(() => {}));
+    render(<QuizRunner attemptId="att-123" onSubmit={onSubmit} />);
+    await screen.findByText('CLOZE Prompt');
+    fireEvent.change(screen.getByLabelText('Câu trả lời:'), { target: { value: 'pending' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Nộp bài' }));
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Chưa thể nộp bài');
+  });
+
   it('keeps a saved draft across a fresh mount', async () => {
     client.mockResolvedValueOnce(attempt({ answer: 'restored text', revision: 1 }) as never);
     await loaded();

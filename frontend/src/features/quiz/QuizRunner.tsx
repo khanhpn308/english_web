@@ -35,10 +35,17 @@ const validEtag = (value: string): boolean => /^"qa-v1-[0-9a-f]{64}"$/.test(valu
 const sameDraft = (a: string, score: number | null, b: string, otherScore: number | null) =>
   a === b && score === otherScore;
 
-export const QuizRunner: React.FC<{ attemptId: string }> = ({ attemptId }) => {
+interface QuizRunnerProps {
+  attemptId: string;
+  /** T051 supplies the submit handler; it runs only after confirmed draft flush. */
+  onSubmit?: (attemptId: string) => Promise<void> | void;
+}
+
+export const QuizRunner: React.FC<QuizRunnerProps> = ({ attemptId, onSubmit }) => {
   const [attempt, setAttempt] = useState<QuizAttempt | null>(null);
   const [states, setStates] = useState<Record<string, QuestionState>>({});
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   // The ref is the synchronous authority for in-flight requests and blur handlers.
   // React state is a read-only rendering snapshot, never an implicit network lock.
   const live = useRef<Record<string, QuestionState>>({});
@@ -322,6 +329,32 @@ export const QuizRunner: React.FC<{ attemptId: string }> = ({ attemptId }) => {
     });
   };
 
+  const submitDraft = async () => {
+    if (!onSubmit || submitting || attempt?.status === 'SUBMITTED') return;
+    setSubmitting(true);
+    setErrorMsg(null);
+    try {
+      cancelTimers();
+      const questionIds = Object.keys(live.current);
+      await Promise.all(questionIds.map(id => save(id)));
+      const hasUnconfirmed = questionIds.some(id => {
+        const state = live.current[id];
+        return state.active !== null || state.uncertain !== null ||
+          ['unknown', 'conflict', 'reconciling', 'error'].includes(state.status) ||
+          !sameDraft(state.localAnswer, state.localSelfScore, state.serverAnswer, state.serverSelfScore);
+      });
+      if (hasUnconfirmed) {
+        setErrorMsg('Chưa thể nộp bài: một số câu chưa được xác nhận lưu. Hãy đối soát hoặc thử lưu lại.');
+        return;
+      }
+      await onSubmit(attemptId);
+    } catch {
+      setErrorMsg('Nộp bài không thành công. Kiểm tra kết quả thao tác trước khi thử lại.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const displayedAttempt = attempt?.id === attemptId ? attempt : null;
   if (!displayedAttempt) {
     return errorMsg ? (
@@ -351,7 +384,7 @@ export const QuizRunner: React.FC<{ attemptId: string }> = ({ attemptId }) => {
               selfScoreDraft={state.localSelfScore}
               onChange={(answer, score) => changeAnswer(question.id, answer, score)}
               onBlur={() => flush(question.id)}
-              disabled={submitted}
+              disabled={submitted || submitting}
             />
             {!submitted && (
               <div className="space-y-2 text-sm" role="status" aria-live="polite">
@@ -406,7 +439,9 @@ export const QuizRunner: React.FC<{ attemptId: string }> = ({ attemptId }) => {
             Bản nháp được lưu qua API cục bộ. Nếu có thông báo chưa lưu, không đóng tab.
             Nộp bài sẽ được tích hợp trong T051 sau khi T048 hoàn thành.
           </p>
-          <Button disabled>Nộp bài (Chưa khả dụng)</Button>
+          <Button disabled={!onSubmit || submitted || submitting} onClick={() => void submitDraft()}>
+            {submitting ? 'Đang xử lý...' : onSubmit ? 'Nộp bài' : 'Nộp bài (Chưa khả dụng)'}
+          </Button>
         </CardContent>
       </Card>
     </div>
