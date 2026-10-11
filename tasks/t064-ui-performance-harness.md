@@ -2,7 +2,7 @@
 
 **Task ID:** `T064`  
 **Title:** Local Lighthouse performance harness  
-**Status:** `IMPLEMENTED_UNVERIFIED` (coding-only checkpoint, 11/10/2026; executable verification deferred)
+**Status:** `DONE (CODING_ONLY)` — `FINAL_VERIFICATION_DEFERRED` (11/10/2026; PR #19 merged into `main`; executable verification pending)
 **Goal:** Measure LCP≤2.5s/CLS≤0.1 on a recorded deterministic preview and return a threshold verdict.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -101,3 +101,10 @@ npm run benchmark:ui
 - Registered `"benchmark:ui": "python scripts/ui_performance.py"` in `package.json`.
 - Documented implementation architecture and pending execution state in `docs/reviews/ui-performance-001.md`.
 - Status: `IMPLEMENTED_UNVERIFIED` (coding-only session; tests, builds, lint, typecheck, audits, and Git commits deferred).
+
+## Owner-approved coding-only closure — T064 (11/10/2026)
+
+- Repository owner explicitly authorized merging PR #19 and closing T064 at `DONE (CODING_ONLY)`; the merge commit is `0fb3226ff69b19bbcff97f5e6d59854bb9309d28`.
+- Integrated `scripts/ui_performance.py`, `npm run benchmark:ui` wiring in `package.json`, and `docs/reviews/ui-performance-001.md`, with existing T052/T038 functionality preserved.
+- The implementation defines fail-closed LCP ≤ 2.5 s / CLS ≤ 0.1 evaluation and setup-pending conditions. **Neither Lighthouse nor a browser benchmark was run**; no measured Core Web Vitals, threshold PASS, or release evidence is claimed.
+- `FINAL_VERIFICATION_DEFERRED` by owner: unit tests, build, typecheck, lint, security scans, benchmark and audit remain pending the final system-wide phase. Historical `IMPLEMENTED_UNVERIFIED` handoff above is superseded for coding closure only; acceptance checkboxes remain unchecked pending evidence.
