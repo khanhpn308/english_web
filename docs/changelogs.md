@@ -1,3 +1,9 @@
+## 11/10/2026 - T051 coding integrated; FINAL_VERIFICATION_DEFERRED
+
+- Merged T051 Quiz Submission/Result/AI Writing Feedback UI via [PR #16](https://github.com/khanhpn308/english_web/pull/16) at `c2b0a7b`; three production frontend files integrated into `main`.
+- Marked T051 `DONE` for **coding completion only** by owner-approved policy. Included fail-closed same-key feedback reconciliation and submission-revision/key consistency protection before merge. No unrelated T048/T049 task-document changes were merged.
+- Deferred focused unit/E2E test source, typecheck, lint, browser/accessibility, generated feedback contract alignment, security and project-wide release acceptance. No executable verification performed or claimed PASS.
+
 ## 11/10/2026 - T048 coding integrated; FINAL_VERIFICATION_DEFERRED
 
 - Merged T048 Quiz Submission and Atomic SRS Handoff via [PR #15](https://github.com/khanhpn308/english_web/pull/15) at `c67d9e9872b3d73dcfa31431eff5f68f3476c615`; preserved existing T049, T050 and T012 implementation and task states on `main`.
