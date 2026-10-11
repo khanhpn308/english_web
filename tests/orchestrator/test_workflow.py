@@ -174,9 +174,7 @@ python -m pytest test_app.py -q
     monkeypatch.setattr(Pipeline, "_collect_docker_verification", synthetic_docker_collection)
     # Preserve inherited private-toolchain test behavior through the legacy
     # synthetic fixture ONLY. Real R6-B3 production clones never use this path.
-    monkeypatch.setattr(
-        Pipeline, "docker_verification_workspace", Pipeline.verification_workspace
-    )
+    monkeypatch.setattr(Pipeline, "docker_verification_workspace", Pipeline.verification_workspace)
     return repo
 
 
