@@ -706,6 +706,225 @@
         "title": "CreateSyncRunRequest",
         "type": "object"
       },
+      "Criterion": {
+        "additionalProperties": false,
+        "properties": {
+          "commentVi": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Commentvi",
+            "type": "string"
+          },
+          "criterion": {
+            "enum": [
+              "TARGET_WORD_USAGE",
+              "GRAMMAR",
+              "CLARITY"
+            ],
+            "title": "Criterion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "criterion",
+          "commentVi"
+        ],
+        "title": "Criterion",
+        "type": "object"
+      },
+      "DashboardError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "INVALID_QUERY",
+              "VALIDATION_ERROR",
+              "SESSION_REQUIRED",
+              "SESSION_INVALID",
+              "ORIGIN_FORBIDDEN",
+              "CONFIGURATION_REQUIRED",
+              "STORAGE_BUSY",
+              "INTERNAL_ERROR"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "requestId": {
+            "title": "Requestid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "requestId"
+        ],
+        "title": "DashboardError",
+        "type": "object"
+      },
+      "DashboardErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DashboardError"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "DashboardErrorResponse",
+        "type": "object"
+      },
+      "DashboardObjectiveAccuracy": {
+        "additionalProperties": false,
+        "properties": {
+          "cloze": {
+            "$ref": "#/components/schemas/DashboardObjectiveScore"
+          },
+          "mcq": {
+            "$ref": "#/components/schemas/DashboardObjectiveScore"
+          }
+        },
+        "required": [
+          "mcq",
+          "cloze"
+        ],
+        "title": "DashboardObjectiveAccuracy",
+        "type": "object"
+      },
+      "DashboardObjectiveScore": {
+        "additionalProperties": false,
+        "properties": {
+          "accuracy": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accuracy"
+          },
+          "attempted": {
+            "minimum": 0.0,
+            "title": "Attempted",
+            "type": "integer"
+          },
+          "correct": {
+            "minimum": 0.0,
+            "title": "Correct",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "correct",
+          "total",
+          "attempted",
+          "accuracy"
+        ],
+        "title": "DashboardObjectiveScore",
+        "type": "object"
+      },
+      "DashboardStreak": {
+        "additionalProperties": false,
+        "properties": {
+          "asOf": {
+            "format": "date",
+            "title": "Asof",
+            "type": "string"
+          },
+          "currentDays": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currentdays"
+          }
+        },
+        "required": [
+          "currentDays",
+          "asOf"
+        ],
+        "title": "DashboardStreak",
+        "type": "object"
+      },
+      "DashboardSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "dueCards": {
+            "minimum": 0.0,
+            "title": "Duecards",
+            "type": "integer"
+          },
+          "flashcardSelfRating": {
+            "$ref": "#/components/schemas/FlashcardSelfRating"
+          },
+          "objectiveAccuracy": {
+            "$ref": "#/components/schemas/DashboardObjectiveAccuracy"
+          },
+          "streak": {
+            "$ref": "#/components/schemas/DashboardStreak"
+          },
+          "writingSelfScore": {
+            "$ref": "#/components/schemas/DashboardWritingSelfScore"
+          }
+        },
+        "required": [
+          "dueCards",
+          "streak",
+          "flashcardSelfRating",
+          "objectiveAccuracy",
+          "writingSelfScore"
+        ],
+        "title": "DashboardSummary",
+        "type": "object"
+      },
+      "DashboardWritingSelfScore": {
+        "additionalProperties": false,
+        "properties": {
+          "average": {
+            "anyOf": [
+              {
+                "maximum": 4.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average"
+          },
+          "scored": {
+            "minimum": 0.0,
+            "title": "Scored",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "scored",
+          "average"
+        ],
+        "title": "DashboardWritingSelfScore",
+        "type": "object"
+      },
       "EditExample": {
         "additionalProperties": false,
         "properties": {
@@ -932,6 +1151,192 @@
         "title": "ExampleView",
         "type": "object"
       },
+      "Feedback": {
+        "additionalProperties": false,
+        "properties": {
+          "answerRevision": {
+            "minimum": 1.0,
+            "title": "Answerrevision",
+            "type": "integer"
+          },
+          "attemptId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Attemptid",
+            "type": "string"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "criteria": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Criterion"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Criteria"
+          },
+          "errorCategory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcategory"
+          },
+          "feedbackId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Feedbackid",
+            "type": "string"
+          },
+          "model": {
+            "const": "gemini-3.8-flash-high",
+            "title": "Model",
+            "type": "string"
+          },
+          "operationId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Operationid",
+            "type": "string"
+          },
+          "promptVersion": {
+            "const": "writing-feedback-v1",
+            "title": "Promptversion",
+            "type": "string"
+          },
+          "provider": {
+            "const": "Antigravity/Google",
+            "title": "Provider",
+            "type": "string"
+          },
+          "questionId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Questionid",
+            "type": "string"
+          },
+          "retryOfOperationId": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retryofoperationid"
+          },
+          "status": {
+            "enum": [
+              "REQUESTED",
+              "VALIDATED",
+              "FAILED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "summaryVi": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summaryvi"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "feedbackId",
+          "attemptId",
+          "questionId",
+          "answerRevision",
+          "status",
+          "provider",
+          "model",
+          "promptVersion",
+          "operationId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "Feedback",
+        "type": "object"
+      },
+      "FeedbackPage": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Feedback"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationView"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "title": "FeedbackPage",
+        "type": "object"
+      },
+      "FeedbackRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "answerRevision": {
+            "minimum": 1.0,
+            "title": "Answerrevision",
+            "type": "integer"
+          },
+          "retryOfOperationId": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retryofoperationid"
+          },
+          "rubricVersion": {
+            "const": "writing-rubric-v1",
+            "title": "Rubricversion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rubricVersion",
+          "answerRevision"
+        ],
+        "title": "FeedbackRequest",
+        "type": "object"
+      },
       "FieldError": {
         "properties": {
           "field": {
@@ -970,6 +1375,39 @@
           "fields"
         ],
         "title": "FieldErrorDetails",
+        "type": "object"
+      },
+      "FlashcardSelfRating": {
+        "additionalProperties": false,
+        "properties": {
+          "averageBucket": {
+            "anyOf": [
+              {
+                "enum": [
+                  "AGAIN",
+                  "HARD",
+                  "GOOD",
+                  "EASY"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Averagebucket"
+          },
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "averageBucket"
+        ],
+        "title": "FlashcardSelfRating",
         "type": "object"
       },
       "GrantAiConsent": {
@@ -4340,6 +4778,161 @@
         ]
       }
     },
+    "/api/v1/dashboard": {
+      "get": {
+        "operationId": "get_dashboard_api_v1_dashboard_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Dashboard",
+        "tags": [
+          "dashboard"
+        ]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "description": "Return application health summary with Cache-Control: no-store.",
@@ -5348,6 +5941,359 @@
           }
         },
         "summary": "Post Submission",
+        "tags": [
+          "assessments"
+        ]
+      }
+    },
+    "/api/v1/quiz-questions/{questionId}/feedback": {
+      "get": {
+        "operationId": "get_feedback_api_v1_quiz_questions__questionId__feedback_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "questionId",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "title": "Questionid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "attemptId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Attemptid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "questionId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Questionid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Feedback",
+        "tags": [
+          "assessments"
+        ]
+      },
+      "post": {
+        "operationId": "post_feedback_api_v1_quiz_questions__questionId__feedback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "questionId",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "title": "Questionid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[\\x20-\\x7e]+$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Feedback"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Post Feedback",
         "tags": [
           "assessments"
         ]

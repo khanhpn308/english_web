@@ -40,6 +40,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Dashboard */
+        get: operations["get_dashboard_api_v1_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -156,6 +173,24 @@ export interface paths {
         put?: never;
         /** Post Submission */
         post: operations["post_submission_api_v1_quiz_attempts__attemptId__submissions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quiz-questions/{questionId}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Feedback */
+        get: operations["get_feedback_api_v1_quiz_questions__questionId__feedback_get"];
+        put?: never;
+        /** Post Feedback */
+        post: operations["post_feedback_api_v1_quiz_questions__questionId__feedback_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -534,6 +569,74 @@ export interface components {
              */
             reason: "STARTUP" | "MANUAL" | "WATCHER";
         };
+        /** Criterion */
+        Criterion: {
+            /** Commentvi */
+            commentVi: string;
+            /**
+             * Criterion
+             * @enum {string}
+             */
+            criterion: "TARGET_WORD_USAGE" | "GRAMMAR" | "CLARITY";
+        };
+        /** DashboardError */
+        DashboardError: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "INVALID_QUERY" | "VALIDATION_ERROR" | "SESSION_REQUIRED" | "SESSION_INVALID" | "ORIGIN_FORBIDDEN" | "CONFIGURATION_REQUIRED" | "STORAGE_BUSY" | "INTERNAL_ERROR";
+            /** Message */
+            message: string;
+            /** Requestid */
+            requestId: string;
+        };
+        /** DashboardErrorResponse */
+        DashboardErrorResponse: {
+            error: components["schemas"]["DashboardError"];
+        };
+        /** DashboardObjectiveAccuracy */
+        DashboardObjectiveAccuracy: {
+            cloze: components["schemas"]["DashboardObjectiveScore"];
+            mcq: components["schemas"]["DashboardObjectiveScore"];
+        };
+        /** DashboardObjectiveScore */
+        DashboardObjectiveScore: {
+            /** Accuracy */
+            accuracy: number | null;
+            /** Attempted */
+            attempted: number;
+            /** Correct */
+            correct: number;
+            /** Total */
+            total: number;
+        };
+        /** DashboardStreak */
+        DashboardStreak: {
+            /**
+             * Asof
+             * Format: date
+             */
+            asOf: string;
+            /** Currentdays */
+            currentDays: number | null;
+        };
+        /** DashboardSummary */
+        DashboardSummary: {
+            /** Duecards */
+            dueCards: number;
+            flashcardSelfRating: components["schemas"]["FlashcardSelfRating"];
+            objectiveAccuracy: components["schemas"]["DashboardObjectiveAccuracy"];
+            streak: components["schemas"]["DashboardStreak"];
+            writingSelfScore: components["schemas"]["DashboardWritingSelfScore"];
+        };
+        /** DashboardWritingSelfScore */
+        DashboardWritingSelfScore: {
+            /** Average */
+            average: number | null;
+            /** Scored */
+            scored: number;
+        };
         /** EditExample */
         EditExample: {
             /** English */
@@ -596,6 +699,69 @@ export interface components {
             /** Vietnamese */
             vietnamese: string;
         };
+        /** Feedback */
+        Feedback: {
+            /** Answerrevision */
+            answerRevision: number;
+            /** Attemptid */
+            attemptId: string;
+            /** Createdat */
+            createdAt: string;
+            /** Criteria */
+            criteria?: components["schemas"]["Criterion"][] | null;
+            /** Errorcategory */
+            errorCategory?: string | null;
+            /** Feedbackid */
+            feedbackId: string;
+            /**
+             * Model
+             * @constant
+             */
+            model: "gemini-3.8-flash-high";
+            /** Operationid */
+            operationId: string;
+            /**
+             * Promptversion
+             * @constant
+             */
+            promptVersion: "writing-feedback-v1";
+            /**
+             * Provider
+             * @constant
+             */
+            provider: "Antigravity/Google";
+            /** Questionid */
+            questionId: string;
+            /** Retryofoperationid */
+            retryOfOperationId?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "REQUESTED" | "VALIDATED" | "FAILED";
+            /** Summaryvi */
+            summaryVi?: string | null;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** FeedbackPage */
+        FeedbackPage: {
+            /** Data */
+            data: components["schemas"]["Feedback"][];
+            pagination: components["schemas"]["PaginationView"];
+        };
+        /** FeedbackRequest */
+        FeedbackRequest: {
+            /** Answerrevision */
+            answerRevision: number;
+            /** Retryofoperationid */
+            retryOfOperationId?: string | null;
+            /**
+             * Rubricversion
+             * @constant
+             */
+            rubricVersion: "writing-rubric-v1";
+        };
         /** FieldError */
         FieldError: {
             /** Field */
@@ -612,6 +778,13 @@ export interface components {
              * @enum {string}
              */
             kind: "FIELD_ERRORS";
+        };
+        /** FlashcardSelfRating */
+        FlashcardSelfRating: {
+            /** Averagebucket */
+            averageBucket: ("AGAIN" | "HARD" | "GOOD" | "EASY") | null;
+            /** Count */
+            count: number;
         };
         /** GrantAiConsent */
         GrantAiConsent: {
@@ -2010,6 +2183,119 @@ export interface operations {
             };
         };
     };
+    get_dashboard_api_v1_dashboard_get: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardErrorResponse"];
+                };
+            };
+        };
+    };
     get_health_api_v1_health_get: {
         parameters: {
             query?: never;
@@ -2793,6 +3079,241 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+        };
+    };
+    get_feedback_api_v1_quiz_questions__questionId__feedback_get: {
+        parameters: {
+            query?: {
+                attemptId?: string | null;
+                questionId?: string | null;
+                pageSize?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackPage"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+        };
+    };
+    post_feedback_api_v1_quiz_questions__questionId__feedback_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Feedback"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizErrorResponse"];
                 };
             };
             /** @description Service Unavailable */
