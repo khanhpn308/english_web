@@ -81,6 +81,18 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
               <fieldset>
                 <legend className="block font-medium mb-2">Tự đánh giá:</legend>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <label className="flex items-start space-x-3 cursor-pointer p-2 rounded-md hover:bg-muted">
+                    <input
+                      type="radio"
+                      name={`question-${question.id}-score`}
+                      checked={selfScoreDraft === null}
+                      onChange={() => onChange(answerDraft, null)}
+                      onBlur={onBlur}
+                      disabled={disabled}
+                      className="mt-1 h-4 w-4 flex-shrink-0 rounded-full border border-primary text-primary"
+                    />
+                    <span className="text-sm">Chưa tự đánh giá</span>
+                  </label>
                   {question.rubric.descriptors.map(desc => (
                     <label key={desc.score} className="flex items-start space-x-3 cursor-pointer p-2 rounded-md hover:bg-muted">
                       <input
