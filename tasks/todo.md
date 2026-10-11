@@ -60,7 +60,7 @@
 - [ ] [T037](t037-dashboard-formulas.md): Dashboard summary API và streak formulas — [T037-H1](t037-h1-study-history-ledger.md) `CODE_IMPLEMENTED_UNVERIFIED` (coding only); T037-R1 integration/unavailable-history behavior pending; tests/audits/security/coverage deferred by owner; not DONE.
 - [ ] [T046](t046-metrics-alerts-runbooks.md): Local RED metrics và operational Status API
 - [ ] [T060](t060-status-ui.md): Operational Status screen và consent integration
-- [ ] [T038](t038-dashboard-ui.md): Learning Dashboard UI
+- [ ] [T038](t038-dashboard-ui.md): Learning Dashboard UI — `IMPLEMENTED_UNVERIFIED` (11/10/2026; coding-only session; executable verification deferred; not DONE).
 - [ ] [T061](t061-alerts-runbooks.md): Local symptom alerts và runbook links
 - [ ] [T039](t039-launcher.md): Windows launcher single-instance/bootstrap
 - [ ] [T040](t040-first-run-recovery.md): Native first-run configuration và protected key store

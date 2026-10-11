@@ -7,6 +7,7 @@ import { AiConsentProvider } from '@/features/consent/AiConsentGate';
 import { AiConsentPanel } from '@/features/consent/AiConsentPanel';
 import { LookupPage } from '@/features/lookup/LookupPage';
 import { ReviewPage } from '@/features/review/ReviewPage';
+import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { SearchPage } from '@/features/search/SearchPage';
 import { WordDetail } from '@/features/search/WordDetail';
 import { QuizBuilder } from '@/features/quiz/QuizBuilder';
@@ -313,6 +314,9 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
       );
 
       if (result && result.status === 'SUBMITTED') {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('vocabulary:invalidate', { detail: { reason: 'quiz-submitted' } }));
+        }
         navigateSearch(`/quiz/${encodeURIComponent(attemptId)}/result`);
       } else {
         const verify = await apiClient<QuizAttempt>(
@@ -320,6 +324,9 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
           { cache: 'no-store' }
         );
         if (verify.status === 'SUBMITTED') {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('vocabulary:invalidate', { detail: { reason: 'quiz-submitted' } }));
+          }
           navigateSearch(`/quiz/${encodeURIComponent(attemptId)}/result`);
         } else {
           throw new Error('Chưa nhận được xác nhận kết quả nộp bài từ máy chủ.');
@@ -337,6 +344,9 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
           { cache: 'no-store' }
         );
         if (verify.status === 'SUBMITTED') {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('vocabulary:invalidate', { detail: { reason: 'quiz-submitted' } }));
+          }
           navigateSearch(`/quiz/${encodeURIComponent(attemptId)}/result`);
           return;
         }
@@ -348,6 +358,9 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
             { cache: 'no-store' }
           );
           if (verify.status === 'SUBMITTED') {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('vocabulary:invalidate', { detail: { reason: 'quiz-submitted' } }));
+            }
             navigateSearch(`/quiz/${encodeURIComponent(attemptId)}/result`);
             return;
           }
@@ -457,6 +470,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
                 {matchedRoute.title}
               </h1>
               {matchedRoute.routeId === 'status' && <AiConsentPanel />}
+              {matchedRoute.routeId === 'dashboard' && <DashboardPage onNavigate={navigateSearch} />}
               {matchedRoute.routeId === 'search' && <SearchPage path={activePath} onNavigate={navigateSearch} />}
               {matchedRoute.routeId === 'word-form-detail' && <WordDetail wordFormId={matchedRoute.params.wordFormId} path={activePath} onNavigate={navigateSearch} />}
               {matchedRoute.routeId === 'quiz-builder' && <QuizBuilder path={activePath} onNavigate={navigateSearch} />}
@@ -466,7 +480,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
               {matchedRoute.routeId === 'quiz-result' && (
                 <QuizResult attemptId={matchedRoute.params.attemptId} onNavigate={navigateSearch} />
               )}
-              {!['lookup', 'review', 'search', 'word-form-detail', 'quiz-builder', 'quiz-runner', 'quiz-result'].includes(matchedRoute.routeId) && <Card role="region" aria-label="Thông báo trạng thái tính năng">
+              {!['dashboard', 'lookup', 'review', 'search', 'word-form-detail', 'quiz-builder', 'quiz-runner', 'quiz-result'].includes(matchedRoute.routeId) && <Card role="region" aria-label="Thông báo trạng thái tính năng">
                 <CardHeader>
                   <CardTitle className="text-primary text-lg">Tính năng đang được xây dựng (chưa khả dụng) trong giai đoạn khởi tạo shell.</CardTitle>
                 </CardHeader>

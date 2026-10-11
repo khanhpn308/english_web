@@ -2,7 +2,7 @@
 
 **Task ID:** `T038`  
 **Title:** Learning Dashboard UI  
-**Status:** `TODO`  
+**Status:** `IMPLEMENTED_UNVERIFIED` (11/10/2026; coding-only session; executable verification deferred)  
 **Goal:** Learning Dashboard UI. Due/streak/three learning result groups có label và null-not-zero.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -90,3 +90,13 @@ npm run test:e2e -- frontend/tests/e2e/dashboard.spec.ts
 ## Commit message đề xuất
 
 `feat(T038): learning dashboard ui`
+
+## Standalone coding-only checkpoint, 11/10/2026 (Asia/Bangkok)
+
+- Implemented `DashboardPage` in `frontend/src/features/dashboard/DashboardPage.tsx` using canonical shadcn/ui primitives (`Card`, `Button`) and Tailwind CSS v4 semantic tokens.
+- Structured separate panels: Due cards count (linking to `/review`), Bangkok-anchored streak summary, and 3 distinct learning-result groups: Flashcard self-rating (with ADR-0005 rating buckets and ordinal rounding explanation), MCQ objective accuracy (correct/attempted with progress bar), Cloze objective accuracy, and Writing rubric self-scores (average 0–4).
+- Preserved strict zero vs. null / insufficient history semantics across all metrics (`null` rendered as "Chưa xác định" or "Chưa làm câu nào", not false 0 or 0%).
+- Integrated into `frontend/src/app/AppShell.tsx` at route `/`, replacing the placeholder card while preserving navigation landmarks, keyboard focus, and ErrorBoundary recovery.
+- Wired invalidation on `vocabulary:invalidate` custom events (including `review-recorded` from Flashcard reviews, `quiz-submitted` from quiz completion in AppShell) and window `focus`. Handled `STORAGE_BUSY` (`isSyncing`) with dedicated non-destructive recovery status.
+- Status: `IMPLEMENTED_UNVERIFIED` (coding-only session; tests, builds, lint, and Git commits deferred). Acceptance criteria checkboxes remain unchecked pending host integration verification.
+
