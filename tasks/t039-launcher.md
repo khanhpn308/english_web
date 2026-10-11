@@ -74,6 +74,15 @@ python -m mypy launcher
 - Evidence ghi command, exit code, môi trường và artifact. Thiếu Windows/browser/provider environment là PENDING; không hoàn tất gate thiếu evidence.
 - Handoff ghi files sửa, files chủ ý không sửa, kết quả, risk còn lại và next task. Chỉ cập nhật `DONE`/checklist sau verification; commit khi đã được ủy quyền.
 
+## Owner-approved T039 contract clarification (11/10/2026)
+
+- Previous worker handoff: BLOCKED_CONTRACT; no implementation source changed, no tests, no audit, no Git write. The blocking questions are resolved by the owner-approved contract documented in [docs/api-contract.md](../docs/api-contract.md) under **T039 Windows launcher in-process handoff**. The task is now **READY_FOR_CODE (CODING_ONLY)**, not DONE.
+- Explicit scope exception approved by owner: T039 may modify docs/api-contract.md to lock startup/config/session/focus semantics, in addition to launcher/src/main.py, launcher/src/windows_mutex.py, docs/runbooks/api-unavailable.md and common task bookkeeping. This exception does not authorize modifying backend/app/main.py, backend/app/platform/config.py, backend/app/http/session.py, frontend source or generated OpenAPI/DTO.
+- Backend and launcher are one process with a controlled Uvicorn server; launch uses create_app(AppSettings with actual reserved loopback port and validated storage path, markdown_root). The same backend SessionStore issues/exchanges 60-second one-time bootstrap credentials after health readiness.
+- The v1 TOML root fields and validation, 10s health readiness budget, fixed mutex and auto-reset focus event, Windows foreground limitations, native failure remediation and strict no-second-backend/tab behavior are locked by the approved contract. T040 owns provisioning and DPAPI; T056 owns packaging.
+- Focus/event implementation is source code only in this pass. Exact browser tab activation on Windows remains PENDING_WINDOWS_EVIDENCE until T057; an unverified foreground attempt is not accepted as PASS.
+- CODING_ONLY constraints supersede the test-authoring and executable verification suggestions elsewhere in this older card: create/modify no test files; run no test/build/lint/typecheck/audit/security scan. Do not commit, push, merge or mark DONE from the worker. Report IMPLEMENTED_UNVERIFIED or a precise remaining blocker.
+
 ## Risk
 
 - **Level:** `Critical`.
