@@ -380,14 +380,14 @@ def test_recover_exact_candidate_and_historical_immutability(
     ).stat().st_mode
     assert not (target / "deleted.txt").exists()
     assert not (target / "main-only.txt").exists()
-    assert (target / "node_modules/fresh-setup").exists()
+    # R6-B3 never populates Host node_modules during recovery.
+    assert not (target / "node_modules/fresh-setup").exists()
     assert not (target / "node_modules/source-only").exists()
     assert set(recovered.artifacts) == {
         "task_card",
         "plan",
         "contract",
         "worker",
-        "setup",
         "recovery_origin",
     }
     for key in ("task_card", "plan", "contract", "worker"):
@@ -616,10 +616,18 @@ def test_setup_failure_or_mutation_fails_closed(
     import tools.orchestrator.workflow as workflow
 
     pipeline, source, snapshot = candidate
+    # Explicitly verify a named sandbox command. Legacy npm ci must remain
+    # unavailable, and no test may rely on its Host fallback.
+    checks = [["python", "-m", "pytest"]]
+    pipeline.config.setup_commands = checks
+    assert source.config is not None
+    source.config.setup_commands = checks
+    pipeline.save(pipeline.run_path("T100", source.run_id), source)
     before = source_bytes(pipeline, source)
 
     def setup(command: list[str], cwd: Path, **_kwargs: object) -> ProcessResult:
-        assert command == ["npm", "ci"]
+        actual = command[2:] if command[0].endswith("env") else command
+        assert actual == ["python", "-m", "pytest"]
         if behavior != "failure":
             root = Path(source.worktree_path) if behavior == "source" else cwd
             (root / "feature.txt").write_text("Mutation in setup")
