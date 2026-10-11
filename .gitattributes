@@ -1,0 +1,46 @@
+# Normalize text on future additions/checkouts; do not renormalize history.
+* text=auto eol=lf
+
+# Executable modes belong to the Git index, not attributes.
+/.githooks/* text eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.pyi text eol=lf
+*.js text eol=lf
+*.cjs text eol=lf
+*.mjs text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.ps1 text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.7z binary
+*.exe binary
+*.dll binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.mp3 binary
+*.wav binary
+*.mp4 binary
+*.webm binary
+*.db binary
+*.db-* binary
+*.sqlite binary
+*.sqlite-* binary
+*.sqlite3 binary
+*.sqlite3-* binary

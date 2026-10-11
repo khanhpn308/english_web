@@ -1,3 +1,10 @@
+## 11/10/2026 - T045 Git hygiene source implementation (Asia/Bangkok)
+
+- Created `.gitattributes`, `.githooks/pre-commit`, `.github/pull_request_template.md` and `docs/git-workflow.md`. Added text/binary line-ending rules, staged whitespace/private-file guards, staged quality snapshots and existing redacted scanner integration without new dependencies or scanner logic.
+- Reused the actual `check:fast:active` and `security:secrets` composition of `check:fast`, including the existing floor guard. Documented task branches/worktrees, atomic commits, explicit hook activation/removal, separate implementation/testing/merge/release statuses and remote protection ownership.
+- Status: `IMPLEMENTED_UNVERIFIED`; `CODING_DONE` with `FINAL_VERIFICATION_DEFERRED`. Only read-only inspection and allowed source edits occurred. No tests, lint, typecheck, build, security scan, hook, CI, audit, Git mutation, commit or push. T045 acceptance checklist and `tasks/todo.md` remain unchanged; previous changelog history is preserved.
+- Host actions: record hook executable mode before staging, integrate only with authorization, and defer executable verification under the owner's Coding First policy. Windows junction cleanup, partial/no-HEAD staging and failure behavior are unverified. Hook activation is explicit; release tag/version approval remains with the release owner.
+
 ## 11/10/2026 - T051 coding integrated; FINAL_VERIFICATION_DEFERRED
 
 - Merged T051 Quiz Submission/Result/AI Writing Feedback UI via [PR #16](https://github.com/khanhpn308/english_web/pull/16) at `c2b0a7b`; three production frontend files integrated into `main`.
