@@ -2,10 +2,19 @@
 
 **Task ID:** `T048`  
 **Title:** Quiz submission và atomic SRS handoff  
-**Status:** `TODO`  
+**Status:** `DONE`
+**Completion scope:** `CODING_ONLY` — PR #15 merged (`c67d9e9872b3d73dcfa31431eff5f68f3476c615`); `FINAL_VERIFICATION_DEFERRED`
 **Goal:** Nộp quiz, chấm objective/self score và cập nhật SRS đúng một lần trong transaction.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
+
+## Owner-authorized coding-only merge (11/10/2026)
+
+- GitHub [PR #15](https://github.com/khanhpn308/english_web/pull/15) merged into `main` as `c67d9e9872b3d73dcfa31431eff5f68f3476c615`, incorporating source commit `ee92fabda18ff2c7be37cb554d70d3f7d7f666e1` and integration reconciliation `064e9031f33f177f9da9d53e51c84dd8a48d7005`.
+- Owner approved `DONE` for **coding implementation only**, consistent with T012, T049 and T050. Final functional, regression, security, coverage, Windows/browser/provider, and release audits are `FINAL_VERIFICATION_DEFERRED` until completion of the 90-task implementation phase. Unchecked acceptance criteria remain pending final verification.
+- Integrated submission API, atomic scoring/SRS handoff service, synthetic tests, and T048-generated `contracts/openapi.json` / `frontend/src/shared/api/generated.ts`, preserving T049 service and router on `main`.
+- Outstanding: reconcile **T049 feedback** OpenAPI/DTO additions; previously recorded full-suite failures (including unresolved lookup deadline timing), quality/security/coverage and Windows/provider acceptance. No new tests or audits were run for the coding-only merge. Historical failures remain unchanged and are not labeled PASS.
+- The standalone implementation checkpoint below is historical. Its `BLOCKED_VERIFICATION`, uncommitted branch and no-merge statements are superseded for coding completion by this owner-authorized merge record.
 
 ## Context cần đọc
 
@@ -88,3 +97,12 @@ npm run test:contract
 ## Commit message đề xuất
 
 `feat(T048): quiz submission và atomic srs handoff`
+
+## Standalone implementation checkpoint, 11/10/2026 (Asia/Bangkok)
+
+- Code implemented on `feature/t048-quiz-submit-api`, base/HEAD `70105f4de49b84f84cfb0b408c69a7e5823d1792`. Final acceptance is `BLOCKED_VERIFICATION`; task status and acceptance checkboxes remain unchanged. No commit, merge, push or PR.
+- Added the production submission route/service and 49 synthetic regressions. Reused T059 scoring, T034 terminal persistence, T032 review primitives and T014's atomic completion callback. Success follows durable result/SRS/receipt commit; replay and restart preserve the original result.
+- Owner authorized only two additional generated files: `contracts/openapi.json` and `frontend/src/shared/api/generated.ts`. Generated through the existing T017 command; diff adds only the T048 route/request and matching TypeScript. T049 artifact reconciliation belongs to integration.
+- Focused suite: 49 passed, exit 0. Dependency suite: 414 passed and one inherited migration-head failure, exit 1. Generated consistency restored; four inherited contract tests still fail. Lint, formatting, Mypy, architecture and secret-scan blockers are recorded separately from T048 diagnostics.
+- Full Python suite: 2,207 passed and 30 failed, exit 1; all T048 tests passed. Sixteen failures reproduce at unchanged HEAD, thirteen require native Windows, and one lookup deadline failure passes in isolation but remains unresolved under the full parallel run.
+- Full commands, review evidence, unchanged files, risks and remaining verification are in [the redacted standalone report](../docs/reviews/t048-standalone-verification.md). No quality threshold, existing test or security policy was weakened.

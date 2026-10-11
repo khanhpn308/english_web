@@ -1,3 +1,32 @@
+## 11/10/2026 - T048 coding integrated; FINAL_VERIFICATION_DEFERRED
+
+- Merged T048 Quiz Submission and Atomic SRS Handoff via [PR #15](https://github.com/khanhpn308/english_web/pull/15) at `c67d9e9872b3d73dcfa31431eff5f68f3476c615`; preserved existing T049, T050 and T012 implementation and task states on `main`.
+- Marked T048 `DONE` for **coding completion only**, by owner approval. Atomic submission service/routes, synthetic regression test source and T048-generated OpenAPI/TypeScript DTO changes are integrated. No new tests or audit executed for merge/closure.
+- `FINAL_VERIFICATION_DEFERRED`: T049 feedback route/schema contract regeneration, prior broad-suite failures (including unresolved lookup timing), inherited quality/security/coverage, native Windows/browser and end-to-end release acceptance remain open. Previous Codex test reports are historical evidence and not final acceptance PASS.
+
+## 11/10/2026 - T048 local quiz submission and atomic SRS handoff (Asia/Bangkok)
+
+- Added `backend/app/application/submit_quiz.py` and `backend/app/http/quiz_submissions.py`; registered their lifecycle and route in `backend/app/main.py`. Submission reuses deterministic scoring and commits terminal result/state, one weakest-rating review per eligible form and the operation receipt in one SQLite transaction. Inactive forms preserve results without new schedules.
+- Added `backend/tests/test_quiz_submission.py` with 49 production-factory regressions for scoring, revision/idempotency conflicts, concurrency, rollback, restart/lost responses, session/privacy guards and transient storage failures before/after commit. Committed results remain readable and replayable without AI or consent.
+- Regenerated only the owner-approved `contracts/openapi.json` and `frontend/src/shared/api/generated.ts` with T017's generator. Additions contain only the submission endpoint and request schema. T049 artifact reconciliation remains an integration action.
+- Recorded the standalone handoff in `tasks/t048-quiz-submit-api.md`, unchecked `tasks/todo.md` and `docs/reviews/t048-standalone-verification.md`. All 49 focused tests pass; the full Python suite returns 2,207 passed and 30 failed. Inherited repository-wide findings, native Windows checks and an unresolved full-run lookup deadline failure block acceptance. No unrelated fixes, suppressions, threshold changes, commit, merge, push or DONE action.
+
+## 11/10/2026 - T049 coding integrated; FINAL_VERIFICATION_DEFERRED
+
+- Merged T049 Writing Feedback API via [PR #14](https://github.com/khanhpn308/english_web/pull/14) at `8a72534499c556bc142bf0864e3e3ca6d3d68515`; preserved T012/T050 source and task-completion states on `main`.
+- Marked T049 `DONE` for **coding completion only**, per owner approval. Production feedback service/routes, append-only `0011_feedback` migration and existing synthetic test code are integrated. No new tests or audits were initiated for the merge.
+- `FINAL_VERIFICATION_DEFERRED`: generated OpenAPI/TypeScript DTO reconciliation, historical contract failures, 7 previously reported broad regression failures, remaining quality/security/coverage gates and Windows/real-provider acceptance remain open. Previously reported test outcomes are historical evidence, not final release PASS.
+
+## 11/10/2026 - T049 writing feedback implementation (Asia/Bangkok)
+
+- Implemented canonical-answer advisory feedback POST/GET, strict writing-feedback-v1 schema, durable paginated history and approved 0011 migration. Reused admission/consent/bridge and operation receipts; preserved learning data, explicit retry identity, UNKNOWN blocking, cancellation cleanup and the 30-second deadline.
+- Added production-factory fake-provider tests for schemas, failures, retries, concurrency, revocation, migration preservation, restart and score/history preservation. Recorded final review and exact verification classification in the task card. T049 stays TODO awaiting Host verification; generated contracts, inherited quality/security findings and historical head assertions require Host reconciliation. No commit, push, dependency installation or real inference.
+
+## 11/10/2026 - T049 standalone preflight and approved path correction (Asia/Bangkok)
+
+- Corrected `tasks/t049-writing-feedback-api.md` to allow `backend/migrations/versions/0011_feedback.py` after verifying single head `0010_quiz_answer_receipts` and its ancestry. Recorded exact baseline checks, scope conflicts and a BLOCKED_SCOPE handoff; T049 remains TODO.
+- Updated `tasks/todo.md` with the pending owner/Host action. The approved writing-feedback prompt/schema is absent, the existing T047 latest-head assertion conflicts with adding 0011, and unrelated baseline quality/security gates fail or lack tools. Application code, tests, migrations, generated files and learning data remain untouched; no commit, merge, push, install or inference.
+
 ## 11/10/2026 - T012 coding integrated; release audit deferred
 
 - Merged T012 source into `main` via PR #13 at `9a6e548` after reviewing exactly seven changed files; retained T050 implementation on `main`.
