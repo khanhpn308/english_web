@@ -115,6 +115,60 @@ python -m pytest test_app.py -q
 """)
     git.run("add", ".")
     git.run("commit", "-m", "fixture")
+    # Synthetic functional-test adapter ONLY. Production Pipeline never exposes
+    # a Host fallback: these tests preserve existing state/evidence behavior
+    # without needing an operator-approved image or a live Docker daemon.
+    from tools.orchestrator import workflow
+    from tools.orchestrator.core import (
+        VerificationCollection,
+        VerificationRequest,
+        command_declaration_digest,
+    )
+    from tools.orchestrator.runtime import (
+        DockerVerificationPolicy,
+        DockerVerificationSandbox,
+        VerificationImageAdmission,
+    )
+
+    image = "example.invalid/synthetic-only@sha256:" + "a" * 64
+
+    def test_authority(
+        self: Pipeline,
+    ) -> tuple[VerificationImageAdmission, DockerVerificationSandbox]:
+        return (
+            VerificationImageAdmission(
+                image, "b" * 64, "sha256:" + "c" * 64, "sha256:" + "d" * 64
+            ),
+            DockerVerificationSandbox(DockerVerificationPolicy(image, self.worktrees)),
+        )
+
+    def synthetic_docker_collection(
+        self: Pipeline,
+        request: VerificationRequest,
+        working: Path,
+        snapshot: str,
+        admission: VerificationImageAdmission,
+        sandbox: DockerVerificationSandbox,
+    ) -> VerificationCollection:
+        assert Git(working).snapshot(request.identity.base_sha) == snapshot
+        assert sandbox.policy.image == admission.image
+        metadata: list[dict[str, object]] = []
+        for index, command in enumerate(request.commands):
+            result = workflow.execute(
+                workflow.verification_command_argv(request.cwd, list(command)),
+                request.cwd,
+                timeout=request.timeout,
+            )
+            item = result.metadata()
+            item["declaration_digest"] = command_declaration_digest(command)
+            item["execution_backend"] = "synthetic-test-adapter-not-docker"
+            metadata.append({**item, "command_index": index})
+            if result.exit_code or result.timed_out or result.oversized:
+                return VerificationCollection(request.identity, tuple(metadata), failed=True)
+        return VerificationCollection(request.identity, tuple(metadata))
+
+    monkeypatch.setattr(Pipeline, "_verification_authority", test_authority)
+    monkeypatch.setattr(Pipeline, "_collect_docker_verification", synthetic_docker_collection)
     return repo
 
 
