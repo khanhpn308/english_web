@@ -12,6 +12,7 @@ import json
 import re
 import stat
 import subprocess
+import tempfile
 from pathlib import Path
 
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
@@ -154,72 +155,80 @@ def verify_registry_attestations(
         or not source_ref.startswith("refs/")
     ):
         raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: invalid trust identity")
-    verify_file_digest(gh_executable, expected_gh_sha256)
-    statements: list[dict[str, object]] = []
-    for predicate in _PREDICATES:
-        argv = [
-            str(gh_executable),
-            "attestation",
-            "verify",
-            "oci://" + image_reference,
-            "--repo",
-            repository,
-            "--signer-workflow",
-            signer_workflow,
-            "--source-digest",
-            source_sha,
-            "--source-ref",
-            source_ref,
-            "--predicate-type",
-            predicate,
-            "--format",
-            "json",
-        ]
-        try:
-            proc = subprocess.run(
-                argv,
-                shell=False,
-                capture_output=True,
-                text=True,
-                timeout=90,
-                check=False,
-                env={"PATH": "/usr/bin:/bin", "HOME": "/nonexistent", "GH_PROMPT_DISABLED": "1"},
-            )
-            if proc.returncode or len(proc.stdout) > 2_000_000:
-                raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: signed attestation rejected")
-            results = json.loads(proc.stdout)
-        except (OSError, subprocess.TimeoutExpired, UnicodeError, ValueError) as error:
-            raise SupplyChainBlocked(
-                "T090 SUPPLY_CHAIN_BLOCKED: attestation verification failed"
-            ) from error
-        if not isinstance(results, list) or not results:
-            raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: no verified attestations")
-        accepted: dict[str, object] | None = None
-        for result in results:
-            if not isinstance(result, dict):
-                continue
-            verification = result.get("verificationResult")
-            if not isinstance(verification, dict):
-                continue
-            statement = verification.get("statement")
-            if not isinstance(statement, dict) or statement.get("predicateType") != predicate:
-                continue
-            subjects = statement.get("subject")
-            if not isinstance(subjects, list):
-                continue
-            if any(
-                isinstance(subj, dict)
-                and subj.get("name") == image_reference.rsplit("@", 1)[0]
-                and isinstance(subj.get("digest"), dict)
-                and subj["digest"].get("sha256") == match.group(1)
-                for subj in subjects
-            ):
-                accepted = statement
-                break
-        if accepted is None:
-            raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: attested image subject mismatch")
-        statements.append(accepted)
-    return statements[0], statements[1]
+    # Execute the EXACT independently verified CLI bytes from a private copy.
+    # A mutable original path must never be reopened by subprocess after hashing.
+    pinned_bytes = verify_file_digest(gh_executable, expected_gh_sha256)
+    with tempfile.TemporaryDirectory(prefix="t090-pinned-gh-") as temporary:
+        pinned_gh = Path(temporary) / "gh"
+        pinned_gh.write_bytes(pinned_bytes)
+        pinned_gh.chmod(0o500)
+        if not hmac.compare_digest(_sha(pinned_gh.read_bytes()), expected_gh_sha256):
+            raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: pinned CLI copy mismatch")
+        statements: list[dict[str, object]] = []
+        for predicate in _PREDICATES:
+            argv = [
+                str(pinned_gh),
+                "attestation",
+                "verify",
+                "oci://" + image_reference,
+                "--repo",
+                repository,
+                "--signer-workflow",
+                signer_workflow,
+                "--source-digest",
+                source_sha,
+                "--source-ref",
+                source_ref,
+                "--predicate-type",
+                predicate,
+                "--format",
+                "json",
+            ]
+            try:
+                proc = subprocess.run(
+                    argv,
+                    shell=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=90,
+                    check=False,
+                    env={"PATH": "/usr/bin:/bin", "HOME": "/nonexistent", "GH_PROMPT_DISABLED": "1"},
+                )
+                if proc.returncode or len(proc.stdout) > 2_000_000:
+                    raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: signed attestation rejected")
+                results = json.loads(proc.stdout)
+            except (OSError, subprocess.TimeoutExpired, UnicodeError, ValueError) as error:
+                raise SupplyChainBlocked(
+                    "T090 SUPPLY_CHAIN_BLOCKED: attestation verification failed"
+                ) from error
+            if not isinstance(results, list) or not results:
+                raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: no verified attestations")
+            accepted: dict[str, object] | None = None
+            for result in results:
+                if not isinstance(result, dict):
+                    continue
+                verification = result.get("verificationResult")
+                if not isinstance(verification, dict):
+                    continue
+                statement = verification.get("statement")
+                if not isinstance(statement, dict) or statement.get("predicateType") != predicate:
+                    continue
+                subjects = statement.get("subject")
+                if not isinstance(subjects, list):
+                    continue
+                if any(
+                    isinstance(subj, dict)
+                    and subj.get("name") == image_reference.rsplit("@", 1)[0]
+                    and isinstance(subj.get("digest"), dict)
+                    and subj["digest"].get("sha256") == match.group(1)
+                    for subj in subjects
+                ):
+                    accepted = statement
+                    break
+            if accepted is None:
+                raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: attested image subject mismatch")
+            statements.append(accepted)
+        return statements[0], statements[1]
 
 
 def validate_candidate_osv_snapshot_source(snapshot_path: Path, pins_path: Path) -> dict[str, str]:
