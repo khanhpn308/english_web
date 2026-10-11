@@ -1374,3 +1374,43 @@ slots và tích hợp tuần tự. T079 bổ sung pool process và lập lịch 
 Pipeline, giữ nguyên contract của các vai trò. Không có cơ sở dữ liệu scheduler,
 dashboard, khóa phân tán hay resume chạy nền. Resource-aware scheduling và cơ chế
 cô lập mạnh hơn thuộc giai đoạn hạ tầng sau.
+
+## T090 R6-B3 — admitted Docker-only verification (candidate, 11/10/2026)
+
+The T090 branch removes the legacy direct Host verification collector: calling
+`collect_verification()` now raises `T090 SANDBOX_BLOCKED`. Production
+`Pipeline.verify()`, `reverify_candidate()`, and the concurrent audit preparation
+collector use a separate Git-frozen, dependency-free verification clone and
+`collect_verification_admitted()`. The admitted Docker runner verifies the source
+hash before each command, does not inherit the Host `.venv` or `node_modules`,
+and never retries a failed Docker command on the Host. Git worktree management,
+source freezing, and privileged integration remain Host-owned control-plane
+operations, not untrusted application test execution.
+
+Image admission requires **five independent Host-supplied inputs**, none read
+from repository config, model output, or task artifacts:
+
+- `T090_IMAGE_POLICY_PATH`: absolute path of an external operator-approved JSON policy
+- `T090_IMAGE_POLICY_SHA256`: externally pinned SHA-256 of those exact policy bytes
+- `T090_IMAGE_APPROVAL_SIGNATURE_PATH`: absolute detached Ed25519 signature path
+- `T090_IMAGE_TRUSTED_PUBLIC_KEY_PATH`: absolute trusted operator public key path
+- `T090_IMAGE_TRUSTED_PUBLIC_KEY_SHA256`: externally pinned public-key SHA-256
+
+All are mandatory. The Host independently verifies the pinned signature and
+source lock digests before constructing `DockerVerificationSandbox`. Absence or
+mismatch means **BLOCKED before test subprocess execution**. The repository's
+`infra/verification/image-policy.json` remains an explicitly unapproved
+candidate; copying or changing it to `approved: true` is not authorization.
+Never create a production signing key or approval policy from inside the worker
+repository. Even a properly signed policy is insufficient without independent
+registry manifest, publisher, SBOM, OSV/OS and live isolation verification.
+
+`orchestrator.yaml` intentionally sets `setup_commands: []`: the trusted
+verification image must preprovision all tooling offline. Older run configs
+that still request `npm ci` fail with `T090 SANDBOX_BLOCKED` instead of
+fetching arbitrary dependencies on either Host or sandbox. No automatic
+operator approval or main-branch merge is performed. Existing workflow tests
+use an *explicit synthetic test adapter* to preserve historical pipeline
+semantics; that adapter runs only inside the test fixture and is not Docker
+isolation evidence. Full Host CI and actual provisioned Docker negative/positive
+trials remain separate acceptance requirements.
