@@ -184,7 +184,7 @@ class Database:
                     dbapi.metric_operation = "write" if immediate else "read"
                     dbapi.metric_failed = False
             except Exception:
-                self.diagnostics_failed = True
+                self._diagnostic_failure()
             connection.exec_driver_sql("BEGIN IMMEDIATE" if immediate else "BEGIN")
 
         @event.listens_for(self.engine, "before_cursor_execute")
@@ -198,7 +198,7 @@ class Database:
                 }:
                     dbapi.metric_operation = "write"
             except Exception:
-                self.diagnostics_failed = True
+                self._diagnostic_failure()
 
         @event.listens_for(self.engine, "handle_error")
         def failed(context: object) -> None:
@@ -212,21 +212,26 @@ class Database:
                     if isinstance(dbapi, _ObservedConnection):
                         dbapi.metric_failed = True
             except Exception:
-                self.diagnostics_failed = True
+                self._diagnostic_failure()
+
+    def _diagnostic_failure(self) -> None:
+        self.diagnostics_failed = True
+        if self.telemetry is not None:
+            self.telemetry.span_retention_failed = True
 
     def _transaction_finished(self, operation: str, result: str) -> None:
         try:
             if self.telemetry is not None:
                 self.telemetry.record_dependency("sqlite", operation, result)
         except Exception:
-            self.diagnostics_failed = True
+            self._diagnostic_failure()
 
     def _observe_failure(self, category: str, *, check: str = "database") -> None:
         try:
             with self._status_lock:
                 if category == "BUSY":
                     if self._busy_count == 2**63 - 1:
-                        self.diagnostics_failed = True
+                        self._diagnostic_failure()
                     else:
                         self._busy_count += 1
                 if category in {"READ_ONLY", "INTEGRITY_FAILED", "SCHEMA_MISMATCH"}:
@@ -234,7 +239,7 @@ class Database:
             if self.telemetry is not None:
                 self.telemetry.record_storage_failure(category, check=check)
         except Exception:
-            self.diagnostics_failed = True
+            self._diagnostic_failure()
 
     @property
     def busy_count(self) -> int | None:
@@ -305,6 +310,8 @@ class Database:
                 connection.exec_driver_sql("UPDATE alembic_version SET version_num=version_num")
             self.storage_failure = None
             self._schema_revision = heads[0]
+            if self.telemetry is not None:
+                self.telemetry.record_integrity(True)
             return StorageInfo(heads[0], journal_mode, journal_mode == "wal")
         except sqlite3.Error as error:
             self._observe_failure(str(_failure(error)), check="startup")

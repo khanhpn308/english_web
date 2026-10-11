@@ -61,7 +61,7 @@
 - [x] [T046](t046-metrics-alerts-runbooks.md): Local RED metrics và operational Status API — `DONE (CODING_ONLY)`; PR #18 merged (`2c4b18e`), typed Status API/RED metrics and T017 generated contracts integrated; `FINAL_VERIFICATION_DEFERRED` by owner.
 - [x] [T060](t060-status-ui.md): Operational Status screen and consent integration — `DONE (CODING_ONLY)`; directly committed to `main` (`e76f6e4`) with StatusPage/AppShell integration; `FINAL_VERIFICATION_DEFERRED` by owner.
 - [x] [T038](t038-dashboard-ui.md): Learning Dashboard UI — `DONE (CODING_ONLY)`; PR #17 merged (`5e97b2a`); `FINAL_VERIFICATION_DEFERRED` by owner.
-- [ ] [T061](t061-alerts-runbooks.md): Local symptom alerts và runbook links
+- [ ] [T061](t061-alerts-runbooks.md): Local symptom alerts và runbook links — `CODE_IMPLEMENTED_UNVERIFIED`; owner-approved R1/R2 producers, Status API/UI and local runbooks connected; external health/qualified benchmark boundaries documented; all verification deferred (11/10/2026).
 - [x] [T039](t039-launcher.md): Windows launcher single-instance/bootstrap — `DONE (CODING_ONLY)`; PR #20 merged (`9e2adfa`), Windows in-process launcher and session bootstrap source integrated; `FINAL_VERIFICATION_DEFERRED` by owner (Windows runtime/packaging pending).
 - [ ] [T040](t040-first-run-recovery.md): Native first-run configuration và protected key store
 - [ ] [T054](t054-restore-recovery-drill.md): Staging restore và migration recovery drill

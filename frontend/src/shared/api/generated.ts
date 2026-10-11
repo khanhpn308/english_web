@@ -214,6 +214,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runbooks/{runbookId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Runbook
+         * @description Serve only trusted, escaped bundled documents through SessionGuard.
+         */
+        get: operations["get_runbook_api_v1_runbooks__runbookId__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sources": {
         parameters: {
             query?: never;
@@ -826,6 +846,49 @@ export interface components {
             storageStatus: components["schemas"]["StorageStatus"];
             /** Version */
             version: string;
+        };
+        /** LocalAlert */
+        LocalAlert: {
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "api_unavailable" | "api_error_rate" | "search_latency" | "bridge_failure" | "storage_contention" | "source_parse_failure" | "integrity_failure";
+            /**
+             * Observation
+             * @enum {string}
+             */
+            observation: "MEASURED" | "NO_DATA" | "INCOMPLETE";
+            /**
+             * Runbookid
+             * @enum {string}
+             */
+            runbookId: "api-unavailable" | "api-error-rate" | "search-performance" | "bridge-failure" | "storage-integrity" | "source-sync" | "first-run-and-restore";
+            /** Samplecount */
+            sampleCount: number;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "ticket" | "page-equivalent";
+            /** Startedat */
+            startedAt: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "ACTIVE" | "RESOLVED" | "INACTIVE" | "UNKNOWN";
+            /** Summary */
+            summary: string;
+            /** Updatedat */
+            updatedAt: string | null;
+        };
+        /** LocalAlertSummary */
+        LocalAlertSummary: {
+            /** Diagnosticsdegraded */
+            diagnosticsDegraded: boolean;
+            /** Items */
+            items: components["schemas"]["LocalAlert"][];
         };
         /** LocalMetricsSummary */
         LocalMetricsSummary: {
@@ -1615,6 +1678,7 @@ export interface components {
             lastSyncAt: string | null;
             /** Lastsyncdurationms */
             lastSyncDurationMs: number | null;
+            localAlerts: components["schemas"]["LocalAlertSummary"] | null;
             localMetrics: components["schemas"]["LocalMetricsSummary"];
             offlineCapabilities: components["schemas"]["OfflineCapabilities"];
             /** Policyversion */
@@ -3567,6 +3631,118 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReviewErrorResponse"];
+                };
+            };
+        };
+    };
+    get_runbook_api_v1_runbooks__runbookId__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runbookId: "api-unavailable" | "api-error-rate" | "search-performance" | "bridge-failure" | "storage-integrity" | "source-sync" | "first-run-and-restore";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Error Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusErrorResponse"];
                 };
             };
         };

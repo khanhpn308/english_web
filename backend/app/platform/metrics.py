@@ -240,6 +240,7 @@ class MeteredTelemetry(Telemetry):
     def record_dependency(
         self, dependency: str, operation: str, result: str,
         duration_ms: float | None = None, *, invalid_response: bool = False,
+        qualifying_failure: bool | None = None,
     ) -> None:
         try:
             if dependency == "bridge":
@@ -265,6 +266,7 @@ class MeteredTelemetry(Telemetry):
             self.metrics.failed = True
         super().record_dependency(
             dependency, operation, result, duration_ms, invalid_response=invalid_response,
+            qualifying_failure=qualifying_failure,
         )
 
     def record_storage_failure(self, category: str, *, check: str = "database") -> None:

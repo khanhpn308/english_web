@@ -1,3 +1,15 @@
+## 11/10/2026 - T061 owner-approved R1/R2 production integration (Asia/Bangkok)
+
+- Preserved the initial uncommitted alert engine and evidence. Connected lifespan-owned alerts to existing telemetry HTTP, bridge, SQLite and committed source observations; retained bounded windows, recovery/dedup behavior and nonfatal diagnostic degradation. No new metrics subsystem, worker, remote service, persistence or migration.
+- Added typed alert state/completeness to Status API, accessible alert rendering and actionable same-origin runbook links to the existing StatusPage. Served only fixed escaped bundled runbooks through session/origin protection, and added SQLITE_BUSY guidance to storage-integrity.md. Ordinary search traffic stays unqualified; external health probing remains T039 responsibility.
+- Updated API documentation, observability evidence, task card and unchecked todo entry to `CODE_IMPLEMENTED_UNVERIFIED`; regenerated OpenAPI/TypeScript using the existing offline source generator. Tests, runtime, builds, lint, typecheck, audits, scans and Windows verification remain pending. No dependency install or Git mutation; task not marked DONE.
+
+## 11/10/2026 - T061 independent local symptom alert engine (Asia/Bangkok)
+
+- Created `backend/app/platform/alerts.py` with seven exact alert/severity/runbook mappings, bounded sliding windows, no-data/incomplete handling, deduplicated evaluated activation/resolution records and local telemetry degradation observation. No worker, second sink, exporter, inference, learning write or public DTO was added.
+- Created `docs/reviews/observability-evidence-001.md`; updated the T061 card and unchecked todo entry to `BLOCKED_SCOPE`, with independent source `IMPLEMENTED_UNVERIFIED`. Recorded producer/status/contract/UI paths outside the allowlist, unavailable bridge/source input contracts and missing contention-specific runbook guidance.
+- Coding-only: no tests or test changes, build, lint, typecheck, audit, security scan, install, provider calls, subagents or Git mutation. All acceptance evidence and CP18 remain pending. Existing source, runbooks, thresholds, configuration and user data remain untouched.
+
 ## 11/10/2026 - T039 owner-approved coding-only merge and closure (Asia/Bangkok)
 
 - Owner-approved [PR #20](https://github.com/khanhpn308/english_web/pull/20) merged T039 Windows Launcher into `main` (`9e2adfa`). Source includes the in-process backend launcher, reserved loopback port, same-backend bootstrap session, mutex/focus signalling, native remediation and bounded shutdown; the task card and checklist are `DONE (CODING_ONLY)`.

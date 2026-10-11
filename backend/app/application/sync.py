@@ -38,6 +38,7 @@ from backend.app.application.source_write import (
 from backend.app.dashboard.history import record_coverage
 from backend.app.markdown_sync.parser import ParsedDocument, parse_markdown
 from backend.app.persistence.database import read_only_observation
+from backend.app.platform.metrics import MAX_SERIES
 from backend.app.platform.telemetry import DependencyOutcome, Telemetry
 from backend.app.review.models import ensure_card, reset_card_state
 from backend.app.vocabulary.models import SourceFile, WordForm
@@ -177,6 +178,20 @@ class SyncService:
             observation[1] if observation is not None and operation_id == observation[0] else None
         )
         return counts, last_sync_at, duration
+
+    @staticmethod
+    def observe_alert_sources(engine: Engine, telemetry: Telemetry) -> None:
+        """Read only committed source categories, with bounded overflow evidence."""
+        if telemetry.alerts is None:
+            return
+        try:
+            with read_only_observation(), engine.connect() as connection, connection.begin():
+                rows = connection.exec_driver_sql(
+                    "SELECT id, status FROM source_files ORDER BY id LIMIT ?", (MAX_SERIES + 1,),
+                ).all()
+                telemetry.record_sources(dict(rows))
+        except Exception:
+            telemetry.sources_unavailable()
 
     def _committed_date_variants(
         self, connection: Connection, adapter: SourceFileAdapter,
@@ -600,9 +615,14 @@ class SyncService:
                 ),
             ) if self.telemetry is not None else contextlib.nullcontext(DependencyOutcome())
         )
-        with measurement as outcome:
-            result = self._sync(reason, operation_id=operation_id)
-            outcome.result = "success" if result.status == "COMPLETED" else "failure"
+        try:
+            with measurement as outcome:
+                result = self._sync(reason, operation_id=operation_id)
+                outcome.result = "success" if result.status == "COMPLETED" else "failure"
+        finally:
+            if self.telemetry is not None:
+                with self._sync_lock:
+                    self.observe_alert_sources(self.engine, self.telemetry)
         if result.status == "COMPLETED":
             self._last_observation = (result.operation_id, outcome.duration_ms)
         return result

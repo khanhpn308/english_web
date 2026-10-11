@@ -1,6 +1,9 @@
 """Read-only operational observations through the production session boundary."""
 
+import stat
 from datetime import datetime
+from html import escape
+from pathlib import Path
 from time import monotonic
 from typing import Annotated, Literal
 
@@ -10,18 +13,58 @@ from backend.app.http.consent import reject_read_body
 from backend.app.http.errors import error_response
 from backend.app.http.health import BridgeStatus, StorageStatus
 from backend.app.persistence.database import StorageError, read_only_observation
+from backend.app.platform.alerts import Category, LocalAlerts, Severity
 from backend.app.platform.metrics import MetricsUnavailable
 from backend.app.platform.telemetry import request_id
 from backend.app.vocabulary.search_index import PROJECTION_VERSION
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 from sqlalchemy.exc import SQLAlchemyError
-from starlette.responses import JSONResponse
+from starlette.responses import HTMLResponse, JSONResponse
 
 Readiness = Literal["NOT_READY", "SYNCING", "READY", "DEGRADED", "UNKNOWN"]
 OperationalStorageStatus = StorageStatus | Literal[
     "BUSY", "READ_ONLY", "INTEGRITY_FAILED", "SCHEMA_MISMATCH", "UNAVAILABLE", "UNKNOWN",
 ]
+RunbookId = Literal[
+    "api-unavailable", "api-error-rate", "search-performance", "bridge-failure",
+    "storage-integrity", "source-sync", "first-run-and-restore",
+]
+_RUNBOOK_ROOT = Path(__file__).resolve().parents[3] / "docs" / "runbooks"
+_RUNBOOK_IDS: tuple[RunbookId, ...] = (
+    "api-unavailable", "api-error-rate", "search-performance", "bridge-failure",
+    "storage-integrity", "source-sync", "first-run-and-restore",
+)
+_RUNBOOKS = {identifier: _RUNBOOK_ROOT / f"{identifier}.md" for identifier in _RUNBOOK_IDS}
+AlertObservation = Literal["MEASURED", "NO_DATA", "INCOMPLETE"]
+_ALERT_SUMMARIES: dict[Category, str] = {
+    "api_unavailable": "Use the Windows launcher for two consecutive failed health probes; preserve the database.",
+    "api_error_rate": "Inspect local request IDs and storage/configuration failures; preserve data before restarting.",
+    "search_latency": "Requires the approved benchmark fixture; ordinary API timing does not establish search performance.",
+    "bridge_failure": "Inspect bridge timeout/auth/quota/validation failures; local search and review remain independent.",
+    "storage_contention": "Preserve the draft, reconcile the existing operation, and retry only with bounded backoff.",
+    "source_parse_failure": "Repair invalid sources explicitly, then sync; valid sources and learning history remain available.",
+    "integrity_failure": "Stop destructive writes, preserve the original database, and follow staged recovery.",
+}
+
+
+class LocalAlert(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    category: Category
+    severity: Severity
+    state: Literal["ACTIVE", "RESOLVED", "INACTIVE", "UNKNOWN"]
+    observation: AlertObservation
+    startedAt: datetime | None
+    updatedAt: datetime | None
+    sampleCount: int = Field(ge=0, le=16384)
+    runbookId: RunbookId
+    summary: str = Field(max_length=240)
+
+
+class LocalAlertSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    diagnosticsDegraded: bool
+    items: list[LocalAlert] = Field(min_length=7, max_length=7)
 
 
 class SourceCounts(BaseModel):
@@ -72,6 +115,7 @@ class StatusSummary(BaseModel):
     consentState: ConsentState | Literal["UNKNOWN"]
     policyVersion: PolicyVersion | None
     localMetrics: LocalMetricsSummary
+    localAlerts: LocalAlertSummary | None
     requestId: str
 
 
@@ -91,6 +135,84 @@ class StatusErrorResponse(BaseModel):
 
 
 router = APIRouter(prefix="/api/v1", tags=["status"])
+
+
+@router.get(
+    "/runbooks/{runbookId}", response_class=HTMLResponse, response_model=None,
+    responses={
+        code: {"content": {"application/json": {
+            "schema": {"$ref": "#/components/schemas/StatusErrorResponse"},
+        }}} for code in (401, 403, 413, 422, 500, 503)
+    },
+)
+def get_runbook(
+    runbookId: RunbookId, request: Request,
+    _body: Annotated[None, Depends(reject_read_body)],
+) -> Response:
+    """Serve only trusted, escaped bundled documents through SessionGuard."""
+    if request.query_params:
+        return error_response(422, "VALIDATION_ERROR")
+    try:
+        path = _RUNBOOKS[runbookId]
+        info = path.stat()
+        if (
+            path.is_symlink() or path.resolve().parent != _RUNBOOK_ROOT
+            or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+            or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+        ):
+            return error_response(503, "CONFIGURATION_REQUIRED")
+        with path.open("rb") as stream:
+            content = stream.read(65537)
+        if len(content) > 65536:
+            return error_response(503, "CONFIGURATION_REQUIRED")
+        paragraphs = "".join(
+            f"<p>{escape(line)}</p>" for line in content.decode("utf-8").splitlines() if line
+        )
+    except (OSError, UnicodeError):
+        return error_response(503, "CONFIGURATION_REQUIRED")
+    except Exception:
+        return error_response(500, "INTERNAL_ERROR")
+    links = "".join(
+        f'<li><a href="/api/v1/runbooks/{identifier}">{identifier}</a></li>'
+        for identifier in _RUNBOOKS
+    )
+    return HTMLResponse(
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f'<title>Runbook: {runbookId}</title></head><body><main><h1>{runbookId}</h1>'
+        f'<a href="/status">Back to status</a><article>{paragraphs}</article>'
+        f'<nav aria-label="Local runbooks"><ul>{links}</ul></nav></main></body></html>',
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+def _observe_alerts(engine: LocalAlerts | None) -> LocalAlertSummary | None:
+    if engine is None:
+        return None
+    try:
+        # shortcut: idle expiry waits for observations/Status; add a tick if push is required.
+        evaluation = engine.evaluate()
+        items = []
+        for status in evaluation.statuses:
+            record = status.latest_record
+            severity, runbook = engine.rule(status.category)
+            items.append(LocalAlert(
+                category=status.category, severity=severity,
+                state="ACTIVE" if status.active is True else "UNKNOWN" if status.active is None
+                else "RESOLVED" if record is not None else "INACTIVE",
+                observation=TypeAdapter(AlertObservation).validate_python(
+                    {"measured": "MEASURED", "no_observations": "NO_DATA", "incomplete": "INCOMPLETE"}[status.data_state],
+                ),
+                startedAt=engine.timestamp(record.started_at) if record is not None else None,
+                updatedAt=engine.timestamp(record.updated_at) if record is not None else None,
+                sampleCount=status.sample_count,
+                runbookId=TypeAdapter(RunbookId).validate_python(Path(runbook).stem),
+                summary=_ALERT_SUMMARIES[status.category],
+            ))
+        return LocalAlertSummary(items=items, diagnosticsDegraded=evaluation.diagnostics_degraded)
+    except Exception:
+        engine.failed = True
+        return None
 
 
 @router.get(
@@ -202,10 +324,12 @@ def _observe_status(request: Request) -> StatusSummary:
         except MetricsUnavailable:
             metrics_failed = True
     telemetry = state.telemetry
+    alerts = _observe_alerts(getattr(state, "alerts", None))
     diagnostics_failed = (
         metrics_failed or telemetry.span_retention_failed
         or (telemetry.sink is not None and telemetry.sink.failed)
         or (database is not None and database.diagnostics_failed)
+        or alerts is None or alerts.diagnosticsDegraded
     )
     local_ready = getattr(state, "ready", None)
     local_storage = local_ready is True and storage == "OK"
@@ -251,5 +375,5 @@ def _observe_status(request: Request) -> StatusSummary:
             lookup=False, newQuiz=False, feedback=False, audio=None,
         ),
         consentState=consent_state, policyVersion=policy_version,
-        localMetrics=metrics, requestId=request_id(),
+        localMetrics=metrics, localAlerts=alerts, requestId=request_id(),
     )
