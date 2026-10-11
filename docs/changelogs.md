@@ -1,3 +1,9 @@
+## 11/10/2026 - T046 coding-only merge and closure (Asia/Bangkok)
+
+- Owner-approved PR #18 merged T046 Operational Status API and local RED metrics into `main` (merge commit `2c4b18e`). Host resolved concurrent T037/T038 bookkeeping and regenerated contract conflicts on the feature branch before merge.
+- Task card and `tasks/todo.md` now record `DONE (CODING_ONLY)`. Implemented Status API, typed unavailable values, 5xx-only rolling error rate, consent read-only observation and bounded bridge/sync/SQLite instrumentation are included as unverified source.
+- `FINAL_VERIFICATION_DEFERRED` by owner: tests, builds, lint, typechecking, runtime/browser/Windows behavior, security scans and audit have not been executed as part of this closure. No executable PASS or release-readiness claim.
+
 ## 11/10/2026 - T046 resumed operational status backend (Asia/Bangkok)
 
 - Continued all existing T046 changes under the recorded owner-approved scope exception. Added `backend/app/http/status.py` and the exact nullable/enumerated StatusSummary contract in `docs/api-contract.md`; registered it through production `main.py`, with no-store, session guards, request correlation, real lifespan uptime and independent dependency/offline observations.
