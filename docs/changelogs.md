@@ -1,3 +1,9 @@
+## 11/10/2026 - T083 authorized bookkeeping commit and worktree closure (Asia/Bangkok)
+
+- Owner authorized committing the three T083 bookkeeping files and closing `/home/khanh/projects/vocabularies-t083-codex`. The worktree had no tracked, untracked or ignored changes; its tip `5153c0c` is already an ancestor of `main`. `git worktree remove` completed without force; branch `fix/t083-dag-metadata-remediation` remains available.
+- Fresh checks: `npm run floor:check` exits 0; scheduler tests pass, 48 passed in 11.22s; scoped Ruff lint/format and Mypy exit 0; `git diff --check` exits 0; `GITLEAKS_BIN=/home/khanh/.local/tools/gitleaks-8.30.1/gitleaks npm run security:secrets` exits 0 with zero findings. Full orchestrator-suite evidence below remains historical; no product/browser/Windows/release checks were rerun.
+- Only `docs/changelogs.md`, `tasks/t083-dag-metadata-remediation.md` and `tasks/todo.md` enter this commit. Product source, tests, contracts, migrations, T008 and other worktrees remain untouched. T008 metadata remediation remains the next separate task; closing T083 does not establish release acceptance.
+
 ## 11/10/2026 - T037-R1 transaction evidence and completion ordering correction (Asia/Bangkok)
 
 - Added conditional additive `0013_study_history_commits` after unchanged `0012_study_history`. H1 rollback safety alone cannot identify transaction boundaries. Prospective immutable commit markers and terminal-quiz metadata establish grouped final SQLite projections; older history stays UNKNOWN. This supersedes the earlier R1 statement that no migration was necessary.
@@ -9,6 +15,14 @@
 - Completed the dashboard consumer for the H1 SQLite ledger. Known eligibility windows replay committed source, link, card, schedule, reset, and journal facts after the opening snapshot; missing or ambiguous intervals remain unknown.
 - Dashboard reads metrics, history, review events, and terminal quiz evidence in one caller-owned SQLite read transaction and returns HTTP 200 with nullable `streak.currentDays` when exact history is unavailable.
 - No additional migration was needed. Generated contracts and executable verification remain deferred; T037 task cards stay unchanged.
+
+## 11/10/2026 - T083 Host reconciliation and scoped closure (Asia/Bangkok)
+
+- `tasks/t083-dag-metadata-remediation.md`, `tasks/todo.md`: retained the existing DONE status and reconciled the unchecked todo entry after confirming correction `9aa1bb0` and closure `a0b23be` are already integrated. No additional T018/T081 implementation patch is needed; original 04/10/2026 evidence is preserved unchanged.
+- Host inventory at local main `e3d34c82b0d9bc9fb3ebc4ff1e4226efeb3be6db`, the worktree and local origin/main snapshot `5153c0cf355289e9bfa4cd241851ca3add977658` finds 90 valid canonical cards/unique IDs, zero self-dependencies and zero missing targets among them. T018 retains T015/T017/T052/T081; T081 retains T004/T080. The concurrent main update did not change relevant orchestrator source/tests/configuration or T083 metadata.
+- Verification: scheduler 48 passed in 16.59s; full orchestrator 561 passed in 370.68s. Floor, scoped Ruff/format, Mypy and diff checks pass; `npm run security:secrets` exits 0 with 0 findings across working-tree, staged and history scopes.
+- Canonical-main `python -m tools.orchestrator schedule --dry-run` exits 2 on `Invalid task metadata: tasks/t008-r4-shared-remediation.md`. This separate malformed authorization document is reported under T083's independent defect rule and left untouched. No whole-DAG PASS, readiness counts or real dispatch is claimed; a separately scoped fix is required.
+- Closure changes only the three bookkeeping files. Scheduler/Pipeline, tests, product/contracts/migrations, T018/T081/T008 documents, constraints and unrelated task states are untouched. No independent audit, product/browser/Windows/release gate, staging, commit, merge, fetch or push; documentation follows documentation-and-adrs 0.6.12.
 
 ## 11/10/2026 - T045 code integrated into local main; FINAL_VERIFICATION_DEFERRED
 

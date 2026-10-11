@@ -155,7 +155,7 @@ Infrastructure verification: [final evidence](../docs/reviews/orchestrator-verif
 
 - [x] [T082](t082-task-id-remediation.md): Canonical-ID remediation integrated on main: orchestrator T075/T076 preserved, UI cards renumbered T080/T081, live UI links/dependencies remapped, 82 unique IDs confirmed.
 
-- [ ] [T083](t083-dag-metadata-remediation.md): Repository DAG dependency metadata remediation ready for review: removed T018 and T081 Dependencies prose self-references; candidate DAG resolves with zero self-dependencies (83 cards, 40 DONE, 6 READY, 37 BLOCKED). Canonical main dry-run pending integration.
+- [x] [T083](t083-dag-metadata-remediation.md): DONE; Host bookkeeping reconciled 11/10/2026. Existing integrated T018/T081 self-dependency corrections confirmed; 90 canonical IDs unique, zero self-edges or missing targets. Whole-repository scheduler remains blocked by independent invalid metadata in `tasks/t008-r4-shared-remediation.md`; no DAG PASS claimed.
 - [x] [T085](t085-task-dependency-parser.md): Normalize authoritative task dependency parsing — DONE (merged `2f0a7b900`; final acceptance pending)
 
 - [x] [T084](t084-scheduler-admission-platform-baseline.md): Scheduler admission & platform-baseline normalization — DONE (merged `47da21a08`; final acceptance pending); later R2 remediation evidence remains pending
