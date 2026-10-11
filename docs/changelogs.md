@@ -1,3 +1,16 @@
+## 11/10/2026 - T039 Windows launcher production source (Asia/Bangkok)
+
+- Created `launcher/src/main.py` and `launcher/src/windows_mutex.py` against owner-approved contract commit `bb4fa4a`. Implemented validated existing four-field Windows TOML, one configured in-process FastAPI/Uvicorn server, exclusive reserved loopback socket, 10-second health readiness, same-app one-time fragment bootstrap, native failures and bounded shutdown with session invalidation and no destructive data cleanup.
+- Implemented fixed mutex/focus event with current-user/SYSTEM ACL, owner/logon-session validation, abandoned-owner recovery and duplicate signal-only behavior. Browser activation uses a captured, validated process/window and bounded Win32 foreground calls; unavailable focus gives native guidance and no extra backend/tab/token.
+- Extended `docs/runbooks/api-unavailable.md` with actual configuration/assets/startup/timeout/session/focus/recovery behavior. Updated T039 card and unchecked todo as `CODE_IMPLEMENTED_UNVERIFIED`, not DONE. T040 provisioning, T056 layout/close controls and T057 Windows evidence are deferred; backend static-root/Vite output alignment, exact-tab focus and OS/browser URI forwarding remain explicitly unverified.
+- Owner explicitly authorized `git fetch origin` and fast-forward pull of the existing T039 branch; no merge commit, reset or rebase. All integrated backend/frontend/contracts, dependencies, test files, configuration, credentials and real data are untouched. No tests, build, benchmark, lint, typecheck, audit, security scan or launcher runtime executed; no commit/push/merge or release claim.
+
+## 11/10/2026 - T039 owner-approved launcher contract clarification (Asia/Bangkok)
+
+- Owner approved in-process Uvicorn/FastAPI startup, use of the existing backend SessionStore for one-time T006/T066 bootstrap, and a Windows primary-owned event for duplicate-launch focus requests. Added the normative T039 launcher startup/configuration/session/focus contract to `docs/api-contract.md` on `feature/t039-windows-launcher`.
+- Documented the narrow `docs/api-contract.md` scope exception in T039 task card; backend settings, session guard and main factory require no edits. Native first-run configuration/key provisioning remains T040; packaging remains T056.
+- T039 is `READY_FOR_CODE (CODING_ONLY)` following a previous `BLOCKED_CONTRACT` handoff; **not implemented, merged or DONE**. No tests, builds, audits or Windows execution were run; browser tab focus evidence remains pending Windows acceptance.
+
 ## 11/10/2026 - T060 coding-only completion on main (Asia/Bangkok)
 
 - T060 Operational Status UI committed directly to `main` at `e76f6e4`, adding `StatusPage.tsx`, integrating the actual `/status` route through `AppShell.tsx`, and recording typed readiness/offline/consent/metrics presentation and visibility-bound 30-second polling in the implementation handoff.

@@ -2,7 +2,7 @@
 
 **Task ID:** `T039`  
 **Title:** Windows launcher single-instance/bootstrap  
-**Status:** `TODO`  
+**Status:** `CODE_IMPLEMENTED_UNVERIFIED` (CODING_ONLY; not DONE)  
 **Goal:** Windows launcher single-instance/bootstrap. First launch starts one backend/tab; duplicate focuses existing and no second port.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -73,6 +73,26 @@ python -m mypy launcher
 - Focused commands đạt kết quả/exit code ghi trong criteria; negative probe phải fail đúng reason. Documentation tasks có conformance report thay cho application-test pass.
 - Evidence ghi command, exit code, môi trường và artifact. Thiếu Windows/browser/provider environment là PENDING; không hoàn tất gate thiếu evidence.
 - Handoff ghi files sửa, files chủ ý không sửa, kết quả, risk còn lại và next task. Chỉ cập nhật `DONE`/checklist sau verification; commit khi đã được ủy quyền.
+
+## Owner-approved T039 contract clarification (11/10/2026)
+
+- Previous worker handoff: BLOCKED_CONTRACT; no implementation source changed, no tests, no audit, no Git write. The blocking questions are resolved by the owner-approved contract documented in [docs/api-contract.md](../docs/api-contract.md) under **T039 Windows launcher in-process handoff**. The task is now **READY_FOR_CODE (CODING_ONLY)**, not DONE.
+- Explicit scope exception approved by owner: T039 may modify docs/api-contract.md to lock startup/config/session/focus semantics, in addition to launcher/src/main.py, launcher/src/windows_mutex.py, docs/runbooks/api-unavailable.md and common task bookkeeping. This exception does not authorize modifying backend/app/main.py, backend/app/platform/config.py, backend/app/http/session.py, frontend source or generated OpenAPI/DTO.
+- Backend and launcher are one process with a controlled Uvicorn server; launch uses create_app(AppSettings with actual reserved loopback port and validated storage path, markdown_root). The same backend SessionStore issues/exchanges 60-second one-time bootstrap credentials after health readiness.
+- The v1 TOML root fields and validation, 10s health readiness budget, fixed mutex and auto-reset focus event, Windows foreground limitations, native failure remediation and strict no-second-backend/tab behavior are locked by the approved contract. T040 owns provisioning and DPAPI; T056 owns packaging.
+- Focus/event implementation is source code only in this pass. Exact browser tab activation on Windows remains PENDING_WINDOWS_EVIDENCE until T057; an unverified foreground attempt is not accepted as PASS.
+- CODING_ONLY constraints supersede the test-authoring and executable verification suggestions elsewhere in this older card: create/modify no test files; run no test/build/lint/typecheck/audit/security scan. Do not commit, push, merge or mark DONE from the worker. Report IMPLEMENTED_UNVERIFIED or a precise remaining blocker.
+
+## Coding-only implementation handoff (11/10/2026)
+
+- Fast-forward synchronization explicitly authorized by the owner: `git fetch origin`, then `git pull --ff-only origin feature/t039-windows-launcher`; base is approved contract commit `bb4fa4a218aa59a54344ba8585a2c217665f4401`. Existing integrated T037/T038/T046/T060/T064 source is preserved.
+- Created only `launcher/src/main.py` and `launcher/src/windows_mutex.py`. Updated `docs/runbooks/api-unavailable.md` and T039 bookkeeping. Existing backend factory/settings/session/bootstrap/health, frontend bootstrap/status/dashboard, generated contracts, T040/T056, dependencies, credentials, configuration and real learning data are untouched.
+- Source entrypoint owns one configured in-process Uvicorn server, an exclusive reserved loopback socket, bounded authoritative readiness and the same app's SessionStore. Native configuration validation consumes only the approved four TOML fields without provisioning, key access or writes. Assets are checked at the existing backend served location before startup/browser opening.
+- Current-user/SYSTEM ACLs and owner checks protect the constant mutex and auto-reset focus event. The security descriptor's group is the current logon SID and is checked on reopen to reject another logon session. Pre-existing focus events are refused because their reset mode cannot safely be assumed. Abandoned mutex acquisition is recovery ownership, not evidence of a healthy instance.
+- Duplicates only signal the event and return `FOCUS_REQUESTED`; they neither bind nor create backend/session/browser resources. The primary performs bounded focus attempts for its captured, validated browser window, with native guidance when unavailable. Signal delivery and a foreground window do not prove exact-tab activation.
+- Runtime health/thread failure invalidates sessions and cleans up owned resources. Graceful shutdown waits five seconds, escalates server exit for one second, and retains ownership until the worker stops. A hung shutdown warns natively and exits the owning process on dismissal or after five further seconds; acknowledged data remains subject to the existing SQLite/journal recovery policy.
+- Remaining integration/evidence: T040 provisioning, T056 installation layout/close controls and T057 Windows ACL/logon/abandonment/browser-focus/privacy/timeout/crash acceptance. Vite emits `frontend/dist`; backend `STATIC_ROOT = Path(__file__).resolve().parents[2] / "frontend" / "dist"` also resolves to the repository-root `frontend/dist` in the current source layout. T039 checks the presence of built assets; packaged layout remains a T056 concern. OS/browser forwarding of the transient URI and exact-tab activation are not guaranteed by this launcher.
+- No test files created/modified. Tests, runtime execution, builds, benchmarks, lint, typecheck, audits and security scans were not run. No executable PASS or release claim; acceptance boxes remain unchecked and T039 is not DONE. No worker commit, push or merge.
 
 ## Risk
 
