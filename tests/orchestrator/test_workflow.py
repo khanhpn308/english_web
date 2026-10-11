@@ -57,6 +57,7 @@ Output = TypeVar("Output", bound=BaseModel)
 # narrowly scoped synthetic functional-test adapter.
 _PRODUCTION_IMAGE_AUTHORITY = Pipeline._verification_authority
 _PRODUCTION_DOCKER_COLLECTION = Pipeline._collect_docker_verification
+_PRODUCTION_DOCKER_WORKSPACE = Pipeline.docker_verification_workspace
 
 
 @pytest.fixture
@@ -171,6 +172,11 @@ python -m pytest test_app.py -q
 
     monkeypatch.setattr(Pipeline, "_verification_authority", test_authority)
     monkeypatch.setattr(Pipeline, "_collect_docker_verification", synthetic_docker_collection)
+    # Preserve inherited private-toolchain test behavior through the legacy
+    # synthetic fixture ONLY. Real R6-B3 production clones never use this path.
+    monkeypatch.setattr(
+        Pipeline, "docker_verification_workspace", Pipeline.verification_workspace
+    )
     return repo
 
 
@@ -2439,6 +2445,8 @@ def concurrent_audit_pipeline(
         admission: VerificationImageAdmission,
         sandbox: DockerVerificationSandbox,
     ) -> VerificationCollection:
+        if pipeline.live_state is None or pipeline.live_state.current_agent != "concurrent_audit_preparation":
+            return collect(self, request, working, snapshot, admission, sandbox)
         assert threading.get_ident() != pipeline.owner
         agents.enter(rendezvous=False)
         try:
@@ -4514,6 +4522,7 @@ def test_t090_pipeline_verify_calls_attested_docker_collector_not_legacy_host(
 
     pipeline = Pipeline(repository, configuration(integrate=False), FakeAgents())
     monkeypatch.setattr(Pipeline, "_collect_docker_verification", _PRODUCTION_DOCKER_COLLECTION)
+    monkeypatch.setattr(Pipeline, "docker_verification_workspace", _PRODUCTION_DOCKER_WORKSPACE)
     observed: list[tuple[str, ...]] = []
 
     def docker_only(
