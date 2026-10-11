@@ -18,7 +18,7 @@ export function isObject(value: unknown): value is Record<string, unknown> {
 export function isVerification(value: unknown): value is keyof typeof verificationLabels {
   return value === 'VERIFIED' || value === 'UNVERIFIED' || value === 'MISSING';
 }
-export function isWordForm(value: unknown): value is Omit<Page['data'][number], 'meaningViMatch' | 'noteDates'> {
+export function isWordForm(value: unknown): value is Record<string, unknown> & Pick<Page['data'][number], 'id' | 'lemma' | 'partOfSpeech' | 'updatedAt' | 'revision' | 'verificationSummary'> {
   return isObject(value) && typeof value.id === 'string' && typeof value.lemma === 'string'
     && typeof value.partOfSpeech === 'string' && typeof value.updatedAt === 'string'
     && Number.isInteger(value.revision) && typeof value.revision === 'number' && value.revision >= 0
@@ -146,7 +146,7 @@ export function SearchPage({ path, onNavigate }: { path: string; onNavigate: Nav
     {params.get('notice') === 'cursorExpired' && <p role="status">Trang đã hết hạn do dữ liệu hoặc truy vấn thay đổi. Đã bắt đầu lại từ trang đầu và giữ bộ lọc.</p>}
     {!active && <p role="status">Nhập nghĩa tiếng Việt hoặc dạng từ, chọn bộ lọc, hoặc bấm Duyệt kho từ.</p>}
     {(view.loading || cursorExpired) && <div className="min-h-32 rounded-md bg-muted p-4 space-y-3"><p role="status" aria-live="polite">Đang tải kết quả…</p><div aria-hidden="true" aria-busy="true" className="space-y-3"><div className="h-5 w-1/2 rounded bg-border" /><div className="h-5 rounded bg-border" /></div></div>}
-    {view.error && !cursorExpired && <ReadRecovery error={view.error} onRetry={() => setRetry(value => value + 1)} />}
+    {Boolean(view.error) && !cursorExpired && <ReadRecovery error={view.error} onRetry={() => setRetry(value => value + 1)} />}
     {view.data && <>
       <p role="status" aria-live="polite">{view.data.data.length} kết quả trên trang này. {!query.has('meaningVi') && !query.has('lemma') && 'Đang duyệt kho từ.'}</p>
       {view.data.data.length === 0 ? <p>Không tìm thấy dạng từ phù hợp. Thử đổi truy vấn hoặc xóa bộ lọc.</p> :

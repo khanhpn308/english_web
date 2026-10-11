@@ -1,6 +1,6 @@
-import React, { useState, useRef, useCallback, useEffect, type FormEvent } from 'react';
+import React, { useState, useRef, useEffect, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAiConsent } from '@/features/consent/AiConsentGate';
 import { ApiError, MutationUnknownError, apiClient } from '@/shared/api/client';
 import type { components } from '@/shared/api/generated';
@@ -18,7 +18,7 @@ interface View {
   code?: string;
 }
 
-export function QuizBuilder({ path, onNavigate }: { path?: string; onNavigate?: (path: string) => void }) {
+export function QuizBuilder({ onNavigate }: { path?: string; onNavigate?: (path: string) => void }) {
   const consent = useAiConsent();
   const [mcqCount, setMcqCount] = useState('2');
   const [clozeCount, setClozeCount] = useState('2');

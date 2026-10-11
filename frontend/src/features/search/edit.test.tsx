@@ -6,7 +6,7 @@ import { WordDetail } from './WordDetail';
 import type { components } from '@/shared/api/generated';
 
 type Detail = components['schemas']['WordFormDetail'];
-type SourcePage = components['schemas']['Page_SourceFile_'];
+type SourcePage = components['schemas']['SourceFilePage'];
 type MutationResult = components['schemas']['WordFormMutationResult'];
 
 const detail: Detail = {
@@ -16,7 +16,7 @@ const detail: Detail = {
   examples: [{ english: 'A robust design.', vietnamese: 'Một thiết kế vững chắc.', verificationStatus: 'UNVERIFIED' }],
   ipaUs: null, cambridgeUrl: null,
   sourceRefs: [{ sourceId: 'source_synthetic', noteDate: '2026-10-09', status: 'VALID' }],
-  card: null, revision: 1, updatedAt: '2026-10-09T00:00:00Z', verificationSummary: 'UNVERIFIED', meaningViMatch: 'vững chắc', noteDates: ['2026-10-09']
+  card: null, revision: 1, updatedAt: '2026-10-09T00:00:00Z', verificationSummary: 'UNVERIFIED'
 };
 
 const sourcePage: SourcePage = {
@@ -31,7 +31,6 @@ const failure = (code: string, status = 503, details = {}) => json({ error: { co
 
 let root: Root;
 let host: HTMLDivElement;
-let path: string;
 let mockFetch: (url: string, init: RequestInit) => Promise<Response>;
 let calls: { url: string; method: string; body?: string; headers?: any }[];
 
@@ -62,7 +61,7 @@ async function editField(labelOrPlaceholder: string, value: string) {
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
-  path = '/word-forms/form_synthetic'; calls = [];
+  calls = [];
   mockFetch = async (url) => {
     if (url.includes('/sources')) return json(sourcePage);
     if (url.includes('/word-forms/')) return json(detail);

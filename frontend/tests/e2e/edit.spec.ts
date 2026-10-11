@@ -3,9 +3,9 @@ import AxeBuilder from '@axe-core/playwright';
 import type { components } from '../../src/shared/api/generated';
 
 type Detail = components['schemas']['WordFormDetail'];
-type SourceFile = components['schemas']['SourceFile'];
+type SourceFile = components['schemas']['SourceFileView'];
 type PatchWordFormRequest = components['schemas']['PatchWordFormRequest'];
-type SourcePage = components['schemas']['Page_SourceFile_'];
+type SourcePage = components['schemas']['SourceFilePage'];
 
 const word: Detail = {
   id: 'form_123', familyId: 'fam_123', lemma: 'robust', partOfSpeech: 'ADJECTIVE',
@@ -20,16 +20,11 @@ const word: Detail = {
 
 const source: SourceFile = {
   id: 'src_123',
-  userId: 'user_1',
-  path: '2026/10/09/notes.md',
+  relativePath: '2026/10/09/notes.md',
   noteDate: '2026-10-09',
-  content: '',
-  parsedWordCount: 1,
   status: 'VALID',
   revision: 5,
   etag: 'W/"5"',
-  createdAt: '2026-10-09T00:00:00Z',
-  updatedAt: '2026-10-09T00:00:00Z',
 };
 
 const sourcesCollection: SourcePage = {
@@ -89,13 +84,13 @@ test('successful edit flow with correct preconditions', async ({ page, context }
 
   // Check form is populated with canonical editable values
   await expect(page.getByRole('heading', { name: 'Chỉnh sửa: robust' })).toBeVisible();
-  const enInput = page.getByDisplayValue('strong');
-  const viInput = page.getByDisplayValue('vững chắc');
-  const ipaInput = page.getByDisplayValue('/roʊˈbʌst/');
+  const enInput = page.locator('form input').nth(0);
+  const viInput = page.locator('form input').nth(1);
+  const ipaInput = page.locator('form input').nth(4);
 
-  await expect(enInput).toBeVisible();
-  await expect(viInput).toBeVisible();
-  await expect(ipaInput).toBeVisible();
+  await expect(enInput).toHaveValue('strong');
+  await expect(viInput).toHaveValue('vững chắc');
+  await expect(ipaInput).toHaveValue('/roʊˈbʌst/');
 
   // Edit a field
   await viInput.fill('vững chắc, mạnh mẽ');
@@ -110,6 +105,7 @@ test('successful edit flow with correct preconditions', async ({ page, context }
   expect(patch.headers['idempotency-key']).toBeDefined();
   expect(patch.body.sourceId).toBe('src_123');
   expect(patch.body.sourceRevision).toBe(5);
+  if (!patch.body.meaningsVi) throw new Error('Expected Vietnamese meaning update in PATCH');
   expect(patch.body.meaningsVi[0].text).toBe('vững chắc, mạnh mẽ');
 
   // Edit form should close on success (refresh triggers refetch)
@@ -134,7 +130,8 @@ test('conflict handling preserves draft and allows reload', async ({ page, conte
   await page.goto('/search?wordFormId=form_123');
   await page.getByRole('button', { name: 'Chỉnh sửa' }).click();
 
-  const viInput = page.getByDisplayValue('vững chắc');
+  const viInput = page.locator('form input').nth(1);
+  await expect(viInput).toHaveValue('vững chắc');
   await viInput.fill('draft meaning');
 
   await page.getByRole('button', { name: 'Lưu thay đổi' }).click();
@@ -145,7 +142,8 @@ test('conflict handling preserves draft and allows reload', async ({ page, conte
   await expect(dialog.getByText('Phiên bản trên máy chủ: 6')).toBeVisible();
 
   // Draft is preserved in background
-  await expect(page.getByDisplayValue('draft meaning')).toBeVisible();
+  await expect(viInput).toHaveValue('draft meaning');
+  await expect(viInput).toBeVisible();
 
   // Mock source reload returning new revision
   api.getSources(async (route) => {
@@ -157,7 +155,8 @@ test('conflict handling preserves draft and allows reload', async ({ page, conte
 
   // Dialog closes, draft still preserved
   await expect(dialog).toBeHidden();
-  await expect(page.getByDisplayValue('draft meaning')).toBeVisible();
+  await expect(viInput).toHaveValue('draft meaning');
+  await expect(viInput).toBeVisible();
 
   // Header shows new revision
   await expect(page.getByText('Mã nguồn: 6')).toBeVisible();
@@ -183,7 +182,9 @@ test('handles validation errors and network errors safely', async ({ page, conte
   await page.getByRole('button', { name: 'Chỉnh sửa' }).click();
 
   // Fill and save
-  await page.getByDisplayValue('/roʊˈbʌst/').fill('invalid_ipa');
+  const ipaInput = page.locator('form input').nth(4);
+  await expect(ipaInput).toHaveValue('/roʊˈbʌst/');
+  await ipaInput.fill('invalid_ipa');
   await page.getByRole('button', { name: 'Lưu thay đổi' }).click();
 
   // Validation error displayed
@@ -191,7 +192,8 @@ test('handles validation errors and network errors safely', async ({ page, conte
   await expect(page.getByText('ipaUs: Invalid format')).toBeVisible();
 
   // Draft preserved
-  await expect(page.getByDisplayValue('invalid_ipa')).toBeVisible();
+  await expect(ipaInput).toHaveValue('invalid_ipa');
+  await expect(ipaInput).toBeVisible();
 
   // Test network error
   api.patchWord(async (route) => {
@@ -201,7 +203,8 @@ test('handles validation errors and network errors safely', async ({ page, conte
   await page.getByRole('button', { name: 'Lưu thay đổi' }).click();
 
   await expect(page.getByText('Lỗi mạng hoặc máy chủ. Bản nháp của bạn vẫn được giữ.')).toBeVisible();
-  await expect(page.getByDisplayValue('invalid_ipa')).toBeVisible();
+  await expect(ipaInput).toHaveValue('invalid_ipa');
+  await expect(ipaInput).toBeVisible();
 });
 
 test('handles read-only behavior for invalid sources', async ({ page, context }) => {
