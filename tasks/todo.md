@@ -54,7 +54,7 @@
 - [x] [T036](t036-quiz-ui.md): Quiz builder UI dùng generation API
 - [x] [T047](t047-quiz-autosave-api.md): Quiz answer draft API với revision
 - [ ] [T050](t050-quiz-runner-ui.md): Quiz runner và revision-aware autosave UI
-- [ ] [T048](t048-quiz-submit-api.md): Quiz submission và atomic SRS handoff
+- [ ] [T048](t048-quiz-submit-api.md): Quiz submission và atomic SRS handoff. Implemented in standalone worktree; acceptance BLOCKED_VERIFICATION, see task report; no DONE authorization.
 - [ ] [T049](t049-writing-feedback-api.md): Writing feedback API và history retry
 - [ ] [T051](t051-quiz-result-feedback-ui.md): Submit/result và writing feedback UI
 - [ ] [T037](t037-dashboard-formulas.md): Dashboard summary API và streak formulas

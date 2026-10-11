@@ -1,3 +1,10 @@
+## 11/10/2026 - T048 local quiz submission and atomic SRS handoff (Asia/Bangkok)
+
+- Added `backend/app/application/submit_quiz.py` and `backend/app/http/quiz_submissions.py`; registered their lifecycle and route in `backend/app/main.py`. Submission reuses deterministic scoring and commits terminal result/state, one weakest-rating review per eligible form and the operation receipt in one SQLite transaction. Inactive forms preserve results without new schedules.
+- Added `backend/tests/test_quiz_submission.py` with 49 production-factory regressions for scoring, revision/idempotency conflicts, concurrency, rollback, restart/lost responses, session/privacy guards and transient storage failures before/after commit. Committed results remain readable and replayable without AI or consent.
+- Regenerated only the owner-approved `contracts/openapi.json` and `frontend/src/shared/api/generated.ts` with T017's generator. Additions contain only the submission endpoint and request schema. T049 artifact reconciliation remains an integration action.
+- Recorded the standalone handoff in `tasks/t048-quiz-submit-api.md`, unchecked `tasks/todo.md` and `docs/reviews/t048-standalone-verification.md`. All 49 focused tests pass; the full Python suite returns 2,207 passed and 30 failed. Inherited repository-wide findings, native Windows checks and an unresolved full-run lookup deadline failure block acceptance. No unrelated fixes, suppressions, threshold changes, commit, merge, push or DONE action.
+
 ## 09/10/2026 - T028 approved shell test extension and final source review (Asia/Bangkok)
 
 - Preserved the existing Search/detail implementation and the existing T028 `frontend/src/app/AppShell.tsx` delta. Updated `frontend/src/app/AppShell.test.tsx` and `frontend/tests/e2e/shell.spec.ts` under the owner-approved extension. Replaced obsolete Search/detail placeholder and raw-ID expectations with real UI/API assertions, retained placeholder Card/parameter coverage on the unimplemented quiz route, and selected the shell announcement independently from Search status messages.

@@ -21,6 +21,7 @@ from backend.app.application.save_answer import SaveAnswerService
 from backend.app.application.save_word_family import SaveWordFamilyService
 from backend.app.application.source_recovery import SourceRecovery
 from backend.app.application.source_write import SourceWriteCoordinator
+from backend.app.application.submit_quiz import SubmitQuizService
 from backend.app.application.sync import SyncService
 from backend.app.enrichment.lookup import LookupService
 from backend.app.http.bootstrap import router as bootstrap_router
@@ -30,6 +31,7 @@ from backend.app.http.lookups import router as lookups_router
 from backend.app.http.operations import router as operations_router
 from backend.app.http.quiz import router as quiz_router
 from backend.app.http.quiz_answers import router as quiz_answers_router
+from backend.app.http.quiz_submissions import router as quiz_submissions_router
 from backend.app.http.review import router as review_router
 from backend.app.http.search import router as search_router
 from backend.app.http.session import SessionGuard, SessionStore
@@ -78,6 +80,7 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.edit_word_form_service = None
     app.state.quiz_service = None
     app.state.answer_service = None
+    app.state.submission_service = None
     app.state.sessions.activate()
     try:
         if database is not None:
@@ -90,6 +93,7 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await run_in_threadpool(ledger.recover_pending)
                 app.state.operation_ledger = ledger
                 app.state.answer_service = SaveAnswerService(ledger)
+                app.state.submission_service = SubmitQuizService(ledger)
                 app.state.consent_service = ConsentService(ledger)
                 app.state.search_service = SearchService(
                     database.engine, signing_key=app.state.cursor_signing_key
@@ -281,6 +285,7 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
                     app.state.edit_word_form_service = None
                     app.state.quiz_service = None
                     app.state.answer_service = None
+                    app.state.submission_service = None
                     if database is not None:
                         await run_in_threadpool(database.close)
                     app.state.database = None
@@ -441,6 +446,7 @@ def create_app(
     app.state.quiz_service = None
     app.state.active_ai_policy = None
     app.state.answer_service = None
+    app.state.submission_service = None
     app.state.sessions = SessionStore()
 
     # FastAPI middleware runs before route handlers, including the generated OpenAPI route.
@@ -486,6 +492,7 @@ def create_app(
     app.include_router(word_forms_router)
     app.include_router(quiz_router)
     app.include_router(quiz_answers_router)
+    app.include_router(quiz_submissions_router)
 
     from backend.app.http.consent import router as consent_router
 

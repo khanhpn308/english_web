@@ -88,3 +88,12 @@ npm run test:contract
 ## Commit message đề xuất
 
 `feat(T048): quiz submission và atomic srs handoff`
+
+## Standalone implementation checkpoint, 11/10/2026 (Asia/Bangkok)
+
+- Code implemented on `feature/t048-quiz-submit-api`, base/HEAD `70105f4de49b84f84cfb0b408c69a7e5823d1792`. Final acceptance is `BLOCKED_VERIFICATION`; task status and acceptance checkboxes remain unchanged. No commit, merge, push or PR.
+- Added the production submission route/service and 49 synthetic regressions. Reused T059 scoring, T034 terminal persistence, T032 review primitives and T014's atomic completion callback. Success follows durable result/SRS/receipt commit; replay and restart preserve the original result.
+- Owner authorized only two additional generated files: `contracts/openapi.json` and `frontend/src/shared/api/generated.ts`. Generated through the existing T017 command; diff adds only the T048 route/request and matching TypeScript. T049 artifact reconciliation belongs to integration.
+- Focused suite: 49 passed, exit 0. Dependency suite: 414 passed and one inherited migration-head failure, exit 1. Generated consistency restored; four inherited contract tests still fail. Lint, formatting, Mypy, architecture and secret-scan blockers are recorded separately from T048 diagnostics.
+- Full Python suite: 2,207 passed and 30 failed, exit 1; all T048 tests passed. Sixteen failures reproduce at unchanged HEAD, thirteen require native Windows, and one lookup deadline failure passes in isolation but remains unresolved under the full parallel run.
+- Full commands, review evidence, unchanged files, risks and remaining verification are in [the redacted standalone report](../docs/reviews/t048-standalone-verification.md). No quality threshold, existing test or security policy was weakened.
