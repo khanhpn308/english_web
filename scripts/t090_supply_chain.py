@@ -80,7 +80,9 @@ def python_lock_is_hash_complete(path: Path) -> bool:
         r"==[a-zA-Z0-9.!+_-]+"
         r"(?:\s+--hash=sha256:[0-9a-f]{64})+"
     )
-    return all(re.fullmatch(exact_pin, requirement) is not None for requirement in requirements)
+    return all(
+        re.fullmatch(exact_pin, requirement) is not None for requirement in requirements
+    )
 
 
 def npm_lock_has_integrities(path: Path) -> bool:
