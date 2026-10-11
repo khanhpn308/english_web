@@ -2,10 +2,19 @@
 
 **Task ID:** `T048`  
 **Title:** Quiz submission và atomic SRS handoff  
-**Status:** `TODO`  
+**Status:** `DONE`  
+**Completion scope:** `CODING_ONLY` — PR #15 merged (`c67d9e9872b3d73dcfa31431eff5f68f3476c615`); `FINAL_VERIFICATION_DEFERRED`  
 **Goal:** Nộp quiz, chấm objective/self score và cập nhật SRS đúng một lần trong transaction.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
+
+## Owner-authorized coding-only merge (11/10/2026)
+
+- GitHub [PR #15](https://github.com/khanhpn308/english_web/pull/15) merged into `main` as `c67d9e9872b3d73dcfa31431eff5f68f3476c615`, incorporating source commit `ee92fabda18ff2c7be37cb554d70d3f7d7f666e1` and integration reconciliation `064e9031f33f177f9da9d53e51c84dd8a48d7005`.
+- Owner approved `DONE` for **coding implementation only**, consistent with T012, T049 and T050. Final functional, regression, security, coverage, Windows/browser/provider, and release audits are `FINAL_VERIFICATION_DEFERRED` until completion of the 90-task implementation phase. Unchecked acceptance criteria remain pending final verification.
+- Integrated submission API, atomic scoring/SRS handoff service, synthetic tests, and T048-generated `contracts/openapi.json` / `frontend/src/shared/api/generated.ts`, preserving T049 service and router on `main`.
+- Outstanding: reconcile **T049 feedback** OpenAPI/DTO additions; previously recorded full-suite failures (including unresolved lookup deadline timing), quality/security/coverage and Windows/provider acceptance. No new tests or audits were run for the coding-only merge. Historical failures remain unchanged and are not labeled PASS.
+- The standalone implementation checkpoint below is historical. Its `BLOCKED_VERIFICATION`, uncommitted branch and no-merge statements are superseded for coding completion by this owner-authorized merge record.
 
 ## Context cần đọc
 
