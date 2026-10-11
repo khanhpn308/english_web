@@ -333,10 +333,16 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ attemptId, onSubmit }) =
     if (!onSubmit || submitting || attempt?.status === 'SUBMITTED') return;
     setSubmitting(true);
     setErrorMsg(null);
+    let submissionTimeout: ReturnType<typeof setTimeout> | null = null;
     try {
       cancelTimers();
       const questionIds = Object.keys(live.current);
-      await Promise.all(questionIds.map(id => save(id)));
+      await Promise.race([
+        Promise.all(questionIds.map(id => save(id))),
+        new Promise<never>((_, reject) => {
+          submissionTimeout = setTimeout(() => reject(new Error('DRAFT_FLUSH_TIMEOUT')), 15_000);
+        }),
+      ]);
       const hasUnconfirmed = questionIds.some(id => {
         const state = live.current[id];
         return state.active !== null || state.uncertain !== null ||
@@ -351,6 +357,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ attemptId, onSubmit }) =
     } catch {
       setErrorMsg('Nộp bài không thành công. Kiểm tra kết quả thao tác trước khi thử lại.');
     } finally {
+      if (submissionTimeout !== null) clearTimeout(submissionTimeout);
       setSubmitting(false);
     }
   };

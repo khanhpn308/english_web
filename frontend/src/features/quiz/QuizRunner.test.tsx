@@ -236,12 +236,12 @@ describe('T050 QuizRunner', () => {
     client.mockImplementationOnce(() => new Promise<never>(() => {}));
     render(<QuizRunner attemptId="att-123" onSubmit={onSubmit} />);
     await screen.findByText('CLOZE Prompt');
+    vi.useFakeTimers();
     fireEvent.change(screen.getByLabelText('Câu trả lời:'), { target: { value: 'pending' } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Nộp bài' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Nộp bài' }));
     expect(onSubmit).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent('Chưa thể nộp bài');
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+    expect(screen.getByRole('alert')).toHaveTextContent('Nộp bài không thành công');
   });
 
   it('keeps a saved draft across a fresh mount', async () => {
