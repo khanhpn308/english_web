@@ -441,3 +441,31 @@ Run 37961597747 created a real GHCR candidate image, SPDX SBOM (1,177 observed c
   rechecks a newer candidate, but it is **not** final-head approval.
   Do not claim R6-B3 acceptance until the final commit passes gates and the
   remaining operator/provenance/provider proofs are independently observed.
+
+### R6-B3 full CI R2/R3 factual checkpoint (2026-10-11)
+
+- Host R2 https://github.com/khanhpn308/english_web/actions/runs/38116973976:
+  **FAIL**, 1,354 passed, 66 failed, plus Ruff format failure. Existing host
+  controls did not bypass or downgrade the gate.
+- Host R3 https://github.com/khanhpn308/english_web/actions/runs/38117228914:
+  **FAIL**, 1,397 passed, 25 failed; Ruff still identified two modified
+  synthetic test fixtures. Source fixes to the historical synthetic recovery
+  setup, clone ancestry, strict code-only collection regressions, and Ruff
+  formatting followed on newer SHAs. R3 does not attest any later commits.
+- The 25 R3 failures belonged to
+  `tests/orchestrator/test_core.py` (7 legacy Host collector cases),
+  `test_workflow.py` (7 synthetic multiprocessing/timeout cases),
+  `test_recovery.py` (5 old setup/config cases),
+  `test_scheduler.py` (4 spawned unapproved verification cases), and
+  `test_evidence.py` (2 retired Host collector cases). These are
+  recorded defects, not accepted exceptions.
+- The exact T090 file allowlist permits changes to `test_core.py`,
+  `test_workflow.py`, `test_recovery.py`, but **not** `test_scheduler.py`
+  or `test_evidence.py`. Do not modify the latter until the owner formally
+  approves their exact paths. Do not re-enable Host verification to satisfy
+  historical fixtures or omit failing tests from coverage.
+- A newer Full Portable CI candidate was started on SHA
+  `76148f7195d4fbafa6d590fc7f12589c2b5547d1`:
+  https://github.com/khanhpn308/english_web/actions/runs/38117581177 .
+  Further code changes after that SHA require a new exact-source verification
+  run before acceptance. Final image approval/live proof remains absent.
