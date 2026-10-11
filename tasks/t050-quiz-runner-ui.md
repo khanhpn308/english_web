@@ -2,7 +2,7 @@
 
 **Task ID:** `T050`  
 **Title:** Quiz runner và revision-aware autosave UI  
-**Status:** `TODO`  
+**Status:** `DONE` (implementation merged in PR #12; final acceptance deferred)  
 **Goal:** Làm bài đã tạo, phục hồi câu trả lời và autosave500ms/flush blur+submit qua local API.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -91,3 +91,12 @@ npm run test:e2e -- frontend/tests/e2e/quiz-runner.spec.ts
 ## Commit message đề xuất
 
 `feat(T050): quiz runner và revision-aware autosave ui`
+
+## Coding-completion record — 2026-10-11
+
+- **Owner decision:** Mark `DONE` when coding is merged into `main`; defer noncritical cross-task test, audit and release remediation until all 90 implementation tasks are complete. `DONE` is not verification PASS.
+- **Integration:** PR [#12](https://github.com/khanhpn308/english_web/pull/12), merged as `c68540ffb2d6441f4cced27ec7d224876bf4d36f`. T050 source head `346039f2500978ca8a1ba8acea45f23c89fe3f46`.
+- **Scope:** Only the five listed T050 frontend source/test files were changed in the implementation PR.
+- **Unresolved acceptance:** GitHub Actions [run #81](https://github.com/khanhpn308/english_web/actions/runs/38114474289), exact source head `346039f`, **FAIL**. Failed gates: check-fast-active, frontend-coverage, portable-pytest, security-secrets, architecture. Security-code and security-deps PASS for that run. Focused T050 browser E2E and Windows-native evidence are **NOT VERIFIED**. Do not mark acceptance criteria or CP15 complete on this evidence.
+- **Deferred integration debt:** frontend test dependencies, baseline and changed-code failures, architecture and security findings need root-cause classification before release. Do not suppress failing checks or reinterpret failed evidence.
+- **Next coding:** T048/T049/T051 remain separate; submission stays disabled until their implementation is integrated.

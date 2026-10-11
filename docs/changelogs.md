@@ -8,6 +8,20 @@
 - Corrected `tasks/t049-writing-feedback-api.md` to allow `backend/migrations/versions/0011_feedback.py` after verifying single head `0010_quiz_answer_receipts` and its ancestry. Recorded exact baseline checks, scope conflicts and a BLOCKED_SCOPE handoff; T049 remains TODO.
 - Updated `tasks/todo.md` with the pending owner/Host action. The approved writing-feedback prompt/schema is absent, the existing T047 latest-head assertion conflicts with adding 0011, and unrelated baseline quality/security gates fail or lack tools. Application code, tests, migrations, generated files and learning data remain untouched; no commit, merge, push, install or inference.
 
+## 11/10/2026 - T012 coding integrated; release audit deferred
+
+- Merged T012 source into `main` via PR #13 at `9a6e548` after reviewing exactly seven changed files; retained T050 implementation on `main`.
+- Marked T012 `DONE` for **coding completion only**, following owner policy. The T012 card retains unresolved end-to-end acceptance criteria rather than falsely claiming CI success.
+- Focused Host evidence: actionlint PASS, 78 contract tests PASS, 21 Gitleaks unit tests PASS, portable real Gitleaks and synthetic working-tree/staged/history negative probes PASS.
+- Deferred failed GitHub Actions full-gate run `38114628839` (Ruff format, Python tests, frontend coverage/browser, architecture) and related issues to the final 90-task integration/audit cycle; no gates or security restrictions relaxed. Experimental verification PR #11 was not merged.
+
+## 10/10/2026 - T012: Core CI Pipeline implementation (Asia/Bangkok)
+
+- Status: `IMPLEMENTED`. Created `.github/workflows/ci.yml` restricting execution to `ubuntu-24.04`, locking third-party Actions to exact verified SHAs, and setting dependency cache policies.
+- Configured CI pipeline to run fast checks, frontend coverage, security gates (Gitleaks, OSV-Scanner, Semgrep pinned and isolated), API contract checks, and frontend build.
+- Updated `docs/toolchain.md` explicitly defining workflow triggers, gate ordering, execution environment constraints, fail-closed diagnostic policy, and limitations of CI evidence relative to Windows-native or provider runtime scenarios.
+- All artifact extractions are minimized and do not cache sensitive data (e.g. SQLite database or raw provider contents). No actual CI was invoked during this change, test results are PENDING host execution. Intentionally untouched existing workflow `.github/workflows/t089-host-ci.yml`, application source, lockfiles, and quality constraints.
+
 ## 09/10/2026 - T028 approved shell test extension and final source review (Asia/Bangkok)
 
 - Preserved the existing Search/detail implementation and the existing T028 `frontend/src/app/AppShell.tsx` delta. Updated `frontend/src/app/AppShell.test.tsx` and `frontend/tests/e2e/shell.spec.ts` under the owner-approved extension. Replaced obsolete Search/detail placeholder and raw-ID expectations with real UI/API assertions, retained placeholder Card/parameter coverage on the unimplemented quiz route, and selected the shell announcement independently from Search status messages.
