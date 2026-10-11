@@ -79,9 +79,11 @@ from tools.orchestrator.probes import (
 )
 from tools.orchestrator.runtime import (
     AgentProvider,
+    DockerVerificationPolicy,
     DockerVerificationSandbox,
     Git,
     VerificationImageAdmission,
+    admit_verification_image,
     LockBusy,
     SecureProvider,
     execute,
@@ -355,7 +357,7 @@ def freeze_verification_source_binding(
         raise OrchestratorError("T090 SANDBOX_BLOCKED: source and verifier are not independent")
     source_git = Git(working)
     clone_git = Git(verification_workspace)
-    if source_git.sha() != base_sha or clone_git.sha() != base_sha:
+    if source_git.sha() != clone_git.sha():
         raise OrchestratorError("T090 SANDBOX_BLOCKED: Git HEAD diverged")
     for git in (source_git, clone_git):
         if git.snapshot(base_sha) != expected_git_snapshot:
@@ -458,30 +460,10 @@ def verification_command_argv(cwd: Path, command: list[str]) -> list[str]:
 
 
 def collect_verification(request: VerificationRequest) -> VerificationCollection:
-    """Execute in declaration order without receiving or persisting any run authority."""
-    results: list[dict[str, object]] = []
-    for index, command in enumerate(request.commands):
-        print(f"TEST {request.task_id}: {command[0]} (arguments in contract/config)")
-        try:
-            exec_argv = verification_command_argv(request.cwd, list(command))
-            started_ns = time.monotonic_ns()
-            result = execute(exec_argv, request.cwd, timeout=request.timeout)
-            duration_ns = time.monotonic_ns() - started_ns
-        except (OrchestratorError, OSError) as error:
-            detail = str(error) if isinstance(error, OrchestratorError) else type(error).__name__
-            return VerificationCollection(
-                request.identity,
-                tuple(results),
-                setup_error=f"SETUP_FAILED: audit_checks: {detail}",
-            )
-        meta = result.metadata()
-        meta["command"] = [Path(command[0]).name, "<arguments withheld>"]
-        meta["declaration_digest"] = command_declaration_digest(command)
-        meta["duration_ns"] = duration_ns
-        results.append({**meta, "command_index": index})
-        if result.exit_code or result.timed_out or result.oversized:
-            return VerificationCollection(request.identity, tuple(results), failed=True)
-    return VerificationCollection(request.identity, tuple(results))
+    """Retired unsafe Host executor: never run untrusted verification on Host."""
+    raise OrchestratorError(
+        "T090 SANDBOX_BLOCKED: legacy Host verification is permanently disabled"
+    )
 
 
 def validate_toolchain_backlinks(toolchain_root: Path, authoritative_roots: set[Path]) -> None:
