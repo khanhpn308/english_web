@@ -192,10 +192,16 @@ def verify_registry_attestations(
                     text=True,
                     timeout=90,
                     check=False,
-                    env={"PATH": "/usr/bin:/bin", "HOME": "/nonexistent", "GH_PROMPT_DISABLED": "1"},
+                    env={
+                        "PATH": "/usr/bin:/bin",
+                        "HOME": "/nonexistent",
+                        "GH_PROMPT_DISABLED": "1",
+                    },
                 )
                 if proc.returncode or len(proc.stdout) > 2_000_000:
-                    raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: signed attestation rejected")
+                    raise SupplyChainBlocked(
+                        "T090 SUPPLY_CHAIN_BLOCKED: signed attestation rejected"
+                    )
                 results = json.loads(proc.stdout)
             except (OSError, subprocess.TimeoutExpired, UnicodeError, ValueError) as error:
                 raise SupplyChainBlocked(
@@ -226,7 +232,9 @@ def verify_registry_attestations(
                     accepted = statement
                     break
             if accepted is None:
-                raise SupplyChainBlocked("T090 SUPPLY_CHAIN_BLOCKED: attested image subject mismatch")
+                raise SupplyChainBlocked(
+                    "T090 SUPPLY_CHAIN_BLOCKED: attested image subject mismatch"
+                )
             statements.append(accepted)
         return statements[0], statements[1]
 
