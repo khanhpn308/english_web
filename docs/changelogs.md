@@ -1,3 +1,9 @@
+## 11/10/2026 - T061 owner-approved coding-only merge and closure (Asia/Bangkok)
+
+- Owner-approved [PR #21](https://github.com/khanhpn308/english_web/pull/21) merged T061 source into `main` at `24e916a76e91850cc27d288e90dab2f48bbcc9dd`; task card and checklist now `DONE (CODING_ONLY)`, `FINAL_VERIFICATION_DEFERRED`.
+- Producer/evaluator/Status API/UI and fixed local runbook source paths are integrated. Seven alert rules exist, but search p95 stays `NO_DATA` until qualified 100k benchmark observations are supplied. Two-failed-health-probe API unavailable detection remains launcher/external responsibility. No production performance or health-availability claim is made.
+- OpenAPI/DTO artifacts were generated with cached `openapi-typescript 7.13.0` against declared `7.4.2`; pinned-version regeneration/reproducibility remains pending. No tests, runtime checks, build, lint, typechecks, benchmark execution, security scans or audits were run during integration; CP18/final verification and Windows acceptance are still outstanding.
+
 ## 11/10/2026 - T061 owner-approved R1/R2 production integration (Asia/Bangkok)
 
 - Preserved the initial uncommitted alert engine and evidence. Connected lifespan-owned alerts to existing telemetry HTTP, bridge, SQLite and committed source observations; retained bounded windows, recovery/dedup behavior and nonfatal diagnostic degradation. No new metrics subsystem, worker, remote service, persistence or migration.
