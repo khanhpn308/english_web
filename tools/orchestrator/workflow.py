@@ -2814,17 +2814,44 @@ class Pipeline:
         *,
         working: Path | None = None,
     ) -> None:
+        """Run every authoritative check inside admitted Docker or fail closed."""
         cwd = working or Path(state.worktree_path)
         git = Git(cwd)
         before = git.snapshot(state.base_sha)
-        results = []
-        for command in commands:
-            print(f"TEST {state.task_id}: {command[0]} (arguments in contract/config)")
-            try:
-                result = execute(command, cwd, timeout=self.config.timeout_seconds)
-            except OrchestratorError as error:
-                raise OrchestratorError(f"SETUP_FAILED: {name}: {error}") from error
-            results.append(result.metadata())
+        if any(command[:2] == ["npm", "ci"] for command in commands):
+            raise OrchestratorError(
+                "T090 SANDBOX_BLOCKED: npm ci setup must be preprovisioned in trusted image"
+            )
+        if not commands:
+            if git.snapshot(state.base_sha) != before:
+                raise OrchestratorError("Verification mutated source; evidence invalidated")
+            state.verified_digest = before
+            self.save(directory, state)
+            return
+
+        admission, sandbox = self._verification_authority()
+        declaration = tuple(tuple(cmd) for cmd in commands)
+        with self.docker_verification_workspace(
+            cwd, before, state.base_sha, state.task_id, f"{state.run_id}-{name}"
+        ) as (verify_path, verify_git):
+            request = VerificationRequest(
+                verify_path,
+                declaration,
+                self.config.timeout_seconds,
+                FrozenEvidenceIdentity.freeze(
+                    state.task_id, state.base_sha, git.branch(), before, declaration
+                ),
+            )
+            collection = self._collect_docker_verification(
+                request, cwd, before, admission, sandbox
+            )
+            if verify_git.snapshot(state.base_sha) != before:
+                raise OrchestratorError("T090 SANDBOX_BLOCKED: verifier clone changed")
+        if git.snapshot(state.base_sha) != before:
+            raise OrchestratorError("Verification mutated source; evidence invalidated")
+        results: list[dict[str, object]] = []
+        for item in collection.results:
+            results.append({k: v for k, v in item.items() if k != "command_index"})
             artifact = f"{state.fix_cycle:02d}-{name}-{uuid4().hex[:8]}.json"
             atomic_json(
                 directory / artifact, {"level": "TEST", "source_digest": before, "results": results}
@@ -2832,19 +2859,19 @@ class Pipeline:
             state.artifacts[name] = artifact
             state.artifact_digests[artifact] = digest((directory / artifact).read_bytes())
             self.save(directory, state)
-            if result.exit_code or result.timed_out or result.oversized:
-                classification = (
-                    "SETUP_FAILED"
-                    if name.endswith("setup")
-                    else "INHERITED_BASELINE_FAILURE"
-                    if name == "baseline"
-                    else "TASK_REGRESSION"
-                )
-                raise OrchestratorError(
-                    f"{classification}: Verification {name} failed (exit {result.exit_code})"
-                )
-        if git.snapshot(state.base_sha) != before:
-            raise OrchestratorError("Verification mutated source; evidence invalidated")
+        if collection.setup_error is not None:
+            raise OrchestratorError(f"SETUP_FAILED: {name}: {collection.setup_error}")
+        if collection.failed:
+            classification = (
+                "SETUP_FAILED"
+                if name == "setup" or name.endswith("setup")
+                else "INHERITED_BASELINE_FAILURE"
+                if name == "baseline"
+                else "TASK_REGRESSION"
+            )
+            raise OrchestratorError(
+                f"{classification}: Verification {name} failed in admitted Docker"
+            )
         state.verified_digest = before
         self.save(directory, state)
 
