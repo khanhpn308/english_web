@@ -1,3 +1,13 @@
+## 11/10/2026 - T049 writing feedback implementation (Asia/Bangkok)
+
+- Implemented canonical-answer advisory feedback POST/GET, strict writing-feedback-v1 schema, durable paginated history and approved 0011 migration. Reused admission/consent/bridge and operation receipts; preserved learning data, explicit retry identity, UNKNOWN blocking, cancellation cleanup and the 30-second deadline.
+- Added production-factory fake-provider tests for schemas, failures, retries, concurrency, revocation, migration preservation, restart and score/history preservation. Recorded final review and exact verification classification in the task card. T049 stays TODO awaiting Host verification; generated contracts, inherited quality/security findings and historical head assertions require Host reconciliation. No commit, push, dependency installation or real inference.
+
+## 11/10/2026 - T049 standalone preflight and approved path correction (Asia/Bangkok)
+
+- Corrected `tasks/t049-writing-feedback-api.md` to allow `backend/migrations/versions/0011_feedback.py` after verifying single head `0010_quiz_answer_receipts` and its ancestry. Recorded exact baseline checks, scope conflicts and a BLOCKED_SCOPE handoff; T049 remains TODO.
+- Updated `tasks/todo.md` with the pending owner/Host action. The approved writing-feedback prompt/schema is absent, the existing T047 latest-head assertion conflicts with adding 0011, and unrelated baseline quality/security gates fail or lack tools. Application code, tests, migrations, generated files and learning data remain untouched; no commit, merge, push, install or inference.
+
 ## 11/10/2026 - T012 coding integrated; release audit deferred
 
 - Merged T012 source into `main` via PR #13 at `9a6e548` after reviewing exactly seven changed files; retained T050 implementation on `main`.
