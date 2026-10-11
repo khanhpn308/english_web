@@ -4534,9 +4534,7 @@ def test_t090_start_blocks_before_dispatch_without_signed_image_authority(
     assert agents.calls == []
 
 
-def test_t090_inherited_npm_ci_setup_cannot_fall_back_to_host(
-    repository: Path
-) -> None:
+def test_t090_inherited_npm_ci_setup_cannot_fall_back_to_host(repository: Path) -> None:
     agents = FakeAgents()
     config = configuration(integrate=False)
     config.setup_commands = [["npm", "ci"]]
