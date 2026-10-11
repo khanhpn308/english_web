@@ -1,3 +1,12 @@
+## 11/10/2026 - T064 Local Lighthouse performance harness implemented (Asia/Bangkok)
+
+- Implemented `scripts/ui_performance.py` as a deterministic local UI performance runner utilizing T052's loopback preview boundary (`frontend/tests/support/test_server.py`) with bounded startup/readiness/teardown lifecycle management.
+- Enforced strict fail-closed Core Web Vitals threshold evaluation per `CONSTRAINTS.md`: LCP ≤ 2.5s and CLS ≤ 0.1. Any missing, non-finite, or exceeded metric and any tool/preview failure fail-closed and never report PASS.
+- Implemented sanitized diagnostic evidence artifact output capturing bounded environment and metric metadata while strictly excluding credentials, tokens, cookies, prompts, and learning content.
+- Registered `"benchmark:ui": "python scripts/ui_performance.py"` in `package.json`.
+- Created `docs/reviews/ui-performance-001.md` detailing harness architecture and truthful `SETUP_PENDING` environment status.
+- Coding-only session: tests, builds, lint, typecheck, audits, security scans, and Git commits deferred. Status: `IMPLEMENTED_UNVERIFIED`.
+
 ## 11/10/2026 - T046 coding-only merge and closure (Asia/Bangkok)
 
 - Owner-approved PR #18 merged T046 Operational Status API and local RED metrics into `main` (merge commit `2c4b18e`). Host resolved concurrent T037/T038 bookkeeping and regenerated contract conflicts on the feature branch before merge.

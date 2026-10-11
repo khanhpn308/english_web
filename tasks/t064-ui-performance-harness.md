@@ -2,7 +2,7 @@
 
 **Task ID:** `T064`  
 **Title:** Local Lighthouse performance harness  
-**Status:** `TODO`  
+**Status:** `IMPLEMENTED_UNVERIFIED` (coding-only checkpoint, 11/10/2026; executable verification deferred)
 **Goal:** Measure LCP≤2.5s/CLS≤0.1 on a recorded deterministic preview and return a threshold verdict.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -91,3 +91,13 @@ npm run benchmark:ui
 ## Commit message đề xuất
 
 `chore(T064): local lighthouse performance harness`
+
+## Standalone coding-only checkpoint, 11/10/2026 (Asia/Bangkok)
+
+- Implemented `scripts/ui_performance.py` as a deterministic local UI performance runner utilizing T052's `frontend/tests/support/test_server.py` loopback preview boundary.
+- Enforced strict fail-closed Core Web Vitals thresholds: LCP ≤ 2.5s and CLS ≤ 0.1 (`CONSTRAINTS.md`).
+- Implemented bounded lifecycle management (startup health check on `/api/v1/health`, process termination on SIGTERM/SIGKILL, port cleanup).
+- Sanitized diagnostic evidence artifact generation excluding credentials, cookies, tokens, learning content, and raw prompts.
+- Registered `"benchmark:ui": "python scripts/ui_performance.py"` in `package.json`.
+- Documented implementation architecture and pending execution state in `docs/reviews/ui-performance-001.md`.
+- Status: `IMPLEMENTED_UNVERIFIED` (coding-only session; tests, builds, lint, typecheck, audits, and Git commits deferred).

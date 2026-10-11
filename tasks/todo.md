@@ -68,7 +68,7 @@
 - [ ] [T041](t041-security-hardening.md): Browser/API/filesystem hardening evidence
 - [x] [T042](t042-performance-fixture.md): Deterministic100k search benchmark fixture
 - [x] [T065](t065-search-performance-evidence.md): Search browser timing trên100k fixture
-- [ ] [T064](t064-ui-performance-harness.md): Local Lighthouse performance harness
+- [ ] [T064](t064-ui-performance-harness.md): Local Lighthouse performance harness — `IMPLEMENTED_UNVERIFIED` (coding-only checkpoint, 11/10/2026; runner, fail-closed thresholds, preview lifecycle, sanitized artifact, package script registered; executable verification deferred).
 - [ ] [T043](t043-accessibility-evidence.md): WCAG 2.2 AA browser/manual evidence
 - [ ] [T055](t055-ai-content-evidence.md): Human-reviewed semantic fixture và optional AI smoke
 - [ ] [T056](t056-windows-package.md): Reproducible Windows package và shortcut
