@@ -2423,13 +2423,20 @@ def concurrent_audit_pipeline(
     from tools.orchestrator.core import VerificationCollection, VerificationRequest
     from tools.orchestrator.runtime import execute as original_execute
 
-    collect = workflow.collect_verification
+    collect = Pipeline._collect_docker_verification
 
-    def collecting(request: VerificationRequest) -> VerificationCollection:
+    def collecting(
+        self: Pipeline,
+        request: VerificationRequest,
+        working: Path,
+        snapshot: str,
+        admission: object,
+        sandbox: object,
+    ) -> VerificationCollection:
         assert threading.get_ident() != pipeline.owner
         agents.enter(rendezvous=False)
         try:
-            return collect(request)
+            return collect(self, request, working, snapshot, admission, sandbox)
         finally:
             agents.leave()
             agents.collection_done.set()
@@ -2482,7 +2489,7 @@ def concurrent_audit_pipeline(
             agents.phase_saves += 1
         save(directory, state)
 
-    monkeypatch.setattr(workflow, "collect_verification", collecting)
+    monkeypatch.setattr(Pipeline, "_collect_docker_verification", collecting)
     monkeypatch.setattr(workflow, "execute", executing)
     monkeypatch.setattr(pipeline, "save", saving)
     return pipeline, agents
