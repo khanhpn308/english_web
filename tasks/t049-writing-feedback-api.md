@@ -2,10 +2,19 @@
 
 **Task ID:** `T049`  
 **Title:** Writing feedback API và history retry  
-**Status:** `TODO`  
+**Status:** `DONE`  
+**Completion scope:** `CODING_ONLY` — PR #14 merged (`8a72534499c556bc142bf0864e3e3ca6d3d68515`); `FINAL_VERIFICATION_DEFERRED`  
 **Goal:** Request/store/read schema-validated feedback, preserving user answer and score through failure.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
+
+## Owner-authorized coding-only merge (11/10/2026)
+
+- GitHub [PR #14](https://github.com/khanhpn308/english_web/pull/14) merged into `main` as `8a72534499c556bc142bf0864e3e3ca6d3d68515`, incorporating source commit `a185b27b42ac947b045f6a0085af3c5ebf901d15` and the reconciliation commit `c08b04ab0d7fd6c1a96d4abcbedb436a56455334`.
+- Owner approved `DONE` for **coding implementation only**, consistent with T012 and T050. Final functional, regression, security, coverage, Windows/provider and release audits are `FINAL_VERIFICATION_DEFERRED` until completion of the 90-task implementation phase. Unchecked acceptance criteria remain pending release verification.
+- The approved migration path `backend/migrations/versions/0011_feedback.py` is integrated. Generated `contracts/openapi.json` and `frontend/src/shared/api/generated.ts` are not reconciled yet; T017-owned generation/integration is outstanding.
+- Historical Codex reports remain recorded below (51 focused tests passed, broad regression 329 passed / 7 failed, contract/gates not green); no new tests or audits were run for this coding-only merge. None of those outcomes are reclassified as PASS.
+- The previous handoff section is a historical pre-merge snapshot. Statements such as `TODO`, `no commit or push`, and pending integration there are superseded by this owner-authorized merge record.
 
 ## Context cần đọc
 
