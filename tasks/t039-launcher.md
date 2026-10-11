@@ -2,7 +2,7 @@
 
 **Task ID:** `T039`  
 **Title:** Windows launcher single-instance/bootstrap  
-**Status:** `CODE_IMPLEMENTED_UNVERIFIED` (CODING_ONLY; not DONE)  
+**Status:** `DONE (CODING_ONLY)` — `FINAL_VERIFICATION_DEFERRED` (11/10/2026; PR #20 merged into `main`; Windows evidence pending)  
 **Goal:** Windows launcher single-instance/bootstrap. First launch starts one backend/tab; duplicate focuses existing and no second port.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -109,3 +109,10 @@ python -m mypy launcher
 ## Commit message đề xuất
 
 `feat(T039): windows launcher single-instance/bootstrap`
+
+## Owner-approved T039 coding-only closure (11/10/2026)
+
+- Repository owner explicitly approved PR #20 merge and coding-only closure; Git merge commit `9e2adfab80b77d22e86aac4f08b8f65065675a70` integrates Windows in-process launcher, configuration consumption, same-backend bootstrap, primary-instance mutex/focus event, and native recovery source into `main`.
+- Source implementation is recorded as **`DONE (CODING_ONLY)`**, **`FINAL_VERIFICATION_DEFERRED`**. Prior `CODE_IMPLEMENTED_UNVERIFIED` and `READY_FOR_CODE` text above is historical pre-merge handoff, not the present task status.
+- No tests, builds, lint, typechecking, security scans, Windows runtime verification, packaging, or audit were performed during merge/closure. The acceptance checklist remains unchecked until independent final verification. Do not claim exact browser-tab activation, Windows ACL correctness, or a working installer without evidence.
+- T040 owns first-run provisioning/DPAPI and T056 owns package layout. Windows acceptance, URI privacy, focus/foreground behavior and startup/shutdown remain `PENDING_WINDOWS_EVIDENCE` for T057/final verification.
