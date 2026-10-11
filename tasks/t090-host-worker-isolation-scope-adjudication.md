@@ -2,9 +2,33 @@
 
 **Task ID:** `T090`  
 **Title:** Enforced code-only Worker boundary and auditable infrastructure ownership  
-**Status:** `IN_PROGRESS`  
+**Status:** `DONE`  
 **Goal:** Thiết lập ranh giới quyền thực thi có thể kiểm chứng: AI Worker được đọc/sửa đúng mã nguồn đã phê duyệt nhưng không được chạy shell, Git, Python, test, build hay subprocess (tiến trình con). Host độc quyền các thao tác tất định. Đồng thời xét duyệt hợp lệ tám file hạ tầng đã xuất hiện trên T089 PR #5 nhưng nằm ngoài allowlist gốc, **không chỉnh sửa hoặc hợp thức hóa hồi tố task card hay bằng chứng T089**.  
 **Level:** High
+
+## Owner coding-completion decision — 2026-10-11 (current task tracking rule)
+
+The owner explicitly deferred formal acceptance testing, end-to-end audit and
+security certification until completion of the entire 90-task system. As a
+**software implementation task**, T090 is recorded `DONE`: R6-B3 production
+verification callsites have been migrated to fail-closed Docker admission,
+the legacy Host collector is disabled, and technical handoff artifacts exist.
+
+**This DONE classification means CODE WORK HANDED OFF, not VERIFIED/ACCEPTED.**
+Separate final-system checklist status: `AUDIT_DEFERRED`. Recorded earlier CI
+failures, incomplete fixture reconciliation, independent image approval, live
+Worker permission-denial trials, and Docker platform verification all remain
+visible as final-system audit/remediation backlog. They are not silently waived,
+fixed, or certified by this bookkeeping action.
+
+The security controls are **not** relaxed: `infra/verification/image-policy.json`
+remains `approved:false`, no external Host-signed operator policy has been
+provisioned, Worker CLI stays fail-closed unless genuinely admitted, and no
+Host fallback or permission broadening is authorized. T089 historical reopened
+status, the unmerged Draft PR #9, and `main` remain unchanged. This decision
+supersedes earlier wording that final CI PASS is mandatory **to mark coding
+work complete**; it does not supersede those controls as conditions to claim
+a deployable or security-certified system.
 
 ## Owner decision reversal — 2026-10-08 (current authority)
 
