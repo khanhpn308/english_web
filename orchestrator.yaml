@@ -57,10 +57,5 @@
     ]
   ],
   "integrate": false,
-  "setup_commands": [
-    [
-      "npm",
-      "ci"
-    ]
-  ]
+  "setup_commands": []
 }
