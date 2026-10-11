@@ -1,3 +1,9 @@
+## 12/10/2026 - T040 native configuration and protected-key primitives (Asia/Bangkok)
+
+- Created `launcher/src/first_run.py` and `launcher/src/protected_key.py`; extended `backend/app/platform/config.py` with native configuration interfaces and a redacted protected-key resolver. Source includes the existing four-field TOML reader, local path/ACL validation, exclusive config/key creation, current-user DPAPI, Markdown dry-run checks and separate existing storage/bridge checks. Missing AI configuration preserves successful local storage validation; no browser credential flow, provider administration, migration redesign or restore implementation was added.
+- Recorded `BLOCKED_SCOPE` in the T040 card and unchecked checklist. `launcher/src/main.py` still needs native setup invocation and remediation presentation; `backend/app/main.py` still constructs an unkeyed runtime adapter. Both remain untouched under the exact allowlist. Source helpers are `IMPLEMENTED_UNVERIFIED`; they do not certify backend health, journal recovery or consent.
+- Coding-only: no test creation/execution, build, lint, typecheck, audit, security scan, installation, provider or Windows execution, subagents or Git mutation. DPAPI/ACL, privacy, error paths and integration evidence remain pending. Existing user files, configuration and credentials were not accessed or changed; restrictive ACLs may require operator repair and Python secret copies cannot promise debugger/crash-dump resistance.
+
 ## 11/10/2026 - T045 coding-only task closure (Asia/Bangkok)
 
 - Recorded already-integrated Git hygiene source commit `5a06042c835313edff0a41ae11931c9eb9ec9605` as `DONE (CODING_ONLY)` in T045 task card and checklist. `.gitattributes`, `.githooks/pre-commit`, `.github/pull_request_template.md`, and `docs/git-workflow.md` already reside in `main`; no duplicate worker implementation started.

@@ -63,7 +63,7 @@
 - [x] [T038](t038-dashboard-ui.md): Learning Dashboard UI — `DONE (CODING_ONLY)`; PR #17 merged (`5e97b2a`); `FINAL_VERIFICATION_DEFERRED` by owner.
 - [x] [T061](t061-alerts-runbooks.md): Local symptom alerts và runbook links — `DONE (CODING_ONLY)`; PR #21 merged (`24e916a`), source integration in Backend/Status API/UI and runbooks; `FINAL_VERIFICATION_DEFERRED` by owner. Search p95 remains `NO_DATA` (no fixture-qualified producer); OpenAPI/DTO pinned-tool regeneration and all executable verification pending.
 - [x] [T039](t039-launcher.md): Windows launcher single-instance/bootstrap — `DONE (CODING_ONLY)`; PR #20 merged (`9e2adfa`), Windows in-process launcher and session bootstrap source integrated; `FINAL_VERIFICATION_DEFERRED` by owner (Windows runtime/packaging pending).
-- [ ] [T040](t040-first-run-recovery.md): Native first-run configuration và protected key store
+- [ ] [T040](t040-first-run-recovery.md): Native first-run configuration và protected key store — `BLOCKED_SCOPE`; permitted native/config primitives `IMPLEMENTED_UNVERIFIED` (12/10/2026). Launcher main/backend composition wiring outside allowlist; all verification and Windows DPAPI/ACL evidence pending.
 - [ ] [T054](t054-restore-recovery-drill.md): Staging restore và migration recovery drill
 - [ ] [T041](t041-security-hardening.md): Browser/API/filesystem hardening evidence
 - [x] [T042](t042-performance-fixture.md): Deterministic100k search benchmark fixture
