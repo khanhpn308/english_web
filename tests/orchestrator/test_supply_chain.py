@@ -110,7 +110,6 @@ def test_t090_supply_chain_attestation_requires_pinned_gh_and_2_predicates(
         verify_registry_attestations(**{**args, "gh_executable": gh_alias})
 
 
-
 def test_t090_attestation_executes_sealed_cli_after_original_is_replaced(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -135,9 +134,7 @@ def test_t090_attestation_executes_sealed_cli_after_original_is_replaced(
             "verificationResult": {
                 "statement": {
                     "predicateType": predicate,
-                    "subject": [
-                        {"name": image.rsplit("@", 1)[0], "digest": {"sha256": "a" * 64}}
-                    ],
+                    "subject": [{"name": image.rsplit("@", 1)[0], "digest": {"sha256": "a" * 64}}],
                 }
             }
         }
