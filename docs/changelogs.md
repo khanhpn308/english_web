@@ -1,3 +1,9 @@
+## 11/10/2026 - T037/T038 owner-approved coding-only closure (Asia/Bangkok)
+
+- T037 marked `DONE (CODING_ONLY)` after integration of H1/R1 dashboard source and SQLite historical evidence, canonical nullable-streak response, plus generated OpenAPI/TypeScript DTO synchronization on `main` at `4ec7bd3`.
+- T038 merged into `main` via PR #17 (`5e97b2a`); marked `DONE (CODING_ONLY)` with Dashboard UI, AppShell integration and invalidation wiring.
+- `FINAL_VERIFICATION_DEFERRED` for both tasks. No tests, builds, lint/typecheck, audits, security scans or runtime claims were performed as part of this closure; task acceptance evidence remains pending the final verification phase.
+
 ## 11/10/2026 - T038 Learning Dashboard UI implemented (Asia/Bangkok)
 
 - Implemented `DashboardPage` in `frontend/src/features/dashboard/DashboardPage.tsx` using canonical shadcn/ui primitives (`Card`, `Button`) and Tailwind CSS v4 semantic tokens.
