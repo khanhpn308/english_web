@@ -46,7 +46,13 @@ from backend.app.http.telemetry import RouteSpanMiddleware, TelemetryFastAPI
 from backend.app.http.word_forms import router as word_forms_router
 from backend.app.persistence.database import Database, StorageError
 from backend.app.platform.alerts import LocalAlerts
-from backend.app.platform.config import AppSettings
+from backend.app.platform.bridge_port import BridgeConfigError
+from backend.app.platform.config import (
+    AppSettings,
+    BridgeKeyMissingError,
+    ProtectedKeyReader,
+    resolve_bridge_key,
+)
 from backend.app.platform.metrics import LocalMetrics, MeteredTelemetry
 from backend.app.platform.telemetry import LocalJsonSink, Telemetry, default_log_directory
 from backend.app.review.queue import ReviewService
@@ -69,8 +75,32 @@ _SHELL_ROUTES = {"", "lookup", "search", "review", "quiz/new", "status"}
 _DETAIL_ROUTES = re.compile(r"(?:word-forms/[^/]+|quiz/[^/]+(?:/result)?)\Z")
 
 
+def _configured_bridge(
+    reader: ProtectedKeyReader | None, profile_verified: bool, telemetry: Telemetry,
+) -> tuple[BridgeAdapter, str]:
+    """Resolve locally only; preflight and AI admission remain request-owned."""
+    if reader is None:
+        return BridgeAdapter(api_key=None, telemetry=telemetry), "MISSING"
+    if profile_verified is not True:
+        return BridgeAdapter(api_key=None, telemetry=telemetry), "PROFILE_UNCONFIRMED"
+    try:
+        key = resolve_bridge_key(reader, profile_verified=profile_verified)
+    except BridgeKeyMissingError:
+        return BridgeAdapter(api_key=None, telemetry=telemetry), "MISSING"
+    except BridgeConfigError:
+        return BridgeAdapter(api_key=None, telemetry=telemetry), "INVALID"
+    try:
+        return BridgeAdapter(api_key=key.get_secret_value(), telemetry=telemetry), "RESOLVED"
+    finally:
+        # shortcut: the adapter retains a Python string; use native memory for dump resistance.
+        del key
+
+
 @asynccontextmanager
-async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def _application_lifespan(
+    app: FastAPI, *, bridge_key_reader: ProtectedKeyReader | None = None,
+    bridge_profile_verified: bool = False,
+) -> AsyncIterator[None]:
     """Keep readiness false until storage checks and migrations finish."""
     settings: AppSettings = app.state.settings
     database = (
@@ -123,7 +153,10 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
                     ledger=ledger,
                     conflict_type=OperationConflict,
                 )
-                app.state.bridge = BridgeAdapter(api_key=None, telemetry=app.state.telemetry)
+                app.state.bridge, app.state.bridge_configuration_status = await run_in_threadpool(
+                    _configured_bridge, bridge_key_reader, bridge_profile_verified,
+                    app.state.telemetry,
+                )
                 admission_coordinator = AiAdmissionCoordinator(
                     app.state.consent_service,
                     app.state.bridge,
@@ -331,10 +364,14 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
                                 await run_in_threadpool(database.close)
                         app.state.database = None
                         app.state.bridge = None
+                        app.state.bridge_configuration_status = "NOT_RESOLVED"
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(
+    app: FastAPI, *, bridge_key_reader: ProtectedKeyReader | None = None,
+    bridge_profile_verified: bool = False,
+) -> AsyncIterator[None]:
     """Delegate all learning lifecycle work; diagnostics never mask its failures."""
     telemetry: Telemetry = app.state.telemetry
     try:
@@ -349,7 +386,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.alerts = None
         telemetry.span_retention_failed = True
     try:
-        async with _application_lifespan(app):
+        async with _application_lifespan(
+            app, bridge_key_reader=bridge_key_reader,
+            bridge_profile_verified=bridge_profile_verified,
+        ):
             try:
                 telemetry.emit("app_started")
             except Exception:
@@ -480,14 +520,25 @@ def create_app(
     settings: AppSettings | None = None,
     *,
     markdown_root: Path | None = None,
+    bridge_key_reader: ProtectedKeyReader | None = None,
+    bridge_profile_verified: bool = False,
 ) -> FastAPI:
     """Create and configure a FastAPI application instance."""
     app_settings = settings or AppSettings()
 
+    @asynccontextmanager
+    async def configured_lifespan(application: FastAPI) -> AsyncIterator[None]:
+        # Keep the protected reference out of serializable settings/application state.
+        async with lifespan(
+            application, bridge_key_reader=bridge_key_reader,
+            bridge_profile_verified=bridge_profile_verified,
+        ):
+            yield
+
     app = TelemetryFastAPI(
         title="Vocabulary Learning App",
         version=app_settings.app_version,
-        lifespan=lifespan,
+        lifespan=configured_lifespan,
     )
 
     app.state.metrics = None
@@ -506,6 +557,7 @@ def create_app(
     app.state.alerts = None
     app.state.started_at = None
     app.state.bridge = None
+    app.state.bridge_configuration_status = "NOT_RESOLVED"
     app.state.markdown_root = markdown_root
     app.state.ready = False
     app.state.database = None

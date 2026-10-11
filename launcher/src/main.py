@@ -6,6 +6,7 @@ Provisioning and packaging remain owned by T040 and T056.
 
 from __future__ import annotations
 
+import asyncio
 import ctypes
 import http.client
 import json
@@ -25,7 +26,11 @@ from html.parser import HTMLParser
 from pathlib import Path, PureWindowsPath
 from socket import AF_INET, SOCK_STREAM, SOL_SOCKET, socket
 from time import monotonic
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from backend.app.platform.config import ProtectedKeyReader
+    from launcher.src.first_run import FirstRun, WindowsConfigurationStore
 
 from launcher.src.windows_mutex import (
     InstanceRole,
@@ -50,9 +55,15 @@ class LaunchResult(StrEnum):
     READINESS_TIMEOUT = "READINESS_TIMEOUT"
     BACKEND_UNAVAILABLE = "BACKEND_UNAVAILABLE"
     BROWSER_UNAVAILABLE = "BROWSER_UNAVAILABLE"
+    BLOCKED_CONTRACT = "BLOCKED_CONTRACT"
 
 
 REMEDIATION = {
+    LaunchResult.BLOCKED_CONTRACT: (
+        "Native operator input is unavailable at WindowsDesktop.native_setup. "
+        "Repair the installed Python Tcl/Tk dialog support and use an interactive Windows "
+        "desktop before first-run setup. No setup success was recorded. Existing data is preserved."
+    ),
     LaunchResult.CONFIGURATION_REQUIRED: (
         "Local API startup failed because native configuration is missing or unsafe. "
         "Use the native first-run setup to provision local writable data and Markdown "
@@ -98,11 +109,18 @@ SHUTDOWN_REMEDIATION = (
     "Do not copy or restore data until it has stopped. Restart for a fresh session; "
     "if this repeats, follow the storage-integrity runbook."
 )
+AI_KEY_REMEDIATION = (
+    "AI is unavailable because the protected client key could not be safely read. "
+    "Local study can continue after storage readiness. Repair current-user permissions or "
+    "explicitly reconfigure the protected store through native setup. Do not overwrite damaged "
+    "material, reset learning data, or supply Google credentials or an administration password."
+)
 
 
 class LaunchFailure(RuntimeError):
-    def __init__(self, result: LaunchResult) -> None:
+    def __init__(self, result: LaunchResult, *, guidance: str | None = None) -> None:
         self.result = result
+        self.guidance = guidance
         super().__init__(result.value)
 
 
@@ -300,10 +318,14 @@ def _health_response(connection: http.client.HTTPConnection) -> bool:
 
 
 class Backend:
-    def __init__(self, configuration: Configuration, listener: socket) -> None:
+    def __init__(
+        self, configuration: Configuration, listener: socket, *,
+        bridge_key_reader: ProtectedKeyReader | None = None,
+        bridge_profile_verified: bool = False,
+    ) -> None:
         import uvicorn
         from backend.app.main import create_app
-        from backend.app.platform.config import AppSettings
+        from backend.app.platform.config import AppSettings, NativeConfiguration
 
         # Uvicorn exceptions/access output are not the application's redacted telemetry.
         for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
@@ -311,8 +333,12 @@ class Backend:
         self.port = listener.getsockname()[1]
         self.listener = listener
         self.app = create_app(
-            settings=AppSettings(host=HOST, port=self.port, storage_path=configuration.storage_path),
+            settings=AppSettings.from_native(NativeConfiguration(
+                configuration.data_root, configuration.storage_path, configuration.markdown_root,
+            ), port=self.port),
             markdown_root=configuration.markdown_root,
+            bridge_key_reader=bridge_key_reader,
+            bridge_profile_verified=bridge_profile_verified,
         )
         self.server = uvicorn.Server(uvicorn.Config(
             self.app, host=HOST, port=self.port, workers=1, reload=False,
@@ -379,14 +405,16 @@ def _hard_shutdown(desktop: DesktopOperations) -> None:
 
 
 def run_launcher(
-    instance: SingleInstance, desktop: DesktopOperations, config_path: Path,
+    instance: SingleInstance, desktop: DesktopOperations, config_path: Path | None,
     stop: threading.Event,
     *, backend_factory: Callable[[Configuration, socket], Backend] = Backend,
     socket_factory: Callable[[], socket] = reserve_socket,
+    configuration_loader: Callable[[], Configuration] | None = None,
 ) -> LaunchResult:
     backend = None
     listener = None
     result = LaunchResult.STOPPED
+    guidance = None
     try:
         role = instance.acquire()
         if role == InstanceRole.DUPLICATE:
@@ -394,8 +422,13 @@ def run_launcher(
                 LaunchResult.FOCUS_REQUESTED if instance.request_focus()
                 else LaunchResult.INSTANCE_UNAVAILABLE
             )
-        else:
-            configuration = load_configuration(config_path, desktop)
+        elif role in {InstanceRole.PRIMARY, InstanceRole.RECOVERED}:
+            if configuration_loader is not None:
+                configuration = configuration_loader()
+            elif config_path is not None:
+                configuration = load_configuration(config_path, desktop)
+            else:
+                raise LaunchFailure(LaunchResult.CONFIGURATION_REQUIRED)
             from backend.app.main import STATIC_ROOT
 
             require_assets(STATIC_ROOT)
@@ -404,6 +437,10 @@ def run_launcher(
             deadline = monotonic() + READINESS_SECONDS
             backend.start()
             if wait_ready(backend, stop, deadline) and not stop.is_set():
+                if getattr(backend.app.state, "bridge_configuration_status", None) == "INVALID":
+                    desktop.notify(AI_KEY_REMEDIATION)
+                if stop.is_set() or not backend.alive() or backend.app.state.ready is not True:
+                    raise LaunchFailure(LaunchResult.BACKEND_UNAVAILABLE)
                 token = backend.app.state.sessions.issue_bootstrap_token()
                 try:
                     desktop.open_bootstrap(backend.port, token)
@@ -425,10 +462,13 @@ def run_launcher(
                                 name="vocabulary-focus-remediation", daemon=True,
                             )
                             focus_notice.start()
+        else:
+            raise SynchronizationError("Instance role unavailable")
     except SynchronizationError:
         result = LaunchResult.INSTANCE_UNAVAILABLE
     except LaunchFailure as failure:
         result = failure.result
+        guidance = failure.guidance
     except KeyboardInterrupt:
         stop.set()
     except Exception:
@@ -445,7 +485,7 @@ def run_launcher(
             finally:
                 desktop.close()
     if result in REMEDIATION:
-        desktop.notify(REMEDIATION[result])
+        desktop.notify(guidance or REMEDIATION[result])
     return result
 
 
@@ -477,6 +517,8 @@ class WindowsDesktop:
         self.browser_window: int | None = None
         self.com_initialized = False
         self.open_attempted = False
+        self.bridge_key_reader: ProtectedKeyReader | None = None
+        self.bridge_profile_verified = False
         self.window_callback = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
         signatures = [
             (self.kernel, "GetDriveTypeW", [wintypes.LPCWSTR], wintypes.UINT),
@@ -530,6 +572,189 @@ class WindowsDesktop:
 
     def notify(self, message: str) -> None:
         self.user.MessageBoxW(None, message, "Vocabulary App", 0x10 | 0x10000)
+
+    def confirm(self, message: str) -> bool:
+        # MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2: refusal is the default.
+        return self.user.MessageBoxW(None, message, "Vocabulary App", 0x104 | 0x20) == 6
+
+    def confirm_bridge_profile(self) -> bool:
+        from launcher.src.first_run import OperatorProfile
+
+        confirmed = self.confirm(
+            "Confirm that Antigravity v4.8.4 uses only http://127.0.0.1:8045/v1, "
+            "LAN access is disabled and authentication is all_except_health. "
+            "This enables protected-key resolution, not AI consent or provider approval. "
+            "Select No to continue with local study only."
+        )
+        return confirmed and OperatorProfile("4.8.4", False, "all_except_health").approved()
+
+    def native_setup(
+        self, setup: FirstRun, store: WindowsConfigurationStore, *, configuration_required: bool,
+    ) -> None:
+        """Native operator interaction only, called with primary-instance ownership.
+
+        Source: https://docs.python.org/3.12/library/dialog.html
+        Source: https://docs.python.org/3.12/library/tkinter.html
+        """
+        from launcher.src.first_run import FirstRunError, REMEDIATION as SETUP_REMEDIATION
+
+        root = None
+        try:
+            import tkinter
+            from tkinter import filedialog, simpledialog
+            from pydantic import SecretStr
+
+            if tkinter.__dict__.get("_debug", False):
+                raise LaunchFailure(LaunchResult.BLOCKED_CONTRACT)
+
+            class OperatorRoot(tkinter.Tk):
+                callback_failed = False
+
+                def readprofile(self, baseName: str, className: str) -> None:
+                    # Tk normally executes user profile scripts; secret entry must not load them.
+                    return None
+
+                def report_callback_exception(self, *_details: object) -> None:
+                    # Tk's default retains and prints raw exceptions/tracebacks.
+                    self.callback_failed = True
+                    self.destroy()
+
+            root = OperatorRoot()
+            root.withdraw()
+            if configuration_required:
+                use_default = self.confirm(
+                    "Use the default data directory Documents\\VocabularyApp under your Windows "
+                    "profile? Select No to choose an existing data directory. Setup uses "
+                    "vocabulary.sqlite3 and preserves existing files."
+                )
+                data = None if use_default else filedialog.askdirectory(
+                    parent=root, title="Select existing local data directory", mustexist=True,
+                )
+                if not use_default and not data:
+                    raise LaunchFailure(LaunchResult.CONFIGURATION_REQUIRED)
+                markdown = filedialog.askdirectory(
+                    parent=root, title="Select existing local Markdown directory", mustexist=True,
+                )
+                if not markdown or not self.confirm(
+                    "Validate the selected directories and create native configuration? "
+                    "Existing configuration, database and Markdown files will not be replaced."
+                ):
+                    raise LaunchFailure(LaunchResult.CONFIGURATION_REQUIRED)
+                if use_default:
+                    data_root = store.create_default_data_root()
+                elif data:
+                    data_root = Path(data)
+                else:
+                    raise LaunchFailure(LaunchResult.CONFIGURATION_REQUIRED)
+                result = setup.provision(data_root, Path(markdown))
+                if result.code != "VALIDATION_ONLY" or result.configuration is None:
+                    raise LaunchFailure(LaunchResult.CONFIGURATION_REQUIRED, guidance=result.guidance)
+            else:
+                self.bridge_profile_verified = self.confirm_bridge_profile()
+                if not self.bridge_profile_verified:
+                    return
+                value = simpledialog.askstring(
+                    "Optional AI client key",
+                    "Enter the rotated Antigravity client key.\n"
+                    "Do not enter a Google credential or administration password.\n"
+                    "Cancel to continue with local study only.",
+                    parent=root, show="*",
+                )
+                try:
+                    if value is not None:
+                        try:
+                            store.files.ensure_directories()
+                            setup.keys.provision(SecretStr(value))
+                        except Exception:
+                            self.notify(AI_KEY_REMEDIATION)
+                finally:
+                    del value
+            if root.callback_failed:
+                raise LaunchFailure(LaunchResult.BLOCKED_CONTRACT)
+        except LaunchFailure:
+            raise
+        except FirstRunError as failure:
+            raise LaunchFailure(
+                LaunchResult.CONFIGURATION_REQUIRED, guidance=SETUP_REMEDIATION[failure.code],
+            ) from None
+        except Exception:
+            raise LaunchFailure(LaunchResult.BLOCKED_CONTRACT) from None
+        finally:
+            if root is not None and not root.callback_failed:
+                try:
+                    root.destroy()
+                except Exception:
+                    raise LaunchFailure(LaunchResult.BLOCKED_CONTRACT) from None
+
+    def prepare_configuration(self) -> Configuration:
+        """Reuse R1 checks and T039's reader; backend owns migration/integrity readiness."""
+        from launcher.src.first_run import (
+            FirstRun, REMEDIATION as SETUP_REMEDIATION, WindowsConfigurationStore,
+        )
+        from launcher.src.protected_key import (
+            CONFIG_NAME, KEY_NAME, NativeFileError, ProtectedKeyStore, WindowsNativeFiles,
+        )
+
+        self.bridge_key_reader = None
+        self.bridge_profile_verified = False
+        try:
+            files = WindowsNativeFiles(self.operations, self)
+            store = WindowsConfigurationStore(files, self)
+            setup = FirstRun(store, ProtectedKeyStore(files))
+            new_configuration = files.is_absent(CONFIG_NAME)
+            if new_configuration:
+                self.native_setup(setup, store, configuration_required=True)
+            validation = asyncio.run(setup.validate(dry_run=True))
+            if validation.code != "VALIDATION_ONLY" or validation.configuration is None:
+                raise LaunchFailure(
+                    LaunchResult.CONFIGURATION_REQUIRED, guidance=validation.guidance,
+                )
+            if not new_configuration:
+                try:
+                    validation.configuration.storage_path.lstat()
+                except FileNotFoundError:
+                    if not self.confirm(
+                        "The configured database is missing. Creating an empty database will not "
+                        "recover any previous learning history. Create it only if this is an "
+                        "intentionally new installation. Otherwise select No, preserve your "
+                        "directories and follow the staging restore runbook. Create a new database?"
+                    ):
+                        raise LaunchFailure(
+                            LaunchResult.CONFIGURATION_REQUIRED,
+                            guidance=SETUP_REMEDIATION["STORAGE_VALIDATION_FAILED"],
+                        )
+        except LaunchFailure:
+            raise
+        except Exception:
+            raise LaunchFailure(
+                LaunchResult.CONFIGURATION_REQUIRED,
+                guidance=SETUP_REMEDIATION["CONFIGURATION_REQUIRED"],
+            ) from None
+
+        self.bridge_key_reader = setup.keys
+        try:
+            key_missing = files.is_absent(KEY_NAME)
+        except NativeFileError:
+            key_missing = False
+            self.notify(AI_KEY_REMEDIATION)
+        if key_missing:
+            self.bridge_key_reader = None
+            if self.confirm(
+                "Local configuration is valid. Configure the optional protected AI client key now? "
+                "Select No to continue with local study."
+            ):
+                try:
+                    self.native_setup(setup, store, configuration_required=False)
+                except LaunchFailure as failure:
+                    self.notify(failure.guidance or REMEDIATION[failure.result])
+                # Re-read through the backend resolver, including any incomplete provision.
+                self.bridge_key_reader = setup.keys
+        else:
+            self.bridge_profile_verified = self.confirm_bridge_profile()
+        configuration = validation.configuration
+        return Configuration(
+            configuration.data_root, configuration.storage_path, configuration.markdown_root,
+        )
 
     def open_bootstrap(self, port: int, token: str) -> None:
         if not 1 <= port <= 65535 or re.fullmatch(r"[A-Za-z0-9_-]{1,128}", token) is None:
@@ -647,12 +872,19 @@ def main() -> int:
         for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGBREAK):
             previous_handlers[signum] = signal.signal(signum, lambda _number, _frame: stop.set())
         operations = WindowsOperations()
-        desktop = WindowsDesktop(operations)
-        local = os.environ.get("LOCALAPPDATA")
-        if local is None:
-            raise LaunchFailure(LaunchResult.CONFIGURATION_REQUIRED)
-        config_path = _windows_path(local, desktop) / "VocabularyApp" / "config.toml"
-        result = run_launcher(SingleInstance(operations), desktop, config_path, stop)
+        runtime_desktop = WindowsDesktop(operations)
+        desktop = runtime_desktop
+
+        def backend_factory(configuration: Configuration, listener: socket) -> Backend:
+            return Backend(
+                configuration, listener, bridge_key_reader=runtime_desktop.bridge_key_reader,
+                bridge_profile_verified=runtime_desktop.bridge_profile_verified,
+            )
+
+        result = run_launcher(
+            SingleInstance(operations), desktop, None, stop,
+            configuration_loader=desktop.prepare_configuration, backend_factory=backend_factory,
+        )
         return 0 if result in {LaunchResult.STOPPED, LaunchResult.FOCUS_REQUESTED} else 1
     except Exception as failure:
         result = (

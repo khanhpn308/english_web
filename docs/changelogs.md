@@ -1,3 +1,14 @@
+## 12/10/2026 - T040 R2 production source integrated into PR branch (Asia/Bangkok)
+
+- T040 R2 implementation is now integrated into the PR branch: approved `launcher/src/main.py` and `backend/app/main.py` connect primary-only Windows provisioning/DPAPI protected reference to the original T039 FastAPI app and bridge adapter. This is `CODE_IMPLEMENTED_UNVERIFIED`, not completed acceptance or a merged-main status.
+- Host reconciled concurrent T044 checklist and changelog updates without dropping either task. T040 coding scope is complete according to its source handoff; owner PR merge approval is pending. Native Tcl/Tk packaging, Windows DPAPI/ACL, startup and offline behavior, focused tests and all audit gates remain PENDING. No tests, audit, build, lint, typecheck or runtime verification ran during this reconciliation.
+
+## 12/10/2026 - T040 native configuration and protected-key primitives (Asia/Bangkok)
+
+- Created `launcher/src/first_run.py` and `launcher/src/protected_key.py`; extended `backend/app/platform/config.py` with native configuration interfaces and a redacted protected-key resolver. Source includes the existing four-field TOML reader, local path/ACL validation, exclusive config/key creation, current-user DPAPI, Markdown dry-run checks and separate existing storage/bridge checks. Missing AI configuration preserves successful local storage validation; no browser credential flow, provider administration, migration redesign or restore implementation was added.
+- Recorded `BLOCKED_SCOPE` in the T040 card and unchecked checklist. `launcher/src/main.py` still needs native setup invocation and remediation presentation; `backend/app/main.py` still constructs an unkeyed runtime adapter. Both remain untouched under the exact allowlist. Source helpers are `IMPLEMENTED_UNVERIFIED`; they do not certify backend health, journal recovery or consent.
+- Coding-only: no test creation/execution, build, lint, typecheck, audit, security scan, installation, provider or Windows execution, subagents or Git mutation. DPAPI/ACL, privacy, error paths and integration evidence remain pending. Existing user files, configuration and credentials were not accessed or changed; restrictive ACLs may require operator repair and Python secret copies cannot promise debugger/crash-dump resistance.
+
 ## 12/10/2026 - T044 merged (coding only)
 
 - PR #22 merged into main, commit 4418434f528cca94883bab47d3b7727f284997bd. T044 is DONE (CODING_ONLY); FINAL_VERIFICATION_DEFERRED.
