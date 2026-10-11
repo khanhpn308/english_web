@@ -969,8 +969,11 @@ class Pipeline:
         ) as temporary:
             clone = Path(temporary) / "workspace"
             self.git.run(
-                "clone", "--no-local", "--no-checkout",
-                str(self.repository), str(clone),
+                "clone",
+                "--no-local",
+                "--no-checkout",
+                str(self.repository),
+                str(clone),
             )
             verifier_git = Git(clone)
             verifier_git.run("checkout", "--detach", pinned_head)
@@ -1444,8 +1447,7 @@ class Pipeline:
             # there is never a retry on the bare Host.
             destination = (
                 State.BLOCKED
-                if isinstance(error, OrchestratorError)
-                and "T090 SANDBOX_BLOCKED" in str(error)
+                if isinstance(error, OrchestratorError) and "T090 SANDBOX_BLOCKED" in str(error)
                 else State.FAILED
             )
             self.move(directory, state, destination)
@@ -2854,9 +2856,7 @@ class Pipeline:
                     state.task_id, state.base_sha, git.branch(), before, declaration
                 ),
             )
-            collection = self._collect_docker_verification(
-                request, cwd, before, admission, sandbox
-            )
+            collection = self._collect_docker_verification(request, cwd, before, admission, sandbox)
             if verify_git.snapshot(state.base_sha) != before:
                 raise OrchestratorError("T090 SANDBOX_BLOCKED: verifier clone changed")
         if git.snapshot(state.base_sha) != before:
