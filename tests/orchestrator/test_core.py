@@ -36,13 +36,24 @@ from tools.orchestrator.core import (
     TimingEvidence,
     VerificationCommandEvidence,
     VerificationEvidence,
+    VerificationRequest,
     atomic_json,
     digest,
     read_json,
     safe_path,
     transition,
 )
-from tools.orchestrator.runtime import CliProvider, Git, LockBusy, execute, lock, slot
+from tools.orchestrator.runtime import (
+    CliProvider,
+    DockerVerificationSandbox,
+    Git,
+    LockBusy,
+    VerificationImageAdmission,
+    execute,
+    lock,
+    slot,
+)
+from tools.orchestrator.workflow import FrozenVerificationSourceBinding
 
 
 def parallel_review_bundle() -> ReviewBundle:
@@ -1656,7 +1667,13 @@ def test_no_task_id_specific_scheduler_or_runtime_exceptions() -> None:
 def _t090_synthetic_admitted_collection(
     tmp_path: Path,
     commands: tuple[tuple[str, ...], ...],
-) -> tuple[object, Path, object, object, object]:
+) -> tuple[
+    VerificationRequest,
+    Path,
+    FrozenVerificationSourceBinding,
+    VerificationImageAdmission,
+    DockerVerificationSandbox,
+]:
     """Real Git sealing plus fake Docker execution; never a live isolation claim."""
     from tools.orchestrator.core import VerificationRequest
     from tools.orchestrator.runtime import (
