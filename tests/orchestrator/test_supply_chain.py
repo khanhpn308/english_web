@@ -32,6 +32,26 @@ def test_t090_supply_chain_candidate_lock_does_not_claim_version_pin_is_hash(
     assert inspect_candidate_locks(requirements, npm)["python_artifact_hashes_pinned"]
 
 
+
+def test_t090_hash_lock_parser_rejects_pip_option_injection(tmp_path: Path) -> None:
+    requirements = tmp_path / "requirements.lock"
+    npm = tmp_path / "package-lock.json"
+    npm.write_text('{"packages":{"":{},"node_modules/demo":{"integrity":"sha512-abc"}}}')
+    sha = "a" * 64
+    requirements.write_text(f"pytest==9.1.1 --hash=sha256:{sha}\n")
+    assert inspect_candidate_locks(requirements, npm)["python_artifact_hashes_pinned"]
+    requirements.write_text(f"pytest==9.1.1 --hash=sha256:{sha} --hash=sha256:{sha}\n")
+    assert inspect_candidate_locks(requirements, npm)["python_artifact_hashes_pinned"]
+    for unsafe in (
+        f"pytest==9.1.1 --hash=sha256:{sha} --trusted-host=attacker.invalid\n",
+        f"pytest==9.1.1 --hash=sha256:{sha} --extra-index-url=https://attacker.invalid\n",
+        f"pytest==9.1.1 --hash=sha256:{sha} --no-deps\n",
+        f"pytest==9.1.1 --hash=sha256:{sha} garbage\n",
+    ):
+        requirements.write_text(unsafe)
+        assert not inspect_candidate_locks(requirements, npm)["python_artifact_hashes_pinned"]
+
+
 def test_t090_supply_chain_sbom_requires_real_pinned_bytes(tmp_path: Path) -> None:
     sbom = tmp_path / "image.spdx.json"
     payload = {
