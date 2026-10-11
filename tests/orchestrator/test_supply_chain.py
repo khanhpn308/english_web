@@ -110,6 +110,57 @@ def test_t090_supply_chain_attestation_requires_pinned_gh_and_2_predicates(
         verify_registry_attestations(**{**args, "gh_executable": gh_alias})
 
 
+
+def test_t090_attestation_executes_sealed_cli_after_original_is_replaced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The digest-pinned executable must not be reopened via its mutable path."""
+    original = tmp_path / "trusted-gh"
+    trusted_bytes = b"synthetic-verified-cli"
+    original.write_bytes(trusted_bytes)
+    image = "ghcr.io/khanhpn308/english_web/t090-verifier@sha256:" + "a" * 64
+    called_paths: list[Path] = []
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        path = Path(argv[0])
+        assert path != original
+        assert path.read_bytes() == trusted_bytes
+        assert kwargs["shell"] is False
+        if not called_paths:
+            # Simulate replacement after verification, before the next call.
+            original.write_bytes(b"attacker-replaced-original")
+        called_paths.append(path)
+        predicate = argv[argv.index("--predicate-type") + 1]
+        statement = {
+            "verificationResult": {
+                "statement": {
+                    "predicateType": predicate,
+                    "subject": [
+                        {"name": image.rsplit("@", 1)[0], "digest": {"sha256": "a" * 64}}
+                    ],
+                }
+            }
+        }
+        return subprocess.CompletedProcess(argv, 0, json.dumps([statement]), "")
+
+    monkeypatch.setattr("scripts.t090_supply_chain.subprocess.run", fake_run)
+    provenance, sbom = verify_registry_attestations(
+        image_reference=image,
+        repository="khanhpn308/english_web",
+        signer_workflow="khanhpn308/english_web/.github/workflows/t090-image-attestation.yml",
+        source_sha="b" * 40,
+        source_ref="refs/heads/feature/t090-provider-isolation-adjudication",
+        gh_executable=original,
+        expected_gh_sha256=hashlib.sha256(trusted_bytes).hexdigest(),
+    )
+    assert provenance["predicateType"] == "https://slsa.dev/provenance/v1"
+    assert sbom["predicateType"] == "https://spdx.dev/Document/v2.3"
+    assert len(called_paths) == 2
+    assert called_paths[0] == called_paths[1]
+    assert not called_paths[0].exists()
+    assert original.read_bytes() == b"attacker-replaced-original"
+
+
 def test_t090_supply_chain_rejects_wrong_attested_image(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
