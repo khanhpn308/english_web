@@ -4340,6 +4340,38 @@ def test_t090_git_frozen_source_binding_matches_authoritative_snapshot(
     assert binding.verification_root == verification.resolve()
 
 
+def test_t090_git_frozen_binding_accepts_post_merge_committed_head(
+    repository: Path, tmp_path: Path
+) -> None:
+    from tools.orchestrator.runtime import DockerVerificationPolicy, DockerVerificationSandbox
+    from tools.orchestrator.workflow import freeze_verification_source_binding
+
+    base = Git(repository).sha()
+    (repository / "feature.txt").write_text("post-merge candidate\n")
+    Git(repository).run("add", "feature.txt")
+    Git(repository).run("commit", "-m", "synthetic integration")
+    committed_head = Git(repository).sha()
+    assert committed_head != base
+    snapshot = Git(repository).snapshot(base)
+    root = tmp_path / "verify-root"
+    clone = root / "verify-integration" / "workspace"
+    clone.parent.mkdir(parents=True)
+    Git(repository).run("clone", "--no-local", "--no-checkout", str(repository), str(clone))
+    Git(clone).run("checkout", "--detach", committed_head)
+    broker = DockerVerificationSandbox(
+        DockerVerificationPolicy("example.org/verified@sha256:" + "a" * 64, root)
+    )
+    binding = freeze_verification_source_binding(
+        working=repository,
+        verification_workspace=clone,
+        base_sha=base,
+        expected_git_snapshot=snapshot,
+        sandbox=broker,
+    )
+    assert binding.git_snapshot == snapshot
+    assert binding.docker_source_digest == broker.source_digest(clone)
+
+
 def test_t090_git_frozen_binding_rejects_tampered_clone_before_docker(
     repository: Path, tmp_path: Path
 ) -> None:
