@@ -53,6 +53,10 @@ from tools.orchestrator.workflow import (
 )
 
 Output = TypeVar("Output", bound=BaseModel)
+# Preserve the production method before the repository fixture installs a
+# narrowly scoped synthetic functional-test adapter.
+_PRODUCTION_IMAGE_AUTHORITY = Pipeline._verification_authority
+_PRODUCTION_DOCKER_COLLECTION = Pipeline._collect_docker_verification
 
 
 @pytest.fixture
@@ -4432,6 +4436,135 @@ def test_t090_admitted_collector_uses_only_docker_and_binds_git(
     assert captured == [command]
     assert collection.results[0]["execution_backend"] == "docker-sandbox"
     assert collection.results[0]["image_policy_digest"] == approval.policy_sha256
+
+
+def test_t090_legacy_host_collector_always_rejects(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator import workflow
+    from tools.orchestrator.core import FrozenEvidenceIdentity, VerificationRequest
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("Legacy Host executor must not run any command")
+
+    monkeypatch.setattr(workflow, "execute", forbidden)
+    base = Git(repository).sha()
+    cmds = (("python", "-m", "pytest", "-q"),)
+    request = VerificationRequest(
+        repository,
+        cmds,
+        30,
+        FrozenEvidenceIdentity.freeze(
+            "T100", base, "main", Git(repository).snapshot(base), cmds
+        ),
+    )
+    with pytest.raises(OrchestratorError, match="legacy Host verification"):
+        workflow.collect_verification(request)
+
+
+def test_t090_pipeline_verify_blocks_missing_operator_policy_before_execution(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator import workflow
+
+    pipeline = Pipeline(repository, configuration(integrate=False), FakeAgents())
+    monkeypatch.setattr(Pipeline, "_verification_authority", _PRODUCTION_IMAGE_AUTHORITY)
+    for name in (
+        "T090_IMAGE_POLICY_PATH",
+        "T090_IMAGE_POLICY_SHA256",
+        "T090_IMAGE_APPROVAL_SIGNATURE_PATH",
+        "T090_IMAGE_TRUSTED_PUBLIC_KEY_PATH",
+        "T090_IMAGE_TRUSTED_PUBLIC_KEY_SHA256",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("No verification subprocess may run before Host admission")
+
+    monkeypatch.setattr(workflow, "execute", forbidden)
+    base = Git(repository).sha()
+    state = RunState(
+        task_id="T100",
+        run_id="test-r6b3-missing-admission",
+        repository=str(repository),
+        base_branch="main",
+        base_sha=base,
+        worktree_path=str(repository),
+        worktree_branch="main",
+        config=pipeline.config,
+        max_fix_cycles=3,
+    )
+    run_dir = pipeline.runs / "T100" / state.run_id
+    run_dir.mkdir(parents=True)
+    with pytest.raises(OrchestratorError, match="independent signed Host image authority"):
+        pipeline.verify(
+            run_dir,
+            state,
+            [["python", "-m", "pytest", "test_app.py", "-q"]],
+            "baseline",
+        )
+    assert not state.artifacts
+
+
+def test_t090_pipeline_verify_calls_attested_docker_collector_not_legacy_host(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.orchestrator import workflow
+    from tools.orchestrator.runtime import DockerVerificationSandbox
+
+    pipeline = Pipeline(repository, configuration(integrate=False), FakeAgents())
+    monkeypatch.setattr(
+        Pipeline, "_collect_docker_verification", _PRODUCTION_DOCKER_COLLECTION
+    )
+    observed: list[tuple[str, ...]] = []
+
+    def docker_only(
+        self: DockerVerificationSandbox,
+        command: list[str],
+        workspace: Path,
+        *,
+        expected_source_digest: str | None = None,
+    ) -> ProcessResult:
+        assert expected_source_digest == self.source_digest(workspace)
+        assert workspace != repository
+        observed.append(tuple(command))
+        return ProcessResult(
+            tuple(command), str(workspace), "start", "end", 0, "", ""
+        )
+
+    def no_host_verification(
+        command: list[str], cwd: Path, *, timeout: int | None = None
+    ) -> ProcessResult:
+        assert command[0] != "python" and command[0] != "npm"
+        return execute(command, cwd, timeout=timeout)
+
+    monkeypatch.setattr(DockerVerificationSandbox, "run", docker_only)
+    monkeypatch.setattr(workflow, "execute", no_host_verification)
+    base = Git(repository).sha()
+    state = RunState(
+        task_id="T100",
+        run_id="test-r6b3-docker-verify",
+        repository=str(repository),
+        base_branch="main",
+        base_sha=base,
+        worktree_path=str(repository),
+        worktree_branch="main",
+        config=pipeline.config,
+        max_fix_cycles=3,
+    )
+    run_dir = pipeline.runs / "T100" / state.run_id
+    run_dir.mkdir(parents=True)
+    pipeline.verify(
+        run_dir,
+        state,
+        [["python", "-m", "pytest", "-q"]],
+        "baseline",
+    )
+    assert observed == [("python", "-m", "pytest", "-q")]
+    artifact = json.loads((run_dir / state.artifacts["baseline"]).read_text())
+    assert artifact["results"][0]["execution_backend"] == "docker-sandbox"
+    assert artifact["results"][0]["image_policy_digest"] == "b" * 64
+    assert state.verified_digest == Git(repository).snapshot(base)
 
 
 def test_t090_admitted_collector_denies_without_policy_before_docker(
