@@ -173,6 +173,7 @@ python -m pytest test_app.py -q
 
     monkeypatch.setattr(Pipeline, "_verification_authority", test_authority)
     monkeypatch.setattr(Pipeline, "_collect_docker_verification", synthetic_docker_collection)
+
     # Legacy uncommitted fixtures need the old private-toolchain clone, while
     # post-merge candidates must preserve their committed HEAD ancestry.
     def synthetic_workspace(
@@ -184,12 +185,8 @@ python -m pytest test_app.py -q
         run_id: str,
     ) -> AbstractContextManager[tuple[Path, Git]]:
         if Git(working).sha() != base_sha:
-            return _PRODUCTION_DOCKER_WORKSPACE(
-                self, working, snapshot, base_sha, task_id, run_id
-            )
-        return Pipeline.verification_workspace(
-            self, working, snapshot, base_sha, task_id, run_id
-        )
+            return _PRODUCTION_DOCKER_WORKSPACE(self, working, snapshot, base_sha, task_id, run_id)
+        return Pipeline.verification_workspace(self, working, snapshot, base_sha, task_id, run_id)
 
     monkeypatch.setattr(Pipeline, "docker_verification_workspace", synthetic_workspace)
     return repo
