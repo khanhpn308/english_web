@@ -73,11 +73,14 @@ def python_lock_is_hash_complete(path: Path) -> bool:
         current = ""
     if current or not requirements:
         return False
-    return all(
-        re.match(r"^[a-zA-Z0-9_.-]+(?:\[[a-zA-Z0-9_,.-]+\])?==[a-zA-Z0-9_.!+ -]+", req)
-        and re.search(r"--hash=sha256:[0-9a-f]{64}(?:\s|$)", req)
-        for req in requirements
+    # Reject pip options, environment markers and trailing arbitrary tokens.
+    # A substring match on --hash is not proof of a pip --require-hashes lock.
+    exact_pin = (
+        r"[a-zA-Z0-9_.-]+(?:\[[a-zA-Z0-9_,.-]+\])?"
+        r"==[a-zA-Z0-9.!+_-]+"
+        r"(?:\s+--hash=sha256:[0-9a-f]{64})+"
     )
+    return all(re.fullmatch(exact_pin, requirement) is not None for requirement in requirements)
 
 
 def npm_lock_has_integrities(path: Path) -> bool:
