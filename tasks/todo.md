@@ -62,7 +62,7 @@
 - [x] [T060](t060-status-ui.md): Operational Status screen and consent integration — `DONE (CODING_ONLY)`; directly committed to `main` (`e76f6e4`) with StatusPage/AppShell integration; `FINAL_VERIFICATION_DEFERRED` by owner.
 - [x] [T038](t038-dashboard-ui.md): Learning Dashboard UI — `DONE (CODING_ONLY)`; PR #17 merged (`5e97b2a`); `FINAL_VERIFICATION_DEFERRED` by owner.
 - [ ] [T061](t061-alerts-runbooks.md): Local symptom alerts và runbook links
-- [ ] [T039](t039-launcher.md): Windows launcher single-instance/bootstrap — CODE_IMPLEMENTED_UNVERIFIED (CODING_ONLY; Windows evidence pending)
+- [x] [T039](t039-launcher.md): Windows launcher single-instance/bootstrap — `DONE (CODING_ONLY)`; PR #20 merged (`9e2adfa`), Windows in-process launcher and session bootstrap source integrated; `FINAL_VERIFICATION_DEFERRED` by owner (Windows runtime/packaging pending).
 - [ ] [T040](t040-first-run-recovery.md): Native first-run configuration và protected key store
 - [ ] [T054](t054-restore-recovery-drill.md): Staging restore và migration recovery drill
 - [ ] [T041](t041-security-hardening.md): Browser/API/filesystem hardening evidence
