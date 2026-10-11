@@ -2,7 +2,7 @@
 
 **Task ID:** `T044`  
 **Title:** Generated contract and cross-doc audit  
-**Status:** `IMPLEMENTED_UNVERIFIED` (coding only; audit and acceptance `PENDING`)  
+**Status:** `DONE (CODING_ONLY)` — `FINAL_VERIFICATION_DEFERRED` (12/10/2026; owner-approved PR #22 merged; audit and acceptance `PENDING`)  
 **Goal:** Generated contract and cross-doc audit. No undocumented endpoint/schema/error/nullable/enum; examples satisfy min/max and response privacy.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -106,3 +106,10 @@ npm run test:contract
 - `TESTS_RUN=NO`, `AUDIT_PERFORMED=NO`, `CONTRACT_AUDIT_EXECUTED=NO`, `BUILD_RUN=NO`, `TYPECHECK_RUN=NO`, `LINT_RUN=NO`, `SECURITY_SCAN_RUN=NO`. No installation or generated-file regeneration. Read-only source/status/diff inspection is the only inspection evidence; no acceptance box is checked.
 - Boundaries: static JSON Schema subset and current AST/Markdown patterns; dynamic/custom projections, format validation, complete generator equality, current-head runtime and Windows/browser/provider/performance evidence remain pending. No spec/ADR/default/threshold was adjusted to make a result green.
 - Next: host integration of coding-only source, then separately authorized T044 test/audit execution, T017 pinned contract reproduction and T013/feature-owner discrepancy resolution. CP22 and DONE remain unaccepted.
+
+## Owner-approved coding-only closure — 12/10/2026 (Asia/Bangkok)
+
+- Owner approved merging [PR #22](https://github.com/khanhpn308/english_web/pull/22) into `main`, merge commit `4418434f528cca94883bab47d3b7727f284997bd`. T044 source-tooling implementation is **`DONE (CODING_ONLY)`** with **`FINAL_VERIFICATION_DEFERRED`**. The `IMPLEMENTED_UNVERIFIED` notes above are historical worker handoff status, not current integration state.
+- Integrated `scripts/audit_contract.py` and `docs/reviews/contract-conformance-003.md` implementation checkpoint. Report 003 remains **unexecuted** and is **not** a conformance PASS or verified finding. The static checker has not demonstrated runtime accuracy, and its AST/Markdown/schema subset limitations remain explicit.
+- No tests, audit execution, build, lint, typecheck, scans, pinned OpenAPI/DTO generator reproduction, Windows verification or independent review were performed. `scripts/tests/test_audit_contract.py` remains absent pending separately authorized test creation. T017 reproducibility, recorded discrepancies/owner decisions, CP22 and final acceptance stay **PENDING**.
+- The three acceptance checkboxes in this task card remain unchecked. This code-only status does not waive any T044 or release requirements.
