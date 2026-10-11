@@ -2,7 +2,7 @@
 
 **Task ID:** `T060`  
 **Title:** Operational Status screen và consent integration  
-**Status:** `IMPLEMENTED_UNVERIFIED` (11/10/2026; coding-only session; StatusPage and AppShell integrated; verification deferred)  
+**Status:** `DONE (CODING_ONLY)` — `FINAL_VERIFICATION_DEFERRED` (11/10/2026; direct-to-main commit `e76f6e4`; runtime verification pending)  
 **Goal:** Cho người dùng biết storage/bridge/source readiness, recovery và consent tại Status.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -104,3 +104,10 @@ npm run test:e2e -- frontend/tests/e2e/status.spec.ts
 - **Rủi ro còn lại:** Xác minh tích hợp thực tế với backend T046 và kiểm thử trình duyệt Playwright E2E/A11y được hoãn lại đến đợt verification chung của dự án.
 - **Next task:** `T061` (Local symptom alerts và runbook links) hoặc verification phase.
 
+
+## Owner-approved coding-only closure — T060 (11/10/2026)
+
+- Implementation landed directly on `main` in commit `e76f6e4df6141c08d55ff00d6b92a691356a44a0`, containing `frontend/src/features/status/StatusPage.tsx`, `frontend/src/app/AppShell.tsx`, task card, checklist and changelog.
+- Per owner coding-first policy, status is **`DONE (CODING_ONLY)`** and **`FINAL_VERIFICATION_DEFERRED`**. The historical `IMPLEMENTED_UNVERIFIED` handoff describes the pre-closure stage only.
+- Status UI provides typed readiness/dependency/offline/metrics representations, visible-only 30s polling, recovery affordances, and consent panel integration using T046 Status API contract, as reported in the implementation handoff.
+- No unit tests, E2E tests, builds, lint, typechecks, runtime validation, security scan or audit were executed as part of this closure. Task acceptance checkboxes remain pending final system-wide verification; neither verified runtime behavior nor release readiness is asserted.
