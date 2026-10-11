@@ -2,7 +2,7 @@
 
 **Task ID:** `T051`  
 **Title:** Submit/result và writing feedback UI  
-**Status:** `TODO`  
+**Status:** `DONE` (coding-only implementation merged; release verification deferred)
 **Goal:** Nộp đã flush và xem scores, SRS notices, feedback history theo API.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -91,3 +91,11 @@ npm run test:e2e -- frontend/tests/e2e/quiz-result.spec.ts
 ## Commit message đề xuất
 
 `feat(T051): submit/result và writing feedback ui`
+
+## Coding-completion record — 2026-10-11
+
+- **Coding DONE, not release accepted.** Merged T051 via [PR #16](https://github.com/khanhpn308/english_web/pull/16), merge commit `c2b0a7b93481980b28b7864ef7c0cdd632fad4b6`; source head `9ecde0990ce35f8edf148c1cc5fc902ae240230b`.
+- The merge changes exactly three T051 production files: `QuizResult.tsx`, `FeedbackPanel.tsx` and `AppShell.tsx`. The code wires the T050 flush boundary to T048 submission, terminal result display, opt-in T049 feedback with current consent, paginated history and explicit retry. Two inherited task-document whitespace changes were removed from the branch before merge.
+- **Critical implementation guardrails:** unknown feedback outcomes retain their idempotency key and original request body for explicit same-key continuation; failed history GET cannot clear the uncertain state. Submit does not reuse one key with a different submission revision. Absent writing self-score is not displayed as a fabricated zero.
+- **FINAL_VERIFICATION_DEFERRED:** `QuizResult.test.tsx` and `quiz-result.spec.ts` were not written during the coding-only session; unit, E2E, typecheck, lint, security, accessibility, API/DTO compatibility and Windows/browser runtime checks remain pending. No tests/audit/CI PASS is claimed.
+- Existing acceptance criteria are left unchecked until actual verification. Merge/closure records coding implementation only, per owner instruction.

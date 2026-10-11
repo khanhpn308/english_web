@@ -25,6 +25,7 @@ from backend.app.application.source_write import SourceWriteCoordinator
 from backend.app.application.submit_quiz import SubmitQuizService
 from backend.app.application.sync import SyncService
 from backend.app.dashboard.formulas import DashboardService
+from backend.app.dashboard.history import observe_lifecycle
 from backend.app.enrichment.lookup import LookupService
 from backend.app.http.bootstrap import router as bootstrap_router
 from backend.app.http.dashboard import router as dashboard_router
@@ -69,6 +70,7 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Keep readiness false until storage checks and migrations finish."""
     settings: AppSettings = app.state.settings
     database = Database(settings.storage_path) if settings.storage_path is not None else None
+    history_started = False
     app.state.database = database
     app.state.ready = False
     app.state.storage_info = None
@@ -95,6 +97,8 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
                 # Sources: https://fastapi.tiangolo.com/advanced/events/
                 # https://www.starlette.dev/threadpool/
                 app.state.storage_info = await run_in_threadpool(database.initialize)
+                await run_in_threadpool(observe_lifecycle, database.engine, "STARTUP")
+                history_started = True
                 ledger = OperationLedger(database.engine)
                 await run_in_threadpool(ledger.recover_pending)
                 app.state.operation_ledger = ledger
@@ -307,7 +311,11 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
                         app.state.submission_service = None
                         app.state.feedback_service = None
                         if database is not None:
-                            await run_in_threadpool(database.close)
+                            try:
+                                if history_started:
+                                    await run_in_threadpool(observe_lifecycle, database.engine, "SHUTDOWN")
+                            finally:
+                                await run_in_threadpool(database.close)
                         app.state.database = None
 
 

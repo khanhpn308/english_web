@@ -56,8 +56,8 @@
 - [x] [T050](t050-quiz-runner-ui.md): Quiz runner và revision-aware autosave UI — DONE (PR #12 merged `c68540ff`; coding-only, release acceptance deferred; GitHub Actions #81 FAIL recorded).
 - [x] [T048](t048-quiz-submit-api.md): Quiz submission và atomic SRS handoff — DONE (coding-only, PR #15 merged `c67d9e9`; `FINAL_VERIFICATION_DEFERRED`; T049-generated API contract reconciliation and project-wide regression/security/release acceptance deferred).
 - [x] [T049](t049-writing-feedback-api.md): Writing feedback API và history retry — DONE (coding-only, PR #14 merged `8a725344`; `FINAL_VERIFICATION_DEFERRED`; generated OpenAPI/DTO synchronization, regression/security and release acceptance deferred).
-- [ ] [T051](t051-quiz-result-feedback-ui.md): Submit/result và writing feedback UI
-- [ ] [T037](t037-dashboard-formulas.md): Dashboard summary API và streak formulas — independent metrics/date validation/DTO/HTTP wiring CODE_IMPLEMENTED_UNVERIFIED; overall BLOCKED_IMPLEMENTATION pending Host historical persistence/unavailable-streak policy. Canonical amendments/generated DTO reconciliation pending; verification deferred by owner.
+- [x] [T051](t051-quiz-result-feedback-ui.md): Submit/result và writing feedback UI — DONE (coding-only, PR #16 merged `c2b0a7b`; `FINAL_VERIFICATION_DEFERRED`).
+- [ ] [T037](t037-dashboard-formulas.md): Dashboard summary API và streak formulas — [T037-H1](t037-h1-study-history-ledger.md) `CODE_IMPLEMENTED_UNVERIFIED` (coding only); T037-R1 integration/unavailable-history behavior pending; tests/audits/security/coverage deferred by owner; not DONE.
 - [ ] [T046](t046-metrics-alerts-runbooks.md): Local RED metrics và operational Status API
 - [ ] [T060](t060-status-ui.md): Operational Status screen và consent integration
 - [ ] [T038](t038-dashboard-ui.md): Learning Dashboard UI

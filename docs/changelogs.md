@@ -11,6 +11,19 @@
 - Documented the missing flashcard bucket averaging policy, the dashboard correct/total shape versus attempted/null-accuracy requirements, and unspecified optional date-range defaults/boundaries. These require Host clarification and a separate persistence scope, including treatment of already missing history.
 - Production dashboard paths and `backend/app/main.py` remain untouched under the owner's explicit stop conditions. No tests, test source, quality/security gates, audits, builds, generators, subagents or Git mutations were performed. T037 is not DONE; production integration is blocked.
 
+## 11/10/2026 - T037-H1 historical study ledger coding checkpoint, Asia/Bangkok
+
+- Added `backend/migrations/versions/0012_study_history.py` after source inspection of the sole existing head `0011_feedback`. One append-only ledger retains opening observations, source statuses/links, card schedules and resets, review references, journal transitions and coverage evidence. Existing migrations, user data, review events and SRS rules remain untouched.
+- Added `backend/app/dashboard/history.py` with typed Bangkok-date facts, bounded SQL-observation windows, deduplicated candidate cards and explicit UNKNOWN coverage. Polling does not establish continuous file validity; the authoritative streak denominator stays `None`, including empty days. No public dashboard schema was selected or changed.
+- Added only sync/lifecycle uncertainty hooks in `backend/app/application/sync.py` and `backend/app/main.py`. Business facts share existing projection/review/receipt transactions through SQLite triggers. Offline/deferred/recovery changes are observed without fabricated effective times or history deletion.
+- Recorded H1/T037-R1 ownership, schema/retention/coverage limits and exact deferred checks in the task cards and unchecked T037 todo entry. Status is `CODE_IMPLEMENTED_UNVERIFIED`; no tests, builds, migration runs, lint/types, security/coverage scans, audits, review agents, commit/push/PR/merge/rebase or DONE action. Only four approved production paths changed; final acceptance is deferred by owner.
+
+## 11/10/2026 - T051 coding integrated; FINAL_VERIFICATION_DEFERRED
+
+- Merged T051 Quiz Submission/Result/AI Writing Feedback UI via [PR #16](https://github.com/khanhpn308/english_web/pull/16) at `c2b0a7b`; three production frontend files integrated into `main`.
+- Marked T051 `DONE` for **coding completion only** by owner-approved policy. Included fail-closed same-key feedback reconciliation and submission-revision/key consistency protection before merge. No unrelated T048/T049 task-document changes were merged.
+- Deferred focused unit/E2E test source, typecheck, lint, browser/accessibility, generated feedback contract alignment, security and project-wide release acceptance. No executable verification performed or claimed PASS.
+
 ## 11/10/2026 - T048 coding integrated; FINAL_VERIFICATION_DEFERRED
 
 - Merged T048 Quiz Submission and Atomic SRS Handoff via [PR #15](https://github.com/khanhpn308/english_web/pull/15) at `c67d9e9872b3d73dcfa31431eff5f68f3476c615`; preserved existing T049, T050 and T012 implementation and task states on `main`.

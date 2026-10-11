@@ -1,4 +1,4 @@
-import React, { Component, useEffect, useState, type ErrorInfo, type ReactNode } from 'react';
+import React, { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import './shell.css';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
@@ -11,6 +11,12 @@ import { SearchPage } from '@/features/search/SearchPage';
 import { WordDetail } from '@/features/search/WordDetail';
 import { QuizBuilder } from '@/features/quiz/QuizBuilder';
 import { QuizRunner } from '@/features/quiz/QuizRunner';
+import { QuizResult } from '@/features/quiz/QuizResult';
+import { ApiError, MutationUnknownError, apiClient } from '@/shared/api/client';
+import type { components } from '@/shared/api/generated';
+
+type QuizAttempt = components['schemas']['QuizAttempt'];
+type QuizResultType = components['schemas']['QuizResult'];
 
 export interface RouteMatch {
   routeId: string;
@@ -240,6 +246,123 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
     }
   };
 
+  const submissionStateRef = useRef<Record<string, {
+    inFlight: boolean;
+    idempotencyKey: string;
+    sentRevision?: number;
+  }>>({});
+
+  const handleSubmitQuiz = async (attemptId: string) => {
+    const current = submissionStateRef.current[attemptId];
+    if (current?.inFlight) {
+      return;
+    }
+    if (!current) {
+      submissionStateRef.current[attemptId] = {
+        inFlight: true,
+        idempotencyKey: crypto.randomUUID(),
+      };
+    } else {
+      current.inFlight = true;
+    }
+
+    try {
+      const attempt = await apiClient<QuizAttempt>(
+        `/api/v1/quiz-attempts/${encodeURIComponent(attemptId)}`,
+        { cache: 'no-store' }
+      );
+
+      if (!attempt) {
+        throw new Error('Không thể đọc dữ liệu bài kiểm tra.');
+      }
+
+      if (attempt.status === 'SUBMITTED') {
+        navigateSearch(`/quiz/${encodeURIComponent(attemptId)}/result`);
+        return;
+      }
+
+      // Check required writing self-scores
+      const writingQuestions = (attempt.questions || []).filter((q) => q.type === 'WRITING');
+      for (const wq of writingQuestions) {
+        const ans = (attempt.answers || []).find((a) => a.questionId === wq.id);
+        if (!ans || ans.selfScore === null || ans.selfScore === undefined) {
+          throw new Error('Câu hỏi viết yêu cầu tự chấm điểm (0-4) trước khi nộp bài.');
+        }
+      }
+
+      const submissionIntent = submissionStateRef.current[attemptId];
+      if (submissionIntent.sentRevision !== undefined &&
+          submissionIntent.sentRevision !== attempt.submissionRevision) {
+        // Reusing an idempotency key with a different revision is a different
+        // fingerprint. The original outcome must be reconciled, not replaced.
+        throw new Error('Phiên bản bài nộp đã thay đổi. Hãy kiểm tra kết quả yêu cầu trước.');
+      }
+      submissionIntent.sentRevision = attempt.submissionRevision;
+      const stableKey = submissionIntent.idempotencyKey;
+      const result = await apiClient<QuizResultType>(
+        `/api/v1/quiz-attempts/${encodeURIComponent(attemptId)}/submissions`,
+        {
+          method: 'POST',
+          headers: {
+            'Idempotency-Key': stableKey,
+          },
+          body: JSON.stringify({
+            submissionRevision: attempt.submissionRevision,
+          }),
+        }
+      );
+
+      if (result && result.status === 'SUBMITTED') {
+        navigateSearch(`/quiz/${encodeURIComponent(attemptId)}/result`);
+      } else {
+        const verify = await apiClient<QuizAttempt>(
+          `/api/v1/quiz-attempts/${encodeURIComponent(attemptId)}`,
+          { cache: 'no-store' }
+        );
+        if (verify.status === 'SUBMITTED') {
+          navigateSearch(`/quiz/${encodeURIComponent(attemptId)}/result`);
+        } else {
+          throw new Error('Chưa nhận được xác nhận kết quả nộp bài từ máy chủ.');
+        }
+      }
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'REVISION_CONFLICT') {
+        // Server rejected this attempt before writing a terminal result.
+        // A fresh explicit submit may use the new authoritative revision.
+        delete submissionStateRef.current[attemptId];
+      }
+      if (error instanceof ApiError && error.code === 'ALREADY_SUBMITTED') {
+        const verify = await apiClient<QuizAttempt>(
+          `/api/v1/quiz-attempts/${encodeURIComponent(attemptId)}`,
+          { cache: 'no-store' }
+        );
+        if (verify.status === 'SUBMITTED') {
+          navigateSearch(`/quiz/${encodeURIComponent(attemptId)}/result`);
+          return;
+        }
+      }
+      if (error instanceof MutationUnknownError) {
+        try {
+          const verify = await apiClient<QuizAttempt>(
+            `/api/v1/quiz-attempts/${encodeURIComponent(attemptId)}`,
+            { cache: 'no-store' }
+          );
+          if (verify.status === 'SUBMITTED') {
+            navigateSearch(`/quiz/${encodeURIComponent(attemptId)}/result`);
+            return;
+          }
+        } catch {
+          // Re-throw original
+        }
+      }
+      throw error;
+    } finally {
+      if (submissionStateRef.current[attemptId]) {
+        submissionStateRef.current[attemptId].inFlight = false;
+      }
+    }
+  };
+
   const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (typeof window === 'undefined') {
       return;
@@ -337,8 +460,13 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
               {matchedRoute.routeId === 'search' && <SearchPage path={activePath} onNavigate={navigateSearch} />}
               {matchedRoute.routeId === 'word-form-detail' && <WordDetail wordFormId={matchedRoute.params.wordFormId} path={activePath} onNavigate={navigateSearch} />}
               {matchedRoute.routeId === 'quiz-builder' && <QuizBuilder path={activePath} onNavigate={navigateSearch} />}
-              {matchedRoute.routeId === 'quiz-runner' && <QuizRunner attemptId={matchedRoute.params.attemptId} />}
-              {!['lookup', 'review', 'search', 'word-form-detail', 'quiz-builder', 'quiz-runner'].includes(matchedRoute.routeId) && <Card role="region" aria-label="Thông báo trạng thái tính năng">
+              {matchedRoute.routeId === 'quiz-runner' && (
+                <QuizRunner attemptId={matchedRoute.params.attemptId} onSubmit={handleSubmitQuiz} />
+              )}
+              {matchedRoute.routeId === 'quiz-result' && (
+                <QuizResult attemptId={matchedRoute.params.attemptId} onNavigate={navigateSearch} />
+              )}
+              {!['lookup', 'review', 'search', 'word-form-detail', 'quiz-builder', 'quiz-runner', 'quiz-result'].includes(matchedRoute.routeId) && <Card role="region" aria-label="Thông báo trạng thái tính năng">
                 <CardHeader>
                   <CardTitle className="text-primary text-lg">Tính năng đang được xây dựng (chưa khả dụng) trong giai đoạn khởi tạo shell.</CardTitle>
                 </CardHeader>
