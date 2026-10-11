@@ -37,6 +37,8 @@ from backend.app.application.source_write import (
 )
 from backend.app.dashboard.history import record_coverage
 from backend.app.markdown_sync.parser import ParsedDocument, parse_markdown
+from backend.app.persistence.database import read_only_observation
+from backend.app.platform.telemetry import DependencyOutcome, Telemetry
 from backend.app.review.models import ensure_card, reset_card_state
 from backend.app.vocabulary.models import SourceFile, WordForm
 from backend.app.vocabulary.repository import VocabularyRepository
@@ -128,6 +130,7 @@ class SyncService:
         *,
         operation_ledger: OperationLedger | None = None,
         search_index: SearchIndex | None = None,
+        telemetry: Telemetry | None = None,
     ) -> None:
         self.engine = engine
         self.root_path = Path(root_path).resolve()
@@ -136,6 +139,44 @@ class SyncService:
         self.search_index = search_index or SearchIndex(engine)
         self._sync_lock = threading.Lock()
         self._sync_cache: dict[str, SyncResult] = {}
+        self.telemetry = telemetry
+        self._last_observation: tuple[str, float | None] | None = None
+        self.last_sync_failed: bool | None = None
+
+    @property
+    def syncing(self) -> bool:
+        return self._sync_lock.locked()
+
+    @staticmethod
+    def observe_status(engine: Engine) -> tuple[dict[str, int], str | None, str | None]:
+        """Only source categories and committed sync time, never cache error messages."""
+        with read_only_observation(), engine.connect() as connection, connection.begin():
+            rows = connection.exec_driver_sql(
+                "SELECT status, count(*) FROM source_files GROUP BY status"
+            ).all()
+            counts = {"VALID": 0, "INVALID": 0, "MISSING": 0}
+            for status, count in rows:
+                if status not in counts:
+                    raise ValueError("Invalid source status")
+                counts[status] = count
+            receipts = connection.exec_driver_sql(
+                "SELECT operation_id, updated_at FROM operations WHERE kind='SYNC_RUN' "
+                "AND status='SUCCEEDED' ORDER BY updated_at DESC LIMIT 2"
+            ).all()
+        last_sync = receipts[0] if receipts else None
+        unique_time = len(receipts) < 2 or receipts[0][1] != receipts[1][1]
+        return (
+            counts, last_sync[0] if last_sync is not None and unique_time else None,
+            last_sync[1] if last_sync is not None else None,
+        )
+
+    def status_snapshot(self) -> tuple[dict[str, int], str | None, float | None]:
+        counts, operation_id, last_sync_at = self.observe_status(self.engine)
+        observation = self._last_observation
+        duration = (
+            observation[1] if observation is not None and operation_id == observation[0] else None
+        )
+        return counts, last_sync_at, duration
 
     def _committed_date_variants(
         self, connection: Connection, adapter: SourceFileAdapter,
@@ -551,8 +592,27 @@ class SyncService:
         *,
         operation_id: str | None = None,
     ) -> SyncResult:
+        """Measure actual sync work, including raised and returned failure outcomes."""
+        measurement = (
+            self.telemetry.measure_dependency(
+                "markdown", "sync", entry_point=(
+                    "watcher" if reason == "WATCHER" else "launcher" if reason == "STARTUP" else "manual-sync"
+                ),
+            ) if self.telemetry is not None else contextlib.nullcontext(DependencyOutcome())
+        )
+        with measurement as outcome:
+            result = self._sync(reason, operation_id=operation_id)
+            outcome.result = "success" if result.status == "COMPLETED" else "failure"
+        if result.status == "COMPLETED":
+            self._last_observation = (result.operation_id, outcome.duration_ms)
+        return result
+
+    def _sync(
+        self, reason: SyncReason, *, operation_id: str | None = None,
+    ) -> SyncResult:
         """Perform atomic synchronization between Markdown directory and SQLite store."""
         with self._sync_lock:
+            self.last_sync_failed = True
             started_at = _now()
             sync_id = f"sync_{token_urlsafe(12)}"
             op_id = operation_id or f"op_{token_urlsafe(18)}"
@@ -1215,6 +1275,7 @@ class SyncService:
                     finished_at=finished_at,
                 )
                 self._sync_cache[sync_id] = sync_res
+                self.last_sync_failed = False
                 return sync_res
             except Exception as exc:
                 finished_at = _now()

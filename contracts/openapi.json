@@ -1467,6 +1467,81 @@
         "title": "HealthSummary",
         "type": "object"
       },
+      "LocalMetricsSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "p50Ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P50Ms"
+          },
+          "p95Ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95Ms"
+          },
+          "p99Ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P99Ms"
+          },
+          "requestErrorRate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requesterrorrate"
+          },
+          "sampledAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sampledat"
+          }
+        },
+        "required": [
+          "requestErrorRate",
+          "p50Ms",
+          "p95Ms",
+          "p99Ms",
+          "sampledAt"
+        ],
+        "title": "LocalMetricsSummary",
+        "type": "object"
+      },
       "LookupExample": {
         "additionalProperties": false,
         "properties": {
@@ -1936,6 +2011,93 @@
           "cloze"
         ],
         "title": "ObjectiveScores",
+        "type": "object"
+      },
+      "OfflineCapabilities": {
+        "additionalProperties": false,
+        "properties": {
+          "audio": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio"
+          },
+          "createdQuiz": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdquiz"
+          },
+          "dashboard": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dashboard"
+          },
+          "feedback": {
+            "const": false,
+            "title": "Feedback",
+            "type": "boolean"
+          },
+          "lookup": {
+            "const": false,
+            "title": "Lookup",
+            "type": "boolean"
+          },
+          "newQuiz": {
+            "const": false,
+            "title": "Newquiz",
+            "type": "boolean"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review"
+          },
+          "search": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search"
+          }
+        },
+        "required": [
+          "search",
+          "review",
+          "dashboard",
+          "createdQuiz",
+          "lookup",
+          "newQuiz",
+          "feedback",
+          "audio"
+        ],
+        "title": "OfflineCapabilities",
         "type": "object"
       },
       "Operation": {
@@ -3465,6 +3627,33 @@
         "title": "SourceConflictDetails",
         "type": "object"
       },
+      "SourceCounts": {
+        "additionalProperties": false,
+        "properties": {
+          "INVALID": {
+            "minimum": 0.0,
+            "title": "Invalid",
+            "type": "integer"
+          },
+          "MISSING": {
+            "minimum": 0.0,
+            "title": "Missing",
+            "type": "integer"
+          },
+          "VALID": {
+            "minimum": 0.0,
+            "title": "Valid",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "VALID",
+          "INVALID",
+          "MISSING"
+        ],
+        "title": "SourceCounts",
+        "type": "object"
+      },
       "SourceFieldDetails": {
         "additionalProperties": false,
         "properties": {
@@ -3654,6 +3843,274 @@
           "operationKind"
         ],
         "title": "SourceRetryDetails",
+        "type": "object"
+      },
+      "StatusError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "VALIDATION_ERROR",
+              "SESSION_REQUIRED",
+              "SESSION_INVALID",
+              "ORIGIN_FORBIDDEN",
+              "PAYLOAD_TOO_LARGE",
+              "CONFIGURATION_REQUIRED",
+              "INTERNAL_ERROR"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "requestId": {
+            "title": "Requestid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "requestId"
+        ],
+        "title": "StatusError",
+        "type": "object"
+      },
+      "StatusErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/StatusError"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "StatusErrorResponse",
+        "type": "object"
+      },
+      "StatusSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "appVersion": {
+            "title": "Appversion",
+            "type": "string"
+          },
+          "bridgeStatus": {
+            "$ref": "#/components/schemas/BridgeStatus"
+          },
+          "consentState": {
+            "anyOf": [
+              {
+                "enum": [
+                  "NOT_GRANTED",
+                  "GRANTED",
+                  "REVOKED",
+                  "STALE"
+                ],
+                "type": "string"
+              },
+              {
+                "const": "UNKNOWN",
+                "type": "string"
+              }
+            ],
+            "title": "Consentstate"
+          },
+          "lastIntegrityCheckAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastintegritycheckat"
+          },
+          "lastSyncAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastsyncat"
+          },
+          "lastSyncDurationMs": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastsyncdurationms"
+          },
+          "localMetrics": {
+            "$ref": "#/components/schemas/LocalMetricsSummary"
+          },
+          "offlineCapabilities": {
+            "$ref": "#/components/schemas/OfflineCapabilities"
+          },
+          "policyVersion": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policyversion"
+          },
+          "readiness": {
+            "enum": [
+              "NOT_READY",
+              "SYNCING",
+              "READY",
+              "DEGRADED",
+              "UNKNOWN"
+            ],
+            "title": "Readiness",
+            "type": "string"
+          },
+          "requestId": {
+            "title": "Requestid",
+            "type": "string"
+          },
+          "schemaRevision": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schemarevision"
+          },
+          "searchIndexStatus": {
+            "enum": [
+              "READY",
+              "NOT_READY",
+              "UNAVAILABLE",
+              "UNKNOWN"
+            ],
+            "title": "Searchindexstatus",
+            "type": "string"
+          },
+          "selectedModelFamily": {
+            "anyOf": [
+              {
+                "const": "gemini-3.8-flash-high",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selectedmodelfamily"
+          },
+          "sourceCounts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceCounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sqliteBusyCount": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sqlitebusycount"
+          },
+          "sqliteFileSizeBytes": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sqlitefilesizebytes"
+          },
+          "storageStatus": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StorageStatus"
+              },
+              {
+                "enum": [
+                  "BUSY",
+                  "READ_ONLY",
+                  "INTEGRITY_FAILED",
+                  "SCHEMA_MISMATCH",
+                  "UNAVAILABLE",
+                  "UNKNOWN"
+                ],
+                "type": "string"
+              }
+            ],
+            "title": "Storagestatus"
+          },
+          "uptimeSeconds": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uptimeseconds"
+          }
+        },
+        "required": [
+          "readiness",
+          "appVersion",
+          "uptimeSeconds",
+          "storageStatus",
+          "schemaRevision",
+          "sourceCounts",
+          "bridgeStatus",
+          "selectedModelFamily",
+          "searchIndexStatus",
+          "lastSyncAt",
+          "lastSyncDurationMs",
+          "lastIntegrityCheckAt",
+          "sqliteFileSizeBytes",
+          "sqliteBusyCount",
+          "offlineCapabilities",
+          "consentState",
+          "policyVersion",
+          "localMetrics",
+          "requestId"
+        ],
+        "title": "StatusSummary",
         "type": "object"
       },
       "StorageStatus": {
@@ -6743,6 +7200,127 @@
         "summary": "Get Sources",
         "tags": [
           "sources"
+        ]
+      }
+    },
+    "/api/v1/status": {
+      "get": {
+        "operationId": "get_status_api_v1_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Status",
+        "tags": [
+          "status"
         ]
       }
     },

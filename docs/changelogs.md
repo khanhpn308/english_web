@@ -1,3 +1,16 @@
+## 11/10/2026 - T046 resumed operational status backend (Asia/Bangkok)
+
+- Continued all existing T046 changes under the recorded owner-approved scope exception. Added `backend/app/http/status.py` and the exact nullable/enumerated StatusSummary contract in `docs/api-contract.md`; registered it through production `main.py`, with no-store, session guards, request correlation, real lifespan uptime and independent dependency/offline observations.
+- Extended metrics/T011 telemetry and the approved bridge, sync and database boundaries. Added an exact five-minute 5xx-only HTTP rate, separate 4xx series, bounded retained percentiles, explicit overflow/no-data/failure, real transaction outcomes and local busy/integrity observations. Added read-only consent observation without policy/event/revision writes. Status connections reuse SQLAlchemy/NullPool in SQLite mode=ro; no bridge/cloud probe, exporter, worker, migration or user-data change.
+- Regenerated T017-owned OpenAPI and DTOs. The backend script wrote OpenAPI but exited 1 because offline npx lacked cache; the existing openapi-typescript 7.4.2 CLI then wrote DTOs with exit 0. No generated file was edited manually. The factory export also captures dashboard/feedback contracts already present in baseline source but absent from older artifacts.
+- Updated the T046 card and todo to CODE_IMPLEMENTED_UNVERIFIED, not DONE. T037 source is present but task acceptance remains independently unresolved. No tests or test creation, build, lint, typecheck, audit, security scan, installation or Git mutation ran. Host must authorize verification before merge/release acceptance.
+
+## 11/10/2026 - T046 independent local metrics; status contract blocked (Asia/Bangkok)
+
+- Created `backend/app/platform/metrics.py` and integrated it through T011's existing request-event boundary in `backend/app/main.py`. Added bounded local counters, exact retained duration percentiles, explicit no-data values and a collection-failure latch. Registered route templates supply labels; no request IDs, content, paths, exporter, worker or new disk format is retained.
+- Status remains BLOCKED_CONTRACT: the normative StatusSummary does not define several required types/unknown values; consent's existing effective read can mutate policy history. No status DTO, endpoint, fabricated readiness or guessed fallback was introduced. Dependency samples and HTTP status-class instrumentation require narrow scope outside the permitted source paths.
+- Updated only the T046 card and unchecked todo entry with exact scope, dependency evidence and Host follow-up. Tests/test source, generated contracts, specs, migrations, UI, dependency source and real data remain untouched. No tests, audits, builds, typecheck, lint, scans, installation or Git mutation occurred; independent metrics are IMPLEMENTED_UNVERIFIED and complete T046 is not ready for integration.
+
 ## 11/10/2026 - T037/T038 owner-approved coding-only closure (Asia/Bangkok)
 
 - T037 marked `DONE (CODING_ONLY)` after integration of H1/R1 dashboard source and SQLite historical evidence, canonical nullable-streak response, plus generated OpenAPI/TypeScript DTO synchronization on `main` at `4ec7bd3`.

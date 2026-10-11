@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 from uuid import uuid4
 
 from backend.app.application.operations import ClaimResult, OperationConflict, OperationLedger
-from backend.app.persistence.database import StorageError
+from backend.app.persistence.database import StorageError, read_only_observation
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -232,6 +232,19 @@ class ConsentService:
             self.storage_reliable = False
             return ConsentRejected((503, "STORAGE_BUSY"))
 
+    def observe_consent(self, source: PolicySource) -> ConsentSnapshot | ConsentRejected:
+        """Status observation shares eligibility rules without durable policy observation."""
+        try:
+            with (
+                read_only_observation(),
+                self.operations.engine.connect() as connection,
+                connection.begin(),
+            ):
+                return self._snapshot(connection, source, observe_policy=False)
+        except (SQLAlchemyError, ValidationError, StorageError, ValueError, TypeError):
+            self.storage_reliable = False
+            return ConsentRejected((503, "STORAGE_BUSY"))
+
     def grant(
         self, key: str, if_match: str, policy_version: str, source: PolicySource
     ) -> ConsentOperationResult:
@@ -351,7 +364,8 @@ class ConsentService:
         return dict(row)
 
     def _policy(
-        self, connection: Connection, state: AiConsentState, source: PolicySource
+        self, connection: Connection, state: AiConsentState, source: PolicySource,
+        *, observe: bool = True,
     ) -> tuple[AiDisclosurePolicy | None, str, str | None, str | None]:
         policy, status, version, fingerprint = resolve_policy(source)
         history = TypeAdapter(dict[str, ImmutablePolicy]).validate_python(
@@ -371,27 +385,30 @@ class ConsentService:
         if missing_accepted_history:
             if version not in conflicts:
                 conflicts[version] = fingerprint
+                if observe:
+                    connection.exec_driver_sql(
+                        "UPDATE ai_consent_state SET policy_conflicts=? WHERE id=1",
+                        (canonical_json(conflicts),),
+                    )
+        elif prior is None:
+            definition = policy.model_dump(mode="json", exclude={"digest"}) if policy else None
+            history[version] = ImmutablePolicy(digest=fingerprint, definition=definition)
+            if observe:
+                connection.exec_driver_sql(
+                    "UPDATE ai_consent_state SET policy_history=? WHERE id=1",
+                    (
+                        canonical_json(
+                            {version: entry.model_dump() for version, entry in history.items()}
+                        ),
+                    ),
+                )
+        elif prior is not None and prior.digest != fingerprint and version not in conflicts:
+            conflicts[version] = fingerprint
+            if observe:
                 connection.exec_driver_sql(
                     "UPDATE ai_consent_state SET policy_conflicts=? WHERE id=1",
                     (canonical_json(conflicts),),
                 )
-        elif prior is None:
-            definition = policy.model_dump(mode="json", exclude={"digest"}) if policy else None
-            history[version] = ImmutablePolicy(digest=fingerprint, definition=definition)
-            connection.exec_driver_sql(
-                "UPDATE ai_consent_state SET policy_history=? WHERE id=1",
-                (
-                    canonical_json(
-                        {version: entry.model_dump() for version, entry in history.items()}
-                    ),
-                ),
-            )
-        elif prior is not None and prior.digest != fingerprint and version not in conflicts:
-            conflicts[version] = fingerprint
-            connection.exec_driver_sql(
-                "UPDATE ai_consent_state SET policy_conflicts=? WHERE id=1",
-                (canonical_json(conflicts),),
-            )
         if policy is None:
             return None, status, version, fingerprint
         integrity = (
@@ -413,9 +430,13 @@ class ConsentService:
             fingerprint,
         )
 
-    def _snapshot(self, connection: Connection, source: PolicySource) -> ConsentSnapshot:
+    def _snapshot(
+        self, connection: Connection, source: PolicySource, *, observe_policy: bool = True,
+    ) -> ConsentSnapshot:
         state = self.get_state(connection)
-        policy, status, version, fingerprint = self._policy(connection, state, source)
+        policy, status, version, fingerprint = self._policy(
+            connection, state, source, observe=observe_policy,
+        )
         eligible = (
             state.state == "GRANTED"
             and self.storage_reliable

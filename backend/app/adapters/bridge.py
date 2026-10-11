@@ -1,8 +1,11 @@
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager, nullcontext
 from time import monotonic
 from typing import Any
 
 import httpx
+from backend.app.platform.telemetry import DependencyOutcome, Telemetry, current_operation
 from backend.app.platform.bridge_port import (
     BridgeAuthError,
     BridgeConfigError,
@@ -41,11 +44,52 @@ class BridgeAdapter(BridgePort):
         api_key: str | None,
         transport: httpx.AsyncBaseTransport | None = None,
         clock: Any = monotonic,
+        *,
+        telemetry: Telemetry | None = None,
     ) -> None:
         self._api_key = api_key
         self._transport = transport
         self._clock = clock
         self._base_url = BRIDGE_BASE_URL
+        self.telemetry = telemetry
+        self._last_observation: tuple[float, bool] | None = None
+
+    def observed_status(self) -> str:
+        """Configuration or a recent transport result; never initiate a health probe."""
+        if not self._api_key:
+            return "NOT_READY"
+        observation = self._last_observation
+        if observation is None or monotonic() - observation[0] >= 300:
+            return "NOT_CHECKED"
+        return "OK" if observation[1] else "NOT_READY"
+
+    @contextmanager
+    def _measurement(self) -> Iterator[None]:
+        measurement = (
+            self.telemetry.measure_dependency("bridge", current_operation())
+            if self.telemetry is not None else nullcontext(DependencyOutcome())
+        )
+        with measurement as outcome:
+            succeeded = False
+            try:
+                yield
+                succeeded = True
+            except BridgeInvalidResponseError:
+                outcome.invalid_response = True
+                raise
+            finally:
+                try:
+                    self._last_observation = (monotonic(), succeeded)
+                except Exception:
+                    self._last_observation = None
+
+    async def preflight(self, deadline: float) -> BridgeProfile:
+        with self._measurement():
+            return await self._preflight(deadline)
+
+    async def dispatch_chat(self, payload: dict[str, Any], deadline: float) -> dict[str, Any]:
+        with self._measurement():
+            return await self._dispatch_chat(payload, deadline)
 
     def _get_timeout(self, deadline: float) -> httpx.Timeout:
         remaining = deadline - self._clock()
@@ -84,7 +128,7 @@ class BridgeAdapter(BridgePort):
                 raise BridgeInvalidResponseError("Response exceeded maximum size")
         return bytes(body_bytes)
 
-    async def preflight(self, deadline: float) -> BridgeProfile:
+    async def _preflight(self, deadline: float) -> BridgeProfile:
         try:
             async with self._get_client() as client:
                 # Stage 1: No-key request
@@ -129,7 +173,7 @@ class BridgeAdapter(BridgePort):
         except (UnicodeDecodeError, json.JSONDecodeError) as e:
             raise BridgeInvalidResponseError("Malformed JSON response") from e
 
-    async def dispatch_chat(self, payload: dict[str, Any], deadline: float) -> dict[str, Any]:
+    async def _dispatch_chat(self, payload: dict[str, Any], deadline: float) -> dict[str, Any]:
         if not self._api_key:
             raise BridgeConfigError("Missing proxy credentials")
 

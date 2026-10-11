@@ -25,6 +25,8 @@ MAX_DURATION_MS = 86_400_000
 _EVENTS = frozenset({
     "app_started", "app_shutdown", "http_request_completed", "http_request_failed",
     "security_boundary_rejected", "telemetry_rotation_failed",
+    "bridge_call_completed", "bridge_call_failed", "bridge_response_rejected",
+    "markdown_sync_completed", "storage_busy", "storage_integrity_failed",
 })
 _LEVELS = frozenset({"info", "warn", "error"})
 _ENTRY_POINTS = frozenset({"browser", "launcher", "watcher", "manual-sync"})
@@ -38,6 +40,10 @@ _SOURCE_STATUSES = frozenset({"VALID", "INVALID", "MISSING"})
 # Only reviewed route templates, never a request path/query or arbitrary URL.
 _ROUTES = frozenset({
     "GET /api/v1/health", "POST /bootstrap/exchange", "GET /bootstrap",
+    "GET /api/v1/status", "GET /api/v1/dashboard",
+    "POST /api/v1/quiz-attempts/{attemptId}/submit",
+    "POST /api/v1/quiz-questions/{questionId}/feedback",
+    "GET /api/v1/quiz-questions/{questionId}/feedback",
     "GET /api/v1/ai-consent", "PUT /api/v1/ai-consent", "DELETE /api/v1/ai-consent",
     "GET /api/v1/operations/{operation_id}", "POST /api/v1/lookups",
     "GET /api/v1/word-forms", "GET /api/v1/word-forms/{wordFormId}",
@@ -55,6 +61,20 @@ _VERSION = re.compile(r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\Z", re.ASCII)
 
 # This stores only a bounded diagnostic ID, never an app or mutable request object.
 _http_request_id: ContextVar[str | None] = ContextVar("http_request_id", default=None)
+_operation: ContextVar[str] = ContextVar("metric_operation", default="unknown")
+
+
+def current_operation() -> str:
+    return _operation.get()
+
+
+@contextmanager
+def operation_context(operation: str) -> Iterator[None]:
+    token = _operation.set(operation if operation in _OPERATIONS else "unknown")
+    try:
+        yield
+    finally:
+        _operation.reset(token)
 
 
 def validated_request_id(value: str | None) -> str:
@@ -81,8 +101,10 @@ def _category(value: object, choices: frozenset[str], default: str | None = None
     return value if type(value) is str and value in choices else default
 
 
-def _duration(start: float) -> float:
+def _duration(start: float, *, strict: bool = False) -> float:
     elapsed = (monotonic() - start) * 1000
+    if strict and (not math.isfinite(elapsed) or not 0 <= elapsed <= MAX_DURATION_MS):
+        raise ValueError("Duration unavailable")
     return round(min(MAX_DURATION_MS, max(0.0, elapsed)), 3) if math.isfinite(elapsed) else 0.0
 
 
@@ -107,6 +129,15 @@ class EventFields:
 
     status: str | None = None
     route: str | None = None
+    duration_ms: float | None = None
+    status_class: str | None = None
+    method: str | None = None
+
+
+@dataclass
+class DependencyOutcome:
+    result: str = "success"
+    invalid_response: bool = False
     duration_ms: float | None = None
 
 
@@ -321,6 +352,8 @@ class Telemetry:
                     record["status"] = status
                 if route is not None:
                     record["route"] = route
+                if fields.status_class in {"2xx", "3xx", "4xx", "5xx"}:
+                    record["statusClass"] = fields.status_class
                 duration = fields.duration_ms
                 if type(duration) in {int, float} and duration is not None:
                     if math.isfinite(duration) and 0 <= duration <= MAX_DURATION_MS:
@@ -330,6 +363,54 @@ class Telemetry:
             return self.sink._append(serialized) if self.sink is not None else False
         except Exception:
             return False
+
+    def record_dependency(
+        self, dependency: str, operation: str, result: str,
+        duration_ms: float | None = None, *, invalid_response: bool = False,
+    ) -> None:
+        if dependency == "bridge":
+            event = "bridge_call_completed" if result == "success" else "bridge_call_failed"
+            self.emit(event, fields=EventFields(result, duration_ms=duration_ms))
+            if invalid_response:
+                self.emit("bridge_response_rejected", level="warn", fields=EventFields("rejected"))
+        elif dependency == "markdown":
+            self.emit("markdown_sync_completed", fields=EventFields(result, duration_ms=duration_ms))
+
+    def record_storage_failure(self, category: str, *, check: str = "database") -> None:
+        if category in {"BUSY", "INTEGRITY_FAILED"}:
+            self.emit(
+                "storage_busy" if category == "BUSY" else "storage_integrity_failed",
+                level="warn" if category == "BUSY" else "error",
+                fields=EventFields("failure"),
+            )
+
+    @contextmanager
+    def measure_dependency(
+        self, dependency: str, operation: str, *, entry_point: str = "browser",
+    ) -> Iterator[DependencyOutcome]:
+        outcome = DependencyOutcome()
+        try:
+            start = monotonic()
+        except Exception:
+            start = None
+            self.span_retention_failed = True
+        name = {"bridge": "bridge_call", "markdown": "markdown", "sqlite": "sqlite"}[dependency]
+        with self.span(name, entry_point=entry_point, attributes=SpanAttributes(operation=operation)):
+            try:
+                yield outcome
+            except BaseException:
+                outcome.result = "failure"
+                raise
+            finally:
+                try:
+                    outcome.duration_ms = _duration(start, strict=True) if start is not None else None
+                    self.record_dependency(
+                        dependency, operation, outcome.result,
+                        outcome.duration_ms,
+                        invalid_response=outcome.invalid_response,
+                    )
+                except Exception:
+                    self.span_retention_failed = True
 
     @contextmanager
     def span(

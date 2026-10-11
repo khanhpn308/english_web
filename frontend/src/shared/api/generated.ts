@@ -231,6 +231,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Status */
+        get: operations["get_status_api_v1_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sync-runs": {
         parameters: {
             query?: never;
@@ -810,6 +827,19 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** LocalMetricsSummary */
+        LocalMetricsSummary: {
+            /** P50Ms */
+            p50Ms: number | null;
+            /** P95Ms */
+            p95Ms: number | null;
+            /** P99Ms */
+            p99Ms: number | null;
+            /** Requesterrorrate */
+            requestErrorRate: number | null;
+            /** Sampledat */
+            sampledAt: string | null;
+        };
         /** LookupExample */
         LookupExample: {
             /** English */
@@ -984,6 +1014,34 @@ export interface components {
         ObjectiveScores: {
             cloze: components["schemas"]["ObjectiveScore"];
             mcq: components["schemas"]["ObjectiveScore"];
+        };
+        /** OfflineCapabilities */
+        OfflineCapabilities: {
+            /** Audio */
+            audio: boolean | null;
+            /** Createdquiz */
+            createdQuiz: boolean | null;
+            /** Dashboard */
+            dashboard: boolean | null;
+            /**
+             * Feedback
+             * @constant
+             */
+            feedback: false;
+            /**
+             * Lookup
+             * @constant
+             */
+            lookup: false;
+            /**
+             * Newquiz
+             * @constant
+             */
+            newQuiz: false;
+            /** Review */
+            review: boolean | null;
+            /** Search */
+            search: boolean | null;
         };
         /** Operation */
         Operation: {
@@ -1446,6 +1504,15 @@ export interface components {
              */
             resourceType: "SOURCE";
         };
+        /** SourceCounts */
+        SourceCounts: {
+            /** Invalid */
+            INVALID: number;
+            /** Missing */
+            MISSING: number;
+            /** Valid */
+            VALID: number;
+        };
         /** SourceFieldDetails */
         SourceFieldDetails: {
             /** Fields */
@@ -1518,6 +1585,65 @@ export interface components {
              * @enum {string}
              */
             operationKind: "SAVE" | "EDIT";
+        };
+        /** StatusError */
+        StatusError: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "VALIDATION_ERROR" | "SESSION_REQUIRED" | "SESSION_INVALID" | "ORIGIN_FORBIDDEN" | "PAYLOAD_TOO_LARGE" | "CONFIGURATION_REQUIRED" | "INTERNAL_ERROR";
+            /** Message */
+            message: string;
+            /** Requestid */
+            requestId: string;
+        };
+        /** StatusErrorResponse */
+        StatusErrorResponse: {
+            error: components["schemas"]["StatusError"];
+        };
+        /** StatusSummary */
+        StatusSummary: {
+            /** Appversion */
+            appVersion: string;
+            bridgeStatus: components["schemas"]["BridgeStatus"];
+            /** Consentstate */
+            consentState: ("NOT_GRANTED" | "GRANTED" | "REVOKED" | "STALE") | "UNKNOWN";
+            /** Lastintegritycheckat */
+            lastIntegrityCheckAt: string | null;
+            /** Lastsyncat */
+            lastSyncAt: string | null;
+            /** Lastsyncdurationms */
+            lastSyncDurationMs: number | null;
+            localMetrics: components["schemas"]["LocalMetricsSummary"];
+            offlineCapabilities: components["schemas"]["OfflineCapabilities"];
+            /** Policyversion */
+            policyVersion: string | null;
+            /**
+             * Readiness
+             * @enum {string}
+             */
+            readiness: "NOT_READY" | "SYNCING" | "READY" | "DEGRADED" | "UNKNOWN";
+            /** Requestid */
+            requestId: string;
+            /** Schemarevision */
+            schemaRevision: string | null;
+            /**
+             * Searchindexstatus
+             * @enum {string}
+             */
+            searchIndexStatus: "READY" | "NOT_READY" | "UNAVAILABLE" | "UNKNOWN";
+            /** Selectedmodelfamily */
+            selectedModelFamily: "gemini-3.8-flash-high" | null;
+            sourceCounts: components["schemas"]["SourceCounts"] | null;
+            /** Sqlitebusycount */
+            sqliteBusyCount: number | null;
+            /** Sqlitefilesizebytes */
+            sqliteFileSizeBytes: number | null;
+            /** Storagestatus */
+            storageStatus: components["schemas"]["StorageStatus"] | ("BUSY" | "READ_ONLY" | "INTEGRITY_FAILED" | "SCHEMA_MISMATCH" | "UNAVAILABLE" | "UNKNOWN");
+            /** Uptimeseconds */
+            uptimeSeconds: number | null;
         };
         /**
          * StorageStatus
@@ -3558,6 +3684,116 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_status_api_v1_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusSummary"];
+                };
+            };
+            /** @description Error Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusErrorResponse"];
+                };
+            };
+            /** @description Error Response */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusErrorResponse"];
                 };
             };
         };
