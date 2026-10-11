@@ -1,3 +1,9 @@
+## 12/10/2026 - T040 coding-only merge and closure (Asia/Bangkok)
+
+- Owner-approved [PR #23](https://github.com/khanhpn308/english_web/pull/23) merged Windows first-run and DPAPI runtime source into `main` at `a5623be42baa421539975ff57d619aeb1789a256`. Updated T040 card and checklist to `DONE (CODING_ONLY)` with `FINAL_VERIFICATION_DEFERRED`.
+- The integrated R1/R2 source connects primary-only native provisioning and current-user DPAPI key resolution to the existing T039 launcher, FastAPI lifecycle and bridge adapter. AI profile/policy/consent readiness, Windows single-instance behavior, offline learning and one-time bootstrap still require real validation.
+- No tests, test creation, builds, lint, typecheck, scans, audits, native Windows startup, Tcl/Tk availability or DPAPI/ACL verification were performed. T054 implementation may start after this merge, and T056 Windows packaging must include/check Tcl/Tk. T040 acceptance boxes and CP19 remain pending.
+
 ## 12/10/2026 - T040 R2 production source integrated into PR branch (Asia/Bangkok)
 
 - T040 R2 implementation is now integrated into the PR branch: approved `launcher/src/main.py` and `backend/app/main.py` connect primary-only Windows provisioning/DPAPI protected reference to the original T039 FastAPI app and bridge adapter. This is `CODE_IMPLEMENTED_UNVERIFIED`, not completed acceptance or a merged-main status.
