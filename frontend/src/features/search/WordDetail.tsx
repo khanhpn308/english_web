@@ -54,7 +54,7 @@ export function WordDetail({ wordFormId, path, onNavigate }: { wordFormId: strin
     <LocalLink href={back} onNavigate={onNavigate}>Quay lại kết quả tìm kiếm</LocalLink>
     {!decodedId && <p role="alert">Địa chỉ dạng từ không hợp lệ.</p>}
     {view.loading && <p role="status" aria-live="polite" className="min-h-32 bg-muted rounded-md p-4">Đang tải chi tiết…</p>}
-    {view.error && <ReadRecovery error={view.error} onRetry={() => setRetry(value => value + 1)} />}
+    {Boolean(view.error) && <ReadRecovery error={view.error} onRetry={() => setRetry(value => value + 1)} />}
     {form && <>
       <Card><CardContent className="pt-6 space-y-3">
         <h2 className="text-2xl font-semibold">{form.lemma}</h2>

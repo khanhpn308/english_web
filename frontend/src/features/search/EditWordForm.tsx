@@ -4,14 +4,13 @@ import { Button } from '@/components/ui/button';
 import { ApiError, apiClient } from '@/shared/api/client';
 import { RevisionConflictDialog } from './RevisionConflictDialog';
 import type { components } from '@/shared/api/generated';
-import { verificationLabels } from './SearchPage';
 
 type WordFormDetail = components['schemas']['WordFormDetail'];
-type SourceFile = components['schemas']['SourceFile'];
+type SourceFile = components['schemas']['SourceFileView'];
 type PatchWordFormRequest = components['schemas']['PatchWordFormRequest'];
 type EditMeaning = components['schemas']['EditMeaning'];
 type EditExample = components['schemas']['EditExample'];
-type SourcePage = components['schemas']['Page_SourceFile_'];
+type SourcePage = components['schemas']['SourceFilePage'];
 
 interface EditWordFormProps {
   wordForm: WordFormDetail;

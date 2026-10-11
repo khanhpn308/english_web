@@ -1,7 +1,6 @@
-import * as React from 'react';
 import { mapErrorToUIState } from '../api/errors';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { AlertCircle, RotateCw, RefreshCcw, LogIn, ShieldAlert } from 'lucide-react';
 
 export interface RecoveryPanelProps {

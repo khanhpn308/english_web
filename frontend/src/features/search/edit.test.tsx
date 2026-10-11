@@ -6,7 +6,7 @@ import { WordDetail } from './WordDetail';
 import type { components } from '@/shared/api/generated';
 
 type Detail = components['schemas']['WordFormDetail'];
-type SourcePage = components['schemas']['Page_SourceFile_'];
+type SourcePage = components['schemas']['SourceFilePage'];
 type MutationResult = components['schemas']['WordFormMutationResult'];
 
 const detail: Detail = {
@@ -16,7 +16,7 @@ const detail: Detail = {
   examples: [{ english: 'A robust design.', vietnamese: 'Một thiết kế vững chắc.', verificationStatus: 'UNVERIFIED' }],
   ipaUs: null, cambridgeUrl: null,
   sourceRefs: [{ sourceId: 'source_synthetic', noteDate: '2026-10-09', status: 'VALID' }],
-  card: null, revision: 1, updatedAt: '2026-10-09T00:00:00Z', verificationSummary: 'UNVERIFIED', meaningViMatch: 'vững chắc', noteDates: ['2026-10-09']
+  card: null, revision: 1, updatedAt: '2026-10-09T00:00:00Z', verificationSummary: 'UNVERIFIED'
 };
 
 const sourcePage: SourcePage = {
@@ -31,7 +31,6 @@ const failure = (code: string, status = 503, details = {}) => json({ error: { co
 
 let root: Root;
 let host: HTMLDivElement;
-let path: string;
 let mockFetch: (url: string, init: RequestInit) => Promise<Response>;
 let calls: { url: string; method: string; body?: string; headers?: any }[];
 
@@ -62,7 +61,7 @@ async function editField(labelOrPlaceholder: string, value: string) {
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
-  path = '/word-forms/form_synthetic'; calls = [];
+  calls = [];
   mockFetch = async (url) => {
     if (url.includes('/sources')) return json(sourcePage);
     if (url.includes('/word-forms/')) return json(detail);
@@ -126,8 +125,10 @@ describe('T030 Edit Form', () => {
     await click('Lưu thay đổi');
 
     expect(isPatch).toBe(true);
-    expect(host.textContent).toContain('Xung đột dữ liệu');
-    expect(host.textContent).toContain('phiên bản hiện tại trên máy chủ: 8');
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.textContent).toContain('Xung đột dữ liệu');
+    expect(dialog?.textContent).toContain('phiên bản hiện tại trên máy chủ: 8');
 
     // Dismiss dialog by choosing to keep draft and reload source
     const reloadSourceResponse = {
@@ -136,10 +137,15 @@ describe('T030 Edit Form', () => {
     };
     mockFetch = async (url) => url.includes('/sources') ? json(reloadSourceResponse) : json({});
 
-    await click('Cập nhật mã phiên bản để lưu đè');
+    await act(async () => {
+      const reloadButton = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
+        .find(button => button.textContent === 'Cập nhật mã phiên bản để lưu đè');
+      if (!reloadButton) throw new Error('Missing conflict dialog reload button');
+      reloadButton.click();
+    });
 
-    // Dialog closes, draft still shows the edited text
-    expect(host.textContent).not.toContain('Xung đột dữ liệu');
+    // Portal is closed and the form draft remains intact.
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
     const input = [...host.querySelectorAll('input')].find(i => i.value === 'vững chắc được sửa');
     expect(input).toBeDefined();
 
