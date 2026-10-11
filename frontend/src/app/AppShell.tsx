@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { AiConsentProvider } from '@/features/consent/AiConsentGate';
-import { AiConsentPanel } from '@/features/consent/AiConsentPanel';
+import { StatusPage } from '@/features/status/StatusPage';
 import { LookupPage } from '@/features/lookup/LookupPage';
 import { ReviewPage } from '@/features/review/ReviewPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
@@ -469,7 +469,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
               <h1 className="screen-view__title m-0 text-3xl font-bold text-foreground outline-none" tabIndex={-1}>
                 {matchedRoute.title}
               </h1>
-              {matchedRoute.routeId === 'status' && <AiConsentPanel />}
+              {matchedRoute.routeId === 'status' && <StatusPage />}
               {matchedRoute.routeId === 'dashboard' && <DashboardPage onNavigate={navigateSearch} />}
               {matchedRoute.routeId === 'search' && <SearchPage path={activePath} onNavigate={navigateSearch} />}
               {matchedRoute.routeId === 'word-form-detail' && <WordDetail wordFormId={matchedRoute.params.wordFormId} path={activePath} onNavigate={navigateSearch} />}
@@ -480,7 +480,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
               {matchedRoute.routeId === 'quiz-result' && (
                 <QuizResult attemptId={matchedRoute.params.attemptId} onNavigate={navigateSearch} />
               )}
-              {!['dashboard', 'lookup', 'review', 'search', 'word-form-detail', 'quiz-builder', 'quiz-runner', 'quiz-result'].includes(matchedRoute.routeId) && <Card role="region" aria-label="Thông báo trạng thái tính năng">
+              {!['dashboard', 'lookup', 'review', 'search', 'word-form-detail', 'quiz-builder', 'quiz-runner', 'quiz-result', 'status'].includes(matchedRoute.routeId) && <Card role="region" aria-label="Thông báo trạng thái tính năng">
                 <CardHeader>
                   <CardTitle className="text-primary text-lg">Tính năng đang được xây dựng (chưa khả dụng) trong giai đoạn khởi tạo shell.</CardTitle>
                 </CardHeader>

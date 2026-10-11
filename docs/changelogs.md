@@ -1,3 +1,12 @@
+## 11/10/2026 - T060 Operational Status screen và consent integration implemented (Asia/Bangkok)
+
+- Implemented `StatusPage` in `frontend/src/features/status/StatusPage.tsx` consuming the documented `StatusSummary` contract from `GET /api/v1/status`.
+- Displayed safe, bounded operational fields across designated cards: System Readiness (`readiness`, `appVersion`, `uptimeSeconds`, `requestId`), Storage Status (`storageStatus`, `schemaRevision`, `lastIntegrityCheckAt`, `sqliteFileSizeBytes`, `sqliteBusyCount`), Markdown Source status (`sourceCounts`, `lastSyncAt`, `lastSyncDurationMs`, `searchIndexStatus`), AI Bridge & Model (`bridgeStatus`, `selectedModelFamily`, `policyVersion`, `consentState`), Offline Capabilities matrix (Search, Review, Dashboard, Created Quiz vs. Lookup, New Quiz, Feedback, Audio), Local RED metrics (`requestErrorRate`, p50, p95, p99 latency, `sampledAt`), and local Runbook references.
+- Embedded `AiConsentPanel` at `#ai-consent` to preserve independent consent management, review, and revoke functionality even when AI bridge or operational status is degraded.
+- Added visible 30-second polling that automatically pauses when `document.visibilityState` is hidden and on unmount, and refetches on visibility restore, window focus, `vocabulary:invalidate` events, or explicit user action, with stale response protection.
+- Integrated `/status` route in `frontend/src/app/AppShell.tsx`, rendering `StatusPage` and removing the placeholder "Tính năng đang được xây dựng" card for status.
+- Coding-only session: tests, builds, lint, typecheck, audits, security scans, and Git commits deferred. Status: `IMPLEMENTED_UNVERIFIED`.
+
 ## 11/10/2026 - T064 coding-only merge and closure (Asia/Bangkok)
 
 - Owner-approved [PR #19](https://github.com/khanhpn308/english_web/pull/19) merged T064 Lighthouse harness into `main` (merge commit `0fb3226`). `scripts/ui_performance.py`, `npm run benchmark:ui`, and pending-evidence documentation are integrated.

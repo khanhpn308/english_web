@@ -2,7 +2,7 @@
 
 **Task ID:** `T060`  
 **Title:** Operational Status screen và consent integration  
-**Status:** `TODO`  
+**Status:** `IMPLEMENTED_UNVERIFIED` (11/10/2026; coding-only session; StatusPage and AppShell integrated; verification deferred)  
 **Goal:** Cho người dùng biết storage/bridge/source readiness, recovery và consent tại Status.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -90,3 +90,17 @@ npm run test:e2e -- frontend/tests/e2e/status.spec.ts
 ## Commit message đề xuất
 
 `feat(T060): operational status screen và consent integration`
+
+## Handoff
+
+- **Trạng thái:** `IMPLEMENTED_UNVERIFIED` (11/10/2026; coding-only session; StatusPage and AppShell integrated; verification deferred).
+- **Files sửa:**
+  - `frontend/src/features/status/StatusPage.tsx`: Tạo mới component hiển thị toàn bộ các trường an toàn của StatusSummary, ma trận offline, RED metrics, runbook links, 30s visible polling và tích hợp AiConsentPanel.
+  - `frontend/src/app/AppShell.tsx`: Đăng ký route `/status` trỏ đến `StatusPage`, loại bỏ placeholder "Tính năng đang được xây dựng" cho status.
+- **Files chủ ý không sửa:**
+  - `frontend/src/features/status/StatusPage.test.tsx`, `frontend/tests/e2e/status.spec.ts`: Không sinh test file trong phiên coding-only per prompt instructions.
+  - Backend source, generated DTOs, contracts, OpenAPI: T046 StatusSummary contract đã được sinh sẵn, không sửa tay.
+- **Kết quả:** Đã triển khai đầy đủ giao diện trạng thái vận hành theo hợp đồng StatusSummary và tích hợp consent panel `#ai-consent`.
+- **Rủi ro còn lại:** Xác minh tích hợp thực tế với backend T046 và kiểm thử trình duyệt Playwright E2E/A11y được hoãn lại đến đợt verification chung của dự án.
+- **Next task:** `T061` (Local symptom alerts và runbook links) hoặc verification phase.
+
