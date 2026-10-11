@@ -10,6 +10,7 @@ import { ReviewPage } from '@/features/review/ReviewPage';
 import { SearchPage } from '@/features/search/SearchPage';
 import { WordDetail } from '@/features/search/WordDetail';
 import { QuizBuilder } from '@/features/quiz/QuizBuilder';
+import { QuizRunner } from '@/features/quiz/QuizRunner';
 
 export interface RouteMatch {
   routeId: string;
@@ -336,7 +337,8 @@ export const AppShell: React.FC<AppShellProps> = ({ currentPath: propPath, onNav
               {matchedRoute.routeId === 'search' && <SearchPage path={activePath} onNavigate={navigateSearch} />}
               {matchedRoute.routeId === 'word-form-detail' && <WordDetail wordFormId={matchedRoute.params.wordFormId} path={activePath} onNavigate={navigateSearch} />}
               {matchedRoute.routeId === 'quiz-builder' && <QuizBuilder path={activePath} onNavigate={navigateSearch} />}
-              {!['lookup', 'review', 'search', 'word-form-detail', 'quiz-builder'].includes(matchedRoute.routeId) && <Card role="region" aria-label="Thông báo trạng thái tính năng">
+              {matchedRoute.routeId === 'quiz-runner' && <QuizRunner attemptId={matchedRoute.params.attemptId} />}
+              {!['lookup', 'review', 'search', 'word-form-detail', 'quiz-builder', 'quiz-runner'].includes(matchedRoute.routeId) && <Card role="region" aria-label="Thông báo trạng thái tính năng">
                 <CardHeader>
                   <CardTitle className="text-primary text-lg">Tính năng đang được xây dựng (chưa khả dụng) trong giai đoạn khởi tạo shell.</CardTitle>
                 </CardHeader>
