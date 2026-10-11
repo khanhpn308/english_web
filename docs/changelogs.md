@@ -1,3 +1,8 @@
+## 11/10/2026 - T045 coding-only task closure (Asia/Bangkok)
+
+- Recorded already-integrated Git hygiene source commit `5a06042c835313edff0a41ae11931c9eb9ec9605` as `DONE (CODING_ONLY)` in T045 task card and checklist. `.gitattributes`, `.githooks/pre-commit`, `.github/pull_request_template.md`, and `docs/git-workflow.md` already reside in `main`; no duplicate worker implementation started.
+- `FINAL_VERIFICATION_DEFERRED` by owner. Pre-commit hook execution, staged-secret negatives, Windows line-ending behavior, Git workflow and security checks were not executed or certified in this bookkeeping change. Earlier implementation/handoff entries remain historical.
+
 ## 11/10/2026 - T061 owner-approved coding-only merge and closure (Asia/Bangkok)
 
 - Owner-approved [PR #21](https://github.com/khanhpn308/english_web/pull/21) merged T061 source into `main` at `24e916a76e91850cc27d288e90dab2f48bbcc9dd`; task card and checklist now `DONE (CODING_ONLY)`, `FINAL_VERIFICATION_DEFERRED`.
