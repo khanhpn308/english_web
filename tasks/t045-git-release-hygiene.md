@@ -2,7 +2,8 @@
 
 **Task ID:** `T045`  
 **Title:** Git hooks, branch and commit hygiene  
-**Status:** `TODO`  
+**Status:** `DONE (CODING_ONLY)` — `FINAL_VERIFICATION_DEFERRED`; source commit `5a06042` on `main`  
+
 **Goal:** Git hooks, branch and commit hygiene. Hook/PR template checks staged diff, tests, secret scan and changed files; no force push policy.  
 **Suggested model:** Gemini  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -86,3 +87,10 @@ npm run security:secrets
 ## Commit message đề xuất
 
 `chore(T045): git hooks, branch and commit hygiene`
+
+## Owner-approved coding-only closure (11/10/2026)
+
+- Production/source hygiene files `.gitattributes`, `.githooks/pre-commit`, `.github/pull_request_template.md` and `docs/git-workflow.md` were integrated into `main` by `5a06042c835313edff0a41ae11931c9eb9ec9605`. The original implementation history and changelog are preserved. These four paths match the T045 allowlist; no coding redo is necessary.
+- Owner's policy closes integrated implementation as **`DONE (CODING_ONLY)`**, with **`FINAL_VERIFICATION_DEFERRED`**. This closure only records source integration; it does not certify hook execution, line endings on Windows, staged file protections, Git acceptance, scans or release readiness.
+- All test/audit/security gates and negative probes remain deferred; acceptance criteria checkboxes remain unchecked until the final verification phase. No tests or hook execution were run for this bookkeeping update.
+
