@@ -964,7 +964,7 @@ class Pipeline:
             raise OrchestratorError("T090 SANDBOX_BLOCKED: source changed before clone")
         self.worktrees.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(
-            prefix=f"docker-verify-{task_id}-{run_id}-",
+            prefix=f"verify-docker-{task_id}-{run_id}-",
             dir=self.worktrees,
         ) as temporary:
             clone = Path(temporary) / "workspace"
