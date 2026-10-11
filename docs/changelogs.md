@@ -1,3 +1,9 @@
+## 11/10/2026 - T048 coding integrated; FINAL_VERIFICATION_DEFERRED
+
+- Merged T048 Quiz Submission and Atomic SRS Handoff via [PR #15](https://github.com/khanhpn308/english_web/pull/15) at `c67d9e9872b3d73dcfa31431eff5f68f3476c615`; preserved existing T049, T050 and T012 implementation and task states on `main`.
+- Marked T048 `DONE` for **coding completion only**, by owner approval. Atomic submission service/routes, synthetic regression test source and T048-generated OpenAPI/TypeScript DTO changes are integrated. No new tests or audit executed for merge/closure.
+- `FINAL_VERIFICATION_DEFERRED`: T049 feedback route/schema contract regeneration, prior broad-suite failures (including unresolved lookup timing), inherited quality/security/coverage, native Windows/browser and end-to-end release acceptance remain open. Previous Codex test reports are historical evidence and not final acceptance PASS.
+
 ## 11/10/2026 - T048 local quiz submission and atomic SRS handoff (Asia/Bangkok)
 
 - Added `backend/app/application/submit_quiz.py` and `backend/app/http/quiz_submissions.py`; registered their lifecycle and route in `backend/app/main.py`. Submission reuses deterministic scoring and commits terminal result/state, one weakest-rating review per eligible form and the operation receipt in one SQLite transaction. Inactive forms preserve results without new schedules.
