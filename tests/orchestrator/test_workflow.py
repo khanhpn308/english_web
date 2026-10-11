@@ -2081,7 +2081,8 @@ def test_opt_in_timeout_reaches_roles_checks_and_saved_state(
         timeout: int | None = None,
         stdin: str | None = None,
     ) -> ProcessResult:
-        if command[0] == "python":
+        verification = command[2:] if command[0].endswith("env") else command
+        if verification[0] == "python":
             observed.append(timeout)
             assert timeout == expected
         return execute(command, cwd, timeout=timeout, stdin=stdin)
