@@ -193,3 +193,44 @@ Historical evidence is implemented in the dedicated H1 worktree, with additive `
 T037-R1 must use `StudyHistoryReader(engine).for_date(study_date, as_of=server_now)` and its `eligible_due_card_ids`, not its observed candidate set. Current polling cannot prove full-day source continuity, so the authoritative denominator is `None`, coverage is `UNKNOWN`, and even an empty day remains unknown. The existing streak helpers preserve that uncertainty; public unavailable-history behavior remains T037-R1/owner work. Facts and observation windows are bounded and read-only, with reset/source/link evidence retained.
 
 The independent checkpoint on `feature/t037-dashboard-summary-api` was read without changes. Host must combine its `main.py` dashboard wiring with H1 startup/shutdown hooks and preserve existing T048/T049 initialization. No public contract/schema, formulas, HTTP source, tests or generated artifacts were changed by H1. Tests, audits, security, migration and coverage verification remain `DEFERRED_BY_OWNER`; neither task is DONE. See the [H1 handoff](t037-h1-study-history-ledger.md) for scope, exact reader semantics and deferred checks.
+
+## T037 resume: consumer handoff, 11/10/2026 (Asia/Bangkok)
+
+This checkpoint supersedes the earlier request to assign a historical persistence task. Host has assigned T037-H1. T037 remains incomplete; this resume preserves the existing production implementation without adding speculative history-reader code.
+
+### Inspected workspace and dependency evidence
+
+- Authorized worktree: `/home/khanh/projects/vocabularies-t037-sol`; branch `feature/t037-dashboard-summary-api`; the merge commit integrates T037-H1 and preserves the pre-merge T037 handoff.
+- Existing `formulas.py`, `http/dashboard.py` and `main.py` contain the independent metrics, date validation, DTO, pure completion/streak helpers and production service/router wiring described above. No further independent source change was identified within the approved allowlist.
+- The H1 branch supplied `backend/app/dashboard/history.py`, `0012_study_history.py`, sync/lifecycle hooks and its task handoff. The canonical API/spec/ADR files remain unchanged, and the approved streak anchor/unavailable-history contract still awaits T037-R1.
+
+### Minimal expected H1 read interface, provisional
+
+These are consumer requirements, not an implemented H1 API or a new persistence assignment. Adapt to the actual integrated reader; no callable name, import, injected reader, protocol or fallback is added before it exists.
+
+The reader must accept the caller-owned SQLAlchemy `Connection`, a bounded Bangkok study-date window and the same aware server-time cutoff captured by `DashboardService.project`. Reading H1 and existing review/quiz facts must stay inside that service's existing explicit SQLite read transaction.
+
+| Required fact | Consumer meaning |
+|---|---|
+| Per-day authoritative eligible card IDs, or explicit UNKNOWN | Use stable `review_cards.card_id` identity, counted once across valid source references. A known empty set means zero eligible due cards; UNKNOWN maps internally to `None`. Current queue state cannot supply this fact. |
+| Historical card existence, box/dueAt and reset state, and source status/link transitions | Establish eligibility from the state applicable to that day. Resets require previous state and ordering; later deletion/invalidation must not rewrite an earlier denominator. H1 may supply the resolved denominator instead of exposing all raw transitions. |
+| Historical NEW classification for relevant review events, or sufficient ordered predecessor facts | The zero-due activity rule needs evidence that a completed review had box 0 immediately before that review. The current box, first-ever review, or the event's resulting box is insufficient after resets. |
+| Coverage start, gaps and observation/effective-time limits | Opening observations cannot establish earlier history. Missing evidence, unobserved offline changes or ambiguous ordering remain UNKNOWN, with a reason available to the consumer. Absence of events is not proof of a known empty denominator. |
+
+T037 owns matching completion evidence from durable `review_events` by card ID and server `reviewed_at`, including relevant FLASHCARD and QUIZ handoffs. Matching must use H1's eligibility/schedule ordering, so an unrelated review is not counted merely because it occurred on the same date. Terminal activity comes from durable `quiz_attempts.status='SUBMITTED'` plus its stored result/submission timestamp. Drafts, AI feedback, client diagnostic timestamps and operation replay are not independent completion events.
+
+For each day, pass the authoritative denominator and relevant completed card IDs to `day_is_complete`, with proven NEW-review and terminal-quiz flags. If a required fact is unknown, retain unknown completion; do not coerce it to false, true or an empty set. A proven terminal quiz suffices for a known zero-due day without needing NEW-review evidence.
+
+Streak history is independent of the selected `from`/`to` metric range and its 366-day limit. Read bounded windows backwards from the Host-approved anchor until a known incomplete day or UNKNOWN boundary, then call `consecutive_completed_days`. Ending at a requested result-filter boundary or at an arbitrary lookback cap would invent a break. A fully completed observed run that reaches unknown pre-coverage history still has an unknown exact length.
+
+### Remaining policy and delivery
+
+- Host must choose the current streak anchor and the meaning of `asOf` when today is unfinished, and decide the public response for unavailable historical streak. The owner-approved timezone, rating, accuracy, writing, due and date-range rules require no further approval.
+- Host owns recording those approved metric rules in canonical API/ADR documentation and reconciling the objective attempted/accuracy additions through T017. No public nullable streak or partial-success response is introduced here.
+- Overall status: `PARTIAL_UNVERIFIED / BLOCKED_DEPENDENCY`. Independent source and H1 ledger are `CODE_IMPLEMENTED_UNVERIFIED`. `DashboardProjection.current_days` stays `None`; a valid, ready dashboard request still follows the typed `503 CONFIGURATION_REQUIRED` path in source. HTTP 200 remains blocked.
+- Resume changes: this task card, the unchecked T037 entry in `tasks/todo.md`, and the newest `docs/changelogs.md` entry preserve the handoff and record the merge. Intentionally untouched: existing review/quiz behavior beyond H1 hooks, tests, generated contracts, specs/ADRs, dependencies, other task states and user data.
+- Skills invoked: Ponytail FULL, unslop and the seven requested Agent Skills at the installed 0.6.12 paths recorded above. Applied scope/interface/security/documentation guidance; no framework code or simplification was needed. Verification/commit workflows remain overridden by the owner's code-only instructions; no subagents were launched.
+- Source and Git inspection covered both branches before the authorized merge. No runtime imports, probes, assertions, tests, migrations, generators, formatters, quality/security gates were executed.
+- TESTS: `DEFERRED_BY_OWNER`; AUDIT: `DEFERRED_BY_OWNER`; SECURITY_VERIFICATION: `DEFERRED_BY_OWNER`; GENERATED_CONTRACT: `HOST_INTEGRATION_PENDING`. No PASS or final acceptance claimed.
+- Known unverified risks: endpoint success is unavailable, execution/performance remain unverified, historical range scans lack global time indexes, and Host must preserve newer main/H1 lifecycle changes during integration.
+- READY_FOR_HOST_INTEGRATION: `NO` for complete T037; T037-R1 must integrate the authoritative reader into the dashboard transaction, record the approved public nullability policy, then reconcile generated contracts. Do not mark T037 DONE.

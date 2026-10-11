@@ -1,3 +1,9 @@
+## 11/10/2026 - T037 merges T037-H1 study history ledger (Asia/Bangkok)
+
+- Merged the authorized T037-H1 branch into `feature/t037-dashboard-summary-api` after preserving its uncommitted implementation in commit `3a407f8` and resolving the `main.py` and bookkeeping conflicts. The merge includes the append-only study-history migration/reader, sync/lifecycle hooks and H1 handoff.
+- Preserved the T037 dashboard formulas/router, T051 integration already present on the H1 ancestry, and the pre-merge T037 handoff. T037 remains `PARTIAL_UNVERIFIED / BLOCKED_DEPENDENCY`; T037-R1 still owns authoritative replay, nullable streak behavior and generated-contract reconciliation.
+- No tests, audits, security verification, generators, migrations or runtime checks were run.
+
 ## 11/10/2026 - T037 independent dashboard source implemented; historical streak dependency open (Asia/Bangkok)
 
 - Created `backend/app/dashboard/formulas.py` and `backend/app/http/dashboard.py`, and wired the dashboard read service/router into `backend/app/main.py`. Implemented current eligible due count, FLASHCARD-only half-up rating buckets, separate terminal MCQ/CLOZE total/attempted/accuracy and final writing-score aggregates with explicit zero/null semantics, in one read snapshot.
