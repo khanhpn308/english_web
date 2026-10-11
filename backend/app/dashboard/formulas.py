@@ -8,10 +8,13 @@ from zoneinfo import ZoneInfo
 
 from backend.app.review.queue import utc_text
 from backend.app.review.srs import PRODUCT_TIMEZONE, Rating, require_aware
-from sqlalchemy import Engine
+from backend.app.dashboard.history import StudyDayHistory, StudyHistoryReader
+from sqlalchemy import Connection, Engine
 
 _RATINGS: tuple[Rating, ...] = ("AGAIN", "HARD", "GOOD", "EASY")
 _STUDY_ZONE = ZoneInfo(PRODUCT_TIMEZONE)
+_HISTORY_FACT_LIMIT = 10_000
+_HISTORY_DAY_LIMIT = 10_000
 
 
 class DashboardRangeError(ValueError):
@@ -94,6 +97,97 @@ class DashboardService:
     ) -> None:
         self.engine = engine
         self.clock = clock or (lambda: datetime.now(UTC))
+        self.history = StudyHistoryReader(engine)
+
+    @staticmethod
+    def _day_completion(connection: Connection, history: StudyDayHistory) -> bool | None:
+        eligible = history.eligible_due_card_ids
+        if eligible is None:
+            return None
+        windows_by_card: dict[str, list[int]] = {}
+        for index, window in enumerate(history.windows):
+            windows_by_card.setdefault(window.card_id, []).append(index)
+        review_facts = {
+            fact.review_event_id: fact
+            for fact in history.facts
+            if fact.kind == "REVIEW" and fact.review_event_id is not None
+        }
+        matched: set[int] = set()
+        if windows_by_card:
+            rows = connection.exec_driver_sql(
+                "SELECT id,card_id,reviewed_at FROM review_events "
+                "WHERE source IN ('FLASHCARD','QUIZ') "
+                "AND reviewed_at>=? AND reviewed_at<? ORDER BY reviewed_at,id LIMIT ?",
+                (history.start.isoformat(timespec="microseconds").replace("+00:00", "Z"),
+                 history.observed_until.isoformat(timespec="microseconds").replace("+00:00", "Z"),
+                 _HISTORY_FACT_LIMIT + 1),
+            ).mappings().all()
+            if len(rows) > _HISTORY_FACT_LIMIT:
+                return None
+            for row in rows:
+                fact = review_facts.get(row["id"])
+                if fact is None:
+                    continue
+                reviewed_at = datetime.fromisoformat(row["reviewed_at"])
+                for index in windows_by_card.get(row["card_id"], ()):
+                    window = history.windows[index]
+                    if (
+                        fact.seq > window.schedule_fact_seq
+                        and window.start <= reviewed_at < window.end
+                    ):
+                        matched.add(index)
+        completed_cards = {
+            card_id
+            for card_id, indexes in windows_by_card.items()
+            if all(index in matched for index in indexes)
+        }
+        completed_new_card = any(
+            index in matched and history.windows[index].schedule.box == 0
+            for index in range(len(history.windows))
+        )
+        terminal_submitted_quiz = connection.exec_driver_sql(
+            "SELECT 1 FROM quiz_attempts WHERE status='SUBMITTED' "
+            "AND submitted_at>=? AND submitted_at<? AND json_valid(result_payload) LIMIT 1",
+            (history.start.isoformat(timespec="microseconds").replace("+00:00", "Z"),
+             history.observed_until.isoformat(timespec="microseconds").replace("+00:00", "Z")),
+        ).first() is not None
+        return day_is_complete(
+            eligible,
+            completed_cards,
+            completed_new_card=completed_new_card,
+            terminal_submitted_quiz=terminal_submitted_quiz,
+        )
+
+    def _current_days(self, connection: Connection, now: datetime, today: date) -> int | None:
+        completion: dict[date, bool | None] = {}
+        today_history = self.history.for_date(
+            today, as_of=now, fact_limit=_HISTORY_FACT_LIMIT, connection=connection,
+        )
+        today_complete = self._day_completion(connection, today_history)
+        if today_complete is None:
+            return None
+        if today_complete:
+            completion[today] = True
+            anchor = today
+        else:
+            anchor = today - timedelta(days=1)
+        for offset in range(_HISTORY_DAY_LIMIT):
+            try:
+                day = anchor - timedelta(days=offset)
+            except OverflowError:
+                return None
+            history = today_history if day == today else self.history.for_date(
+                day, as_of=now, fact_limit=_HISTORY_FACT_LIMIT, connection=connection,
+            )
+            complete = today_complete if day == today else self._day_completion(connection, history)
+            completion[day] = complete
+            if complete is None:
+                return None
+            if not complete:
+                return consecutive_completed_days(completion, as_of=anchor)
+            if day == date.min:
+                return consecutive_completed_days(completion, as_of=anchor)
+        return None
 
     def project(
         self, *, from_date: date | None = None, to_date: date | None = None,
@@ -101,7 +195,6 @@ class DashboardService:
         now = self.clock()
         today = study_date(now)
         start, end = date_range(today, from_date, to_date)
-        # Source: https://docs.sqlalchemy.org/en/21/core/connections.html#using-transactions
         with self.engine.connect() as conn, conn.begin():
             # Keep the canonical ReviewService.queue predicate, including NEW/null dueAt.
             due: int = conn.exec_driver_sql(
@@ -138,6 +231,7 @@ class DashboardService:
                 "WHERE a.status='SUBMITTED' AND a.submitted_at>=? AND a.submitted_at<=?",
                 (start, end),
             ).mappings().one()
+            current_days = self._current_days(conn, now, today)
 
         objective: dict[str, dict[str, int | float | None]] = {
             kind: {"correct": 0, "total": 0, "attempted": 0, "accuracy": None}
@@ -158,5 +252,4 @@ class DashboardService:
             "objectiveAccuracy": objective,
             "writingSelfScore": {"scored": writing["scored"], "average": writing["average"]},
         }
-        # Host persistence must supply daily denominators/reset history before this is known.
-        return DashboardProjection(metrics=metrics, as_of=today, current_days=None)
+        return DashboardProjection(metrics=metrics, as_of=today, current_days=current_days)

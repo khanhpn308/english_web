@@ -1,3 +1,9 @@
+## 11/10/2026 - T037-R1 SQLite study history and dashboard continuation (Asia/Bangkok)
+
+- Completed the dashboard consumer for the H1 SQLite ledger. Known eligibility windows replay committed source, link, card, schedule, reset, and journal facts after the opening snapshot; missing or ambiguous intervals remain unknown.
+- Dashboard reads metrics, history, review events, and terminal quiz evidence in one caller-owned SQLite read transaction and returns HTTP 200 with nullable `streak.currentDays` when exact history is unavailable.
+- No additional migration was needed. Generated contracts and executable verification remain deferred; T037 task cards stay unchanged.
+
 ## 11/10/2026 - T037 merges T037-H1 study history ledger (Asia/Bangkok)
 
 - Merged the authorized T037-H1 branch into `feature/t037-dashboard-summary-api` after preserving its uncommitted implementation in commit `3a407f8` and resolving the `main.py` and bookkeeping conflicts. The merge includes the append-only study-history migration/reader, sync/lifecycle hooks and H1 handoff.

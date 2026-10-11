@@ -1,8 +1,7 @@
 """Observed SQLite eligibility history for T037-R1, independent of dashboard HTTP.
 
-Polling Markdown cannot prove continuous on-disk validity. Evidence windows replay
-retained SQL observations, not filesystem effective times or transaction commit times.
-They are never a confirmed daily streak denominator.
+The reader replays committed SQLite observations after the opening snapshot.
+Filesystem edit times and physical transaction commit times are not inferred.
 """
 
 import json
@@ -96,7 +95,7 @@ class EligibilityWindow:
 
 @dataclass(frozen=True)
 class HistoryCoverage:
-    status: Literal["UNKNOWN"]
+    status: Literal["KNOWN", "UNKNOWN"]
     reasons: tuple[CoverageReason, ...]
     opening_observed_at: datetime | None
     evidence_complete: bool
@@ -113,7 +112,7 @@ class StudyDayHistory:
     facts: tuple[HistoryFact, ...]
     windows: tuple[EligibilityWindow, ...]
     observed_due_card_ids: frozenset[str]
-    # None is mandatory until continuity is independently supported, including empty days.
+    # None means required committed-state evidence is missing or ambiguous.
     eligible_due_card_ids: frozenset[str] | None = None
 
 
@@ -203,19 +202,18 @@ def _windows(
     forms_by_source: dict[str, set[str]] = {}
     cards: dict[str, tuple[str, CardState, int]] = {}
     card_by_form: dict[str, str] = {}
-    segments: dict[str, tuple[datetime, tuple[SourceEvidence, ...]]] = {}
+    segments: dict[
+        str, tuple[datetime, tuple[SourceEvidence, ...], CardState, int, str]
+    ] = {}
     windows: list[EligibilityWindow] = []
     evidence_size = 0
     truncated = False
-    seeded = False
-
     def close(card_id: str, until: datetime) -> None:
         nonlocal truncated, evidence_size
         segment = segments.pop(card_id, None)
         if segment is None:
             return
-        form_id, state, seq = cards[card_id]
-        since, evidence = segment
+        since, evidence, state, seq, form_id = segment
         due_start = max(since, state.due_at) if state.due_at is not None else since
         if due_start < until:
             size = 1 + len(evidence)
@@ -226,33 +224,33 @@ def _windows(
                 evidence_size += size
 
     def open_segment(card_id: str, since: datetime) -> None:
-        form_id = cards[card_id][0]
+        card = cards.get(card_id)
+        if card is None:
+            return
+        form_id, state, seq = card
         evidence = tuple(
             SourceEvidence(source_id, sources[source_id][1], link_seq)
             for source_id, link_seq in sorted(links.get(form_id, {}).items())
             if source_id in sources and sources[source_id][0].status == "VALID"
         )
         if evidence:
-            segments[card_id] = (since, evidence)
+            segments[card_id] = (since, evidence, state, seq, form_id)
 
-    for fact in facts:
-        if not seeded and fact.timeline_at >= start:
-            for card_id in cards:
-                open_segment(card_id, start)
-            seeded = True
-        instant = max(start, fact.timeline_at)
-        affected: set[str] = set()
+    def affected_cards(fact: HistoryFact) -> set[str]:
         if fact.kind == "SOURCE" and fact.source_id is not None:
-            affected = {card_by_form[form] for form in forms_by_source.get(fact.source_id, set())
-                        if form in card_by_form}
-        elif fact.kind == "LINK" and fact.word_form_id is not None and fact.word_form_id in card_by_form:
-            affected = {card_by_form[fact.word_form_id]}
-        elif fact.kind == "CARD" and fact.card_id is not None:
-            affected = {fact.card_id}
-        if seeded:
-            for card_id in affected:
-                close(card_id, instant)
+            return {
+                card_by_form[form_id]
+                for form_id in forms_by_source.get(fact.source_id, set())
+                if form_id in card_by_form
+            }
+        if fact.kind == "LINK" and fact.word_form_id is not None:
+            card_id = card_by_form.get(fact.word_form_id)
+            return {card_id} if card_id is not None else set()
+        if fact.kind == "CARD" and fact.card_id is not None:
+            return {fact.card_id}
+        return set()
 
+    def apply(fact: HistoryFact) -> None:
         if fact.kind == "SOURCE" and fact.source_id is not None:
             if isinstance(fact.resulting, SourceState):
                 sources[fact.source_id] = (fact.resulting, fact.seq)
@@ -267,18 +265,38 @@ def _windows(
             else:
                 refs.pop(fact.source_id, None)
                 related.discard(fact.word_form_id)
-        elif (fact.kind == "CARD" and fact.card_id is not None and fact.word_form_id is not None
-              and isinstance(fact.resulting, CardState)):
+        elif (
+            fact.kind == "CARD"
+            and fact.card_id is not None
+            and fact.word_form_id is not None
+            and isinstance(fact.resulting, CardState)
+        ):
             cards[fact.card_id] = (fact.word_form_id, fact.resulting, fact.seq)
             card_by_form[fact.word_form_id] = fact.card_id
-        if seeded:
-            for card_id in affected:
-                if card_id in cards:
-                    open_segment(card_id, instant)
 
-    if not seeded:
-        for card_id in cards:
-            open_segment(card_id, start)
+    index = 0
+    while index < len(facts) and facts[index].timeline_at < start:
+        apply(facts[index])
+        index += 1
+    for card_id in cards:
+        open_segment(card_id, start)
+    while index < len(facts):
+        instant = facts[index].timeline_at
+        if instant >= end:
+            break
+        batch: list[HistoryFact] = []
+        while index < len(facts) and facts[index].timeline_at == instant:
+            batch.append(facts[index])
+            index += 1
+        affected: set[str] = set()
+        for fact in batch:
+            affected.update(affected_cards(fact))
+        for card_id in affected:
+            close(card_id, instant)
+        for fact in batch:
+            apply(fact)
+        for card_id in affected:
+            open_segment(card_id, instant)
     for card_id in tuple(segments):
         close(card_id, end)
     return tuple(windows), truncated
@@ -291,13 +309,14 @@ class StudyHistoryReader:
         self.engine = engine
 
     def for_date(
-        self, study_date: date, *, as_of: datetime | None = None, fact_limit: int = 10_000,
+        self,
+        study_date: date,
+        *,
+        as_of: datetime | None = None,
+        fact_limit: int = 10_000,
+        connection: Connection | None = None,
     ) -> StudyDayHistory:
-        """Read start-of-day seeds and ordered daily transitions in one read snapshot.
-
-        A limit hit returns incomplete evidence and UNKNOWN, never an empty denominator.
-        Consumers must use eligible_due_card_ids for streaks, not observed_due_card_ids.
-        """
+        """Read one date, optionally inside a caller-owned read transaction."""
         if type(study_date) is not date or type(fact_limit) is not int or not 1 <= fact_limit <= 10_000:
             raise ValueError("Invalid historical study-date query")
         now = as_of if as_of is not None else datetime.now(UTC)
@@ -311,17 +330,15 @@ class StudyHistoryReader:
         until = min(end, max(start, now.astimezone(UTC)))
         first = start.isoformat(timespec="microseconds").replace("+00:00", "Z")
         last = until.isoformat(timespec="microseconds").replace("+00:00", "Z")
-        reasons: list[CoverageReason] = ["NO_CONTINUOUS_SOURCE_OBSERVATION"]
-        with self.engine.connect() as connection, connection.begin():
-            opening = connection.exec_driver_sql(
-                "SELECT observed_at FROM study_history WHERE kind='COVERAGE' "
-                "AND entity_key=json_array('coverage') ORDER BY seq LIMIT 1",
+        def read(read_connection: Connection) -> StudyDayHistory:
+            opening = read_connection.exec_driver_sql(
+                "SELECT timeline_at FROM study_history WHERE kind='COVERAGE' "
+                "AND reason='OPENING' AND entity_key=json_array('coverage') ORDER BY seq LIMIT 1",
             ).scalar_one_or_none()
-            last_seq: int = connection.exec_driver_sql(
+            last_seq: int = read_connection.exec_driver_sql(
                 "SELECT coalesce(max(seq),0) FROM study_history",
             ).scalar_one()
-            # Latest pre-day fact per entity, not a lifetime of raw events in Python.
-            rows = connection.exec_driver_sql(
+            rows = read_connection.exec_driver_sql(
                 "WITH seeds AS (SELECT h.* FROM study_history h WHERE h.timeline_at<? "
                 "AND h.kind IN ('SOURCE','LINK','CARD','JOURNAL','COVERAGE') AND NOT EXISTS "
                 "(SELECT 1 FROM study_history newer WHERE newer.kind=h.kind "
@@ -334,12 +351,39 @@ class StudyHistoryReader:
                 "SELECT * FROM (SELECT * FROM seeds UNION ALL SELECT * FROM daily) ORDER BY seq LIMIT ?",
                 (first, first, first, last, fact_limit + 1),
             ).mappings().all()
-            adjusted = connection.exec_driver_sql(
-                "SELECT 1 FROM study_history WHERE timeline_at>=? AND observed_at<? "
+            adjusted = read_connection.exec_driver_sql(
+                "SELECT 1 FROM study_history WHERE timeline_at>=? AND timeline_at<? "
                 "AND observed_at!=timeline_at LIMIT 1", (first, last),
             ).first() is not None
+            return self._build_day(
+                study_date, start, end, until, now, opening, last_seq, rows, adjusted, fact_limit,
+            )
+
+        if connection is not None:
+            if not connection.in_transaction():
+                raise ValueError("Historical read requires a caller-owned transaction")
+            return read(connection)
+        with self.engine.connect() as owned, owned.begin():
+            return read(owned)
+
+    @staticmethod
+    def _build_day(
+        study_date: date,
+        start: datetime,
+        end: datetime,
+        until: datetime,
+        now: datetime,
+        opening: str | None,
+        last_seq: int,
+        rows: list[Mapping[str, Any]],
+        adjusted: bool,
+        fact_limit: int,
+    ) -> StudyDayHistory:
         opening_at = _instant(opening)
-        if opening_at is None or start < opening_at:
+        reasons: list[CoverageReason] = []
+        if opening_at is None:
+            reasons.extend(("NO_CONTINUOUS_SOURCE_OBSERVATION", "BEFORE_OPENING"))
+        elif start < opening_at:
             reasons.append("BEFORE_OPENING")
         if now.astimezone(UTC) < start:
             reasons.append("FUTURE_WINDOW")
@@ -349,8 +393,17 @@ class StudyHistoryReader:
             reasons.append("CLOCK_ADJUSTED")
         limited = len(rows) > fact_limit
         facts = tuple(_fact(row) for row in rows[:fact_limit])
-        if any(f.kind == "JOURNAL" or f.reason in {"STARTUP", "SYNC_STARTED", "SYNC_FAILED"}
-               for f in facts):
+        unresolved: set[str] = set()
+        for fact in facts:
+            if fact.kind != "JOURNAL" or fact.operation_id is None:
+                continue
+            if isinstance(fact.resulting, JournalState) and fact.resulting.state in {
+                "PREPARED", "SOURCE_REPLACED", "DEGRADED",
+            }:
+                unresolved.add(fact.operation_id)
+            else:
+                unresolved.discard(fact.operation_id)
+        if unresolved:
             reasons.append("SOURCE_RECONCILIATION")
         if limited:
             reasons.append("FACT_LIMIT")
@@ -360,11 +413,15 @@ class StudyHistoryReader:
             windows, window_limit = _windows(facts, start, until, fact_limit)
             if window_limit:
                 reasons.append("WINDOW_LIMIT")
+        blocking = {
+            "NO_CONTINUOUS_SOURCE_OBSERVATION", "BEFORE_OPENING", "FUTURE_WINDOW",
+            "CLOCK_ADJUSTED", "SOURCE_RECONCILIATION", "FACT_LIMIT", "WINDOW_LIMIT",
+        }
+        known = not any(reason in blocking for reason in reasons)
+        eligible = frozenset(window.card_id for window in windows) if known else None
         return StudyDayHistory(
             study_date, start, end, until,
-            HistoryCoverage(
-                "UNKNOWN", tuple(reasons), opening_at,
-                not limited and not window_limit and not adjusted, last_seq,
-            ),
-            facts, windows, frozenset(window.card_id for window in windows),
+            HistoryCoverage("KNOWN" if known else "UNKNOWN", tuple(reasons), opening_at,
+                            not limited and not window_limit and not adjusted, last_seq),
+            facts, windows, frozenset(window.card_id for window in windows), eligible,
         )

@@ -1,4 +1,4 @@
-"""Session-protected dashboard boundary; unavailable streak history blocks HTTP 200."""
+"""Session-protected dashboard boundary."""
 
 import re
 from datetime import date
@@ -20,7 +20,7 @@ _QUERY_KEYS = {"from", "to"}
 class DashboardStreak(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    currentDays: int = Field(ge=0)
+    currentDays: int | None = Field(ge=0)
     asOf: date
 
 
@@ -119,9 +119,6 @@ def get_dashboard(
         return _error(503, "STORAGE_BUSY")
     try:
         projection = service.project(from_date=first, to_date=last)
-        if projection.current_days is None:
-            # The approved DTO has no unknown-streak value; never emit a fabricated zero.
-            return _error(503, "CONFIGURATION_REQUIRED")
         summary = DashboardSummary.model_validate({
             **projection.metrics,
             "streak": {"currentDays": projection.current_days, "asOf": projection.as_of},
