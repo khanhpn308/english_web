@@ -24,8 +24,10 @@ from backend.app.application.source_recovery import SourceRecovery
 from backend.app.application.source_write import SourceWriteCoordinator
 from backend.app.application.submit_quiz import SubmitQuizService
 from backend.app.application.sync import SyncService
+from backend.app.dashboard.formulas import DashboardService
 from backend.app.enrichment.lookup import LookupService
 from backend.app.http.bootstrap import router as bootstrap_router
+from backend.app.http.dashboard import router as dashboard_router
 from backend.app.http.errors import error_response
 from backend.app.http.feedback import router as feedback_router
 from backend.app.http.health import router as health_router
@@ -75,6 +77,7 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.consent_service = None
     app.state.search_service = None
     app.state.review_service = None
+    app.state.dashboard_service = None
     app.state.sync_service = None
     app.state.watcher = None
     app.state.lookup_service = None
@@ -97,6 +100,7 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
                 app.state.operation_ledger = ledger
                 app.state.answer_service = SaveAnswerService(ledger)
                 app.state.submission_service = SubmitQuizService(ledger)
+                app.state.dashboard_service = DashboardService(database.engine)
                 app.state.consent_service = ConsentService(ledger)
                 app.state.search_service = SearchService(
                     database.engine, signing_key=app.state.cursor_signing_key
@@ -293,6 +297,7 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
                         app.state.consent_service = None
                         app.state.search_service = None
                         app.state.review_service = None
+                        app.state.dashboard_service = None
                         app.state.sync_service = None
                         app.state.lookup_service = None
                         app.state.save_word_family_service = None
@@ -466,6 +471,7 @@ def create_app(
     app.state.consent_service = None
     app.state.search_service = None
     app.state.review_service = None
+    app.state.dashboard_service = None
     app.state.cursor_signing_key = token_bytes(32)
     app.state.sync_service = None
     app.state.watcher = None
@@ -530,6 +536,7 @@ def create_app(
     app.include_router(operations_router)
     app.include_router(search_router)
     app.include_router(review_router)
+    app.include_router(dashboard_router)
     app.include_router(sources_router)
     app.include_router(lookups_router)
     app.include_router(word_forms_router)

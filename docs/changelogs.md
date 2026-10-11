@@ -1,3 +1,16 @@
+## 11/10/2026 - T037 independent dashboard source implemented; historical streak dependency open (Asia/Bangkok)
+
+- Created `backend/app/dashboard/formulas.py` and `backend/app/http/dashboard.py`, and wired the dashboard read service/router into `backend/app/main.py`. Implemented current eligible due count, FLASHCARD-only half-up rating buckets, separate terminal MCQ/CLOZE total/attempted/accuracy and final writing-score aggregates with explicit zero/null semantics, in one read snapshot.
+- Applied the owner's approved inclusive Bangkok date ranges: default 28 days including today, defined one-sided defaults, strict date/query validation and maximum 366 inclusive days. Added pure completion/streak helpers that preserve unknown inputs. Current historical persistence cannot supply a trustworthy streak; valid GET requests return typed 503 CONFIGURATION_REQUIRED until Host integration can honestly assemble the required summary.
+- Updated `tasks/t037-dashboard-formulas.md` and unchecked `tasks/todo.md` to distinguish independent source `CODE_IMPLEMENTED_UNVERIFIED` from the dependent `BLOCKED_IMPLEMENTATION` portion. Recorded the owner-authorized Host task scope for immutable historical eligibility/link/reset evidence and unavailable-history rules. Canonical API/ADR amendments and generated DTO reconciliation remain Host-owned follow-ups.
+- Tests, test source, audits, scans, builds, formatters and executable verification remain deferred. No migrations, sync/review/SRS internals, dependencies, specifications/generated files, learning data, task-plan dependencies or Git state were changed; no subagents were launched or DONE status claimed.
+
+## 11/10/2026 - T037 historical persistence and dashboard contract blockers (Asia/Bangkok)
+
+- Recorded `BLOCKED_IMPLEMENTATION` in `tasks/t037-dashboard-formulas.md` and the unchecked T037 entry in `tasks/todo.md`. Source inspection found that sync overwrites source validity, deletes removed links and resets schedules without a complete historical transition record; exact historical daily due denominators cannot be reconstructed under ADR-0004.
+- Documented the missing flashcard bucket averaging policy, the dashboard correct/total shape versus attempted/null-accuracy requirements, and unspecified optional date-range defaults/boundaries. These require Host clarification and a separate persistence scope, including treatment of already missing history.
+- Production dashboard paths and `backend/app/main.py` remain untouched under the owner's explicit stop conditions. No tests, test source, quality/security gates, audits, builds, generators, subagents or Git mutations were performed. T037 is not DONE; production integration is blocked.
+
 ## 11/10/2026 - T048 coding integrated; FINAL_VERIFICATION_DEFERRED
 
 - Merged T048 Quiz Submission and Atomic SRS Handoff via [PR #15](https://github.com/khanhpn308/english_web/pull/15) at `c67d9e9872b3d73dcfa31431eff5f68f3476c615`; preserved existing T049, T050 and T012 implementation and task states on `main`.
