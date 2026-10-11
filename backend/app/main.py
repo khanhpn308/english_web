@@ -16,6 +16,7 @@ from backend.app.application.ai_admission import AiAdmissionCoordinator
 from backend.app.application.consent import ConsentService
 from backend.app.application.create_quiz import CreateQuizService
 from backend.app.application.edit_word_form import EditWordFormService
+from backend.app.application.feedback import FeedbackService
 from backend.app.application.operations import OperationConflict, OperationLedger
 from backend.app.application.save_answer import SaveAnswerService
 from backend.app.application.save_word_family import SaveWordFamilyService
@@ -25,6 +26,7 @@ from backend.app.application.sync import SyncService
 from backend.app.enrichment.lookup import LookupService
 from backend.app.http.bootstrap import router as bootstrap_router
 from backend.app.http.errors import error_response
+from backend.app.http.feedback import router as feedback_router
 from backend.app.http.health import router as health_router
 from backend.app.http.lookups import router as lookups_router
 from backend.app.http.operations import router as operations_router
@@ -78,6 +80,7 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.edit_word_form_service = None
     app.state.quiz_service = None
     app.state.answer_service = None
+    app.state.feedback_service = None
     app.state.sessions.activate()
     try:
         if database is not None:
@@ -115,6 +118,12 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
                     admission_coordinator,
                     VocabularyRepository(database.engine),
                 )
+                app.state.feedback_service = FeedbackService(
+                    ledger,
+                    admission_coordinator,
+                    signing_key=app.state.cursor_signing_key,
+                )
+                await run_in_threadpool(app.state.feedback_service.recover)
 
                 markdown_root = app.state.markdown_root
                 if markdown_root is not None:
@@ -268,22 +277,28 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
                     if quiz_service is not None:
                         await quiz_service.drain()
                 finally:
-                    app.state.sessions.invalidate()
-                    app.state.ready = False
-                    app.state.storage_info = None
-                    app.state.operation_ledger = None
-                    app.state.consent_service = None
-                    app.state.search_service = None
-                    app.state.review_service = None
-                    app.state.sync_service = None
-                    app.state.lookup_service = None
-                    app.state.save_word_family_service = None
-                    app.state.edit_word_form_service = None
-                    app.state.quiz_service = None
-                    app.state.answer_service = None
-                    if database is not None:
-                        await run_in_threadpool(database.close)
-                    app.state.database = None
+                    try:
+                        feedback_service = app.state.feedback_service
+                        if feedback_service is not None:
+                            await feedback_service.drain()
+                    finally:
+                        app.state.sessions.invalidate()
+                        app.state.ready = False
+                        app.state.storage_info = None
+                        app.state.operation_ledger = None
+                        app.state.consent_service = None
+                        app.state.search_service = None
+                        app.state.review_service = None
+                        app.state.sync_service = None
+                        app.state.lookup_service = None
+                        app.state.save_word_family_service = None
+                        app.state.edit_word_form_service = None
+                        app.state.quiz_service = None
+                        app.state.answer_service = None
+                        app.state.feedback_service = None
+                        if database is not None:
+                            await run_in_threadpool(database.close)
+                        app.state.database = None
 
 
 @asynccontextmanager
@@ -317,12 +332,18 @@ class RequestBudgetMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        feedback_request = (
+            re.fullmatch(r"/api/v1/quiz-questions/[A-Za-z0-9_-]+/feedback", scope.get("path", ""))
+            is not None
+        )
         if scope["type"] == "http":
             app = scope.get("app")
             clock = None
             if app is not None and hasattr(app, "state"):
                 service_name = (
-                    "quiz_service"
+                    "feedback_service"
+                    if feedback_request
+                    else "quiz_service"
                     if scope.get("path") == "/api/v1/quiz-attempts"
                     else "lookup_service"
                 )
@@ -337,14 +358,20 @@ class RequestBudgetMiddleware:
         if (
             scope["type"] == "http"
             and scope.get("method") == "POST"
-            and scope.get("path") in {"/api/v1/lookups", "/api/v1/quiz-attempts"}
+            and (
+                feedback_request
+                or scope.get("path") in {"/api/v1/lookups", "/api/v1/quiz-attempts"}
+            )
         ):
             from backend.app.application import create_quiz as quiz_module
+            from backend.app.application.feedback import FEEDBACK_DEADLINE_SECONDS
             from backend.app.enrichment import lookup as lookup_module
 
             budget_clock = clock or monotonic
             budget = (
-                quiz_module.QUIZ_DEADLINE_SECONDS
+                FEEDBACK_DEADLINE_SECONDS
+                if feedback_request
+                else quiz_module.QUIZ_DEADLINE_SECONDS
                 if scope["path"] == "/api/v1/quiz-attempts"
                 else lookup_module.LOOKUP_DEADLINE_SECONDS
             )
@@ -362,7 +389,7 @@ class RequestBudgetMiddleware:
                 nonlocal response_started
                 if message["type"] == "http.response.start":
                     if (
-                        scope["path"] == "/api/v1/quiz-attempts"
+                        (feedback_request or scope["path"] == "/api/v1/quiz-attempts")
                         and 200 <= message["status"] < 300
                         and budget_clock() >= deadline
                     ):
@@ -375,7 +402,9 @@ class RequestBudgetMiddleware:
             except TimeoutError:
                 if response_started:
                     raise
-                operation_id = scope["state"].get("quiz_operation_id")
+                operation_id = scope["state"].get(
+                    "feedback_operation_id" if feedback_request else "quiz_operation_id"
+                )
                 details = (
                     {"kind": "RETRY", "operationId": operation_id}
                     if operation_id is not None else None
@@ -451,13 +480,27 @@ def create_app(
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
-        if request.method == "POST" and request.url.path == "/api/v1/quiz-attempts":
-            service = request.app.state.quiz_service
+        feedback_request = (
+            re.fullmatch(r"/api/v1/quiz-questions/[A-Za-z0-9_-]+/feedback", request.url.path)
+            is not None
+        )
+        if request.method == "POST" and (
+            feedback_request or request.url.path == "/api/v1/quiz-attempts"
+        ):
+            service = (
+                request.app.state.feedback_service
+                if feedback_request
+                else request.app.state.quiz_service
+            )
             clock = service.clock if service is not None else monotonic
             start = getattr(request.state, "request_start_time", clock())
             from backend.app.application import create_quiz as quiz_module
+            from backend.app.application.feedback import FEEDBACK_DEADLINE_SECONDS
 
-            if clock() >= start + quiz_module.QUIZ_DEADLINE_SECONDS:
+            budget = (
+                FEEDBACK_DEADLINE_SECONDS if feedback_request else quiz_module.QUIZ_DEADLINE_SECONDS
+            )
+            if clock() >= start + budget:
                 return error_response(503, "BRIDGE_UNAVAILABLE")
         # FastAPI error objects include input; expose only field and error type.
         if request.url.path != "/api/v1/ai-consent" and any(
@@ -486,6 +529,7 @@ def create_app(
     app.include_router(word_forms_router)
     app.include_router(quiz_router)
     app.include_router(quiz_answers_router)
+    app.include_router(feedback_router)
 
     from backend.app.http.consent import router as consent_router
 
