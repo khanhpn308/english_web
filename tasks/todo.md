@@ -63,7 +63,7 @@
 - [x] [T038](t038-dashboard-ui.md): Learning Dashboard UI — `DONE (CODING_ONLY)`; PR #17 merged (`5e97b2a`); `FINAL_VERIFICATION_DEFERRED` by owner.
 - [x] [T061](t061-alerts-runbooks.md): Local symptom alerts và runbook links — `DONE (CODING_ONLY)`; PR #21 merged (`24e916a`), source integration in Backend/Status API/UI and runbooks; `FINAL_VERIFICATION_DEFERRED` by owner. Search p95 remains `NO_DATA` (no fixture-qualified producer); OpenAPI/DTO pinned-tool regeneration and all executable verification pending.
 - [x] [T039](t039-launcher.md): Windows launcher single-instance/bootstrap — `DONE (CODING_ONLY)`; PR #20 merged (`9e2adfa`), Windows in-process launcher and session bootstrap source integrated; `FINAL_VERIFICATION_DEFERRED` by owner (Windows runtime/packaging pending).
-- [ ] [T040](t040-first-run-recovery.md): Native first-run configuration và protected key store — `BLOCKED_SCOPE`; permitted native/config primitives `IMPLEMENTED_UNVERIFIED` (12/10/2026). Launcher main/backend composition wiring outside allowlist; all verification and Windows DPAPI/ACL evidence pending.
+- [ ] [T040](t040-first-run-recovery.md): Native first-run configuration và protected key store — `CODE_IMPLEMENTED_UNVERIFIED`; R1 provisioning/DPAPI and owner-approved R2 launcher/backend runtime wiring pushed (`ee77e63`); PR #23 pending merge; Windows DPAPI/ACL/Tcl-Tk, tests and acceptance `FINAL_VERIFICATION_DEFERRED`.
 - [ ] [T054](t054-restore-recovery-drill.md): Staging restore và migration recovery drill
 - [ ] [T041](t041-security-hardening.md): Browser/API/filesystem hardening evidence
 - [x] [T042](t042-performance-fixture.md): Deterministic100k search benchmark fixture
@@ -72,7 +72,7 @@
 - [ ] [T043](t043-accessibility-evidence.md): WCAG 2.2 AA browser/manual evidence
 - [ ] [T055](t055-ai-content-evidence.md): Human-reviewed semantic fixture và optional AI smoke
 - [ ] [T056](t056-windows-package.md): Reproducible Windows package và shortcut
-- [ ] [T044](t044-release-contract-audit.md): Generated contract and cross-doc audit
+- [x] [T044](t044-release-contract-audit.md): Generated contract and cross-doc audit tooling — `DONE (CODING_ONLY)`; PR #22 merged (`4418434`), deterministic static checker and unexecuted implementation checkpoint integrated; `FINAL_VERIFICATION_DEFERRED` by owner (focused tests, actual audit, pinned generator comparison and CP22 acceptance pending).
 - [x] [T045](t045-git-release-hygiene.md): Git hooks, branch and commit hygiene — `DONE (CODING_ONLY)`; source commit `5a06042` already integrated into `main`; `FINAL_VERIFICATION_DEFERRED` by owner (hook, Windows and negative security checks pending).
 - [ ] [T057](t057-release-verification.md): Windows/offline release evidence matrix
 
