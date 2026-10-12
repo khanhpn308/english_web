@@ -322,7 +322,7 @@ These are **proposed UXR IDs**, NOT canonical application T IDs. **The owner has
 | Work package | Depends on | Output | Relevant owner files to read (no edits yet) |
 |---|---|---|---|
 | UXR-00 Evidence capture and journey inventory | None | Browser screenshot/state matrix and source-to-journey trace; status 'unverified' where Windows startup blocked | app shell, existing E2E fixtures, ui-architecture |
-| UXR-01 Design direction approval | UXR-00 / static baseline | Two side-by-side layout directions, owner decision | CSS tokens, shell, design docs |
+| [UXR-01 Design direction approval](../../tasks/uxr-01-design-direction-owner-approval.md) — **task specification PREPARED; execution NOT STARTED** | **UXR-00 final handoff** | Two comparable design directions, scored comparison and explicit owner decision | CSS tokens, shell, design docs |
 | UXR-02 Foundation and AppShell spec | UXR-01 | Navigation wireframes, feature-group slots, official shadcn component selection and reuse/upgrade policy, token proposal, responsive rules | AppShell.tsx, shell.css, index.css, components/ui; future-learning-content-architecture; shadcn-ui-component-strategy |
 | UXR-02A Layout simplification and density | UXR-02 | Cross-screen content hierarchy, CTA deduplication, compact metric patterns, Dashboard first-run wireframes, responsive-density checklist | DashboardPage.tsx, AppShell.tsx, official shadcn component strategy |
 | UXR-03 Lookup/Search/Detail spec | UXR-02A | Wireframes/interaction states for G2/G3, with density and progressive disclosure contract | features/lookup, features/search |
@@ -334,6 +334,12 @@ These are **proposed UXR IDs**, NOT canonical application T IDs. **The owner has
 | UXR-09 Dashboard spec | UXR-02A | Daily-workflow and statistics wireframes for G9 | DashboardPage.tsx |
 | UXR-10 Cross-screen design QA | UXR-03–09 | Component-state and information-density matrix, responsive/keyboard/accessibility review, action/empty-state deduplication and UX consistency report | all nine groups; UXR-02A criteria |
 | UXR-11 Owner sign-off and implementation handoff | UXR-10 | Approved screens, mapping to scoped coding tasks, file ownership and merge order | design artifacts only |
+
+### UXR task-card preparation — 2026-10-12
+
+- **[UXR-01 task specification](../../tasks/uxr-01-design-direction-owner-approval.md):** `PREPARED / NOT STARTED / BLOCKED_BY_UXR_00`. Drafting the task is authorized; **running UXR-01 requires the verified UXR-00 report/readiness handoff plus separate owner execution authorization**. This is the stricter dependency in the current project handoff. Older wording in §3D about sketching while UXR-00 runs means preliminary ideation only, **not** permission to execute, sign off, or mark either task DONE.
+- UXR-01 output requires a side-by-side A/B comparison and explicit owner selection; UXR-02 and UXR-02A remain separate, later approval gates. The existing nine-group evidence limitations, including G3/G4/G7 without direct screenshot, remain in force until updated by UXR-00 evidence.
+- **UXR-12 — Proposed Redesign Implementation Planning:** assessed as a potentially useful **post-UXR-11** implementation-planning phase for scoped coding work packages, worktree ownership, dependency waves, integrations and release gates. **Not approved, not in the established UXR-00–11 roadmap and not authorized for execution or new features.** UXR-11 signs off the design; a future UXR-12 would only structure the subsequent implementation program after separate owner approval.
 
 The independent feature briefs UXR-03 through UXR-09 can proceed in parallel **after** UXR-02 and UXR-02A fix the shared component, navigation and density contracts. Source implementation should later be assigned to independent worker worktrees by non-overlapping files; one integration owner controls AppShell, design tokens and shared primitives. No agent changes generated DTOs, API schemas, SQLite, consent rules or release tooling solely for a visual task.
 
