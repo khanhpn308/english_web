@@ -2,7 +2,7 @@
 
 **Task ID:** `T056`  
 **Title:** Reproducible Windows package và shortcut  
-**Status:** `TODO`  
+**Status:** `DONE (CODING_ONLY)` — `FINAL_VERIFICATION_DEFERRED`  
 **Goal:** Build/install app local Windows với packaged Python/static frontend và shortcut launcher.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -46,6 +46,19 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 - No Electron/Tauri/server DB. Select minimal Windows packaging official tool once exact runtime known; dependency version/installer scripts reviewed, resulting artifact checksum. No signing cert fabricated; no distribution/upload at planning. Installer must preserve existing data and user Markdown on uninstall/update, runtime keys excluded.
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
+
+## Owner code-first integration checkpoint — 2026-10-12
+
+- Source merged to `main`: PR #25, merge `4df8084b3f6fa7afeed91881016f0fcd1fd37e39`.
+- Implementation: Pinned PyInstaller onedir builder, SHA-256 manifest verification, per-user Inno Setup source, synthetic tests and install runbook; no Windows binary built.
+- **Executed checks:** NONE in this GitHub-only session. Do not interpret
+  `DONE (CODING_ONLY)` as runnable/Windows, security or release PASS.
+- Restore/package operator checks, source-history guarantees under real crashes,
+  platform `uvloop`/`tzdata` lockfile correction, and integrated acceptance
+  remain pending where applicable. The acceptance checkboxes below are
+  deliberately unchanged.
+- Owner policy precedence: code-first merged implementation may be marked
+  `DONE (CODING_ONLY)`; final verification separately decides release readiness.
 
 ## Acceptance criteria
 
