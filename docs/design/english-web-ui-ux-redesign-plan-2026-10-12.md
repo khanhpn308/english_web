@@ -317,7 +317,7 @@ full 9-group audit or release tests as completed.
 
 ## 5. Design-only work plan and task boundaries
 
-These are **proposed UXR IDs**, NOT canonical application T IDs. Do not add to `tasks/todo.md` or dispatch workers until the owner approves the scope and design direction.
+These are **proposed UXR IDs**, NOT canonical application T IDs. **The owner has authorized autonomous research execution for UXR-00 only** (2026-10-12); the actionable task contract is [UXR-00 — Astra-led autonomous visual audit](../../tasks/uxr-00-autonomous-visual-audit.md). Other design phases, code changes and owner design-direction sign-off remain separate approvals. Do not add UXR IDs to the canonical `tasks/todo.md`.
 
 | Work package | Depends on | Output | Relevant owner files to read (no edits yet) |
 |---|---|---|---|
