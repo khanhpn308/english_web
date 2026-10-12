@@ -134,6 +134,107 @@ Luyện tập:    Kiểm tra | Bài tập theo sách (future)
 Hệ thống:     Trạng thái | Quyền AI (trong Trạng thái)
 ```
 
+## 3C. Required redesign scope: UI layout simplification & information density
+
+**Owner evidence, 2026-10-12:** two screenshots of the currently rendered Dashboard
+from local browser `127.0.0.1` at desktop width show a long sequence of large
+cards and a full scroll needed to reveal the empty-state call-to-action footer.
+The screenshot review is **VISUAL EVIDENCE**, distinct from earlier static-code
+observations. Captures are present in the owner conversation; not copied into
+GitHub (avoid bundling personal desktop captures into the repository).
+
+**Observed in these screenshots:**
+- Oversized metric cards relative to data shown, especially when learning
+  history is empty; vertical whitespace creates excessive scrolling.
+- A repeated zero-data/unknown message occurs in individual metric cards
+  *and* the lower-page global empty state. Do not conflate genuine zero
+  due cards with unknown streak or unavailable accuracy.
+- Multiple repeated routes/actions such as Review and Create Quiz compete
+  across cards and the footer.
+- Important 'what should I learn next' action is not the dominant visual
+  focal point; fine-print diagnostic explanations are highly visible.
+- Top navigation and content header consume space without creating a strong
+  information hierarchy. These observations apply to the supplied Dashboard,
+  **not** to all nine screens without equivalent evidence.
+
+### UXR-02A — Layout Simplification & Information Density (new, P0 design gate)
+
+**Scope:** a mandatory cross-screen IA/layout specification between UXR-02
+(shared shell/tokens) and UXR-03–09 (individual screen redesigns). The owner
+must approve a compact Dashboard desktop/mobile wireframe as a representative
+layout before feature design work proceeds.
+
+1. **One primary action per screen.** Secondary actions live in a contextual
+   menu or clear secondary placement; navigation shortcuts can exist but should
+   not be repeated as equally prominent primary CTAs inside every metric.
+2. **Two-level information hierarchy.** First view shows the screen purpose,
+   next action and key metrics; explanatory/technical content is in named
+   expandable sections, tooltips or detailed views. Keep all information
+   accessible, and never hide safety/privacy-critical warnings.
+3. **Content-driven card sizing.** No oversized metric cards or artificial
+   equal heights when content is tiny. Use a dense `MetricTile` or
+   `StatSummary` composition with restrained padding instead of default
+   full-height cards for every value; retain accessible labels.
+4. **Deduplicated empty state.** When the *entire learning history* is empty,
+   show one main onboarding/empty-state CTA with a compact summary of the
+   available zero/unknown metrics. For mixed-data situations, use **local
+   contextual empties** (and do not erase valid data from unrelated cards).
+5. **Semantic correctness.** Keep `0`, `— / no attempts`,
+   `UNKNOWN`, and `DEGRADED` distinguishable. A minimized layout never
+   implies that unknown streak is zero, optional AI feedback is final,
+   unacknowledged save completed, or offline bridge down disables local study.
+6. **Progressive disclosure.** Main Search shows common search fields;
+   advanced filters remain reachable and visible when active. The Status
+   screen shows user-facing readiness before diagnostics. Save/Edit shows
+   a human-oriented success before optional receipt IDs.
+7. **Responsive density.** Wide desktop: grouped KPIs, scan-friendly content;
+   narrow screens: single column, keyboard focus remains visible, control
+   hit targets and text remain accessible at 320px / effective 200% zoom.
+8. **Reusable composition, not copy-paste.** Use official shadcn/ui
+   Card, Badge, Accordion, Tabs, Separator, Skeleton, Progress, Button,
+   Alert and Sidebar where appropriate; create one app-level metric
+   composition, no nine unrelated card styles.
+9. **Design-level targets (proposals, not audited facts):**
+   - On a typical 1366×768 CSS-pixel desktop viewport at 100% zoom,
+     the Dashboard's page heading, primary action and top-level due/streak
+     summary should be visible without scrolling, subject to browser
+     viewport chrome; don't force fixed pixel heights to game the target.
+   - User can identify the next learning action within **one visual scan**
+     (measured in owner walk-through, not asserted from a mockup).
+   - Duplicate 'no history' paragraphs should not appear throughout
+     the same initial dashboard state.
+   - At 320px and 200% zoom, required actions remain reachable and no
+     ordinary content overflows horizontally.
+10. **Do not optimize only for density.** Readability, long Vietnamese strings,
+    quiz question text, writing answer input areas, verification labels,
+    consent disclosures and error recovery have higher priority than
+    shrinking cards.
+
+### Proposed Dashboard composition (design mockup only)
+
+```text
+[App Sidebar] | Tổng quan                 [Local status] [...]
+              | Hôm nay nên học gì?      [Ôn tập ngay]
+              | [Thẻ đến hạn 0] [Streak —] [Quiz hôm nay —]
+              |
+              | Hoạt động học tập
+              | [ Flashcard | MCQ | Cloze | Writing ] (summary rows/tabs)
+              |
+              | First run only: một empty/onboarding section,
+              | không lặp nội dung 'chưa có dữ liệu' trong mọi card.
+```
+
+When no cards are due, the single primary CTA may switch to Lookup or
+Create Quiz according to **authoritative local data and user goal**, not
+inferred personalized recommendations. All existing dashboard metrics must
+remain reachable with documented meaning.
+
+**Workflow dependencies:** UXR-00 captures the screenshots/state matrix;
+UXR-01 selects direction; **UXR-02 → UXR-02A** fixes shell, density
+and component contracts; UXR-03–09 then design their feature screens;
+UXR-10 checks against a 9-screen content-density matrix. Do not
+treat redesign as a mandate for unsafe algorithm/API/data mutations.
+
 ## 4. Nine screen-level design briefs
 
 ### UXR-G1 — AppShell / Sidebar / Navigation [P0, platform-wide]
@@ -181,7 +282,7 @@ Hệ thống:     Trạng thái | Quyền AI (trong Trạng thái)
 
 ### UXR-G9 — Dashboard [P1]
 **Keep:** authoritative due count, streak definition, separate flashcard/MCQ/Cloze/writing stats, null/unknown distinctions, refresh triggers.
-**Propose:** hero 'Hôm nay nên học gì?' deriving CTAs only from valid local data, due-card and streak glance metrics, second-row detailed learning breakdown, purposeful empty state with Lookup/Review/Quiz links.
+**Propose:** hero 'Hôm nay nên học gì?' deriving one primary CTA only from valid local data, compact due-card/streak glance metrics with truthful 0/unknown distinctions, progressive-disclosure detailed result breakdown, and exactly one top-level onboarding empty state when every learning-history metric is empty. Do not force equal card heights or duplicate empty-state explanations and CTAs.
 **States:** first-run zero data, ready, storage busy, stale/invalid response, null streak, incomplete results; no invented performance trends or analytics.
 
 ## 5. Design-only work plan and task boundaries
@@ -193,14 +294,15 @@ These are **proposed UXR IDs**, NOT canonical application T IDs. Do not add to `
 | UXR-00 Evidence capture and journey inventory | None | Browser screenshot/state matrix and source-to-journey trace; status 'unverified' where Windows startup blocked | app shell, existing E2E fixtures, ui-architecture |
 | UXR-01 Design direction approval | UXR-00 / static baseline | Two side-by-side layout directions, owner decision | CSS tokens, shell, design docs |
 | UXR-02 Foundation and AppShell spec | UXR-01 | Navigation wireframes, feature-group slots, official shadcn component selection and reuse/upgrade policy, token proposal, responsive rules | AppShell.tsx, shell.css, index.css, components/ui; future-learning-content-architecture; shadcn-ui-component-strategy |
-| UXR-03 Lookup/Search/Detail spec | UXR-02 | Wireframes/interaction states for G2/G3 | features/lookup, features/search |
-| UXR-04 Save/Edit spec | UXR-02 | Draft/save/error/conflict wireframes for G4 | SavePreview.tsx, EditWordForm.tsx |
-| UXR-05 Review spec | UXR-02 | Reveal/rating/progress wireframes for G5 | ReviewPage.tsx, Flashcard.tsx |
-| UXR-06 Quiz Builder/Runner spec | UXR-02 | Setup/progress/autosave/failure wireframes for G6 | QuizBuilder.tsx, QuizRunner.tsx, QuestionRenderer.tsx |
-| UXR-07 Results/Feedback spec | UXR-02 | Scoring/splitting/feedback history wireframes for G7 | QuizResult.tsx, FeedbackPanel.tsx |
-| UXR-08 Status/Consent/Errors spec | UXR-02 | State taxonomy and diagnostics disclosure for G8 | StatusPage.tsx, AiConsentGate.tsx, RecoveryPanel.tsx |
-| UXR-09 Dashboard spec | UXR-02 | Daily-workflow and statistics wireframes for G9 | DashboardPage.tsx |
-| UXR-10 Cross-screen design QA | UXR-03–09 | Component-state matrix, responsive/keyboard/accessibility review, UX consistency report | all nine groups |
+| UXR-02A Layout simplification and density | UXR-02 | Cross-screen content hierarchy, CTA deduplication, compact metric patterns, Dashboard first-run wireframes, responsive-density checklist | DashboardPage.tsx, AppShell.tsx, official shadcn component strategy |
+| UXR-03 Lookup/Search/Detail spec | UXR-02A | Wireframes/interaction states for G2/G3, with density and progressive disclosure contract | features/lookup, features/search |
+| UXR-04 Save/Edit spec | UXR-02A | Draft/save/error/conflict wireframes for G4 | SavePreview.tsx, EditWordForm.tsx |
+| UXR-05 Review spec | UXR-02A | Reveal/rating/progress wireframes for G5 | ReviewPage.tsx, Flashcard.tsx |
+| UXR-06 Quiz Builder/Runner spec | UXR-02A | Setup/progress/autosave/failure wireframes for G6 | QuizBuilder.tsx, QuizRunner.tsx, QuestionRenderer.tsx |
+| UXR-07 Results/Feedback spec | UXR-02A | Scoring/splitting/feedback history wireframes for G7 | QuizResult.tsx, FeedbackPanel.tsx |
+| UXR-08 Status/Consent/Errors spec | UXR-02A | State taxonomy and diagnostics disclosure for G8 | StatusPage.tsx, AiConsentGate.tsx, RecoveryPanel.tsx |
+| UXR-09 Dashboard spec | UXR-02A | Daily-workflow and statistics wireframes for G9 | DashboardPage.tsx |
+| UXR-10 Cross-screen design QA | UXR-03–09 | Component-state and information-density matrix, responsive/keyboard/accessibility review, action/empty-state deduplication and UX consistency report | all nine groups; UXR-02A criteria |
 | UXR-11 Owner sign-off and implementation handoff | UXR-10 | Approved screens, mapping to scoped coding tasks, file ownership and merge order | design artifacts only |
 
 The independent feature briefs UXR-03 through UXR-09 can proceed in parallel **after** UXR-02 fixes the shared contract. Source implementation should later be assigned to independent worker worktrees by non-overlapping files; one integration owner controls AppShell, design tokens and shared primitives. No agent changes generated DTOs, API schemas, SQLite, consent rules or release tooling solely for a visual task.
@@ -219,6 +321,7 @@ Use an evidence register: `screen + state + viewport + screenshot link + observe
 4. Design specifies keyboard tab order, focus for overlay/route, visible focus, contrast checks and reflow through 320px/200% zoom.
 5. Navigation and core learning tasks require no invented product surfaces (account, backup, settings, paid provider). Technical metadata stays available to operators without crowding primary learning content.
 6. Design handoff maps each new component to presentational-only ownership and explicit acceptance scenarios. **No source implementation begins before owner sign-off.**
+7. Every screen includes a content-density and action-hierarchy review against UXR-02A; the provided real Dashboard screenshots anchor the first visual comparison. Explicitly avoid duplicated full-page empty states and oversized no-data cards.
 
 ### Release gates deferred until after approved UI implementation
 
@@ -234,5 +337,6 @@ WCAG 2.2 AA evidence (contrast 4.5:1 normal text, 3:1 large text/non-text UI as 
 - **D6:** Confirm desired visual reference examples/screenshots from the owner. Current repository source does not include an approved screenshot target in this research record.
 - **D7:** For the future Library, define first import format and reading needs (manual metadata, PDF/EPUB assets or external references), book exercise type support and completion criteria. These are architecture decisions, NOT v1 redesign blockers; see the linked future-learning-content document.
 - **D8:** The official shadcn component library is selected as the design-system source. Confirm individual additions (especially Sidebar and large interaction primitives) via representative wireframes and a scoped CLI diff before implementation; no automatic overwrite.
+- **D9:** Approve cross-screen UXR-02A simplification: compact KPI composition, one primary CTA, deduplicated empty state, contextual advanced details. Exact dashboard layout still requires owner sign-off.
 
 **Current outcome:** Source audit and design direction proposals prepared; static code observations supported, runtime visual assessment pending. No app code changed, no acceptance gates executed, no tasks added to the canonical checklist.
