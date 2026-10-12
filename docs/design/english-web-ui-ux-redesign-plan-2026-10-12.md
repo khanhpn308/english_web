@@ -235,6 +235,33 @@ and component contracts; UXR-03–09 then design their feature screens;
 UXR-10 checks against a 9-screen content-density matrix. Do not
 treat redesign as a mandate for unsafe algorithm/API/data mutations.
 
+## 3D. UXR-00 screenshot evidence update — batch #2 (2026-10-12)
+
+**Evidence received:** eight desktop screenshots uploaded by the owner in this conversation:
+five Status/Consent segments, one Lookup idle screen, one Review empty
+queue and one Quiz Builder form. Source anchors, finding IDs VIS-001–011,
+design severity and proposed shadcn compositions are documented in
+[UXR-00 visual audit — 8-screen capture batch](ui-visual-audit-2026-10-12-batch2.md).
+
+Earlier Dashboard screenshots remain part of UXR-02A evidence. Distinguish
+**number of screenshots** from **number of requested feature groups**:
+5/9 groups now have at least one direct desktop capture (including Dashboard);
+4 groups still lack direct screenshots (Search/Word Detail, Save/Edit,
+Quiz Results/Writing Feedback, and the missing parts of other combined
+screens). Every captured group remains partial for unshown interaction
+states and responsive viewports.
+
+Top visual findings: Status places alarms/technical diagnostics ahead of
+quick permission and local-readiness access; Review repeats the empty
+queue message in two Cards; Lookup's idle composer uses a disproportionately
+large container; Quiz Builder has inconsistent form/header alignment and
+does not summarize selected counts. **These are layout/redesign
+observations, not verified functional failures.**
+
+UXR-00 remains `IN_PROGRESS`, not `DONE`. Wireframe work for
+UXR-01/02/02A can proceed now using the observed screens; do not report
+full 9-group audit or release tests as completed.
+
 ## 4. Nine screen-level design briefs
 
 ### UXR-G1 — AppShell / Sidebar / Navigation [P0, platform-wide]
@@ -309,7 +336,9 @@ The independent feature briefs UXR-03 through UXR-09 can proceed in parallel **a
 
 ## 6. Required visual evidence before claiming an actual UI problem
 
-For each screen collect viewport/zoom screenshots at 320 / 768 / 1024 / 1440 CSS px, light/dark where supported, plus empty/loading/success/error/unknown state. Use synthetic learning data and fake bridge; do not enter real credentials or import personal study records.
+For each screen collect viewport/zoom screenshots at 320 / 768 / 1024 / 1440 CSS px, light/dark where supported, plus empty/loading/success/error/unknown state.
+
+**Evidence ledger:** User-supplied desktop screenshots from 2026-10-12 cover Dashboard (earlier batch) and partial Status, Lookup, Review and Quiz Builder states (batch #2). See [audit report](ui-visual-audit-2026-10-12-batch2.md). Further screenshots/screens are still needed; the image widths are file pixels, not verified CSS viewport widths. Use synthetic learning data and fake bridge; do not enter real credentials or import personal study records.
 
 Use an evidence register: `screen + state + viewport + screenshot link + observed issue + user impact + severity + source anchor + proposal + owner decision`. A visual defect remains `PENDING_VISUAL_VERIFICATION` until actually observed. Source-driven issues can still be accepted as redesign opportunities without being misreported as observed bugs.
 
