@@ -180,6 +180,19 @@ Share:
 
 If approval is missing, hand off **no finalized direction**; leave UXR-02 blocked. UXR-11 later owns final cross-screen design sign-off and implementation handoff; this preliminary choice is not coding authorization.
 
+## 11A. Owner's mandatory image-preview and Impeccable requirement (2026-10-12)
+
+**Authoritative cross-task protocol:** [Owner-visible UI images, installed Impeccable usage and official-only shadcn components](../docs/design/uxr-visual-approval-impeccable-protocol-2026-10-12.md).
+
+This contract supplements, and takes precedence over a text-only reading of, sections 4/6/7:
+
+- **Visuals are obligatory:** Direction A and B must each have genuinely composed **full-screen PNG/WebP UI mockups**, not just Markdown, scoring tables, HTML source, rough ASCII wireframes or textual rationale. Show Dashboard, vocabulary Lookup/Search/Detail, focused Review/Quiz and Status/Consent; desktop and mobile screens for **both** directions in equivalent scenarios. A browser-rendered static design mockup is acceptable, clearly labeled `DESIGN_MOCKUP`, not `CURRENT_APP_CAPTURE`.
+- **Owner decision packet:** readable inline before/after and A/B comparison/contact sheet plus separate links to full-resolution screen images; labels for target/state/viewport/theme/version and any simulated data. UXR-01 design direction remains `OWNER_VISUAL_APPROVAL_PENDING` until owner actually sees screenshots and explicitly selects direction/version.
+- **Impeccable mandatory on execution:** local Astra/coordinator and **each design worker** resolve the **already-installed** Impeccable skill, read installed `SKILL.md`, run its actual `context` launcher once/session, use appropriate `shape`/concept/`critique` guidance and record `skill path/version | invocation outcome | target | design impact | evidence`. Do not reinstall or equate this GitHub file edit with actually running the local skill; inaccessible skill = disclosed blocker, not PASS.
+- **Components:** proposed missing reusable components must map to official https://ui.shadcn.com/docs/components with **Radix-compatible** decisions; local Button/Card/Dialog reused. Research is documentation/visual mockups only, not CLI installation or application modifications.
+- **Additional UXR-01 Done gate:** screenshots must be viewable and the owner's actual visual version-selection recorded. No text-only owner sign-off, no inferred approval and no UXR-02 execution before the gate passes.
+- UXR-02 requires a **separate** image-based approval of the resulting AppShell; UXR-02A separately requires compact Dashboard/Review/Status visual sign-off; UXR-11 remains the final whole-system visual sign-off.
+
 ## 12. Future task proposal boundary (not adopted)
 
 UXR-12 — *Proposed Redesign Implementation Planning* is **NOT IN APPROVED ROADMAP**. It may be proposed after UXR-11 to translate signed-off designs into discrete coding tasks, implementation dependency DAG, worktree/file ownership, integration gates and sequencing. UXR-11 remains responsible for **approved design handoff**; UXR-12 would be responsible for **post-sign-off coding execution planning**, if separately authorized. This UXR-01 file neither approves nor creates UXR-12.
