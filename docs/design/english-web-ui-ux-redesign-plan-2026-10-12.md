@@ -60,6 +60,31 @@ Potential maintenance concern, not a measured usability defect: some components 
 
 Nested word-form detail/edit and quiz attempt/result remain same-origin routes with clear breadcrumbs/back links, not new sidebar destinations. Do not add Accounts, generic Settings, cloud sync, backup or credentials pages outside the approved v1 routes. Header can show current page, local readiness summary and a link to consent; labels must not claim a bridge outage disables local features.
 
+## 3B. Owner component-source decision: official shadcn/ui
+
+**New owner choice, 2026-10-12:** Use existing, official shadcn/ui components from
+https://ui.shadcn.com/docs/components and install/upgrade via the established
+Vite project's documented workflow at https://ui.shadcn.com/docs/installation.
+This is a preferred **implementation/component policy**, not approval to
+install, upgrade or replace app code in this design phase.
+
+Technical baseline is **SOURCE-CONFIRMED**: root `components.json` has
+`new-york` style, `lucide` icons, semantic CSS variables and aliases to
+`frontend/src/components/ui`; React/Vite/Tailwind 4, Button/Card/Dialog
+and Radix Dialog are already installed. Reuse and extend, **do not
+reinitialize Vite/shadcn, blanket-replace CSS or overwrite existing components**.
+
+Use the [official component mapping and upgrade-safe adoption policy](shadcn-ui-component-strategy-2026-10-12.md)
+as a hard design handoff reference for UXR-02–11. It maps official Sidebar,
+Breadcrumb, Accordion, Data Table, Date Picker, Alert, Progress, Chart etc.
+to the nine screens and future Library/Book modules; requires Radix-consistent
+choices, source-controlled canonical primitives, scoped CLI review/diffs
+and human design sign-off. Component source changes are NOT auto-updated
+by shadcn releases.
+
+This narrows implementation choices but does **not** predetermine color
+palette, component density, book feature scope, or the visual mockup to approve.
+
 ## 3A. Approved future-growth requirement: books, exercises, tags and per-book progress
 
 **New owner requirement, 2026-10-12:** the application must eventually support
@@ -167,7 +192,7 @@ These are **proposed UXR IDs**, NOT canonical application T IDs. Do not add to `
 |---|---|---|---|
 | UXR-00 Evidence capture and journey inventory | None | Browser screenshot/state matrix and source-to-journey trace; status 'unverified' where Windows startup blocked | app shell, existing E2E fixtures, ui-architecture |
 | UXR-01 Design direction approval | UXR-00 / static baseline | Two side-by-side layout directions, owner decision | CSS tokens, shell, design docs |
-| UXR-02 Foundation and AppShell spec | UXR-01 | Navigation wireframes, future-ready feature group slots (hidden until shipped), token proposal, responsive rules, components | AppShell.tsx, shell.css, index.css, components/ui; future-learning-content-architecture |
+| UXR-02 Foundation and AppShell spec | UXR-01 | Navigation wireframes, feature-group slots, official shadcn component selection and reuse/upgrade policy, token proposal, responsive rules | AppShell.tsx, shell.css, index.css, components/ui; future-learning-content-architecture; shadcn-ui-component-strategy |
 | UXR-03 Lookup/Search/Detail spec | UXR-02 | Wireframes/interaction states for G2/G3 | features/lookup, features/search |
 | UXR-04 Save/Edit spec | UXR-02 | Draft/save/error/conflict wireframes for G4 | SavePreview.tsx, EditWordForm.tsx |
 | UXR-05 Review spec | UXR-02 | Reveal/rating/progress wireframes for G5 | ReviewPage.tsx, Flashcard.tsx |
@@ -208,5 +233,6 @@ WCAG 2.2 AA evidence (contrast 4.5:1 normal text, 3:1 large text/non-text UI as 
 - **D5:** Quiz Runner: all questions on one page (existing flow) versus one-at-a-time navigation; do not decide without mapping autosave/focus/accessibility and owner approval.
 - **D6:** Confirm desired visual reference examples/screenshots from the owner. Current repository source does not include an approved screenshot target in this research record.
 - **D7:** For the future Library, define first import format and reading needs (manual metadata, PDF/EPUB assets or external references), book exercise type support and completion criteria. These are architecture decisions, NOT v1 redesign blockers; see the linked future-learning-content document.
+- **D8:** The official shadcn component library is selected as the design-system source. Confirm individual additions (especially Sidebar and large interaction primitives) via representative wireframes and a scoped CLI diff before implementation; no automatic overwrite.
 
 **Current outcome:** Source audit and design direction proposals prepared; static code observations supported, runtime visual assessment pending. No app code changed, no acceptance gates executed, no tasks added to the canonical checklist.
