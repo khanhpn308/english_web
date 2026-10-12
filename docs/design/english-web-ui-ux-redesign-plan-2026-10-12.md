@@ -1,0 +1,162 @@
+# English Web — UI/UX source assessment and redesign proposal
+
+**Date:** 2026-10-12 (Asia/Ho_Chi_Minh)
+**Repository:** khanhpn308/english_web
+**Source baseline:** `67659eea35202706e0f18e4db9c722b02921cbd0` on `main`
+**Status:** `RESEARCH / DESIGN PROPOSAL ONLY — OWNER DESIGN APPROVAL PENDING`
+**Scope:** Nine requested UI groups; no source code, API, schema, route, dependency, token, test or release changes authorized.
+**Release policy:** Packaging source T056 already merged coding-only; defer the actual Windows build until redesign implementation and final integrated verification.
+
+## 1. Evidence standard and limitations
+
+The observations marked **SOURCE-CONFIRMED** follow directly from the checked-in React/CSS and repo architecture. **PROPOSAL** identifies an unapproved design choice. **PENDING VISUAL VERIFICATION** identifies claims that cannot be proved by a source read.
+
+This study did **not** launch a browser, render screens, obtain screenshots, run Playwright, measure contrast, complete usability sessions, execute tests, connect an AI provider or observe Windows runtime. Do not infer visual quality, accessibility conformance or runtime correctness from code structure.
+
+Authoritative product UI constraints:
+- `docs/ui-architecture.md` — routes, J1–J7 journeys, consent, typed DTOs, keyboard/focus and state retention.
+- `docs/adr/0004-v1-product-policy-and-operational-baseline.md` — offline study, SRS, quiz, consent, 320px/reflow/WCAG 2.2 AA and performance targets.
+- `frontend/src/index.css` — existing light/dark semantic tokens. `frontend/src/app/shell.css` — document baseline.
+- `frontend/src/components/ui/button.tsx`, `card.tsx` and `dialog.tsx` — current local shadcn/ui-like canonical primitives.
+- Official component reference (research only): https://ui.shadcn.com/docs/components/radix/sidebar ; accessibility standard https://www.w3.org/TR/wcag/
+
+## 2. Baseline source observations
+
+| ID | SOURCE-CONFIRMED observation | Evidence | Design implication (PROPOSAL) |
+|---|---|---|---|
+| B01 | AppShell defines nine routes; six primary links are in a responsive horizontal header navigation, not a persistent sidebar. It provides skip link, route focus, a live region and ErrorBoundary. | `frontend/src/app/AppShell.tsx` | Redesign IA with desktop sidebar and mobile drawer; retain routes, focus, browser history and bootstrap semantics. |
+| B02 | Core semantic light/dark colors in `index.css` are predominantly achromatic; Card and Button primitives exist, while many feature inputs use bespoke class strings. | `frontend/src/index.css`, `frontend/src/components/ui/*`, `SearchPage.tsx` | Propose a restrained branded accent and harmonize input/state primitives. Do not discard canonical shadcn foundation or install unapproved registry components. |
+| B03 | Lookup has distinct input, preview, audio and save states; AI request and unknown-operation reconciliation are explicitly guarded. | `frontend/src/features/lookup/LookupPage.tsx`, `LookupResult.tsx`, `SavePreview.tsx` | Introduce stronger term/result/save hierarchy without merging preview and durable save into one misleading action. |
+| B04 | Search has Vietnamese meaning, lemma, POS, verification, date, source, sort, order and page-size controls in one form. Results and filters are URL-driven. | `frontend/src/features/search/SearchPage.tsx` | Primary search row + collapsible advanced filters, visible active chips and explicit clear/reset semantics. Preserve query URL/cursor behavior. |
+| B05 | Detail presents source status, revision, card state, meanings, examples, IPA and Cambridge; Edit offers repeating bilingual fields and conflict/recovery. | `frontend/src/features/search/WordDetail.tsx`, `EditWordForm.tsx` | Reader-friendly dictionary detail and grouped editor; keep source provenance, ETag conflicts, draft preservation and safe Cambridge-link policy. |
+| B06 | Review exposes date-filtered queue, reveal action and four `AGAIN/HARD/GOOD/EASY` ratings. | `frontend/src/features/review/ReviewPage.tsx`, `Flashcard.tsx` | Focus-oriented study mode with visible progress and clear localized rating labels. No false flip/rating acknowledgments. |
+| B07 | Quiz builder has date and three numeric type counts; runner displays question cards, autosave, pending/unknown/conflict and submit states. | `frontend/src/features/quiz/QuizBuilder.tsx`, `QuizRunner.tsx`, `QuestionRenderer.tsx` | Improve configuration preview, sticky-but-safe progress and question navigation. Do not lose any in-progress answers or alter rubric behavior. |
+| B08 | Quiz Result has objective scores, question-by-question review, writing self-score, optional AI feedback and SRS notice. | `frontend/src/features/quiz/QuizResult.tsx` | Summary-first results, grouped answer analysis, separately labeled optional feedback and SRS evidence. Keep objective/self/AI scores distinct. |
+| B09 | Dashboard presents due count, streak, flashcard self-rating, MCQ, Cloze and writing self-score in multiple Cards. | `frontend/src/features/dashboard/DashboardPage.tsx` | Show the next meaningful learning action above detailed statistics; never infer missing streak/accuracy as zero. |
+| B10 | Status contains alerts, readiness, storage/SQLite, search, AI bridge, offline capabilities, local metrics, runbooks and separate AI-consent controls. | `frontend/src/features/status/StatusPage.tsx`, `AiConsentPanel.tsx` | Separate plain-language readiness/consent from expandable diagnostics; never hide failures or make grant look like generic settings. |
+| B11 | Shared recovery handles typed errors; AI consent is a deliberate Radix/shadcn dialog with server-policy read and explicit accept/decline/revoke. | `frontend/src/shared/errors/RecoveryPanel.tsx`, `AiConsentGate.tsx` | Consistent status surfaces, recovery hierarchy and focus behavior without changing consent semantics. |
+
+Potential maintenance concern, not a measured usability defect: some components co-locate a large volume of state and presentation (e.g. DashboardPage and StatusPage), increasing the risk of unscoped visual rewrites. Preserve state machines by isolating presentational components rather than replacing business logic during redesign.
+
+## 3. Candidate product direction — not approved
+
+**Direction A (recommended): Calm Academic Workspace.** A desktop learning workspace with an opt-in collapsible left sidebar, quiet neutral surfaces, one restrained accent, strong typography and dedicated study/quiz focus states. This fits the local-first single-user app and its content-heavy learning surfaces.
+
+**Direction B (comparison alternative): Compact Study Console.** More information per screen, compact cards, persistent small navigation and advanced data prominence. Better for expert/operators, less suitable as the default learning interface.
+
+### Design tokens for mockup exploration — proposed, not present implementation
+
+- Palette candidate: background `#F8FAFC`, surface `#FFFFFF`, body text `#0F172A`, primary `#315BE8`; success teal, amber warning and red danger in explicitly named status roles. Confirm color and contrast in both light/dark before acceptance.
+- Type: keep available OS/system fonts by default for Windows offline reliability; hierarchy proposal display 28–32px, section title 20–24px, body 16px, metadata 13–14px. Avoid tiny labels as sole critical meaning.
+- Spacing scale `4 / 8 / 12 / 16 / 24 / 32 / 48` px; interactive targets design toward 44px, while WCAG 2.2 AA requirements remain authoritative.
+- Content widths: main workspace up to ~1180px; focused learning text ~720–800px; sidebar candidate ~240–264px on wide screens. No fixed sidebar on narrow screens.
+- Responsive study: wide screen sidebar + content; tablet collapsible sidebar; narrow 320px reflow with off-canvas drawer. No lateral scrolling for regular text, including at 200% zoom.
+- Preserve semantic shadcn CSS variables, local composition and the repo's no-Preflight Tailwind baseline. Do not paste external UI blocks without dependency/license/security review.
+
+### Proposed information architecture
+
+`Learning` group: Dashboard (`/`), Lookup (`/lookup`), Search (`/search`), Review (`/review`), Quiz (`/quiz/new`).
+`System` group: Status and explicit AI data-sharing permissions (`/status#ai-consent`).
+
+Nested word-form detail/edit and quiz attempt/result remain same-origin routes with clear breadcrumbs/back links, not new sidebar destinations. Do not add Accounts, generic Settings, cloud sync, backup or credentials pages outside the approved v1 routes. Header can show current page, local readiness summary and a link to consent; labels must not claim a bridge outage disables local features.
+
+## 4. Nine screen-level design briefs
+
+### UXR-G1 — AppShell / Sidebar / Navigation [P0, platform-wide]
+**Keep:** route table and active semantics, history, skip link, focus announcer, ErrorBoundary and consent deep link.
+**Propose:** expandable sidebar with clear active item, group labels, icon+text, keyboard-accessible collapse; top content header with breadcrumb and concise local status; off-canvas mobile navigation with focus management; default content padding responsive.
+**Acceptance mockups:** 320/768/1024/1440 widths; collapsed, expanded, selected, deep route, 404, keyboard-only and long Vietnamese label. Focus cannot disappear behind drawer/sticky UI.
+**Risk boundary:** no change to bootstrap, routes, active quiz attempt ID, or session and link navigation semantics.
+
+### UXR-G2 — Lookup & AI Preview [P1]
+**Keep:** term validation; AI policy/consent gate; noncommittal preview, field-verification provenance; native local audio; operation reconciliation.
+**Propose:** prominent search input and CTA, phase-specific progress with copy that distinguishes local readiness versus provider availability; result as dictionary-style word family with bilingual tabs/sections (not hidden important fields); single clear 'Lưu vào ôn tập' transition; compact source/provider meta in expandable details.
+**Design variants:** idle/empty, checking policy, awaiting consent, AI unavailable, loading/canceled-wait, result with missing fields, success, UNKNOWN reconciliation.
+
+### UXR-G3 — Search & Word Detail [P1]
+**Keep:** all supported filters, URL query/cursor, verification and source labels, safe external link and independent detail route.
+**Propose:** main Vietnamese/lemma search row; expandable filters grid and removable active filter chips; results as scannable lemma / meaning / source / verification rows; detail heading with IPA/audio status, bilingual meanings and examples, provenance/reading mode.
+**State coverage:** browse/no query, zero results, slow local API, expired cursor, stale source, detail missing, return-to-search preservation.
+
+### UXR-G4 — Save & Edit Vocabulary [P1]
+**Keep:** all-preview forms, note-date choice, existing-source preconditions, revision/ETag conflict, unknown mutation reconciliation, draft inputs.
+**Propose:** 2-step preview→save treatment; save summary with human-readable action result and collapsible technical receipt; add/remove meaning/example editor with stable labels, field grouping and visible unsaved indicators.
+**State coverage:** dirty draft, validation failure, missing source, revision conflict, unknown result, acknowledged success, keyboard deletion.
+**Never:** silent overwrite, repeat a mutation solely to clear a spinner, truncate or drop unknown Markdown fields.
+
+### UXR-G5 — Review Flashcards [P1]
+**Keep:** due/date logic, four SRS ratings, source restrictions and durable acknowledgment before moving to the next card.
+**Propose:** focused centered card, conspicuous reveal interaction, progress position and remaining count when the server can authoritatively provide it; translated rating controls with optional Again/Hard/Good/Easy annotation; shortcut hints only if accessible and separately approved.
+**States:** hidden/revealed, pending rating, empty queue, source-invalid card, uncertain operation, successful next-card transition.
+
+### UXR-G6 — Quiz Builder & Runner [P1]
+**Keep:** quiz date, MCQ/Cloze/Writing counts, immutable snapshot, writing rubric/self-score, 500ms autosave semantics, per-question conflict/reconcile, protected submit.
+**Propose:** builder as one brief setup card with counts summary and source sufficiency guidance; runner with attempt heading, progress/question navigator, per-question saved indicator, clear submit prerequisites, sticky actions only when they never obscure focus.
+**States:** insufficient material, provider failure, created attempt, in-progress/dirty/saving/acknowledged, UNKNOWN, REVISION_CONFLICT, submission reconciliation.
+**Never:** present an unacknowledged draft as saved; reveal hidden answer keys pre-submit; override self-score from AI feedback.
+
+### UXR-G7 — Quiz Results & Writing Feedback [P2]
+**Keep:** objective MCQ/Cloze accuracy, writing self-score, answer explanations, terminal submission identity, SRS handoff and optional consent-gated AI feedback/history.
+**Propose:** result summary top; grouped collapsible per-question explanation; separate panel 'Phản hồi AI (tùy chọn)' with request history; explicit distinction objective grading vs learner self-rating vs advisory AI commentary.
+**States:** never submitted, loading, submitted no result, valid result, optional feedback disabled/failed/ready, historical source deleted.
+
+### UXR-G8 — Status / Consent / Error States [P1]
+**Keep:** honest readiness and alerts, no-secret telemetry, consent view/grant/revoke, stale/unknown and fail-closed states, runbook link, error recovery actions.
+**Propose:** two levels on same `/status` route: user-facing 'Học cục bộ / AI tùy chọn / cần xử lý' summary first, technical diagnostics under explicit disclosure; consent remains a dedicated high-visibility section and dialog; reusable callouts for loading/empty/warning/failure/unknown.
+**Never:** let green UI imply missing evidence is PASS, infer provider approval, hide DEGRADED or automatically re-grant/retry AI.
+
+### UXR-G9 — Dashboard [P1]
+**Keep:** authoritative due count, streak definition, separate flashcard/MCQ/Cloze/writing stats, null/unknown distinctions, refresh triggers.
+**Propose:** hero 'Hôm nay nên học gì?' deriving CTAs only from valid local data, due-card and streak glance metrics, second-row detailed learning breakdown, purposeful empty state with Lookup/Review/Quiz links.
+**States:** first-run zero data, ready, storage busy, stale/invalid response, null streak, incomplete results; no invented performance trends or analytics.
+
+## 5. Design-only work plan and task boundaries
+
+These are **proposed UXR IDs**, NOT canonical application T IDs. Do not add to `tasks/todo.md` or dispatch workers until the owner approves the scope and design direction.
+
+| Work package | Depends on | Output | Relevant owner files to read (no edits yet) |
+|---|---|---|---|
+| UXR-00 Evidence capture and journey inventory | None | Browser screenshot/state matrix and source-to-journey trace; status 'unverified' where Windows startup blocked | app shell, existing E2E fixtures, ui-architecture |
+| UXR-01 Design direction approval | UXR-00 / static baseline | Two side-by-side layout directions, owner decision | CSS tokens, shell, design docs |
+| UXR-02 Foundation and AppShell spec | UXR-01 | Navigation wireframes, token proposal, responsive rules, components | AppShell.tsx, shell.css, index.css, components/ui |
+| UXR-03 Lookup/Search/Detail spec | UXR-02 | Wireframes/interaction states for G2/G3 | features/lookup, features/search |
+| UXR-04 Save/Edit spec | UXR-02 | Draft/save/error/conflict wireframes for G4 | SavePreview.tsx, EditWordForm.tsx |
+| UXR-05 Review spec | UXR-02 | Reveal/rating/progress wireframes for G5 | ReviewPage.tsx, Flashcard.tsx |
+| UXR-06 Quiz Builder/Runner spec | UXR-02 | Setup/progress/autosave/failure wireframes for G6 | QuizBuilder.tsx, QuizRunner.tsx, QuestionRenderer.tsx |
+| UXR-07 Results/Feedback spec | UXR-02 | Scoring/splitting/feedback history wireframes for G7 | QuizResult.tsx, FeedbackPanel.tsx |
+| UXR-08 Status/Consent/Errors spec | UXR-02 | State taxonomy and diagnostics disclosure for G8 | StatusPage.tsx, AiConsentGate.tsx, RecoveryPanel.tsx |
+| UXR-09 Dashboard spec | UXR-02 | Daily-workflow and statistics wireframes for G9 | DashboardPage.tsx |
+| UXR-10 Cross-screen design QA | UXR-03–09 | Component-state matrix, responsive/keyboard/accessibility review, UX consistency report | all nine groups |
+| UXR-11 Owner sign-off and implementation handoff | UXR-10 | Approved screens, mapping to scoped coding tasks, file ownership and merge order | design artifacts only |
+
+The independent feature briefs UXR-03 through UXR-09 can proceed in parallel **after** UXR-02 fixes the shared contract. Source implementation should later be assigned to independent worker worktrees by non-overlapping files; one integration owner controls AppShell, design tokens and shared primitives. No agent changes generated DTOs, API schemas, SQLite, consent rules or release tooling solely for a visual task.
+
+## 6. Required visual evidence before claiming an actual UI problem
+
+For each screen collect viewport/zoom screenshots at 320 / 768 / 1024 / 1440 CSS px, light/dark where supported, plus empty/loading/success/error/unknown state. Use synthetic learning data and fake bridge; do not enter real credentials or import personal study records.
+
+Use an evidence register: `screen + state + viewport + screenshot link + observed issue + user impact + severity + source anchor + proposal + owner decision`. A visual defect remains `PENDING_VISUAL_VERIFICATION` until actually observed. Source-driven issues can still be accepted as redesign opportunities without being misreported as observed bugs.
+
+### Design acceptance contract (pre-code)
+
+1. Owner chooses design direction, nav/sidebar behavior, palette, density, and approves representative desktop/mobile wireframes before coding.
+2. Every requested screen has loading, empty, content, recoverable, terminal and uncertainty treatments appropriate to its APIs; controls have explicit label/primary action.
+3. The nine-route map, URL query persistence, source verification badges, SRS semantics, quiz terminal/result rules and consent fail-closed behavior are preserved.
+4. Design specifies keyboard tab order, focus for overlay/route, visible focus, contrast checks and reflow through 320px/200% zoom.
+5. Navigation and core learning tasks require no invented product surfaces (account, backup, settings, paid provider). Technical metadata stays available to operators without crowding primary learning content.
+6. Design handoff maps each new component to presentational-only ownership and explicit acceptance scenarios. **No source implementation begins before owner sign-off.**
+
+### Release gates deferred until after approved UI implementation
+
+WCAG 2.2 AA evidence (contrast 4.5:1 normal text, 3:1 large text/non-text UI as applicable, 1.4.10 reflow and 2.4.11 focus visibility), keyboard journeys, visual screenshots, Playwright/Vitest, backend regression, Windows launcher smoke, packaging and dependency remediation remain separate executable checks. No security/a11y/performance PASS is claimed here.
+
+## 7. Decisions awaiting owner
+
+- **D1:** Adopt Direction A (Calm Academic Workspace), or Direction B (Compact Study Console)?
+- **D2:** Desktop sidebar expanded by default or collapsed by default? Recommended expanded when width allows; mobile drawer.
+- **D3:** Accent exploration: restrained indigo (recommended) or teal; light default with supported dark theme.
+- **D4:** Content density: comfortable study default (recommended) versus compact list mode optional.
+- **D5:** Quiz Runner: all questions on one page (existing flow) versus one-at-a-time navigation; do not decide without mapping autosave/focus/accessibility and owner approval.
+- **D6:** Confirm desired visual reference examples/screenshots from the owner. Current repository source does not include an approved screenshot target in this research record.
+
+**Current outcome:** Source audit and design direction proposals prepared; static code observations supported, runtime visual assessment pending. No app code changed, no acceptance gates executed, no tasks added to the canonical checklist.
