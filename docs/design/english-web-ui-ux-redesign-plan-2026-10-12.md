@@ -157,12 +157,11 @@ GitHub (avoid bundling personal desktop captures into the repository).
   information hierarchy. These observations apply to the supplied Dashboard,
   **not** to all nine screens without equivalent evidence.
 
-### UXR-02A — Layout Simplification & Information Density (new, P0 design gate)
+### [UXR-02A — Layout Simplification & Information Density](../../tasks/uxr-02a-layout-simplification-information-density.md) (P0 design gate; task specification PREPARED, execution NOT STARTED)
 
 **Scope:** a mandatory cross-screen IA/layout specification between UXR-02
 (shared shell/tokens) and UXR-03–09 (individual screen redesigns). The owner
-must approve a compact Dashboard desktop/mobile wireframe as a representative
-layout before feature design work proceeds.
+must **view actual full-resolution Dashboard desktop/mobile UI mockup images and approve the selected composition/version**, not merely a text wireframe, before feature design work proceeds. See the [UXR-02A task contract](../../tasks/uxr-02a-layout-simplification-information-density.md) and the [visual approval / Impeccable protocol](uxr-visual-approval-impeccable-protocol-2026-10-12.md).
 
 1. **One primary action per screen.** Secondary actions live in a contextual
    menu or clear secondary placement; navigation shortcuts can exist but should
@@ -324,7 +323,7 @@ These are **proposed UXR IDs**, NOT canonical application T IDs. **The owner has
 | UXR-00 Evidence capture and journey inventory | None | Browser screenshot/state matrix and source-to-journey trace; status 'unverified' where Windows startup blocked | app shell, existing E2E fixtures, ui-architecture |
 | [UXR-01 Design direction approval](../../tasks/uxr-01-design-direction-owner-approval.md) — **task specification PREPARED; execution NOT STARTED** | **UXR-00 final handoff** | Two comparable design directions, scored comparison and explicit owner decision | CSS tokens, shell, design docs |
 | [UXR-02 Foundation and AppShell spec](../../tasks/uxr-02-design-foundation-appshell-specification.md) — **task PREPARED, execution NOT STARTED** | **UXR-01 owner visual direction sign-off** | **Full-resolution image mockups of AppShell desktop/tablet/mobile + owner visual approval**, navigation IA, official shadcn adoption matrix, token proposal, accessible shell rules and actual Impeccable use evidence | AppShell.tsx, shell.css, index.css, components/ui; future-learning-content-architecture; shadcn-ui-component-strategy; visual-approval-impeccable-protocol |
-| UXR-02A Layout simplification and density | UXR-02 | Cross-screen content hierarchy, CTA deduplication, compact metric patterns, Dashboard first-run wireframes, responsive-density checklist | DashboardPage.tsx, AppShell.tsx, official shadcn component strategy |
+| [UXR-02A Layout simplification and density](../../tasks/uxr-02a-layout-simplification-information-density.md) — **task PREPARED, execution BLOCKED until UXR-02 visual sign-off** | **UXR-02 owner-approved foundation images** | G1–G9 compact hierarchy, CTA/empty-state deduplication, truthful 0/null/UNKNOWN, **Dashboard first-run/populated + Review empty + Status/Consent desktop/mobile full-resolution images and separate owner visual approval**, Impeccable proof and official shadcn mapping | DashboardPage.tsx, ReviewPage.tsx, StatusPage.tsx; UXR-02 frozen shell; visual-approval-impeccable-protocol |
 | UXR-03 Lookup/Search/Detail spec | UXR-02A | Wireframes/interaction states for G2/G3, with density and progressive disclosure contract | features/lookup, features/search |
 | UXR-04 Save/Edit spec | UXR-02A | Draft/save/error/conflict wireframes for G4 | SavePreview.tsx, EditWordForm.tsx |
 | UXR-05 Review spec | UXR-02A | Reveal/rating/progress wireframes for G5 | ReviewPage.tsx, Flashcard.tsx |
@@ -341,7 +340,7 @@ These are **proposed UXR IDs**, NOT canonical application T IDs. **The owner has
 
 - **UXR-01 visual direction gate:** A/B options include high-fidelity **actual owner-viewable image screenshots** of the proposed Dashboard, vocabulary, Review/Quiz and Status/Consent screens; owner explicitly selects A/B/hybrid based on images. No screenshots = no approved direction.
 - **UXR-02 shell gate:** full-resolution **visual mockups** show desktop expanded/collapsed Sidebar, tablet, mobile menu open/closed, a real composed Dashboard/feature page, light/dark, long labels, local-versus-AI status and 320px adaptation. Owner must view and approve the AppShell design version **before UXR-02 is DONE**.
-- **UXR-02A density gate:** mandatory **rendered screenshots** for first-run + populated compact Dashboard, compact Review empty state and Status/Consent information hierarchy on desktop/mobile; owner approval required before UXR-03–09 begin.
+- **UXR-02A density gate:** mandatory **rendered screenshots** for first-run + populated compact Dashboard, compact Review empty state and Status/Consent information hierarchy on desktop/mobile; owner approval required before UXR-03–09 begin. The [UXR-02A task specification](../../tasks/uxr-02a-layout-simplification-information-density.md) fixes a **minimum 12 primary full-resolution frames plus 2 alternative Dashboard frames**, semantic case matrix, 320px stress treatment, authentic baseline provenance and signed variant/version decision. These are **future execution deliverables**, not screenshots created by this documentation commit.
 - **UXR-03–09 per-feature gate:** each worker produces screen/state screenshots, including meaningful populated content and empty/error/unknown states where relevant. Owner must approve each feature's visible design, even if seven worker design tasks can run in parallel.
 - **UXR-10 / UXR-11:** nine-group contact-sheet and linked full-resolution gallery, responsive/semantic UI comparisons and recorded owner decisions. UXR-11 requires the **final explicit owner sign-off of all nine screen groups** before any code implementation handoff is treated as approved.
 - **Impeccable required, not optional:** the owner reports [Impeccable](https://github.com/pbakaus/impeccable) is **already installed locally**. Do not install/update it. The actual Codex coordinator **and every worker** must discover their installed skill, read its SKILL.md, execute its `context` launcher once per session and apply relevant `shape/critique/layout/distill/adapt` guidance per the installed references, recording **evidence of actual invocation and its effect on the UI proposal**. GitHub-only authoring of the task docs is **not** a claim to have invoked the owner's Windows skill. If it is not accessible to a worker, disclose `IMPECCABLE_NOT_ACCESSIBLE` and block false approval.
@@ -350,6 +349,8 @@ These are **proposed UXR IDs**, NOT canonical application T IDs. **The owner has
 - **Scope:** visuals are **isolated design assets/prototypes only** until owner authorizes implementation; no code, API, database, packaging, main merge or acceptance-PASS claims from a visual mockup.
 
 ### UXR task-card preparation — 2026-10-12
+
+- **[UXR-02A prepared task card](../../tasks/uxr-02a-layout-simplification-information-density.md):** `PREPARED / NOT STARTED / BLOCKED_BY_UXR_02_VISUAL_SIGNOFF`. Owner approved drafting the task file; UXR-02A execution/owner visual approval/UXR-03–09 dispatch remain separately gated. This documentation change does not generate mockup screenshots, execute the locally installed Impeccable skill or add shadcn components.
 
 - **[UXR-01 task specification](../../tasks/uxr-01-design-direction-owner-approval.md):** `PREPARED / NOT STARTED / BLOCKED_BY_UXR_00`. Drafting the task is authorized; **running UXR-01 requires the verified UXR-00 report/readiness handoff plus separate owner execution authorization**. This is the stricter dependency in the current project handoff. Older wording in §3D about sketching while UXR-00 runs means preliminary ideation only, **not** permission to execute, sign off, or mark either task DONE.
 - UXR-01 output requires a side-by-side A/B comparison and explicit owner selection; UXR-02 and UXR-02A remain separate, later approval gates. The existing nine-group evidence limitations, including G3/G4/G7 without direct screenshot, remain in force until updated by UXR-00 evidence.
