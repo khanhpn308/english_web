@@ -114,7 +114,7 @@ Design the **full, all-forms** save decision:
 - **Before/proposed pairs only with genuine current captures.** G4 currently lacks owner screenshots; label `SOURCE_CONFIRMED / NO DIRECT BASELINE CAPTURE` until UXR-00 provides actual visual evidence, not fabricated before screenshots.
 - Readable contact sheet plus individual owner-accessible **full-resolution image links** under `docs/design/uxr-04/assets/` or approved persistent storage, with `task|scenario|state|viewport|theme|version|synthetic provenance|date|path`. A local temp directory or source JSX is insufficient.
 
-**Owner decision record:** `version | selected candidate | full image links | confirmed user-visible safeguards | concerns | APPPROVE/REQUEST_CHANGES/REJECT/PENDING | owner response/date`. Treat `APPROVE` (correct spelling) as the only acceptable positive status. Until owner actually views images and explicitly approves the specific version, UXR-04 stays `OWNER_VISUAL_APPROVAL_PENDING`, not DONE. Changed image set requires reapproval. Later UXR-11 still requires integrated nine-group final sign-off.
+**Owner decision record:** `version | selected candidate | full image links | confirmed user-visible safeguards | concerns | APPROVE/REQUEST_CHANGES/REJECT/PENDING | owner response/date`. Only an explicit owner response with `APPROVE` is a positive decision. Until owner actually views images and explicitly approves the specific version, UXR-04 stays `OWNER_VISUAL_APPROVAL_PENDING`, not DONE. Changed image set requires reapproval. Later UXR-11 still requires integrated nine-group final sign-off.
 
 ## 6. Mandatory use of the already-installed Impeccable skill
 
