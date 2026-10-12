@@ -245,10 +245,13 @@ design severity and proposed shadcn compositions are documented in
 
 Earlier Dashboard screenshots remain part of UXR-02A evidence. Distinguish
 **number of screenshots** from **number of requested feature groups**:
-5/9 groups now have at least one direct desktop capture (including Dashboard);
-4 groups still lack direct screenshots (Search/Word Detail, Save/Edit,
-Quiz Results/Writing Feedback, and the missing parts of other combined
-screens). Every captured group remains partial for unshown interaction
+6/9 groups now have at least one desktop visual reference when counting
+shared AppShell/header (G1) and earlier Dashboard (G9). The three groups
+with no direct screenshot are G3 Search/Word Detail, G4 Save/Edit,
+and G7 Quiz Results/Writing Feedback. Other combined groups are only
+partially captured: Lookup without AI Preview, Review without a
+revealed flashcard, Quiz Builder without Runner and Status without
+consent dialog/error recovery. Every captured group remains partial for unshown interaction
 states and responsive viewports.
 
 Top visual findings: Status places alarms/technical diagnostics ahead of
