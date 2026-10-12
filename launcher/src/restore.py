@@ -14,7 +14,8 @@ from backend.app.adapters.source_files import SourceFileAdapter
 from backend.app.application.operations import OperationLedger
 from backend.app.application.source_recovery import SourceRecovery
 from backend.app.application.source_write import SourceWriteCoordinator
-from backend.app.markdown_sync.parser import parse_markdown, serialize_document
+from backend.app.markdown_sync.parser import parse_markdown
+from backend.app.markdown_sync.serializer import serialize_document
 from backend.app.persistence.database import Database
 from backend.app.vocabulary.models import SourceFile
 
@@ -42,6 +43,14 @@ def _check_entry(path: Path) -> os.stat_result:
     ):
         raise RestoreRefused("UNSAFE_BACKUP_ENTRY")
     return info
+
+
+def _safe_root(path: Path) -> Path:
+    """Reject symlink/reparse aliases at every existing root component."""
+    absolute = path.absolute()
+    for entry in (*reversed(absolute.parents), absolute):
+        _check_entry(entry)
+    return absolute.resolve(strict=True)
 
 
 def _inventory(root: Path, *, markdown: bool = False) -> dict[str, str]:
@@ -191,8 +200,8 @@ def restore_staging(
     """Create a new, non-destructive staging copy from operator-managed backups."""
     if db_name != "vocabulary.sqlite3":
         raise RestoreRefused("UNSUPPORTED_DATABASE_NAME")
-    data = backup_data.resolve(strict=True)
-    markdown = backup_markdown.resolve(strict=True)
+    data = _safe_root(backup_data)
+    markdown = _safe_root(backup_markdown)
     stage = staging_root.absolute()
     if stage.exists() or stage.is_symlink():
         raise RestoreRefused("STAGING_ALREADY_EXISTS")
@@ -203,7 +212,7 @@ def restore_staging(
         or data.is_relative_to(stage) or markdown.is_relative_to(stage)
     ):
         raise RestoreRefused("OVERLAPPING_ROOTS")
-    _check_entry(staging_root.parent.resolve(strict=True))
+    _safe_root(stage.parent)
     baseline_data = _inventory(data)
     baseline_md = _inventory(markdown, markdown=True)
     if db_name not in baseline_data:
