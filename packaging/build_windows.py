@@ -176,9 +176,9 @@ def build() -> dict[str, object]:
         "--hidden-import", "_tkinter", "--collect-submodules", "tkinter",
         "--collect-submodules", "backend.migrations.versions",
         "--collect-data", "tzdata",
-        "--add-data", f"{static}{os.pathsep}frontend/dist",
-        "--add-data", f"{REPO / 'backend' / 'migrations'}{os.pathsep}backend/migrations",
-        "--add-data", f"{REPO / 'alembic.ini'}{os.pathsep}.",
+        "--add-data", f"{static}:frontend/dist",
+        "--add-data", f"{REPO / 'backend' / 'migrations'}:backend/migrations",
+        "--add-data", f"{REPO / 'alembic.ini'}:.",
         str(REPO / "launcher" / "src" / "main.py"),
     ]
     subprocess.run(cmd, cwd=REPO, check=True, timeout=900)
