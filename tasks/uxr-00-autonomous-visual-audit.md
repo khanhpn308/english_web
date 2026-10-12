@@ -2,7 +2,7 @@
 
 **Track:** UI/UX redesign research, separate from canonical implementation T00x tasks  
 **Execution approval:** APPROVED FOR RESEARCH/AUDIT PREPARATION (owner, 2026-10-12)  
-**Implementation status:** NOT STARTED / NOT VERIFIED; mark `DONE` only after the evidence/coverage acceptance below  
+**Autonomous execution status:** NOT YET VERIFIED; earlier screenshot-based UXR-00 research is PARTIAL / IN_PROGRESS. Mark `DONE` only after the evidence/coverage acceptance below.  
 **Target workspace:** an isolated local `vocabularies-smoke` checkout of English Web; record the actual checkout commit SHA  
 **Owner requirement:** Fastest reliable completion. **No token budget, tool-call cap, or monetary/quota optimization.** Resource discipline is intended **only** to reduce wall-clock latency, duplicated work and stalled loops.
 
