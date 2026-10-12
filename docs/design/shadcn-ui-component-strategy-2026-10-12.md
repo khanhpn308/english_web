@@ -82,11 +82,7 @@ Use the **official shadcn/ui registry by default**. External blocks, community r
 
 1. **Check the official docs for the actual component and primitive flavor** (Radix for this repo) before editing. Favor the existing local component source if it meets screen needs.
 2. **Do not independently copy component implementations** from articles or inline web screenshots; use the audited official component registry/CLI or scoped review of source.
-3. **Never call ```sh
-shadcn add --all
-shadcn add --overwrite
-shadcn init --force
-```** in an unattended worker job. An overwrite of a specific component may be allowed only as a separately reviewed upgrade with preserved local diffs.
+3. **Never run `shadcn add --all`, `shadcn add --overwrite`, or `shadcn init --force` in unattended worker jobs.** An overwrite of a specific component may be allowed only as a separately reviewed upgrade with preserved local diffs.
 4. Use `components.json` + CSS semantic variables as the source of truth; avoid feature-specific hard-coded color palettes or multiple CSS resets. Light/dark and offline browser font behavior must be deliberately supported.
 5. Use shadcn components for widgets, not as a license to replace semantic landmarks (`main`, `nav`, `header`), native focus handling or accessible labels. WCAG 2.2 AA target still needs measured tests and manual keyboard/screen-reader review.
 6. Prefer shadcn `Field` and consistent Form feedback patterns over nine bespoke raw `<input>` style strings. Preserve typed DTO validation and user-entered drafts.
