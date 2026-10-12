@@ -305,7 +305,7 @@ These are **proposed UXR IDs**, NOT canonical application T IDs. Do not add to `
 | UXR-10 Cross-screen design QA | UXR-03–09 | Component-state and information-density matrix, responsive/keyboard/accessibility review, action/empty-state deduplication and UX consistency report | all nine groups; UXR-02A criteria |
 | UXR-11 Owner sign-off and implementation handoff | UXR-10 | Approved screens, mapping to scoped coding tasks, file ownership and merge order | design artifacts only |
 
-The independent feature briefs UXR-03 through UXR-09 can proceed in parallel **after** UXR-02 fixes the shared contract. Source implementation should later be assigned to independent worker worktrees by non-overlapping files; one integration owner controls AppShell, design tokens and shared primitives. No agent changes generated DTOs, API schemas, SQLite, consent rules or release tooling solely for a visual task.
+The independent feature briefs UXR-03 through UXR-09 can proceed in parallel **after** UXR-02 and UXR-02A fix the shared component, navigation and density contracts. Source implementation should later be assigned to independent worker worktrees by non-overlapping files; one integration owner controls AppShell, design tokens and shared primitives. No agent changes generated DTOs, API schemas, SQLite, consent rules or release tooling solely for a visual task.
 
 ## 6. Required visual evidence before claiming an actual UI problem
 
