@@ -2,16 +2,16 @@
 from __future__ import annotations
 
 import json
+import runpy
 from pathlib import Path
 
 import pytest
 
-from packaging.build_windows import (
-    PackageRefused,
-    inventory,
-    verify,
-    write_manifest,
-)
+_api = runpy.run_path(str(Path(__file__).resolve().parents[1] / "build_windows.py"))
+PackageRefused = _api["PackageRefused"]
+inventory = _api["inventory"]
+verify = _api["verify"]
+write_manifest = _api["write_manifest"]
 
 
 def _fixture(tmp_path: Path) -> Path:
