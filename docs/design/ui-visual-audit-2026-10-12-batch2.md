@@ -23,7 +23,7 @@ User provided 8 images through the ChatGPT conversation. They are **not checked 
 
 Earlier owner-provided Dashboard screenshots dated `20261012-064645` and `20261012-064657` support a **separate** finding for overlarge/duplicated cards in Dashboard and are summarized in the parent UXR-02A plan. They are **not** silently counted as part of the eight new captures.
 
-Important: Captures do not prove backend faults, AI connectivity, focus handling, React responsiveness, form submission, contrast pass or mobile accessibility. The capture sequence covers **four feature surfaces** (Status/Consent, Lookup, Review, Quiz Builder), not eight different feature groups. Shared AppShell/header is visible across multiple captures.
+Important: Captures do not prove backend faults, AI connectivity, focus handling, React responsiveness, form submission, contrast pass or mobile accessibility. The capture sequence covers **four feature surfaces** (Status/Consent, Lookup, Review, Quiz Builder), not eight different feature groups. Shared AppShell/header is visible across multiple captures and separately supplies G1 layout evidence. The earlier Dashboard supplies G9.
 
 ## 2. Prioritized findings with source anchors
 
@@ -65,7 +65,7 @@ Priority refers to **redesign urgency**; not a measured incident, security failu
 | G8 Status, Consent & Error States | **PARTIAL (rich Status coverage)** | 5 Status captures, lower Consent Card; need consent dialog and actual RecoveryPanel/error state, responsive |
 | G9 Dashboard | **PARTIAL (earlier captures)** | Earlier empty-data Dashboard and repeated cards; need populated learning state, responsive widths |
 
-Totals: **5/9 groups have at least one screenshot** including previously captured Dashboard; **4/9 groups have no direct screen screenshot**; no claim of complete visual audit for any group. Multiple images of the same group do not count as distinct groups.
+Totals: **6/9 groups have at least one visual reference** when the shared AppShell visible across screenshots is counted separately (G1, G2, G5, G6, G8, G9); **3/9 groups have no direct screenshot** (G3 Search/Detail, G4 Save/Edit, G7 Results/Feedback). Of the six referenced groups, G1 is a shared header/navigation view rather than its own dedicated screenshot, and G2/G5/G6/G8/G9 are partial states. No claim of complete visual audit for any group. Multiple screenshots of one group do not count as different groups.
 
 ## 4. UXR-02A refinement: screen-specific information density contract
 
