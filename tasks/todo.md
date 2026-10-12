@@ -64,14 +64,14 @@
 - [x] [T061](t061-alerts-runbooks.md): Local symptom alerts và runbook links — `DONE (CODING_ONLY)`; PR #21 merged (`24e916a`), source integration in Backend/Status API/UI and runbooks; `FINAL_VERIFICATION_DEFERRED` by owner. Search p95 remains `NO_DATA` (no fixture-qualified producer); OpenAPI/DTO pinned-tool regeneration and all executable verification pending.
 - [x] [T039](t039-launcher.md): Windows launcher single-instance/bootstrap — `DONE (CODING_ONLY)`; PR #20 merged (`9e2adfa`), Windows in-process launcher and session bootstrap source integrated; `FINAL_VERIFICATION_DEFERRED` by owner (Windows runtime/packaging pending).
 - [x] [T040](t040-first-run-recovery.md): Native first-run configuration và protected key store — `DONE (CODING_ONLY)`; PR #23 merged (`a5623be`), R1 DPAPI/provisioning and R2 launcher/backend wiring integrated; `FINAL_VERIFICATION_DEFERRED` by owner (Windows DPAPI/ACL, Tcl/Tk, startup, offline behavior and CP19 acceptance pending).
-- [ ] [T054](t054-restore-recovery-drill.md): Staging restore và migration recovery drill
+- [x] [T054](t054-restore-recovery-drill.md): Staging restore và migration recovery drill — `DONE (CODING_ONLY)`; PR #24 merged (`6ee481c`); staging-copy recovery implementation and synthetic probes integrated; runtime/security/Windows acceptance `FINAL_VERIFICATION_DEFERRED`.
 - [ ] [T041](t041-security-hardening.md): Browser/API/filesystem hardening evidence
 - [x] [T042](t042-performance-fixture.md): Deterministic100k search benchmark fixture
 - [x] [T065](t065-search-performance-evidence.md): Search browser timing trên100k fixture
 - [x] [T064](t064-ui-performance-harness.md): Local Lighthouse performance harness — `DONE (CODING_ONLY)`; PR #19 merged (`0fb3226`), runner and `benchmark:ui` command integrated; Lighthouse benchmark and `FINAL_VERIFICATION_DEFERRED` by owner.
 - [ ] [T043](t043-accessibility-evidence.md): WCAG 2.2 AA browser/manual evidence
 - [ ] [T055](t055-ai-content-evidence.md): Human-reviewed semantic fixture và optional AI smoke
-- [ ] [T056](t056-windows-package.md): Reproducible Windows package và shortcut
+- [x] [T056](t056-windows-package.md): Reproducible Windows package và shortcut — `DONE (CODING_ONLY)`; PR #25 merged (`4df8084`); PyInstaller packaging scripts, Inno Setup shortcut source and manifest probes integrated; no binary built; platform lockfile remediation and Windows/installer acceptance `FINAL_VERIFICATION_DEFERRED`.
 - [x] [T044](t044-release-contract-audit.md): Generated contract and cross-doc audit tooling — `DONE (CODING_ONLY)`; PR #22 merged (`4418434`), deterministic static checker and unexecuted implementation checkpoint integrated; `FINAL_VERIFICATION_DEFERRED` by owner (focused tests, actual audit, pinned generator comparison and CP22 acceptance pending).
 - [x] [T045](t045-git-release-hygiene.md): Git hooks, branch and commit hygiene — `DONE (CODING_ONLY)`; source commit `5a06042` already integrated into `main`; `FINAL_VERIFICATION_DEFERRED` by owner (hook, Windows and negative security checks pending).
 - [ ] [T057](t057-release-verification.md): Windows/offline release evidence matrix
