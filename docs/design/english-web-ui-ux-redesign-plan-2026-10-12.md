@@ -60,6 +60,55 @@ Potential maintenance concern, not a measured usability defect: some components 
 
 Nested word-form detail/edit and quiz attempt/result remain same-origin routes with clear breadcrumbs/back links, not new sidebar destinations. Do not add Accounts, generic Settings, cloud sync, backup or credentials pages outside the approved v1 routes. Header can show current page, local readiness summary and a link to consent; labels must not claim a bridge outage disables local features.
 
+## 3A. Approved future-growth requirement: books, exercises, tags and per-book progress
+
+**New owner requirement, 2026-10-12:** the application must eventually support
+a learning Library with books, exercises inside books, vocabulary occurrences
+linked to book/unit, per-book reading/completion progress, and multiple skill
+tags plus typed proficiency/exam targets (e.g. Writing, Speaking, IELTS target
+band, CEFR level). This is a **future extensibility requirement**, not an
+authorization to add v1 Library routes or to rewrite the current backend.
+
+Detailed, source-grounded proposal:
+[Future learning content architecture](future-learning-content-architecture-2026-10-12.md).
+
+**Consequences for this redesign:**
+
+- **Shell / UXR-G1 and UXR-02:** do not design a fixed six-item layout that
+  cannot grow. Define scalable navigation groupings: Learning, Vocabulary,
+  Practice, future Library/Progress, and System. Future entries are omitted
+  until actually implemented; do not ship placeholder routes.
+- **Word Detail and Save / UXR-G3–G4:** keep vocabulary canonical and allow
+  later contextual backlinks from a word to a book, chapter/unit and exercise.
+  Do not store a duplicate word per book.
+- **Review / UXR-G5:** independent SRS learning remains canonical. Later review
+  filters may select linked book vocabulary without creating a separate SRS
+  schedule per book.
+- **Quiz / UXR-G6–G7:** reserve a presentation concept of exercise origin and
+  separately versioned book exercises; do not change current `note_date`
+  generated-quiz contracts or immutable snapshots as part of UI work.
+- **Dashboard / UXR-G9:** leave room for additional book-progress widgets but
+  do not fold book completion into due-card/streak/quiz metrics.
+- **Metadata components:** use controlled multi-skill taxonomy; typed,
+  scale-aware IELTS bands and CEFR levels; many-to-many tags with filter chips.
+  Book-target proficiency is not measured learner proficiency.
+- **No early platform rewrite:** remain single-user, local-first FastAPI +
+  SQLite + React modular monolith. Future schema requires additive migrations,
+  record preservation and a separately approved ADR.
+- **UXR-10 review scenarios:** 0/100 books, long titles, many tags, mixed
+  skills, 30-unit table of contents, word shared among three books, changed
+  book edition, offline content and incomplete progress.
+
+The illustrative navigation model below represents **future capacity**, not
+approved current release pages:
+
+```text
+Học tập:      Tổng quan | Thư viện (future) | Tiến độ sách (future)
+Từ vựng:      Tra cứu | Kho từ | Ôn tập
+Luyện tập:    Kiểm tra | Bài tập theo sách (future)
+Hệ thống:     Trạng thái | Quyền AI (trong Trạng thái)
+```
+
 ## 4. Nine screen-level design briefs
 
 ### UXR-G1 — AppShell / Sidebar / Navigation [P0, platform-wide]
@@ -118,7 +167,7 @@ These are **proposed UXR IDs**, NOT canonical application T IDs. Do not add to `
 |---|---|---|---|
 | UXR-00 Evidence capture and journey inventory | None | Browser screenshot/state matrix and source-to-journey trace; status 'unverified' where Windows startup blocked | app shell, existing E2E fixtures, ui-architecture |
 | UXR-01 Design direction approval | UXR-00 / static baseline | Two side-by-side layout directions, owner decision | CSS tokens, shell, design docs |
-| UXR-02 Foundation and AppShell spec | UXR-01 | Navigation wireframes, token proposal, responsive rules, components | AppShell.tsx, shell.css, index.css, components/ui |
+| UXR-02 Foundation and AppShell spec | UXR-01 | Navigation wireframes, future-ready feature group slots (hidden until shipped), token proposal, responsive rules, components | AppShell.tsx, shell.css, index.css, components/ui; future-learning-content-architecture |
 | UXR-03 Lookup/Search/Detail spec | UXR-02 | Wireframes/interaction states for G2/G3 | features/lookup, features/search |
 | UXR-04 Save/Edit spec | UXR-02 | Draft/save/error/conflict wireframes for G4 | SavePreview.tsx, EditWordForm.tsx |
 | UXR-05 Review spec | UXR-02 | Reveal/rating/progress wireframes for G5 | ReviewPage.tsx, Flashcard.tsx |
@@ -158,5 +207,6 @@ WCAG 2.2 AA evidence (contrast 4.5:1 normal text, 3:1 large text/non-text UI as 
 - **D4:** Content density: comfortable study default (recommended) versus compact list mode optional.
 - **D5:** Quiz Runner: all questions on one page (existing flow) versus one-at-a-time navigation; do not decide without mapping autosave/focus/accessibility and owner approval.
 - **D6:** Confirm desired visual reference examples/screenshots from the owner. Current repository source does not include an approved screenshot target in this research record.
+- **D7:** For the future Library, define first import format and reading needs (manual metadata, PDF/EPUB assets or external references), book exercise type support and completion criteria. These are architecture decisions, NOT v1 redesign blockers; see the linked future-learning-content document.
 
 **Current outcome:** Source audit and design direction proposals prepared; static code observations supported, runtime visual assessment pending. No app code changed, no acceptance gates executed, no tasks added to the canonical checklist.
