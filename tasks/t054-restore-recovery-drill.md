@@ -2,7 +2,7 @@
 
 **Task ID:** `T054`  
 **Title:** Staging restore và migration recovery drill  
-**Status:** `TODO`  
+**Status:** `DONE (CODING_ONLY)` — `FINAL_VERIFICATION_DEFERRED`  
 **Goal:** Khôi phục bản copy lúc app dừng với migration/integrity/journal checks và nguyên vẹn learning history.  
 **Suggested model:** GPT-6 Astra  
 **Estimated scope:** Một phiên tập trung; tối đa 5 file viết tay trong danh sách. Nếu vượt khoảng 2 giờ hoặc phạm vi này, tách task trước khi làm tiếp.
@@ -46,6 +46,19 @@ Khi thêm endpoint, regenerate OpenAPI/DTO do T017 quản lý; không sửa gene
 - Operator recovery workflow only, no in-app backup feature. Preserve original root; restore copy into task-specific staging, validate then configured-root switch, no overwrite sole original. Consent/policy/ops/history in SQLite and all Markdown roots included. Automated fixtures only; real data test requires exact authorized copy.
 - Test behavior/error paths trước hoặc cùng implementation; source validity, privacy, correlation và operation receipts được kiểm tra ở boundary có liên quan.
 - Không chạy inference thật trong automated tests. Lệnh thiếu tool/runtime phải ghi `PENDING`, không báo PASS.
+
+## Owner code-first integration checkpoint — 2026-10-12
+
+- Source merged to `main`: PR #24, merge `6ee481cb5a6b9c8804f2799e603e2d193fbb72cc`.
+- Implementation: Restoration staging with migration, source journal reconciliation, history hashes, CLI and synthetic tests; no runtime execution.
+- **Executed checks:** NONE in this GitHub-only session. Do not interpret
+  `DONE (CODING_ONLY)` as runnable/Windows, security or release PASS.
+- Restore/package operator checks, source-history guarantees under real crashes,
+  platform `uvloop`/`tzdata` lockfile correction, and integrated acceptance
+  remain pending where applicable. The acceptance checkboxes below are
+  deliberately unchanged.
+- Owner policy precedence: code-first merged implementation may be marked
+  `DONE (CODING_ONLY)`; final verification separately decides release readiness.
 
 ## Acceptance criteria
 
