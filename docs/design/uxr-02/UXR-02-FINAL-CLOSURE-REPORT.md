@@ -51,8 +51,9 @@ These are design-contract outcomes. Applicable publication gates below must fini
 - Preflight: required directory/branch; HEAD matches base; no staged files, conflicts, merge/rebase/cherry-pick or index lock. No worker was delegated. Unrelated local files remain outside scope.
 - Unauthenticated fetch/remote check: origin branch at base SHA; local/remote divergence `0 0` before edits.
 - Initial mandatory security command: `python scripts/security_checks.py --repo . secrets`; exit 0. Actual report `htmlcov/security/gitleaks.json`: Gitleaks **8.30.1**, verdict **PASS**, findings `[]`. Scanner preserves working-tree/staged/history scopes. Final staged and post-commit results must be appended after execution.
-- Commit: PENDING.
-- Push and remote HEAD: PENDING. Previously exposed GitHub credential rotation/replacement must be confirmed before authenticated operations; no credential value is recorded.
+- Local scoped commit: `ebabd490dfab04e60db8135c31e81e1e27422ff5` (`docs(uxr-02): finalize approved AppShell R2 and heatmap design`).
+- Post-commit mandatory security command: `python scripts/security_checks.py --repo . secrets`; exit 0. Gitleaks 8.30.1 report remained PASS with zero findings after commit.
+- Push and remote HEAD: PENDING. Unauthenticated remote remained at `baa2a885d7e0dd8d99831d99c9ae23fc83625c8c`. Previously exposed GitHub credential rotation/replacement must be confirmed before authenticated operations; no credential value is recorded.
 - PR #26: metadata update PENDING; must remain OPEN/DRAFT/NOT_MERGED with unchanged base.
 
 No publication success is claimed from local files or a local commit alone. If credential/security/publication gates fail, final status is DESIGN_APPROVED_PUBLICATION_BLOCKED.
