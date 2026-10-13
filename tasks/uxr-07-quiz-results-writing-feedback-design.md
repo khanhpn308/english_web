@@ -55,7 +55,7 @@ The following are **requirements for later separately authorized local design ex
 Produce a state matrix `route | attempt.status | result | available source fields | primary/secondary action | focus/aria | warning or caveat | screenshot ID`:
 
 1. **Loading** attempt read: no fake answer cards or default 0%, provide valid skeleton and responsive header; distinguish delayed local API from AI outage.
-2. **Error** `QUIZ_RESTORE_REQUIRED`, `SESSION_*`, local API unavailable, mismatched/corrupt attempt: actionable re-read/launcher help, preserve historical data claims, never claim no attempt exists simply because GET failed.
+2. **Error** `QUIZ_RESTORE_REQUIRED`, `SESSION_*`, local service unreachable, mismatched/corrupt attempt: actionable re-read/launcher help, preserve historical data claims, never claim no attempt exists simply because GET failed.
 3. **IN_PROGRESS, result=null**: explicit “Bài chưa nộp”, saved draft count (`savedAnswerCount` server field), **Tiếp tục làm bài** route and no objective answer key/accuracy/terminal explanation in DOM, image or tooltip.
 4. **SUBMITTED with missing/inconsistent result**: recovery/restore warning and retry read, **not** an empty successful scorecard or “0 điểm.”
 5. **SUBMITTED with valid result**: date/time and revision from backend, one compact high-priority result summary, next useful CTA (e.g. review weak questions), return to Dashboard/new quiz optional and subordinate. Do not invent “final grade” across disparate assessment types.

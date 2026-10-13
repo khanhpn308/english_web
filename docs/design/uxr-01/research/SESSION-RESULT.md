@@ -1,0 +1,19 @@
+# UXR-01 session result
+
+Task UXR-01. Visual version v1.2. Direction B and D1/D2/D3/D4/D6/D8/D9 are **APPROVED** on 13/10/2026; D5 is deferred to UXR-06 and D7 is future/unapproved. Finalization status is **APPROVED_DESIGN / PUBLICATION_BLOCKED** because the mandatory Gitleaks 8.30.1 gate returned exit 1. The implementation boundary is preserved.
+
+- A and B each have 27 verified full-resolution PNG originals; three derived contact sheets; 21 unchanged canonical UXR-00 baseline capture copies.
+- UXR-00-R1 added exactly three synthetic current-app renders: submitted QuizResult, validated writing feedback and populated Dashboard. The comparison is recorded in [UXR-01-R1-EVIDENCE-DELTA](../UXR-01-R1-EVIDENCE-DELTA.md); no B v1.2 image was regenerated or replaced.
+- Six required owner packet documents exist, plus task-local changelog, provenance/research records, source HTML and render/package-check scripts.
+- Worktree: `C:/Users/khanh/projects/english-web-uxr01`. Branch: `work/uxr01-design`. Fork SHA: `aaf1629f5680da89c6117e42880565450439a6cc`. Audit SHA: `c2417ba6ff1db131fd3259faf67100fda6c3928b`.
+- Coordinator context: once, installed launcher, exit 0. Workers' actual outcomes and limits are in [Impeccable evidence](../UXR-01-IMPECCABLE-EVIDENCE.md). No final worker conformance claim is made.
+- Static renderer checks: 50 light-state renders, zero page-level horizontal overflow, zero script errors, zero oversized visible buttons. PNG checks: header/dimension/complete chunk/CRC/hash validation. These are task mockup checks, not application/WCAG/CI PASS.
+- Historical pre-finalization records report the earlier setup failure `SETUP_FAILED: gitleaks is unavailable`; that was resolved for this closure by installing the pinned executable through the verified Winget manifest for the official Gitleaks v8.30.1 release.
+- Finalization ran `GITLEAKS_BIN=<verified v8.30.1 executable> python scripts/security_checks.py --repo . secrets`. **Exit 1** with four redacted `generic-api-key` findings: working-tree and history entries in existing UXR-06 and UXR-07 task cards. Report: `htmlcov/security/gitleaks.json`. No suppression, ignore rule or policy change was used.
+- Finalization checks found 54/54 original A/B manifest hashes, all 21 baseline copies, all three contact-sheet entries, all three R1 screenshot hashes and the owner Dashboard reference hash/dimensions matched; `git diff --check` returned no whitespace errors. Affected images and the B contact sheet were inspected for obvious personal/sensitive content; this is not a substitute for the blocked security gate.
+- Commit SHA: **NONE**. Push status: **NOT_ATTEMPTED — secret scan returned exit 1**. The owner can review all local originals now. Publication requires resolving the existing findings and rerunning the same pinned gate.
+- `git ls-remote` verified that PR #26 and the research branch both point to `a1ae72d5bc5b4d396a45628030051a37b9c0c3c7`; no remote `work/uxr01-design` ref was returned. PR #26 was not edited or merged. A future working-branch push would not update that PR automatically; research-branch integration needs separate authorization.
+- Scope: final task changes under `docs/design/uxr-01/` only. Frontend/backend/DTOs/component configuration/locks/constraints/ADR/task-todo/shared changelog intentionally unchanged. Initial predecessor work in the original checkout is disclosed in the handoff; unrelated changes there were preserved.
+- Remaining evidence limits: current-app G7 transitions and persistence, mixed/null G9 coverage, production keyboard/zoom/contrast/persistence verification, detailed responsive IA and D5 Runner navigation. These do not become passed gates from static images.
+
+Next action is owner image review. UXR-02 has not started and requires an explicit later instruction.

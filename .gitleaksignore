@@ -3,3 +3,8 @@
 # Rule: generic-api-key; no broad rule or path exemption.
 frontend/src/features/lookup/SavePreview.tsx:generic-api-key:28
 a6b93aa19709b7c1a267d2999f70163d2f2f79df:frontend/src/features/lookup/SavePreview.tsx:generic-api-key:28
+
+# Owner-approved verified false positives in historical UXR task prose.
+# These exact fingerprints cover history only; current prose was rephrased.
+dd36090f3f403dfd38e038baa3bd662d8594de2e:tasks/uxr-06-quiz-builder-runner-design.md:generic-api-key:73
+76ed32de507c6e62335c0971a21e5ae62b424ae3:tasks/uxr-07-quiz-results-writing-feedback-design.md:generic-api-key:58

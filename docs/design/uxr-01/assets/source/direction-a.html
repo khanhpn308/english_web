@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>English Web — Direction A static design mockup</title>
+  <style>
+    :root {
+      --paper: #f7f6f2;
+      --paper-deep: #efeee9;
+      --surface: #ffffff;
+      --surface-soft: #fbfaf7;
+      --ink: #172038;
+      --muted: #667085;
+      --faint: #8992a7;
+      --line: #dfe2e8;
+      --line-soft: #ececf0;
+      --accent: #3f4c9b;
+      --accent-strong: #2f3d86;
+      --accent-soft: #e8eafa;
+      --teal: #257a72;
+      --teal-soft: #e0f0ed;
+      --amber: #9a641b;
+      --amber-soft: #f7edd7;
+      --danger: #a23f4c;
+      --danger-soft: #fae8eb;
+      --shadow: 0 10px 24px rgba(26, 34, 55, .07);
+      --radius: 14px;
+      --font-body: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+      --font-display: Cambria, "Times New Roman", serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-width: 320px; min-height: 100%; }
+    body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.5; }
+    body.dark {
+      --paper: #161923; --paper-deep: #1d2230; --surface: #232837; --surface-soft: #1c2130;
+      --ink: #f1f2f8; --muted: #b1b8c9; --faint: #8992a7; --line: #3b4254; --line-soft: #303748;
+      --accent: #aeb8ff; --accent-strong: #c5ccff; --accent-soft: #303964; --teal: #69c2b7;
+      --teal-soft: #233f42; --amber: #f2c77d; --amber-soft: #46351d; --danger: #f29aa4; --danger-soft: #482b34;
+      --shadow: 0 14px 30px rgba(0, 0, 0, .28);
+    }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    .frame { min-height: 100vh; display: flex; }
+    .sidebar { width: 238px; background: var(--surface); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 24px 15px 18px; flex: 0 0 auto; }
+    .brand { display: flex; align-items: center; gap: 11px; padding: 0 12px 23px; }
+    .brand-mark { width: 31px; height: 31px; border: 1.5px solid var(--accent); border-radius: 10px; display: grid; place-items: center; color: var(--accent); background: var(--accent-soft); }
+    .brand-mark svg { width: 17px; height: 17px; }
+    .brand-name { font-family: var(--font-display); font-size: 18px; letter-spacing: -.02em; }
+    .brand-sub { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; margin-top: 2px; }
+    .nav-group { margin: 0 0 19px; }
+    .nav-label { padding: 0 12px 8px; color: var(--faint); text-transform: uppercase; font-size: 10px; letter-spacing: .11em; font-weight: 700; }
+    .nav-item { display: flex; align-items: center; gap: 11px; min-height: 40px; padding: 8px 12px; border-radius: 10px; color: var(--muted); text-decoration: none; margin: 2px 0; }
+    .nav-item svg { width: 16px; height: 16px; stroke-width: 1.7; }
+    .nav-item.active { background: var(--accent-soft); color: var(--accent-strong); font-weight: 700; }
+    .dark .nav-item.active { color: var(--accent-strong); }
+    .side-note { margin-top: auto; padding: 15px 13px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 12px; }
+    .side-note strong { color: var(--ink); display: block; margin-bottom: 3px; font-size: 12px; }
+    .main { min-width: 0; flex: 1; padding: 0 34px 40px; }
+    .topbar { height: 70px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); gap: 18px; }
+    .crumbs { color: var(--muted); font-size: 12px; display: flex; gap: 7px; align-items: center; }
+    .crumbs strong { color: var(--ink); font-weight: 700; }
+    .top-actions { display: flex; align-items: center; gap: 12px; }
+    .status-link { display: inline-flex; align-items: center; gap: 7px; text-decoration: none; color: var(--muted); font-size: 12px; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); }
+    .avatar { width: 31px; height: 31px; border-radius: 50%; background: #d9d8ed; color: #31377a; display: grid; place-items: center; font-weight: 700; font-size: 12px; }
+    .provenance { max-width: 1180px; margin: 21px auto 0; border: 1px dashed var(--line); color: var(--muted); background: var(--surface-soft); border-radius: 9px; padding: 7px 11px; font-size: 10px; letter-spacing: .04em; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .provenance strong { color: var(--accent); font-weight: 700; }
+    .content { max-width: 1180px; margin: 0 auto; padding-top: 31px; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-family: var(--font-display); font-size: clamp(28px, 3.3vw, 44px); line-height: 1.08; letter-spacing: -.035em; font-weight: 500; }
+    h2 { font-family: var(--font-display); font-size: clamp(22px, 2.2vw, 30px); line-height: 1.14; letter-spacing: -.025em; font-weight: 500; }
+    h3 { font-size: 15px; line-height: 1.25; }
+    .lead { margin-top: 12px; color: var(--muted); max-width: 62ch; font-size: 15px; }
+    .section-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 16px; }
+    .section-head p { color: var(--muted); font-size: 12px; margin-top: 5px; }
+    .button { border: 1px solid transparent; border-radius: 9px; padding: 10px 15px; min-height: 42px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; }
+    .button.primary { background: var(--accent); color: white; box-shadow: 0 5px 12px rgba(63, 76, 155, .2); }
+    .button.secondary { background: var(--surface); border-color: var(--line); color: var(--ink); }
+    .button.ghost { background: transparent; color: var(--accent-strong); border-color: transparent; padding-inline: 7px; }
+    .button.small { min-height: 34px; padding: 7px 11px; font-size: 12px; }
+    .tag { font-size: 11px; border-radius: 999px; padding: 4px 8px; display: inline-flex; gap: 5px; align-items: center; white-space: nowrap; font-weight: 700; }
+    .tag.indigo { color: var(--accent-strong); background: var(--accent-soft); }
+    .tag.teal { color: var(--teal); background: var(--teal-soft); }
+    .tag.amber { color: var(--amber); background: var(--amber-soft); }
+    .tag.danger { color: var(--danger); background: var(--danger-soft); }
+    .grid { display: grid; gap: 18px; }
+    .grid.two { grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr); }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
+    .card.soft { background: var(--surface-soft); }
+    .card.elevated { box-shadow: var(--shadow); border-color: transparent; }
+    .card-title { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .muted { color: var(--muted); }
+    .faint { color: var(--faint); }
+    .sp-26 { margin-top: 26px; }
+    .sp-20 { margin-top: 20px; }
+    .sp-16 { margin-top: 16px; }
+    .metric { min-height: 111px; }
+    .metric-label { color: var(--muted); font-size: 12px; }
+    .metric-value { display: block; font-family: var(--font-display); font-size: 31px; line-height: 1; margin-top: 13px; }
+    .metric-note { font-size: 11px; color: var(--muted); margin-top: 10px; }
+    .metric-note.good { color: var(--teal); }
+    .empty-hero { padding: 35px 36px 33px; display: flex; align-items: center; justify-content: space-between; gap: 28px; }
+    .empty-copy { max-width: 55ch; }
+    .empty-copy h2 { margin-bottom: 11px; }
+    .empty-copy p { color: var(--muted); }
+    .quiet-ornament { width: 110px; height: 110px; border-radius: 44% 56% 51% 49%; background: var(--accent-soft); display: grid; place-items: center; color: var(--accent); flex: 0 0 auto; }
+    .quiet-ornament svg { width: 42px; height: 42px; stroke-width: 1.25; }
+    .list { display: grid; gap: 0; }
+    .list-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 0; border-top: 1px solid var(--line-soft); }
+    .list-row:first-child { border-top: 0; padding-top: 2px; }
+    .row-title { font-weight: 700; }
+    .row-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .progress { height: 7px; border-radius: 999px; background: var(--paper-deep); overflow: hidden; }
+    .progress i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+    .chart { height: 128px; display: flex; align-items: end; gap: 9px; padding-top: 11px; }
+    .bar { flex: 1; background: var(--accent-soft); border-radius: 5px 5px 2px 2px; position: relative; min-height: 8px; }
+    .bar.active { background: var(--accent); }
+    .bar span { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); font-size: 10px; color: var(--faint); }
+    .search-bar { display: flex; gap: 10px; margin-top: 20px; }
+    .input-wrap { position: relative; flex: 1; }
+    .input-wrap svg { position: absolute; width: 17px; left: 13px; top: 13px; color: var(--faint); }
+    input { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 9px; padding: 9px 12px 9px 40px; background: var(--surface); color: var(--ink); outline: none; }
+    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .lookup-layout { display: grid; grid-template-columns: 285px minmax(0, 1fr); gap: 18px; margin-top: 24px; }
+    .result-list { padding: 8px 0; }
+    .result { display: block; padding: 12px 13px; border-radius: 9px; color: inherit; text-decoration: none; }
+    .result + .result { margin-top: 3px; }
+    .result.active { background: var(--accent-soft); }
+    .result-word { font-family: var(--font-display); font-size: 18px; }
+    .result-meta { color: var(--muted); font-size: 11px; margin-top: 3px; }
+    .detail-header { display: flex; align-items: start; justify-content: space-between; gap: 20px; }
+    .word { font-family: var(--font-display); font-size: 42px; line-height: 1; letter-spacing: -.04em; }
+    .ipa { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+    .word-meaning { font-size: 18px; margin-top: 23px; }
+    .source-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .rule { border: 0; border-top: 1px solid var(--line-soft); margin: 22px 0; }
+    .example { font-family: var(--font-display); font-size: 19px; line-height: 1.35; max-width: 58ch; }
+    .example em { color: var(--accent-strong); font-style: normal; }
+    .preview { border: 1px solid var(--line); border-radius: 11px; padding: 15px; background: var(--surface-soft); }
+    .preview-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+    .preview p { color: var(--muted); font-size: 12px; }
+    .flash-wrap { max-width: 770px; margin: 0 auto; }
+    .review-top { display: flex; justify-content: space-between; align-items: center; gap: 18px; }
+    .review-count { color: var(--muted); font-size: 12px; }
+    .flashcard { min-height: 344px; display: grid; place-items: center; text-align: center; padding: 40px; margin-top: 20px; }
+    .flashcard .word { font-size: clamp(45px, 8vw, 74px); }
+    .flashcard .hint { color: var(--muted); margin-top: 12px; }
+    .answer { max-width: 570px; margin: 23px auto 0; text-align: left; border-top: 1px solid var(--line-soft); padding-top: 19px; }
+    .ratings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-top: 16px; }
+    .rating { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 9px; padding: 10px 8px; text-align: center; min-height: 52px; }
+    .rating strong { display: block; font-size: 12px; }
+    .rating span { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .quiz-layout { display: grid; grid-template-columns: minmax(0, 1fr) 265px; gap: 18px; align-items: start; }
+    .quiz-progress { display: flex; align-items: center; gap: 10px; margin-bottom: 19px; }
+    .quiz-progress .progress { flex: 1; }
+    .question { font-family: var(--font-display); font-size: clamp(24px, 3vw, 34px); line-height: 1.2; max-width: 28ch; }
+    .choices { display: grid; gap: 10px; margin-top: 25px; }
+    .choice { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 13px 15px; text-align: left; color: var(--ink); display: flex; gap: 11px; align-items: start; }
+    .choice.selected { border-color: var(--accent); background: var(--accent-soft); }
+    .choice-letter { width: 22px; height: 22px; border: 1px solid var(--line); border-radius: 6px; display: grid; place-items: center; font-size: 11px; font-weight: 700; flex: 0 0 auto; }
+    .choice.selected .choice-letter { border-color: var(--accent); color: var(--accent-strong); }
+    .quiz-side { display: grid; gap: 13px; }
+    .side-stat { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 9px 0; border-bottom: 1px solid var(--line-soft); }
+    .side-stat:last-child { border-bottom: 0; padding-bottom: 0; }
+    .status-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); gap: 18px; }
+    .status-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; padding: 16px 0; border-top: 1px solid var(--line-soft); }
+    .status-row:first-child { padding-top: 3px; border-top: 0; }
+    .status-name { font-weight: 700; }
+    .status-copy { color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .consent-card { background: var(--accent-soft); border-color: transparent; }
+    .consent-card h3 { font-size: 18px; font-family: var(--font-display); font-weight: 500; }
+    .consent-card p { margin-top: 10px; color: var(--muted); font-size: 12px; }
+    .consent-list { margin: 16px 0 20px; display: grid; gap: 10px; }
+    .consent-list li { display: flex; gap: 9px; align-items: start; color: var(--muted); font-size: 12px; }
+    .consent-list svg { width: 15px; height: 15px; color: var(--accent-strong); flex: 0 0 auto; margin-top: 2px; }
+    .notice { display: flex; align-items: start; gap: 10px; border-radius: 10px; padding: 12px 13px; font-size: 12px; }
+    .notice svg { width: 16px; height: 16px; flex: 0 0 auto; margin-top: 1px; }
+    .notice.warn { color: var(--amber); background: var(--amber-soft); }
+    .notice.error { color: var(--danger); background: var(--danger-soft); }
+    .notice.info { color: var(--accent-strong); background: var(--accent-soft); }
+    .mobile-header, .bottom-nav { display: none; }
+    .wide-only { display: inline; }
+    .footer-note { color: var(--faint); font-size: 10px; margin-top: 24px; }
+    @media (max-width: 1050px) {
+      .main { padding-inline: 24px; }
+      .sidebar { width: 215px; }
+      .grid.three { gap: 12px; }
+      .card { padding: 18px; }
+    }
+    @media (max-width: 740px) {
+      .frame { display: block; }
+      .sidebar { display: none; }
+      .main { padding: 0 15px 82px; }
+      .topbar { display: none; }
+      .mobile-header { display: flex; min-height: 61px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+      .mobile-brand { display: flex; align-items: center; gap: 9px; font-family: var(--font-display); font-size: 17px; }
+      .menu-btn { border: 1px solid var(--line); border-radius: 9px; width: 37px; height: 37px; background: var(--surface); color: var(--ink); display: grid; place-items: center; }
+      .menu-btn svg { width: 17px; }
+      .provenance { margin-top: 12px; font-size: 9px; align-items: start; }
+      .provenance span:last-child { display: none; }
+      .content { padding-top: 24px; }
+      h1 { font-size: 32px; }
+      h2 { font-size: 25px; }
+      .lead { font-size: 14px; }
+      .section-head { align-items: start; flex-direction: column; gap: 9px; }
+      .grid.two, .grid.three, .lookup-layout, .quiz-layout, .status-layout { grid-template-columns: 1fr; }
+      .empty-hero { padding: 24px; display: block; }
+      .quiet-ornament { display: none; }
+      .empty-hero .button { margin-top: 20px; width: 100%; }
+      .grid.three { gap: 10px; }
+      .metric { min-height: 94px; }
+      .metric-value { margin-top: 8px; font-size: 27px; }
+      .search-bar { display: block; }
+      .search-bar .button { margin-top: 9px; width: 100%; }
+      .lookup-layout { margin-top: 14px; }
+      .lookup-layout > .card:first-child { padding: 12px; }
+      .detail-header { display: block; }
+      .detail-header .button { margin-top: 15px; width: 100%; }
+      .word { font-size: 39px; }
+      .flashcard { min-height: 270px; padding: 25px 16px; }
+      .ratings { gap: 6px; }
+      .rating { padding-inline: 4px; }
+      .quiz-side { order: -1; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+      .quiz-side .card { padding: 12px; }
+      .quiz-side .card-title, .quiz-side p { font-size: 11px; }
+      .question { font-size: 25px; }
+      .choice { min-height: 52px; }
+      .status-row { padding: 14px 0; }
+      .bottom-nav { position: fixed; z-index: 5; bottom: 0; left: 0; right: 0; display: grid; grid-template-columns: repeat(4, 1fr); min-height: 63px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 93%, transparent); backdrop-filter: blur(8px); }
+      .bottom-nav a { color: var(--muted); text-decoration: none; display: grid; place-items: center; align-content: center; gap: 3px; font-size: 10px; }
+      .bottom-nav a.active { color: var(--accent-strong); font-weight: 700; }
+      .bottom-nav svg { width: 17px; height: 17px; }
+      .footer-note { margin-bottom: 12px; }
+    }
+    @media (max-width: 345px) {
+      .main { padding-inline: 11px; }
+      .provenance { padding-inline: 8px; }
+      .card { padding: 15px; }
+      h1 { font-size: 29px; }
+      .ratings { grid-template-columns: repeat(2, 1fr); }
+      .quiz-side { grid-template-columns: 1fr; }
+      .quiz-side .card { min-height: 0; }
+    }
+  
+    svg { width:18px; height:18px; flex-shrink:0; }
+    .button svg { width:16px; height:16px; }
+    .button { min-height:44px; white-space:normal; }
+    .dark .button.primary { color:#172038; }
+    .avatar { display:none; }
+    .metric { min-height:0; }
+    .metric-note { font-size:12px; }
+    .content { padding-top:24px; }
+    .section-head h1 { font-size:36px; }
+    .ratings { grid-template-columns:repeat(2,1fr); }
+    .rating { min-height:52px; }
+    .rating strong { font-size:14px; }
+    .rating span { font-size:12px; }
+    .tag { white-space:normal; }
+    .content p,.content li { overflow-wrap:anywhere; }
+    textarea { width:100%; border:1px solid var(--line); border-radius:8px; padding:12px; font:inherit; background:var(--surface); color:var(--ink); min-height:100px; }
+    details { padding:12px 0; border-top:1px solid var(--line); }
+    summary { cursor:pointer; font-weight:600; min-height:32px; }
+    label { display:block; font-weight:600; margin-bottom:6px; }
+    .edit-fields { display:grid; gap:16px; }
+    .edit-fields input { padding-left:12px; }
+    .quiz-side { position:sticky; top:24px; }
+    .question { font-size:27px; max-width:100%; }
+    .consent-list { padding:0; list-style:none; }
+    @media(max-width:740px) {
+      .section-head h1 { font-size:29px; }
+      .grid.three { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .grid.three .metric { padding:14px; }
+      .metric-value { font-size:25px; }
+      .lookup-layout { display:flex; flex-direction:column; }
+      .lookup-layout>article { order:-1; }
+      .quiz-side { order:0; position:static; grid-template-columns:1fr; }
+      .flashcard { min-height:0; padding:24px 16px; }
+      .status-layout>aside { order:-1; }
+      .provenance { font-size:10px; }
+    }
+    @media(max-width:345px) { h1,.section-head h1 { font-size:26px; } .word { font-size:34px; } }
+  
+    .notice.error { display:block; }
+    .notice.error p { margin:8px 0; }
+    .notice.error .button { margin-top:8px; }
+    .score-controls { display:flex; gap:8px; }
+    .score-controls button { min-width:44px;min-height:44px;background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:6px; }
+    .score-controls button.selected { background:var(--accent-soft);border-color:var(--accent); }
+    :focus-visible { outline:3px solid var(--accent);outline-offset:3px; }
+    button:disabled { opacity:.6;cursor:default; }
+    .scrim { position:fixed;inset:0;background:#17203880;z-index:10; }
+    .drawer { position:absolute;inset:0 auto 0 0;width:min(92%,360px);background:var(--surface);padding:20px;overflow:auto;color:var(--ink); }
+    .drawer-title { display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px; }
+    .drawer-title button { width:44px;height:44px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:24px; }
+    .drawer h3 { margin:20px 0 6px;color:var(--muted);font-size:13px; }
+    .drawer a { display:block;min-height:44px;padding:10px 8px;color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line);font-size:14px; }
+    .drawer p { font-size:12px;line-height:1.5;margin:8px 0; }
+    .drawer-note { color:var(--muted); }
+    .review-top { flex-wrap:wrap; }
+    @media(min-width:741px) and (max-width:900px) { .sidebar { display:none; } .mobile-header { display:flex;min-height:54px;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line); } .mobile-brand { display:flex;gap:9px;align-items:center; } .menu-btn { min-width:44px;min-height:44px;background:var(--surface);border:1px solid var(--line);color:var(--ink); } .topbar { display:none; } }
+    @media(max-width:740px) { .menu-btn { width:44px;height:44px; } .word { overflow-wrap:anywhere; } .search-bar { margin-top:14px; } .content>.section-head h1 { line-height:1.2; } .quiz-progress { flex-wrap:wrap; } }
+    
+    .content p, .content li, .row-sub, .metric-label, .metric-note, .status-copy { font-size:14px; }
+    .metric-value { margin-top:10px; }
+    .result-meta { font-size:12px; }
+    .footer-note { font-size:11px; }
+    .dark .side-note strong { color:var(--ink); }
+    @media(max-width:345px) { .content h1,.section-head h1 { font-size:24px; } .content .section-head p,.content .lead { font-size:13px; } .content { padding-top:16px; } .search-bar .button { margin-top:8px; } }
+    </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    const icons = {
+      book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/><path d="M8 6h8M8 10h7"/></svg>',
+      grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+      search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>',
+      cards: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="4" width="14" height="14" rx="2"/><path d="M8 8h6M8 12h4"/><path d="M8 20h10a2 2 0 0 0 2-2V8"/></svg>',
+      quiz: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 3h10a2 2 0 0 1 2 2v14l-7-3-7 3V5a2 2 0 0 1 2-2Z"/><path d="M9 8h6M9 12h4"/></svg>',
+      status: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/></svg>',
+      menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
+      arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+      check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m5 12 4 4L19 6"/></svg>',
+      info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
+      alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.3 3.9 2.2 18a2 2 0 0 0 1.7 3h16.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>',
+      circleCheck: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16 9"/></svg>'
+    };
+    const q = new URLSearchParams(location.search);
+    const scenario = q.get('scenario') || 'dashboard-populated';
+    const theme = q.get('theme') || 'light';
+    if (theme === 'dark') document.body.classList.add('dark');
+
+    const nav = (active) => `
+      <aside class="sidebar">
+        <div class="brand"><div class="brand-mark">${icons.book}</div><div><div class="brand-name">English Web</div><div class="brand-sub">NHẬT KÝ HỌC TẬP</div></div></div>
+        <div class="nav-group"><div class="nav-label">Học tập</div>
+          <a class="nav-item ${active === 'dashboard' ? 'active' : ''}" href="#">${icons.grid}<span>Tổng quan</span></a>
+          <a class="nav-item ${active === 'review' ? 'active' : ''}" href="#">${icons.cards}<span>Ôn tập</span></a>
+          <a class="nav-item ${active === 'quiz' ? 'active' : ''}" href="#">${icons.quiz}<span>Tạo bài kiểm tra</span></a>
+        </div>
+        <div class="nav-group"><div class="nav-label">Từ vựng</div>
+          <a class="nav-item ${active === 'lookup' ? 'active' : ''}" href="#">${icons.search}<span>Tra cứu AI</span></a>
+          <a class="nav-item ${active === 'search' ? 'active' : ''}" href="#">${icons.book}<span>Kho từ</span></a>
+        </div>
+        <div class="nav-group"><div class="nav-label">Hệ thống</div>
+          <a class="nav-item ${active === 'status' ? 'active' : ''}" href="#">${icons.status}<span>Trạng thái & quyền AI</span></a>
+        </div>
+        <div class="side-note"><strong>Học cục bộ</strong>Lịch sử đã lưu ở máy này. AI luôn là tùy chọn.</div>
+      </aside>`;
+    const mobile = (active) => `<div class="mobile-header"><button class="menu-btn" aria-label="Open navigation">${icons.menu}</button><div class="mobile-brand"><div class="brand-mark">${icons.book}</div>English Web</div><div class="avatar">NP</div></div>
+      <nav class="bottom-nav" aria-label="Primary"><a class="${active === 'dashboard' ? 'active' : ''}" href="#">${icons.grid}<span>Tổng quan</span></a><a class="${active === 'lookup' ? 'active' : ''}" href="#">${icons.search}<span>Tra cứu AI</span></a><a class="${active === 'review' ? 'active' : ''}" href="#">${icons.cards}<span>Ôn tập</span></a><a class="${active === 'status' ? 'active' : ''}" href="#">${icons.status}<span>Menu</span></a></nav>`;
+    const shell = (active, title, content) => `<div class="frame">${nav(active)}<div class="main">${mobile(active)}<div class="topbar"><div class="crumbs"><span>Không gian học</span><span>/</span><strong>${title}</strong></div><div class="top-actions"><a class="status-link" href="#"><span class="status-dot"></span>Cục bộ sẵn sàng</a><div class="avatar">NP</div></div></div><div class="provenance"><span><strong>DESIGN MOCKUP</strong> · Direction A · synthetic learning data</span><span>UXR-01 · v1.2 · SYNTHETIC</span></div><main class="content">${content}<div class="footer-note">Concept only. Values and labels are illustrative; no live account or provider is connected.</div></main></div></div>`;
+    const metric = (label, value, note, good = false) => `<div class="card metric"><div class="metric-label">${label}</div><span class="metric-value">${value}</span><div class="metric-note ${good ? 'good' : ''}">${note}</div></div>`;
+    const dashboardFirst = () => shell('dashboard', 'Tổng quan', `
+      <section class="section-head"><div><h1>Bắt đầu với một từ hữu ích.</h1><p>Chưa có lịch sử học. Lưu một từ hữu ích để bắt đầu ôn tập.</p></div></section>
+      <div class="card elevated empty-hero"><div class="empty-copy"><h2>Tạo kho từ đầu tiên của bạn</h2><p>Tra cứu bằng AI khi chính sách và quyền cho phép, kiểm tra bản xem trước rồi lưu để ôn tập. Đây là dữ liệu minh họa.</p><button class="button primary sp-16">Tra cứu từ đầu tiên ${icons.arrow}</button></div><div class="quiet-ornament">${icons.book}</div></div>
+      <section class="grid three sp-26">${metric('Thẻ đến hạn','0','Không có thẻ đến hạn')}${metric('Chuỗi học','—','Chưa xác định · không phải 0')}${metric('Trắc nghiệm MCQ','—','0 câu đã trả lời')}${metric('Điền từ Cloze','—','0 câu đã trả lời')}${metric('Flashcard tự đánh giá','—','0 lượt đánh giá')}${metric('Writing tự chấm','— / 4','0 câu có điểm')}</section>
+      <p class="muted sp-20">Tìm kiếm từ đã lưu và đọc kết quả cũ hoạt động khi API cục bộ sẵn sàng. Tạo quiz mới cần AI.</p>`);
+    const dashboardPopulated = () => shell('dashboard','Tổng quan',`
+      <section class="section-head"><div><h1>Hôm nay, bắt đầu từ ôn tập.</h1><p>Chỉ số độc lập · cập nhật 12/10/2026 · Asia/Bangkok</p></div><button class="button primary">Ôn 12 thẻ đến hạn ${icons.arrow}</button></section>
+      <section class="grid three sp-26">${metric('Thẻ đến hạn','12','Theo lịch SRS')}${metric('Chuỗi học','6 ngày','Tính đến 12/10/2026')}${metric('Flashcard tự đánh giá','Tốt','38 lượt · không phải độ chính xác')}</section>
+      <section class="grid two sp-26"><div class="card"><div class="card-title"><h3>Kết quả khách quan</h3><span class="tag indigo">Chấm cục bộ</span></div><div class="list"><div class="list-row"><div><div class="row-title">MCQ · 80%</div><div class="row-sub">8 đúng / 10 đã trả lời · tổng 12 câu · 2 bỏ trống</div></div></div><div class="list-row"><div><div class="row-title">Cloze · 75%</div><div class="row-sub">6 đúng / 8 đã trả lời · tổng 10 câu · 2 bỏ trống</div></div></div></div><details><summary>Cách đọc độ chính xác</summary><p>Đúng / đã trả lời. Bỏ trống được hiển thị riêng.</p></details></div><div class="card soft"><div class="card-title"><h3>Writing · tự chấm</h3><span class="tag amber">Tự đánh giá</span></div><span class="metric-value">3 / 4</span><p class="muted sp-16">5 câu có điểm. Không gộp với MCQ/Cloze hoặc nhận xét AI.</p><details><summary>Ý nghĩa chỉ số</summary><p>Trung bình điểm người học tự chọn theo writing-rubric-v1.</p></details></div></section>
+      <div class="notice info sp-26">${icons.info}<div>MCQ, Cloze và Writing được theo dõi riêng. Các chỉ số phản ánh lịch sử đã lưu.</div></div>`);
+    const lookup = () => shell('search', 'Kho từ / chi tiết', `
+      <section><h1>Tìm từ đã lưu, đọc trong ngữ cảnh.</h1><p class="lead">Tìm trong kho từ cục bộ. Nghĩa, ví dụ và thông tin nguồn đi cùng nhau.</p></section>
+      <div class="search-bar"><div class="input-wrap">${icons.search}<input value="meticulous" aria-label="Search vocabulary" /></div><button class="button primary">Tìm từ đã lưu ${icons.arrow}</button></div>
+      <div class="lookup-layout"><aside class="card"><div class="card-title"><div><h3>Kết quả tìm kiếm</h3><p class="muted">3 dạng từ phù hợp</p></div><button class="button ghost small">Bộ lọc nâng cao</button></div><div class="result-list"><a class="result active" href="#"><div class="result-word">meticulous</div><div class="result-meta">adjective · /məˈtɪk.jə.ləs/</div></a><a class="result" href="#"><div class="result-word">meticulously</div><div class="result-meta">adverb · /məˈtɪk.jə.ləs.li/</div></a><a class="result" href="#"><div class="result-word">meticulousness</div><div class="result-meta">noun · /məˈtɪk.jə.ləs.nəs/</div></a></div><div class="footer-note">Bộ lọc nâng cao và nhãn đang chọn luôn có đường truy cập.</div></aside><article class="card elevated"><div class="detail-header"><div><div class="word">meticulous</div><div class="ipa">/məˈtɪk.jə.ləs/ · adjective</div><div class="source-line"><span class="tag teal">Cambridge · SYNTHETIC</span><span class="muted">VERIFIED · nguồn VALID · 12/10/2026</span></div></div><button class="button primary">Chỉnh sửa từ đã lưu ${icons.arrow}</button></div><div class="word-meaning">very careful and precise about details</div><hr class="rule"><div><div class="tag indigo">Ví dụ trong ngữ cảnh</div><p class="example sp-16">She kept <em>meticulous</em> notes while comparing the two editions.</p><p class="muted sp-16">Cô ấy ghi chú rất tỉ mỉ khi so sánh hai ấn bản.</p></div><hr class="rule"><div class="preview"><div class="preview-title"><h3>Tra cứu AI · tùy chọn</h3><span class="tag amber">Cần quyền AI</span></div><p>Tra cứu AI có bản xem trước riêng. Cần chính sách, quyền và khả năng bridge; không tự gửi sau khi cấp quyền và không tự lưu.</p><button class="button ghost small sp-16">Xem quyền AI ${icons.arrow}</button></div></article></div>`);
+    const review = () => shell('review', 'Review', `
+      <div class="flash-wrap"><section class="review-top"><div><h1>Ôn tập với không gian để suy nghĩ.</h1><p class="lead">Một từ mỗi lần. Chọn mức nhớ sau khi xem đáp án; lịch do backend quyết định.</p></div><div class="review-count">Hàng đợi phiên: còn 12 thẻ</div></section><div class="progress sp-20"><i style="width:0%"></i></div><article class="card elevated flashcard"><div><span class="tag indigo">Đáp án đã mở · adjective</span><div class="word sp-20">meticulous</div><div class="hint">Think of a careful, detail-focused person.</div><div class="answer"><h3>Very careful and precise about details</h3><p class="muted sp-16">Cô ấy ghi chú rất tỉ mỉ khi so sánh hai ấn bản.</p><div class="source-line"><span class="tag teal">Cambridge · SYNTHETIC</span><span class="muted">VERIFIED · nguồn VALID</span></div></div></div></article><div class="ratings"><button class="rating"><strong>Again</strong><span>Cần học lại</span></button><button class="rating"><strong>Hard</strong><span>Giữ mức hiện tại</span></button><button class="rating"><strong>Good</strong><span>Theo lịch backend</span></button><button class="rating"><strong>Easy</strong><span>Theo lịch backend</span></button></div><p class="footer-note">Bốn mức nhớ: Again · Hard · Good · Easy. Chỉ xác nhận sau biên nhận; UNKNOWN khóa đánh giá và cho kiểm tra cùng thao tác.</p></div>`);
+    const quiz = () => shell('quiz','Bài kiểm tra',`
+      <section class="section-head"><div><h1>Tập trung vào câu trả lời.</h1><p>Nguồn ngày 12/10/2026 · 5 câu: MCQ 2 + Cloze 2 + Writing 1</p></div><span class="tag teal">Đã lưu bản nháp · 09:42</span></section>
+      <div class="quiz-layout sp-20"><section><article class="card"><div class="tag indigo">Câu 1 · MCQ</div><div class="question sp-16">The researcher was meticulous when documenting each change.</div><p class="muted sp-16">Chọn nghĩa gần nhất.</p><div class="choices"><button class="choice selected"><span class="choice-letter">A</span>Very careful and precise about details</button><button class="choice"><span class="choice-letter">B</span>Quick to change an opinion</button><button class="choice"><span class="choice-letter">C</span>Likely to happen without warning</button></div></article><article class="card sp-20"><h3>Câu 2 · Cloze</h3><p class="sp-16">She kept ______ notes of each experiment.</p><label class="sp-16">Câu trả lời</label><input value="meticulous"></article><article class="card sp-20"><h3>Câu 3 · MCQ</h3><p class="sp-16">Choose the word closest to strong and reliable.</p><div class="choices"><button class="choice">robust</button><button class="choice">casual</button><button class="choice">uncertain</button></div></article><article class="card sp-20"><h3>Câu 4 · Cloze</h3><label class="sp-16">The team used a ______ method to check the sources.</label><input placeholder="Chưa trả lời"></article><article class="card sp-20"><h3>Câu 5 · Writing</h3><p class="sp-16">Viết một câu sử dụng meticulous.</p><textarea class="sp-16">The meticulous researcher checked every source before drawing a conclusion.</textarea><label class="sp-16">Tự chấm theo writing-rubric-v1</label><div class="score-controls"><button>0</button><button>1</button><button>2</button><button class="selected">3</button><button>4</button></div><p class="sp-16">3 / 4 · Đúng nghĩa và dạng từ; lỗi nhỏ không cản trở hiểu.</p><details><summary>Xem mô tả 0–4</summary><p>0: không có câu có nghĩa; 1: sai nghĩa/lỗi lớn; 2: cần sửa đáng kể; 3: đúng và hiểu được; 4: tự nhiên, chính xác.</p></details></article></section><aside class="quiz-side"><div class="card"><h3>Bản nháp cục bộ</h3><div class="side-stat"><span>Đã trả lời</span><strong>3 / 5</strong></div><p class="muted sp-16">Chỉ bản nháp đã được backend xác nhận mới được bảo đảm lưu.</p><button class="button primary sp-16">Nộp bài</button><p class="metric-note">Cuộn để kiểm tra mọi câu trả lời trước khi nộp.</p></div><div class="notice info">${icons.info}<div>Nộp bài chấm khách quan cục bộ. Nhận xét AI là tùy chọn sau khi nộp.</div></div></aside></div>`);
+    const status = (error=false) => shell('status','Trạng thái & quyền AI',`
+      <section class="section-head"><div><h1>Học cục bộ. AI là lựa chọn.</h1><p>Trạng thái hiện tại và điều kiện cảnh báo được hiển thị riêng.</p></div><button class="button secondary">Làm mới</button></section>
+      <div class="status-layout sp-20"><section class="card"><h3>Khả năng học hiện tại</h3><div class="status-row sp-16"><div><div class="status-name">API và dữ liệu cục bộ</div><div class="status-copy">Tìm từ đã lưu, ôn tập, trả lời và đọc kết quả quiz.</div></div><span class="tag teal">Sẵn sàng</span></div><div class="status-row"><div><div class="status-name">AI Bridge</div><div class="status-copy">Tra cứu mới, tạo quiz và nhận xét Writing cần bridge và mạng.</div></div><span class="tag amber">${error?'Ngoại tuyến':'Chưa xác định'}</span></div><div class="notice warn">${icons.alert}<div><strong>${error?'AI tạm không khả dụng.':'Chưa xác định khả năng AI.'}</strong><br>Không tự gửi lại. Các chức năng cục bộ vẫn dùng được khi API cục bộ sẵn sàng.</div></div></section>
+      <aside class="card consent-card" id="ai-consent"><h3>Quyền gửi dữ liệu AI</h3><span class="tag amber sp-16">Chưa cấp quyền</span><p>Chính sách chưa đầy đủ. Chưa cho phép cấp quyền hay gửi nội dung học.</p><ul class="consent-list"><li>${icons.check}<span>Ba phạm vi: tra cứu, tạo quiz, nhận xét Writing.</span></li><li>${icons.info}<span>Bên nhận, lưu giữ, vùng xử lý, chi phí/hạn mức phải được khai báo trước khi cấp quyền.</span></li></ul><button class="button primary">Xem chính sách hiện tại</button><p>Rút quyền chặn yêu cầu AI mới. Yêu cầu đã gửi có thể hoàn tất; không thu hồi hoặc xóa dữ liệu đã gửi.</p><button class="button secondary sp-16">Rút quyền gửi AI</button></aside></div>
+      ${error?'<div class="notice error sp-20"><strong>Chưa xác nhận rút quyền · UNKNOWN</strong><p>Giữ thao tác hiện tại. Kiểm tra lại trạng thái trước khi báo thành công.</p><button class="button secondary">Kiểm tra kết quả rút quyền</button></div>':''}
+      <section class="card soft sp-20"><details><summary>Chẩn đoán: dữ liệu, nguồn Markdown, AI Bridge</summary><p>Mã trạng thái, request ID và thông tin kỹ thuật chỉ hiển thị trong mục này.</p></details><details><summary>Cảnh báo hiện tại và điều kiện kích hoạt</summary><p>API không phản hồi: trạng thái UNKNOWN. Mức nghiêm trọng khi kích hoạt không có nghĩa cảnh báo đang hoạt động.</p></details><details><summary>Runbooks & khả năng ngoại tuyến</summary><p>Không ghi nội dung học hoặc khóa vào thông tin chẩn đoán.</p></details></section>`);
+    const edit = () => shell('lookup','Chỉnh sửa từ',`<section class="section-head"><div><h1>Chỉnh sửa meticulous</h1><p>Nguồn VALID · bản nháp được giữ</p></div><span class="tag indigo">Revision conflict</span></section><div class="notice warn">${icons.alert}<div><strong>Nguồn đã thay đổi.</strong><br>Revision yêu cầu 2; hiện tại 3. Không ghi đè. Đọc lại và xác nhận lưu mới.</div></div><section class="card sp-20"><div class="edit-fields"><div><label>Nghĩa tiếng Anh</label><textarea>Very careful and precise about details.</textarea></div><div><label>Nghĩa tiếng Việt</label><textarea>Cẩn thận, tỉ mỉ và chú ý đến từng chi tiết khi kiểm tra nguồn và ghi chép kết quả nghiên cứu.</textarea></div><div><label>Ví dụ tiếng Anh</label><textarea>She kept meticulous notes while comparing the two editions.</textarea></div></div><button class="button primary sp-16">Đọc lại nguồn</button><button class="button secondary sp-16">Giữ bản nháp</button><details class="sp-16"><summary>Chi tiết nguồn / ETag</summary><p>ETag được đọc từ backend; không dùng nhãn giả làm precondition.</p></details></section>`);
+    const results = () => shell('quiz','Kết quả',`<section class="section-head"><div><h1>Hiểu kết quả, chọn bước tiếp theo.</h1><p>SUBMITTED · dữ liệu minh họa</p></div><button class="button primary">Ôn tập</button></section><section class="grid three sp-20">${metric('MCQ khách quan','1 / 2','1 đúng / 2 trả lời · 50%')}${metric('Cloze khách quan','1 / 1','Tổng 2 câu · 1 bỏ trống · 100%')}${metric('Writing tự chấm','3 / 4','1 câu · người học chọn')}</section><article class="card sp-20"><h3>Câu Writing đã nộp · không chỉnh sửa</h3><p class="example sp-16">The meticulous researcher checked every source before drawing a conclusion.</p><p class="muted sp-16">Tự chấm 3/4 không bị AI thay đổi.</p><details><summary>MCQ / Cloze: câu trả lời và giải thích</summary><p>Đáp án và giải thích chỉ xuất hiện sau khi nộp. Bỏ trống phân biệt với sai.</p></details></article><article class="card soft sp-20"><h3>Nhận xét AI tùy chọn</h3><span class="tag amber sp-16">Chưa yêu cầu · cần quyền AI</span><p class="sp-16">Nhận xét về dùng từ, ngữ pháp và độ rõ ràng; không phải điểm khách quan và không thay tự chấm.</p><button class="button secondary sp-16">Xem quyền AI</button><details class="sp-16"><summary>Lịch sử nhận xét</summary><p>REQUESTED, VALIDATED hoặc FAILED được giữ riêng. Đây là concept SOURCE_BACKED, hiện trạng G7 NOT_VERIFIED.</p></details></article>`);
+    const preview = () => shell('lookup','Tra cứu AI',`<section class="section-head"><div><h1>Từ mới, trong ngữ cảnh.</h1><p>Bản xem trước SYNTHETIC · chưa lưu</p></div><span class="tag amber">AI tùy chọn</span></section><label>Từ tiếng Anh</label><div class="search-bar"><div class="input-wrap">${icons.search}<input value="meticulous"></div><button class="button secondary">Tra cứu AI</button></div><article class="card sp-20"><div class="detail-header"><div><div class="word">meticulous</div><div class="ipa">/məˈtɪk.jə.ləs/ · adjective</div></div><span class="tag amber">PREVIEW · Chưa lưu</span></div><p class="word-meaning">Very careful and precise about details.</p><p class="sp-16">Tỉ mỉ, chú ý kỹ đến từng chi tiết.</p><p class="example sp-16">She kept meticulous notes of each experiment.</p><div class="source-line"><span class="tag amber">Cambridge · UNVERIFIED</span><span>Không tự nâng cấp xác minh</span></div><details class="sp-16"><summary>Dạng từ và thông tin nguồn</summary><p>meticulously · meticulousness · toàn bộ dạng từ được lưu cùng nhau.</p></details><label class="sp-16">Ngày học</label><input type="date" value="2026-10-12"><p class="muted sp-16">Nguồn ngày đã đọc: chưa có nguồn. Lưu mới dùng precondition xác nhận không tồn tại.</p><button class="button primary sp-16">Lưu tất cả dạng từ để ôn</button><p class="metric-note">Chỉ hiển thị đã lưu khi backend xác nhận biên nhận.</p></article>`);
+    const page = scenario === 'dashboard-first-run' ? dashboardFirst() : scenario === 'dashboard-populated' ? dashboardPopulated() : scenario === 'lookup-search-detail' ? lookup() : scenario === 'review' ? review() : scenario === 'quiz' ? quiz() : scenario === 'status-consent' ? status() : scenario === 'status-error' ? status(true) : scenario === 'edit-conflict' ? edit() : scenario === 'results' ? results() : scenario === 'lookup-preview' ? preview() : scenario === 'navigation-drawer' ? dashboardPopulated() : scenario === 'quiz-unknown' ? quiz() : scenario === 'review-unknown' ? review() : dashboardPopulated();
+    document.getElementById('app').innerHTML = page;
+    if (scenario === 'status-error') {
+      const errorBox=document.querySelector('.notice.error');
+      document.querySelector('.content').insertBefore(errorBox,document.querySelector('.status-layout'));
+    }
+    if (scenario === 'quiz-unknown') {
+      document.querySelector('.content').insertAdjacentHTML('afterbegin','<div class="notice error"><div><strong>Chưa xác nhận lưu · UNKNOWN</strong><p>Giữ câu trả lời và thao tác hiện tại. Kiểm tra cùng thao tác trước khi nộp.</p><button class="button secondary">Kiểm tra kết quả lưu</button></div></div>');
+      document.querySelector('.section-head .tag').textContent='Chưa xác nhận bản nháp';
+      document.querySelector('.section-head .tag').className='tag amber';
+      document.querySelector('.quiz-side .button.primary').disabled=true;
+    }
+    if (scenario === 'review-unknown') {
+      document.querySelector('.flash-wrap').insertAdjacentHTML('afterbegin','<div class="notice warn"><div><strong>Chưa xác nhận đánh giá · UNKNOWN</strong><p>Giữ thẻ hiện tại. Kiểm tra cùng thao tác; chưa gửi đánh giá mới.</p><button class="button secondary">Kiểm tra kết quả</button></div></div>');
+      document.querySelectorAll('.rating').forEach(b=>b.disabled=true);
+    }
+    if (scenario === 'navigation-drawer') {
+      document.body.insertAdjacentHTML('beforeend','<div class="scrim"><section class="drawer" role="dialog" aria-modal="true" aria-label="Điều hướng"><div class="drawer-title"><strong>English Web · Điều hướng</strong><button aria-label="Đóng điều hướng">×</button></div><h3>Học tập</h3><a href="#">Tổng quan · /</a><a href="#">Ôn tập · /review</a><h3>Từ vựng</h3><a href="#">Tra cứu AI · /lookup</a><a href="#">Kho từ · /search</a><p>Chi tiết từ mở từ Kho từ · /word-forms/:id</p><h3>Luyện tập</h3><a href="#">Tạo bài kiểm tra · /quiz/new</a><p>Bài làm và kết quả mở theo attempt ID.</p><h3>Hệ thống</h3><a href="#">Trạng thái · /status</a><a href="#">Quyền gửi dữ liệu AI · /status#ai-consent</a><p class="drawer-note">MOCKUP: Escape đóng, focus trở về nút Menu là yêu cầu thiết kế; chưa kiểm chứng hành vi.</p></section></div>');
+    }
+    
+  </script>
+</body>
+</html>

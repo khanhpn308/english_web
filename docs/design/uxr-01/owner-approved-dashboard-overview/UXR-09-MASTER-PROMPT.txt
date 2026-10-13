@@ -1,0 +1,465 @@
+TASK_ID: UXR-09
+TASK_NAME: Dashboard Design
+ACTION: REDESIGN_DASHBOARD_OVERVIEW_ACCORDING_TO_OWNER_APPROVED_LAYOUT
+EXECUTION_MODE: DESIGN_EXECUTION
+STATUS_TARGET: OWNER_VISUAL_APPROVAL_PENDING
+
+## 1. ROLE
+
+Act as a Senior UI/UX Architect, Product Dashboard Designer, Frontend Design Architect, and Visual Systems Coordinator for the English Web redesign program.
+
+You are executing UXR-09 — Dashboard Design.
+
+This is a DESIGN task, not a production-code implementation task.
+
+Your responsibility is to redesign the Dashboard Overview screen according to the owner-approved Direction B layout contract described below.
+
+Do not switch to another task.
+Do not start UXR-10.
+Do not implement the dashboard into production application code.
+Do not merge anything.
+
+## 2. PROJECT CONTEXT
+
+Project: English Web
+Repository: khanhpn308/english_web
+
+Authoritative design direction:
+Direction B — Compact Study Console
+
+This direction has already been selected by the owner.
+
+Design goals for Direction B:
+- compact and information-dense
+- fast to scan
+- clear study actions
+- dashboard-centric
+- task-focused
+- user should understand what to do within 3 seconds
+- less explanatory text, more visual guidance
+- cards and charts should support decision-making, not decoration
+
+Use official shadcn/ui as the component foundation where relevant.
+Use the locally installed Impeccable skill during design work and record its actual usage.
+
+## 3. PRIMARY OWNER REQUIREMENT
+
+The dashboard overview has already been visually approved at concept level.
+
+You must redesign the dashboard to match that approved concept.
+
+The single most important rule is:
+
+THE USER SHOULD UNDERSTAND WITHIN 3 SECONDS WHAT THEY SHOULD DO TODAY.
+
+Therefore:
+- the most important task of the day must be visually dominant
+- the current book-learning journey must be highly visible
+- unnecessary repeated information must be removed
+- charts must be useful and quick to read
+- the dashboard must emphasize books as a core long-term product focus
+
+## 4. DASHBOARD LAYOUT CONTRACT — MANDATORY
+
+Recreate the dashboard overview according to the following contract.
+
+### 4.1 Overall composition
+
+Desktop overview should be organized into these sections:
+
+A. Top row
+- Left: “Việc cần làm hôm nay” hero card
+- Right: “Sách học gần đây” book carousel banner
+
+B. Second row
+- 4 compact KPI cards:
+  1. Thẻ đến hạn
+  2. Chuỗi học
+  3. Độ chính xác trắc nghiệm
+  4. Writing tự chấm
+
+C. Third row
+- Left: “Thẻ đến hạn 7 ngày tới” bar chart
+- Center: “Lịch sử học” heatmap
+- Right: “Kết quả làm bài” donut chart
+
+D. Fourth row
+- Left: “Tiến độ 14 ngày” line chart
+- Center: “Kỹ năng cần củng cố”
+- Right: “Hoạt động gần đây”
+
+This screen is the Dashboard Overview screen only.
+
+Do not overload it with additional unrelated widgets.
+
+## 5. TOP-LEFT HERO CARD — “VIỆC CẦN LÀM HÔM NAY”
+
+This is the most important dashboard block.
+
+It must immediately answer:
+What should the learner do right now?
+
+Required content:
+- title: “Việc cần làm hôm nay”
+- primary message: “Ôn 12 thẻ đến hạn” (or equivalent synthetic example with the same structure)
+- supporting sentence that explains urgency briefly
+- 3 CTAs:
+  1. primary: “Ôn 12 thẻ đến hạn”
+  2. secondary: “Làm quiz ngắn”
+  3. secondary: “Tra từ mới”
+
+Visual priority rules:
+- the primary CTA must be clearly dominant
+- the block must be the first thing the eye sees together with the book carousel
+- text must be concise
+- no long paragraphs
+- use iconography and strong hierarchy
+- keep Direction B compactness while preserving readability
+
+## 6. TOP-RIGHT BOOK CAROUSEL — “SÁCH HỌC GẦN ĐÂY”
+
+This area replaces the previous static book progress block.
+
+Books are strategically important for the product and must be highlighted.
+
+This section must function conceptually as an auto-rotating horizontal carousel / auto-play slider.
+
+### Required behavior concept
+- show 5 most recently studied books
+- display only ONE book at a time in the visible main banner
+- no partial next/previous book should be visible in the same frame
+- provide left and right navigation controls
+- provide small pagination indicators/dots
+- include auto-play behavior concept
+- recommended auto-advance interval: around 4–5 seconds
+- pause on hover or interaction should be documented conceptually
+- agent does NOT need to build real production animation; only design the state and note intended behavior
+
+### Required visual structure per visible book
+- section title: “Sách học gần đây”
+- small contextual label such as “5 sách học gần nhất”
+- book cover
+- book title
+- learning status
+- chapter progress
+- lesson progress
+- progress bar
+- percentage complete
+- primary CTA: “Tiếp tục học”
+- secondary CTA: “Mở sách”
+
+### Critical owner feedback that must be applied
+- only one book is visible per carousel state
+- do not show another book intruding into the same frame
+- left/right buttons must be more subtle and slightly faded than before
+- the carousel should feel like a focused learning-banner, not a cluttered slider
+- this top book area is important and should feel like a product highlight
+
+## 7. SECOND ROW KPI CARDS
+
+Use 4 compact summary cards.
+
+Required cards:
+1. Thẻ đến hạn
+2. Chuỗi học
+3. Độ chính xác trắc nghiệm
+4. Writing tự chấm
+
+Required rules:
+- each card must be scannable in under 1 second
+- use icon + large number + concise subtext
+- no repeated information from charts below
+- avoid long descriptions
+- use strong typography hierarchy
+- Direction B should remain compact but not cramped
+
+Recommended examples:
+- Thẻ đến hạn: “12 / 58 thẻ” + “Cần ôn trong hôm nay”
+- Chuỗi học: “7 ngày liên tiếp” + small positive delta
+- Độ chính xác trắc nghiệm: percentage + answered count + delta
+- Writing tự chấm: “3.6 / 4” + reviewed count + delta
+
+## 8. THIRD ROW ANALYTICS
+
+### 8.1 “Thẻ đến hạn 7 ngày tới”
+Use a bar chart.
+Purpose:
+- quickly show upcoming workload
+- help the learner understand review pressure
+
+Requirements:
+- simple 7-day horizon
+- clear value labels
+- chart must be readable at a glance
+- no unnecessary decoration
+
+### 8.2 “Lịch sử học”
+Use a calendar heatmap.
+Purpose:
+- visualize learning consistency
+- represent streak behavior visually
+
+Requirements:
+- month label
+- weekday rows
+- compact heat cells
+- legend from low to high activity
+- should visually support the streak concept without duplicating it as text-heavy content
+
+### 8.3 “Kết quả làm bài”
+Use a donut chart.
+Purpose:
+- show correct / incorrect / blank breakdown
+
+Requirements:
+- donut center total
+- legend for:
+  - Đúng
+  - Sai
+  - Bỏ trống
+- compact time-range control (e.g. “7 ngày qua”)
+
+## 9. FOURTH ROW ANALYTICS AND ACTIONS
+
+### 9.1 “Tiến độ 14 ngày”
+Use a line chart.
+Purpose:
+- show learning progress trend over time
+
+Requirements:
+- clear trend
+- simple filter control if needed
+- tooltip state may be shown in at least one desktop screen
+- chart must not dominate more than the top-priority hero and book banner
+
+### 9.2 Replace duplicate book-progress block with “Kỹ năng cần củng cố”
+
+This section exists because the prior “Tiến độ theo sách” block was too repetitive with the top book banner.
+
+It should now become a skill-priority action block.
+
+Required contents:
+- title: “Kỹ năng cần củng cố”
+- 3 skill rows:
+  - Cloze
+  - Trắc nghiệm
+  - Writing
+- each row should show:
+  - skill label
+  - progress/strength bar or score
+  - current metric
+  - quick action CTA
+- include an overall action button such as:
+  “Bắt đầu luyện tập”
+
+Purpose:
+- translate data into action
+- tell the learner where to focus next
+- reinforce the “3-second understanding” principle
+
+### 9.3 “Hoạt động gần đây”
+Use a compact recent-activity list.
+
+Required content examples:
+- saved vocabulary activity
+- quiz completion
+- writing attempt
+- lookup activity
+
+Requirements:
+- each row includes icon, action summary, and timestamp
+- concise and scannable
+- no verbose paragraph descriptions
+
+## 10. VISUAL STYLE REQUIREMENTS
+
+This must remain within Direction B — Compact Study Console.
+
+Required characteristics:
+- compact but clean
+- visually structured
+- strong hierarchy
+- moderate information density
+- cards aligned to a clear grid
+- minimal wasted whitespace
+- useful charts rather than decorative illustrations
+- dashboard should feel like a real study control center
+
+Typography:
+- strong heading hierarchy
+- compact secondary text
+- readable number emphasis
+- Vietnamese labels must remain natural and easy to scan
+
+Color:
+- keep Direction B tone
+- dark teal sidebar
+- clean light content area
+- green/teal actions and data emphasis
+- limited accent colors for chart categories and skill states
+
+Do not:
+- overload the layout with too many colors
+- use chart styles that feel gimmicky
+- make the UI feel like a financial dashboard
+- create duplicate book-progress sections
+- allow the carousel to show multiple books in one visible frame
+
+## 11. RESPONSIVENESS
+
+Design at least the following responsive states:
+
+### Desktop
+Primary mandatory state.
+This is the most important output.
+
+### Mobile
+Create a mobile adaptation that preserves the dashboard’s priorities:
+- “Việc cần làm hôm nay” first
+- book carousel near the top
+- KPI cards stacked or scrollable appropriately
+- charts simplified but still meaningful
+
+### Optional tablet
+Include only if it materially improves handoff quality.
+
+Do not produce random responsive variants.
+Use purposeful responsive composition.
+
+## 12. THEMES AND STATES
+
+At minimum, provide:
+- populated dashboard desktop
+- populated dashboard mobile
+- first-run / low-data or empty-learning-state desktop
+- one dark-mode desktop variant if consistent with existing UXR style set
+
+If you add more states, they must be justified.
+
+Do not produce redundant screenshot variants that do not add review value.
+
+## 13. SHADCN/UI REQUIREMENT
+
+Use official shadcn/ui as the design-system foundation where appropriate.
+
+Do not merely imitate shadcn/ui visually.
+If you use a component in the design preview, be able to identify its role, such as:
+- Card
+- Button
+- Badge
+- Tabs or dropdown filter where appropriate
+- Progress
+- Tooltip
+- Carousel-like composition (document if this is an app-level composition rather than a native canonical primitive)
+
+Document which parts are:
+- current canonical reused
+- official shadcn-compatible
+- app-level composition
+
+The carousel may be treated as an app-level composition if needed, but must still visually fit the shadcn/ui ecosystem.
+
+## 14. IMPECCABLE REQUIREMENT
+
+Use the installed Impeccable skill.
+
+The coordinator and design workers must:
+- locate the installed skill
+- read SKILL.md
+- invoke context appropriately
+- use it to improve hierarchy, density, clarity, and component coherence
+- record actual invocation evidence
+
+Do not just mention Impeccable without proof of use.
+
+## 15. PRODUCTION-CODE SAFETY
+
+This is a design task.
+
+Do not modify:
+- backend production code
+- frontend production feature code
+- database schema
+- quiz persistence logic
+- consent logic
+- learner data
+- task orchestration system
+- tasks/todo.md
+
+If a design-preview sandbox is needed, keep it isolated to the UXR-09 design artifact area.
+
+Do not merge into main.
+
+## 16. REQUIRED DELIVERABLES
+
+Create/update UXR-09 design artifacts with:
+- dashboard design rationale
+- full-resolution images
+- gallery or review index
+- comparison notes if prior dashboard drafts existed
+- explicit explanation of how the new dashboard solves:
+  1. repetition between book sections
+  2. lack of chart-driven scannability
+  3. unclear immediate next action
+  4. insufficient product emphasis on books
+
+Required image outputs should include at least:
+1. desktop populated dashboard
+2. desktop first-run / low-data dashboard
+3. mobile populated dashboard
+4. one additional desktop state showing the carousel/banner and charts clearly if needed for review
+
+All final images must be full resolution and owner-reviewable.
+
+## 17. ACCEPTANCE CRITERIA
+
+Do not mark the task complete unless all of these are true:
+
+1. The dashboard clearly tells the user what to do within 3 seconds.
+2. The book area is transformed into a single-book recent-books carousel concept.
+3. Only one book is visible per carousel state.
+4. Carousel nav buttons are visually softened/subtle.
+5. “Tiến độ theo sách” duplicate block is removed.
+6. The replacement “Kỹ năng cần củng cố” block is present and action-oriented.
+7. The dashboard uses more visual insight and fewer unnecessary text blocks.
+8. Books are visibly elevated as a strategic product focus.
+9. Direction B compactness is preserved.
+10. Deliverables are ready for owner visual review.
+
+## 18. FINAL REPORT FORMAT
+
+Return the completion report in this structure:
+
+TASK_ID: UXR-09
+ACTION: DASHBOARD_REDESIGN_ACCORDING_TO_APPROVED_OVERVIEW
+STARTING_STATE: ...
+FINAL_STATE: OWNER_VISUAL_APPROVAL_PENDING
+BRANCH: ...
+BASE_SHA: ...
+FILES_CREATED: ...
+FILES_MODIFIED: ...
+ARTIFACT_PATHS: ...
+IMAGE_PATHS: ...
+IMPECCABLE_EVIDENCE: ...
+SHADCN_COMPONENT_NOTES: ...
+DESIGN_DECISIONS_APPLIED:
+- ...
+- ...
+ACCEPTANCE_CRITERIA_STATUS:
+- ...
+BLOCKERS: ...
+NEXT_ALLOWED_ACTION: WAIT_FOR_OWNER_VISUAL_APPROVAL
+
+## 19. STOP CONDITION
+
+Stop after:
+- the redesigned UXR-09 dashboard artifacts are prepared
+- the images are generated
+- the report is written
+- everything is ready for owner visual approval
+
+Do not continue to UXR-10.
+Do not start implementation.
+Do not auto-approve the work.
+
+BEGIN UXR-09 NOW.

@@ -1,0 +1,846 @@
+# UXR-09 — STRICT OWNER-APPROVED VISUAL CONTRACT
+## Dashboard Overview — Compact Study Console
+
+**TASK_ID:** UXR-09  
+**CONTRACT_TYPE:** STRICT_VISUAL_IMPLEMENTATION_SPECIFICATION  
+**PARENT:** UXR-09 Master Prompt  
+**REFERENCE:** Owner-selected final Dashboard Overview mockup  
+**DIRECTION:** B — Compact Study Console  
+**EXECUTION:** DESIGN-ONLY, NO PRODUCTION CODE  
+**DELIVERY:** Browser-rendered, full-resolution UI images for owner approval
+
+---
+
+## 1. AUTHORITY AND PRECEDENCE
+
+This contract supplements the UXR-09 Master Prompt.
+
+The Master Prompt defines the overall project, deliverables, component policy and execution boundaries.
+
+This Strict Visual Contract defines exactly how the Dashboard Overview should look and behave conceptually.
+
+When requirements differ:
+
+1. Repository safety, verified API contracts and owner approval gates take precedence over everything.
+2. This Strict Visual Contract takes precedence over earlier aesthetic/layout suggestions.
+3. The UXR-09 Master Prompt remains authoritative for all other requirements.
+4. The attached owner-approved screenshot is the primary visual composition reference.
+
+Do not run two independent redesigns.
+
+Execute one coherent UXR-09 design workflow.
+
+The screenshot represents the approved visual direction, not proof that every illustrated backend feature currently exists.
+
+## 2. REQUIRED REFERENCE IMAGE
+
+Locate the owner-provided Dashboard Overview screenshot attached to this task.
+
+Before designing:
+
+- Inspect the complete screenshot at original resolution.
+- Record its actual dimensions.
+- Identify all major visual regions.
+- Identify the exact final carousel design.
+- Identify the replacement “Kỹ năng cần củng cố” panel.
+- Distinguish layout decisions from illustrative synthetic data.
+
+If the image is not accessible to the local agent, report REFERENCE_IMAGE_NOT_ACCESSIBLE and request it.
+
+Do not claim pixel-level conformance to an unseen reference.
+
+Do not substitute the earlier version that displayed a second book partially intruding from the right.
+
+The FINAL reference is the version in which only one complete book is visible at a time and the navigation arrows are subtle.
+
+## 3. PRIMARY UX RULE — THE THREE-SECOND TEST
+
+The fundamental owner requirement is:
+
+"Within three seconds, the learner must understand what they should do today."
+
+The visual hierarchy must answer these questions in order:
+
+FIRST:
+What is the single most useful action I should take right now?
+
+SECOND:
+Which book was I studying, and how can I continue?
+
+THIRD:
+How am I progressing, and which skills need attention?
+
+This must remain true even when analytics cards contain substantial data.
+
+The first prominent primary CTA is the daily learning action.
+
+The book carousel contains a separate contextual action to resume a book.
+
+Secondary charts must not compete with these two actions.
+
+Use hierarchy, position, scale, contrast and concise copy to satisfy this rule.
+
+A screenshot's apparent clarity is design evidence, not a measured three-second usability PASS. Report any reviewer check accurately.
+
+## 4. LOCKED DESKTOP PAGE STRUCTURE
+
+At the reference desktop viewport, preserve the following layout.
+
+### GLOBAL SHELL
+
+Left:
+Dark teal vertical navigation sidebar.
+
+Right:
+Light-colored main workspace with:
+
+- Compact breadcrumb/status header.
+- Four horizontal dashboard bands.
+- Consistent alignment and gutters.
+- Rounded white or pale-teal cards.
+- Teal/green action accents.
+
+Keep the page recognizably Direction B.
+
+Do not introduce a new floating navigation system, top mega-navigation or unrelated dashboard concept.
+
+### ROW 1 — TWO PRIMARY HERO AREAS
+
+Left:
+“VIỆC CẦN LÀM HÔM NAY”
+
+Right:
+“SÁCH HỌC GẦN ĐÂY”
+
+Both blocks should appear within the same horizontal band.
+
+Use approximately balanced widths, with adjustments only when necessary for content readability.
+
+The top row must remain the largest and most strategically important region.
+
+### ROW 2 — FOUR KPI CARDS
+
+Four equal-width cards:
+
+1. Thẻ đến hạn
+2. Chuỗi học
+3. Độ chính xác trắc nghiệm
+4. Writing tự chấm
+
+Keep consistent card height and number alignment.
+
+### ROW 3 — THREE ANALYTICS PANELS
+
+Left:
+Thẻ đến hạn 7 ngày tới
+
+Center:
+Lịch sử học
+
+Right:
+Kết quả làm bài
+
+Preserve the horizontal three-column relationship at desktop width.
+
+### ROW 4 — THREE PANELS
+
+Left:
+Tiến độ 14 ngày
+
+Center:
+Kỹ năng cần củng cố
+
+Right:
+Hoạt động gần đây
+
+The center block must NOT be replaced with another book-progress section.
+
+The complete page should feel like a cohesive study workspace, not an assortment of unrelated widgets.
+
+## 5. LOCKED ROW 1 LEFT — TODAY'S LEARNING ACTION
+
+Required header:
+
+“VIỆC CẦN LÀM HÔM NAY”
+
+Required populated example:
+
+“Ôn 12 thẻ đến hạn”
+
+Visual hierarchy:
+
+- Small uppercase section label.
+- Strong primary headline.
+- One concise supporting sentence.
+- One clearly dominant primary button.
+- Two secondary actions.
+
+Primary button:
+
+“Ôn 12 thẻ đến hạn”
+
+Secondary buttons:
+
+“Làm quiz ngắn”
+
+“Tra từ mới”
+
+Do not:
+
+- Add long instructions.
+- Replace the main CTA with a decorative statistic.
+- Place several equally prominent primary buttons.
+- Introduce unrelated recommendations or invented AI personalization.
+- Make the carousel visually overpower the daily action.
+
+If no review cards are due, adapt the primary CTA to a truthful available task.
+
+Never show “12 cards due” when the actual selected state has zero due cards.
+
+## 6. LOCKED ROW 1 RIGHT — SINGLE-BOOK CAROUSEL
+
+Title:
+
+“SÁCH HỌC GẦN ĐÂY”
+
+This is a major strategic product feature.
+
+Use a single-item horizontal carousel featuring the five most recently studied books.
+
+### 6.1 One-book-only visibility
+
+At any stable carousel position:
+
+Exactly ONE book is visible.
+
+The active banner contains:
+
+- One complete book cover.
+- One book title.
+- One current learning status.
+- Chapter/lesson progress information when available.
+- One progress bar.
+- One percentage if a valid denominator exists.
+- Primary contextual button: “Tiếp tục học”.
+- Secondary button: “Mở sách”.
+
+IMPORTANT:
+
+Do not reveal any part of the next book.
+
+Do not reveal any part of the previous book.
+
+Do not implement a “peek next slide” composition.
+
+No second cover may extend into the right or left edge of the visible banner.
+
+The active slide occupies the entire carousel viewport.
+
+Set carousel overflow and clipping accordingly in any browser prototype.
+
+### 6.2 Navigation controls
+
+Provide:
+
+- Previous arrow.
+- Next arrow.
+- Five pagination dots, when five items exist.
+
+Navigation arrows must be visually understated.
+
+Recommended visual approach:
+
+- Small circular outline buttons.
+- Neutral/pale translucent surface.
+- Low-emphasis border.
+- Reduced visual prominence at rest.
+- Stronger affordance on hover and keyboard focus.
+- Accessible contrast and visible focus state.
+
+Do not make arrows so faint that they become difficult to identify.
+
+Place the arrows inside the carousel boundary without overlapping important text or book artwork.
+
+Do not use large decorative arrow icons.
+
+### 6.3 Autoplay behavior
+
+Intended interaction:
+
+- Auto-play carousel.
+- Horizontal slide transition.
+- Approximately 5 seconds per slide by default.
+- Moderate animation duration, approximately 350–500 ms.
+- Manual previous/next navigation.
+- Manual pagination-dot selection.
+- Pause on hover.
+- Pause while keyboard focus is inside the carousel.
+- Respect prefers-reduced-motion.
+- Do not automatically resume while the user is interacting.
+- Avoid unexpected focus movement during slide changes.
+
+This is the conceptual interaction contract.
+
+A functioning design-only prototype is preferred if supported by the approved sandbox, but production animation implementation is not authorized.
+
+Do not make autoplay a requirement for static screenshot generation.
+
+### 6.4 Recent-books ordering
+
+The five books must represent:
+
+Five most recently studied books.
+
+Not:
+
+- Five most popular books.
+- Five random recommendations.
+- Five recently added books.
+- Five arbitrary promotional products.
+
+For the design prototype, fictional book data is allowed and must be labeled SYNTHETIC.
+
+Do not imply that an implemented Recent Books API already exists.
+
+If fewer than five actual books are available in the future application, show only the available items and update pagination accordingly.
+
+If no book exists, use a useful first-book discovery/onboarding state.
+
+### 6.5 Product emphasis
+
+Keep the book cover visually prominent.
+
+The banner should resemble a premium educational library feature, not a generic e-commerce advertisement.
+
+The user should immediately recognize:
+
+- Which book is active.
+- Where they stopped.
+- How much of the book is complete.
+- How to resume.
+
+Do not use unlicensed cover art as a claimed official asset.
+
+Synthetic concept covers are acceptable in mockups if explicitly labeled.
+
+## 7. LOCKED ROW 2 — FOUR KPI CARDS
+
+Preserve exactly four cards.
+
+Each card should communicate one metric at first glance.
+
+### Card 1 — Thẻ đến hạn
+
+Display:
+
+- Distinctive small icon.
+- Due count.
+- Concise study urgency.
+- Optional confirmed denominator.
+
+### Card 2 — Chuỗi học
+
+Display:
+
+- Streak days when known.
+- Relevant icon.
+- Optional comparison only when supported by actual data.
+
+Do not repeat the streak in the top-right carousel.
+
+Do not falsely display unknown streak as zero.
+
+### Card 3 — Độ chính xác trắc nghiệm
+
+Display:
+
+- Measured MCQ accuracy.
+- Correct and attempted counts if available.
+- Optional trend only when real historical data supports it.
+
+Do not mix all exercise types into an unlabeled accuracy percentage.
+
+### Card 4 — Writing tự chấm
+
+Display:
+
+- Learner-assigned average score on 0–4 scale.
+- Scored attempt count.
+- Proper “self-score” label.
+
+This is not an AI writing score.
+
+Do not display fabricated progress trends.
+
+All four cards must share:
+
+- Comparable dimensions.
+- Consistent padding.
+- Aligned number baseline.
+- Consistent icon language.
+- Restrained visual decoration.
+
+## 8. LOCKED ROW 3 — ANALYTICS
+
+### Left — Thẻ đến hạn 7 ngày tới
+
+Bar chart.
+
+Seven day columns.
+
+Easy-to-read labels and values.
+
+The chart should communicate workload, not just decoration.
+
+If future due-date data is unavailable, use a clearly labeled conceptual fixture only.
+
+Do not claim the current dueCards total alone supports a seven-day forecast.
+
+### Center — Lịch sử học
+
+Calendar activity heatmap.
+
+Compact square cells.
+
+Clear low-to-high legend.
+
+Accurate weekday/date organization for the chosen synthetic sample.
+
+Do not automatically infer activity history from the current streak count.
+
+### Right — Kết quả làm bài
+
+Donut chart.
+
+Categories:
+
+- Đúng.
+- Sai.
+- Bỏ trống.
+
+Show a truthful total.
+
+For objective questions, the categories may be derived from:
+
+Correct = correct count.
+
+Incorrect = attempted count minus correct count.
+
+Blank = total count minus attempted count.
+
+Only combine exercise types when their semantics and time window match.
+
+Never silently treat Writing self-score as a correct/incorrect answer.
+
+Any “7 ngày qua” control requires seven-day filtered data; otherwise label the chart according to the actual available aggregation.
+
+Keep the center total and legend consistent.
+
+## 9. LOCKED ROW 4 — DEVELOPMENT AND ACTIONS
+
+### Left — Tiến độ 14 ngày
+
+Line chart showing an explicitly defined metric.
+
+The chart must state what is being tracked.
+
+Examples:
+
+- Vocabulary items saved per day.
+- Reviews completed per day.
+
+These are design candidates, not current DashboardSummary data fields.
+
+Do not fabricate a live time-series endpoint.
+
+Use clearly marked synthetic data for future-looking UI mockups.
+
+### Center — Kỹ năng cần củng cố
+
+THIS SECTION IS MANDATORY.
+
+It replaces the duplicated “Tiến độ theo sách” section.
+
+Display three compact skill rows:
+
+Cloze
+
+Trắc nghiệm
+
+Writing
+
+Each row includes:
+
+- Icon.
+- Skill name.
+- Compact performance indicator.
+- Measured value, if available.
+- Contextual learning action.
+
+Example action labels:
+
+Cloze → “Luyện điền từ”
+
+Trắc nghiệm → “Ôn câu sai”
+
+Writing → “Luyện viết câu”
+
+Bottom action:
+
+“Bắt đầu luyện tập”
+
+This block must explain which skill may deserve attention and how to act.
+
+Do not compare Writing 3.6/4 directly to MCQ 78% without distinct units and proper labeling.
+
+Do not claim AI-derived weakness classification unless such a feature actually exists.
+
+### Right — Hoạt động gần đây
+
+Compact activity list.
+
+Examples of event types:
+
+- Flashcard review.
+- Quiz attempt.
+- Writing self-score.
+- Vocabulary lookup/save.
+
+Use timestamps only when valid source events exist.
+
+Do not invent a production event-history API.
+
+Use static synthetic examples for design previews, clearly labeled.
+
+## 10. NO DUPLICATION RULE
+
+The same information may appear at different levels only when it serves a distinct purpose.
+
+Acceptable:
+
+- Hero says the user should review 12 cards.
+- KPI provides additional contextual card count.
+- Bar chart shows a different time dimension.
+
+Unacceptable:
+
+- Repeating a detailed book-progress module in Row 4.
+- Showing the same streak metric as a second large hero.
+- Placing multiple identical accuracy cards.
+- Showing the same book completion information in two separate full-size panels.
+
+The recent-books carousel is the only prominent book-progress component on the Dashboard Overview.
+
+The full future book-progress page may present more details separately.
+
+## 11. DESIGN SYSTEM
+
+Preserve Direction B:
+
+- Dark teal sidebar.
+- Light main workspace.
+- Compact but readable card layout.
+- Green/teal primary action.
+- Clean typography.
+- Restrained shadows and borders.
+- Consistent spacing.
+- Lucide icon family.
+
+Use official shadcn/ui source or existing canonical components as the design foundation.
+
+Suitable component candidates:
+
+Card, Button, Badge, Progress, Separator, Tooltip, Skeleton, Select and Carousel.
+
+Use the official shadcn/ui Carousel only if its dependencies and source are available within the approved design preview environment.
+
+Document whether the carousel is actually instantiated or merely proposed.
+
+Do not reinstall shadcn/ui, overwrite canonical components, or modify production dependencies.
+
+Do not claim a static image uses genuine shadcn component code unless the underlying preview source proves it.
+
+Apply the locally installed Impeccable skill for composition critique.
+
+## 12. RESPONSIVE CONTRACT
+
+### Desktop
+
+Canonical screenshot:
+
+1440 × 900 CSS pixels.
+
+Use the provided reference image for proportions and placement.
+
+Preserve four dashboard rows.
+
+Optimize the first viewport to show the priority action and book banner immediately.
+
+Avoid unnecessary scrolling caused by excessive hero whitespace.
+
+### Mid-width / tablet
+
+Use an intentional responsive layout.
+
+The two hero areas may stack if necessary.
+
+The book carousel must preserve one-book-only visibility.
+
+Charts may rearrange into two columns or a vertical flow.
+
+Do not allow horizontal page overflow.
+
+### Mobile
+
+At 390 × 844 and 320 × 568:
+
+Order the page:
+
+1. Today's action.
+2. Recent book carousel.
+3. KPI summaries.
+4. Analytics and skills.
+5. Recent activity.
+
+The carousel may reduce its content density but must retain:
+
+- Book identity.
+- Book progress.
+- Resume action.
+- Manual navigation.
+
+Never show part of another book to suggest overflow.
+
+Maintain readable Vietnamese text and usable interactive targets.
+
+The responsive output must not be a desktop screenshot scaled down.
+
+## 13. DATA TRUTHFULNESS — CRITICAL
+
+Current known DashboardSummary supports:
+
+- dueCards
+- streak.currentDays / asOf
+- flashcardSelfRating
+- objectiveAccuracy.mcq / cloze
+- writingSelfScore
+
+The approved visual concept also contains future-facing elements such as:
+
+- Recent-book list and book completion.
+- Seven-day due schedule.
+- Calendar activity history.
+- Fourteen-day learning trend.
+- Recent activity history.
+- Filtered quiz history.
+
+These features must not be represented as currently implemented backend capabilities without source evidence.
+
+For each widget, classify:
+
+SOURCE_BACKED_CURRENT
+
+DERIVED_FROM_CURRENT_CONTRACT
+
+SYNTHETIC_DESIGN_FIXTURE
+
+FUTURE_DATA_CONTRACT_REQUIRED
+
+Maintain a separate data-dependency register.
+
+Do not add fake fields to the current DashboardSummary.
+
+Do not implement or invent endpoints, historical events, completion models or learning metrics.
+
+Make synthetic sample values numerically consistent.
+
+If book progress is represented as completed lessons divided by total lessons, its percentage must match the chosen calculation and round-off rule.
+
+If the donut and KPI reference the same population and time window, their values must agree.
+
+Do not copy numerical inconsistencies from an illustrative screenshot.
+
+## 14. REQUIRED VISUAL EVIDENCE
+
+Provide full-resolution browser-rendered images for:
+
+1. Desktop populated Dashboard with the first carousel book active.
+2. Desktop populated Dashboard with a different carousel book active, proving the one-book-per-frame layout.
+3. Desktop first-run state.
+4. Mobile populated state.
+5. Mobile first-run state.
+6. Representative dark-mode desktop state.
+7. Relevant focus/hover carousel control state where a functioning prototype exists.
+
+Retain useful screenshots already available; do not regenerate identical evidence without reason.
+
+For every screenshot include:
+
+- State.
+- Viewport.
+- Theme.
+- Prototype version.
+- Synthetic/source provenance.
+- Component implementation provenance.
+- Exact artifact path.
+
+Owner must be able to inspect the images at full resolution.
+
+A contact sheet alone is insufficient.
+
+## 15. DESIGN REVIEW — STRICT ACCEPTANCE GATES
+
+Perform the following checks.
+
+### Layout gate
+
+- Top-left daily action remains dominant.
+- Top-right recent-book banner is prominent.
+- Four KPI cards occupy Row 2.
+- Three analytics panels occupy Row 3.
+- Three panels occupy Row 4.
+- No duplicate book-progress module exists.
+
+### Carousel gate
+
+- Exactly one book visible at rest.
+- No previous/next book peeking.
+- Both arrows present.
+- Arrows visually subtle but accessible.
+- Pagination dots present when applicable.
+- Resume action clear.
+- Autoplay/pause/reduced-motion behavior documented.
+- No unsafe or automatic production network operations.
+
+### Data gate
+
+- No invented live API capabilities.
+- Derived metrics have consistent arithmetic.
+- Null/unknown values remain distinguishable from zero.
+- Current versus future/synthetic data is identified.
+- Writing self-score is not portrayed as an AI grade.
+
+### Three-second gate
+
+Show the final desktop image to an independent design reviewer without first explaining its layout.
+
+Ask:
+
+1. What should the learner do first?
+2. Where can the learner resume a book?
+3. Where can the learner see what needs improvement?
+
+Record the actual qualitative responses.
+
+If the reviewer cannot answer quickly, revise hierarchy without changing the agreed section architecture.
+
+Do not claim a measured three-second test unless timing and participants were actually recorded.
+
+### Technical gate
+
+- No production code changes.
+- No server or database changes.
+- No unapproved component installation.
+- Original design references preserved.
+- Real full-resolution images produced.
+- Owner can view all deliverables.
+
+## 16. REQUIRED DELIVERABLES
+
+Create a versioned UXR-09 design package, including:
+
+- UXR-09-DASHBOARD-VISUAL-GALLERY.md
+- UXR-09-STRICT-LAYOUT-CONTRACT.md
+- UXR-09-COMPONENT-MAPPING.md
+- UXR-09-DATA-DEPENDENCIES.md
+- UXR-09-INTERACTION-SPEC.md
+- UXR-09-OWNER-REVIEW.md
+- Full-resolution PNG images.
+
+Use the authorized UXR-09 artifact directory.
+
+Do not overwrite an existing approved file without versioning.
+
+Do not alter UXR-01, UXR-00 or existing approved foundation artifacts.
+
+## 17. EXECUTION PREREQUISITES
+
+Before actual UXR-09 design execution, verify the project dependency gates:
+
+- UXR-01 Direction B owner selection is recorded.
+- UXR-02 foundation/AppShell images are owner-approved.
+- UXR-02A compact-layout/density images are owner-approved.
+- UXR-09 execution is separately authorized.
+
+If upstream execution approvals are not yet satisfied, do not falsely mark those tasks DONE.
+
+Record the exact blocker and stop at the permitted preparation scope.
+
+The owner's approval of the Dashboard Overview concept does not automatically close UXR-02 or UXR-02A.
+
+## 18. FINAL REPORT
+
+Return:
+
+TASK_ID: UXR-09
+
+ACTION: STRICT_DASHBOARD_VISUAL_REDESIGN
+
+DESIGN_DIRECTION: B — Compact Study Console
+
+REFERENCE_IMAGE: ...
+
+STARTING_STATUS: ...
+
+FINAL_STATUS: OWNER_VISUAL_APPROVAL_PENDING / BLOCKED
+
+LAYOUT_CONFORMANCE: ...
+
+CAROUSEL_SINGLE_BOOK: ...
+
+CAROUSEL_CONTROLS: ...
+
+BOOK_FEATURE_PROVENANCE: ...
+
+DUPLICATE_BOOK_PROGRESS_REMOVED: ...
+
+SKILLS_PANEL_PRESENT: ...
+
+THREE_SECOND_REVIEW: ...
+
+SHADCN_COMPONENT_EVIDENCE: ...
+
+IMPECCABLE_EVIDENCE: ...
+
+DATA_DEPENDENCY_GAPS: ...
+
+SCREENSHOT_COUNT: ...
+
+IMAGE_PATHS: ...
+
+FILES_CREATED: ...
+
+FILES_MODIFIED: ...
+
+PRODUCTION_CODE_MODIFIED: NO
+
+OWNER_APPROVAL: PENDING
+
+BLOCKERS: ...
+
+NEXT_ALLOWED_ACTION: WAIT_FOR_OWNER_VISUAL_APPROVAL
+
+## 19. ABSOLUTE STOP RULE
+
+Stop after the UXR-09 visual redesign is prepared for owner review.
+
+Do not:
+
+- Begin UXR-10.
+- Implement production Dashboard code.
+- Change backend contracts.
+- Automatically mark UXR-09 DONE.
+- Approve your own screenshots.
+- Merge or push without separate authorization.
+
+**The owner-approved composition is the specification. Preserve its visual identity while ensuring truthful data representation and implementable component architecture.**
