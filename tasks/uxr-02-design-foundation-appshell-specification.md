@@ -1,12 +1,14 @@
 # UXR-02 — Design Foundation & AppShell Specification
 
-**Track:** English Web UI/UX redesign (separate from application T001–T090)  
-**Priority:** P0 / shared design foundation  
-**Status:** `PREPARED / NOT STARTED / BLOCKED_BY_UXR_01_OWNER_SIGNOFF`  
-**Task-file preparation:** APPROVED 2026-10-12; **task execution, final UI direction, installation and code implementation are NOT approved**.  
-**Dependency:** UXR-00 final handoff → UXR-01 image-based owner selection/approval → **UXR-02** → UXR-02A.  
-**Owner-visible approval:** MANDATORY **visual screenshots**, not merely a markdown specification.  
-**Branch:** `design/ui-ux-research-20261012` / [Draft PR #26](https://github.com/khanhpn308/english_web/pull/26). Do not merge.  
+**Track:** English Web UI/UX redesign (separate from application T001–T090)
+**Priority:** P0 / shared design foundation
+**Status:** `DESIGN_APPROVED / PUBLICATION_PENDING`
+**Owner visual approval:** APPROVED; **approved version:** UXR-02-R2 + HM-FIX; **date:** 2026-10-14; **publication:** PENDING.
+**Closure mapping:** [AC01–AC14 and publication gates](../docs/design/uxr-02/UXR-02-FINAL-CLOSURE-REPORT.md).
+**Task-file preparation:** APPROVED 2026-10-12; design execution and final UXR-02-R2 + HM-FIX are owner approved on 2026-10-14. Installation and production code implementation remain prohibited.
+**Dependency:** UXR-00 final handoff → UXR-01 image-based owner selection/approval → **UXR-02** → UXR-02A.
+**Owner-visible approval:** MANDATORY **visual screenshots**, not merely a markdown specification.
+**Branch:** `design/ui-ux-research-20261012` / [Draft PR #26](https://github.com/khanhpn308/english_web/pull/26). Do not merge.
 **Shared mandatory protocol:** [Visual Owner Approval + Impeccable + Official shadcn/ui](../docs/design/uxr-visual-approval-impeccable-protocol-2026-10-12.md).
 
 ## 1. Objective and scope
@@ -19,14 +21,10 @@ UXR-02 owns: shared information architecture, layout regions, sidebar/header/nav
 
 ## 2. Current status, evidence and blockers
 
-- Research branch contains source-based design notes; UXR-00 was last documented `IN_PROGRESS`. No proven UXR-00 DONE artifact or UXR-01 owner-signed design direction is available in this task preparation context.
-- Existing source: `frontend/src/app/AppShell.tsx` declares nine same-origin routes, horizontal navigation to six main destinations, an AI-consent deep link, skip link, route focus and live status/ErrorBoundary. Current behavior is a **baseline contract**, not proof that a redesigned Sidebar or mobile drawer works.
-- `frontend/src/index.css`: existing semantic light/dark CSS variables; `frontend/src/app/shell.css`: current body and shell baseline, no blanket Tailwind Preflight.
-- `components.json`: existing `new-york`, Tailwind CSS variables, `lucide` icons and `@/components/ui` aliases. Installed local primitives include `Button`, `Card`, `Dialog` with Radix Dialog. No installation/reinitialization is required for **task preparation**.
-- The 2026-10-12 existing visual audit has **partial G1/G2/G5/G6/G8/G9** desktop visual coverage; G3/G4/G7 lack direct screenshots. Treat unsupported visual claims as `NOT_VERIFIED` until UXR-00 hands off.
-- The owner has stated Impeccable is already installed **on their Windows machine**. GitHub research cannot invoke or validate that installation. Actual Codex coordinator/worker usage must be proven in the later execution log.
-
-**Current gate:** `BLOCKED_BY_UXR_01_OWNER_SIGNOFF`. This Markdown file can be committed now; designing UI, running Impeccable on the user's local machine, finalizing tokens and producing approved design images require later execution authorization.
+- UXR-01 sign-off is verified in the repository: `DONE / DESIGN_DECISIONS_APPROVED / PUBLISHED`; Direction B - Compact Study Console v1.2 is owner-approved, with D1/D2/D3/D4/D6/D8/D9 approved, D5 deferred to UXR-06 and D7 future/unapproved.
+- UXR-00 remains `PARTIAL_WITH_EXPLICIT_BLOCKERS`; its final handoff, coverage matrix and targeted G7/G9 R1 evidence are retained and referenced by UXR-01.
+- Owner execution authorization is granted by the active UXR-02 instruction. This authorizes design artifact production only; it is not approval of the resulting images or a production implementation.
+- Owner explicitly approved R2 + HM-FIX on 2026-10-14 in the current conversation. Design is locked; task closure awaits verified commit/push, remote HEAD and Draft PR update. Production code, backend, database, package and lockfiles remain read-only.
 
 ## 3. Hard dependencies and execution start conditions
 
