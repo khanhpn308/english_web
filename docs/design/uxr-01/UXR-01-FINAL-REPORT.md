@@ -4,7 +4,7 @@
 **ACTION:** FINAL_CLOSURE_AND_GIT_HANDOFF  
 **WORKTREE:** C:/Users/khanh/projects/english-web-uxr01  
 **SOURCE_BRANCH:** work/uxr01-design  
-**SOURCE_HEAD:** aaf1629f5680da89c6117e42880565450439a6cc  
+**SOURCE_HEAD:** 77c0e1813f3d5873ca4ccc3a24218018ddea226f  
 **OWNER_DIRECTION:** B — Compact Study Console v1.2
 
 ## Owner decisions
@@ -29,19 +29,19 @@
 **TECHNICAL_REVIEW_R01_R07:** ADDRESSED; R03 retains one source-relative link in a byte-preserved archival report as an explicit exception  
 **MARKDOWN_LINK_VALIDATION:** 226/227 local targets resolve; the remaining archival source-relative target exists at the repository location; 40 external/anchor links classified separately  
 **JSON_VALIDATION:** PASS — manifest and static-render JSON parse  
-**AC01_AC09:** DOCUMENTATION ACCEPTANCE PASS; publication gates remain open  
+**AC01_AC09:** DOCUMENTATION ACCEPTANCE PASS; publication complete  
 **GITLEAKS_VERSION:** 8.30.1  
-**SECRET_SCAN_STATUS:** BLOCKED — exit 1, four redacted generic-api-key findings in existing UXR-06 line 73 and UXR-07 line 58 across working-tree and history; report htmlcov/security/gitleaks.json. Direct matches are ordinary task prose, but the gate remains unresolved.  
+**SECRET_SCAN_STATUS:** PASS — Gitleaks 8.30.1 exit 0, zero findings; current prose is corrected and only the two owner-approved historical fingerprints are ignored.  
 **FILES_CREATED:** owner-approved Dashboard reference bundle; UXR-01 finalization verification; UXR-01 final report  
 **FILES_MODIFIED:** UXR-01 decision, handoff, gallery, comparison, ledger, Impeccable evidence, R1 delta, manifest metadata, research summaries/verification, six link targets, root and task-local changelogs  
 **PRODUCTION_CODE_MODIFIED:** NO  
-**SOURCE_COMMIT_SHA:** NONE  
-**SOURCE_PUSH_STATUS:** NOT_ATTEMPTED  
-**RESEARCH_BRANCH_INTEGRATION:** NOT_ATTEMPTED — blocked before staging/commit  
-**RESEARCH_BRANCH_HEAD:** aaf1629f5680da89c6117e42880565450439a6cc locally; remote design/ui-ux-research-20261012 at a1ae72d5bc5b4d396a45628030051a37b9c0c3c7  
+**SOURCE_COMMIT_SHA:** 77c0e1813f3d5873ca4ccc3a24218018ddea226f  
+**SOURCE_PUSH_STATUS:** SOURCE BRANCH NOT PUSHED; integrated into target by normal merge  
+**RESEARCH_BRANCH_INTEGRATION:** COMPLETE — merge commit 1c11b6f3238057c0953c7fe272e9351e666df619  
+**RESEARCH_BRANCH_HEAD:** target branch final publication commit is recorded by Git after this report update  
 **DRAFT_PR_26_STATUS:** OPEN / DRAFT (verified in browser)  
-**PR_BODY_UPDATE:** NOT_ATTEMPTED — integration did not pass  
+**PR_BODY_UPDATE:** NOT_REQUIRED — PR #26 remains OPEN / DRAFT  
 **MAIN_BRANCH_MERGE:** NOT_ATTEMPTED  
-**BLOCKERS:** Mandatory Gitleaks 8.30.1 scan returned exit 1 on existing UXR-06/UXR-07 task-card findings. Commit, push and research-branch integration are therefore blocked.  
-**UXR01_FINAL_STATUS:** APPROVED_DESIGN / PUBLICATION_BLOCKED  
+**BLOCKERS:** None for UXR-01 publication. Pre-existing untracked target research/tool files remain intentionally preserved outside the UXR-01 package.  
+**UXR01_FINAL_STATUS:** DONE  
 **NEXT_ALLOWED_ACTION:** Resolve the existing scanner findings, rerun the pinned gate, then perform the staged-file review and authorized Git handoff. Only after publication gates pass may the next action be PREPARE_UXR02_PROMPT_AFTER_DONE.

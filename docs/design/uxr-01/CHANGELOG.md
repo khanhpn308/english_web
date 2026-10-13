@@ -23,3 +23,9 @@
 - Recorded worker capacity/command-length failures and historical critique provenance; final v1.2 directions and comparison are coordinator-owned. No installed skill/component was updated or copied into production.
 - UXR-01 remains `OWNER_VISUAL_APPROVAL_PENDING`; every owner decision remains PENDING. No UXR-02 execution or application/DTO/schema/dependency/task-todo change.
 - The owner's task-specific exclusive artifact path supersedes repository-wide changelog placement; shared `docs/changelogs.md` and its unrelated original worktree modification are intentionally untouched.
+## 13/10/2026 — UXR-01 Git publication and worktree handoff
+
+- Integrated source commit `77c0e1813f3d5873ca4ccc3a24218018ddea226f` into `design/ui-ux-research-20261012` with merge commit `1c11b6f3238057c0953c7fe272e9351e666df619`.
+- Verified the Gitleaks 8.30.1 gate passed with exit 0 and zero findings; retained only the two owner-approved exact historical fingerprints and the corrected UXR-06/UXR-07 prose.
+- Preserved the target worktree's unrelated untracked files and target-local changelog entries; no production code changed.
+

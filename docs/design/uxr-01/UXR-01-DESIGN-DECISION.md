@@ -2,7 +2,7 @@
 
 **TASK_ID:** UXR-01  
 **OWNER_DECISION_STATUS:** `DESIGN_DECISIONS_APPROVED` for D1/D2/D3/D4/D6/D8/D9  
-**TASK_STATUS:** `APPROVED_DESIGN / PUBLICATION_BLOCKED` pending the mandatory secret scan and Git handoff  
+**TASK_STATUS:** `DONE / OWNER_APPROVED / PUBLISHED`  
 **SELECTED_DIRECTION:** **B — Compact Study Console v1.2**  
 **DIRECTION_A:** Not selected; original gallery and historical comparison preserved.
 

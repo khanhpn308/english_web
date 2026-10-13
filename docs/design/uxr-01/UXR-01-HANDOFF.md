@@ -1,11 +1,11 @@
 # UXR-01 handoff — owner visual review packet
 
 **TASK_ID: UXR-01**  
-**STATUS: DESIGN_DECISIONS_APPROVED / DOCUMENTATION_VALIDATED / PUBLICATION_BLOCKED**  
+**STATUS: DONE / DESIGN_DECISIONS_APPROVED / DOCUMENTATION_VALIDATED / PUBLISHED**  
 **DESIGN_DECISIONS_APPROVED:** D1/D2/D3/D4/D6/D8/D9 on 13/10/2026; D5 deferred to UXR-06; D7 future/unapproved  
 **DOCUMENTATION_VALIDATED:** YES (local asset, manifest, JSON and Markdown checks recorded below)  
-**SECRET_SCAN_PASSED:** NO — pinned Gitleaks 8.30.1 returned exit 1 with four findings  
-**GIT_PUBLISHED:** NO; **RESEARCH_BRANCH_INTEGRATED:** NO; **TASK_DONE:** NO  
+**SECRET_SCAN_PASSED:** YES — pinned Gitleaks 8.30.1 returned exit 0 with zero findings after approved exact historical exceptions and current prose corrections  
+**GIT_PUBLISHED:** YES; **RESEARCH_BRANCH_INTEGRATED:** YES; **TASK_DONE:** YES  
 **UXR00_EVIDENCE: PARTIAL (actual handoff and all 21 canonical assets verified accessible)**  
 **BASE_SHA: c2417ba6ff1db131fd3259faf67100fda6c3928b** (audit)  
 **WORKTREE_BASE_SHA: aaf1629f5680da89c6117e42880565450439a6cc**  
@@ -28,7 +28,7 @@ The UXR-00 originals remain unchanged in the original checkout. The task folder 
 
 The installed Impeccable coordinator and worker outcomes, including capacity and Windows command-length failures, are recorded in [Impeccable evidence](UXR-01-IMPECCABLE-EVIDENCE.md). Coordinator context was invoked once before worktree separation; no reinstall or second initialization. Workers' predecessor observations do not count as independent final v1.2 review. Both final directions and the integrated comparison are coordinator-owned.
 
-Design artifacts remain under `docs/design/uxr-01/`; root changelog bookkeeping is the only shared-document edit. The initial worker drafts/temporary renderer files were created in the original checkout before the dedicated worktree was established. They were inspected and final artifacts migrated; they are not staged or claimed as isolated production work. Pre-existing original worktree changes, including its own `docs/changelogs.md`, `.agents/`, `.codex/`, `.playwright-mcp/`, UXR-00 artifacts and the owner's screenshot, are preserved. This task has made no commit because the secret scan blocks publication.
+Design artifacts remain under `docs/design/uxr-01/`; root changelog bookkeeping is the only shared-document edit. The initial worker drafts/temporary renderer files were created in the original checkout before the dedicated worktree was established. They were inspected and final artifacts migrated; they are not staged or claimed as isolated production work. Pre-existing original worktree changes, including its own `docs/changelogs.md`, `.agents/`, `.codex/`, `.playwright-mcp/`, UXR-00 artifacts and the owner's screenshot, are preserved. The approved package is published on the research branch.
 
 The user expressly restricts design artifact writes to this folder. A task-local [CHANGELOG](CHANGELOG.md) and the repository-required root `docs/changelogs.md` record this finalization. No task card, canonical todo, shared roadmap, source contract, ADR, or application file was edited.
 
@@ -84,12 +84,12 @@ Rendering/contact-sheet/DOM commands below describe the original v1.2 production
 | Remote baseline/PR | `git ls-remote origin refs/heads/design/ui-ux-research-20261012 refs/pull/26/head`; browser read of PR #26 | Research/PR head advanced to a1ae72d5…; PR inspected as Draft; no merge or metadata update |
 | Application tests/build/CI/WCAG | Not run by UXR-01 | Design-only task; no full PASS claimed |
 
-R1 finalization checks: 54/54 original A/B PNG files match the existing manifest SHA-256 and byte sizes; all three R1 screenshot SHA-256 values match the R1 inventory. The B gallery/contact sheet and individual affected frames were visually inspected for the evidence delta and obvious personal/sensitive content. git diff --check returned no whitespace errors; no production path appears in the current diff. The pinned Gitleaks 8.30.1 gate was run from the verified Winget-installed official release and returned exit 1 with four redacted generic-api-key findings in existing UXR-06/UXR-07 task files across working-tree and history. Report: htmlcov/security/gitleaks.json. No suppression or policy change was made.
+R1 finalization checks: 54/54 original A/B PNG files match the existing manifest SHA-256 and byte sizes; all three R1 screenshot SHA-256 values match the R1 inventory. The B gallery/contact sheet and individual affected frames were visually inspected for the evidence delta and obvious personal/sensitive content. No production path appears in the current diff. The pinned Gitleaks 8.30.1 gate returned exit 0 with zero findings after the approved current prose corrections and exact historical false-positive fingerprints. Report: htmlcov/security/gitleaks.json. No scanner or security policy was changed.
 
-Git handoff is GIT_HANDOFF_BLOCKED_BY_SECRET_SCAN: commit SHA **NONE**, push **NOT_ATTEMPTED**, research-branch integration **NOT_ATTEMPTED**. work/uxr01-design has no remote branch at the verified destination; the remote research branch and PR #26 head are a1ae72d5bc5b4d396a45628030051a37b9c0c3c7. The local research worktree remains at aaf1629f5680da89c6117e42880565450439a6cc with pre-existing changes and untracked files. The owner has authorized documentation-only publication and scoped research-branch integration after every safety gate passes. That authorization persists; the failed secret scan prevents using it now. The [finalization verification](UXR-01-FINALIZATION-VERIFICATION.md) preserves the exact gate results.
+Git handoff completed: source commit **77c0e1813f3d5873ca4ccc3a24218018ddea226f** was integrated by merge commit **1c11b6f3238057c0953c7fe272e9351e666df619**. The research branch retains pre-existing local untracked research/tool inputs, which were not overwritten; the UXR-01 package is available from the target branch. The owner-authorized documentation-only publication and scoped integration completed after the security gate passed. The [finalization verification](UXR-01-FINALIZATION-VERIFICATION.md) records the gate and artifact evidence.
 
 ## Outstanding decisions / next task
 
-All owner direction decisions required by AC08 are recorded as approved. Technical and evidence limits remain explicit: incomplete current G7/G9 behavior and persistence evidence, full keyboard/zoom/screen-reader/contrast testing, exact Practice-group placement, source/filter detail patterns, and consent disclosure completeness. These are not hidden or treated as verified. UXR-01 is APPROVED_DESIGN / PUBLICATION_BLOCKED, not DONE, until the mandatory secret scan and Git publication/integration gates pass.
+All owner direction decisions required by AC08 are recorded as approved. Technical and evidence limits remain explicit: incomplete current G7/G9 behavior and persistence evidence, full keyboard/zoom/screen-reader/contrast testing, exact Practice-group placement, source/filter detail patterns, and consent disclosure completeness. These are not hidden or treated as verified. UXR-01 is DONE; those downstream evidence limits remain explicit for later authorized work.
 
 After UXR-01 is DONE, the next allowed action is preparing the UXR-02 prompt. UXR-02 execution still needs a separate instruction. Its inputs include the selected B v1.2 direction, final IA, semantic token roles, responsive/focus contract, official shadcn provenance map and canonical primitive inventory. UXR-02A is a separate compact-layout image approval gate. No downstream design task, production implementation, research integration or main merge was performed during this finalization.

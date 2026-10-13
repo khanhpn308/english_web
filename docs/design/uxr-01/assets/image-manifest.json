@@ -1,7 +1,7 @@
 {
   "task_id": "UXR-01",
   "version": "v1.2",
-  "status": "DIRECTION_B_OWNER_APPROVED_DOCUMENTATION_VALIDATED_PUBLICATION_BLOCKED",
+  "status": "DIRECTION_B_OWNER_APPROVED_DOCUMENTATION_VALIDATED_PUBLISHED",
   "owner_direction": "B — Compact Study Console v1.2",
   "owner_decision_date": "2026-10-13",
   "owner_decisions": {"D1": "APPROVED", "D2": "APPROVED", "D3": "APPROVED", "D4": "APPROVED", "D5": "DEFERRED_TO_UXR06", "D6": "APPROVED", "D7": "FUTURE_UNAPPROVED", "D8": "APPROVED", "D9": "APPROVED"},
