@@ -77,7 +77,7 @@ All proposed images are DESIGN_MOCKUP with SYNTHETIC_DESIGN_FIXTURE data. Origin
 
 | Gate | Status before commit | Method/evidence |
 |---|---|---|
-| G01 repository/branch integrity | PASS | branch and origin equal c11ccc611f4f65779a605382f2594eb3e2b59c37; no divergence |
+| G01 repository/branch integrity | PASS | branch and origin equal c11ccc611f4f65779a605382f2594eb3e2b59c37 at the publication checkpoint; no divergence |
 | G02 scope allowlist | PASS | staged paths limited to authorized design/task/roadmap files |
 | G03 approved artifacts | PASS | 64 PNGs decoded; R1/A12/R1B/source preserved; links resolve |
 | G04 targeted preview | PASS | R1B check PASS; A12 verification PASS |
@@ -99,7 +99,7 @@ UXR02A_HANDOFF: COMPLETE. UXR03_09_DESIGN_DEPENDENCY: SATISFIED. UXR03_09_PRODUC
 ## Publication metadata
 
 Initial design publication commit: 79ccbac59ea777ceee0424b61e2a203578d29703. Final closure metadata commits: ea50ef9a4740fe3fd4403c519b283058dacd3285 and c11ccc611f4f65779a605382f2594eb3e2b59c37.
-Remote branch SHA: c11ccc611f4f65779a605382f2594eb3e2b59c37 (verified at origin/design/ui-ux-research-20261012).
+Remote branch publication checkpoint: c11ccc611f4f65779a605382f2594eb3e2b59c37 (verified at origin/design/ui-ux-research-20261012); subsequent pre-approval-note supersession commit: 9d018205e47f66b9b0a61f370e3f71ebec7e4db6.
 Draft PR #26: OPEN / DRAFT / NOT MERGED; base main; head design/ui-ux-research-20261012. PR milestone marker opening/closing each appears exactly once.
 Production code modified: NO. Main modified or merged: NO.
 
@@ -124,4 +124,4 @@ Remote verification: PASS.
 | G09 Git patch integrity | PASS | git diff --check and git diff --cached --check clean |
 | G10 gate summary | PASS | all applicable closure gates passed before commit/push |
 
-Remote GitHub file HEAD checks returned HTTP 200 for the closure report, owner decision, handoff, R1B gallery asset and A12 verification. PR #26 remains OPEN/DRAFT and was not merged.\n\n
+Remote GitHub file HEAD checks returned HTTP 200 for the closure report, owner decision, handoff, R1B gallery asset and A12 verification. PR #26 remains OPEN/DRAFT and was not merged.\n\n\n
