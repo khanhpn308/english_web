@@ -1,0 +1,2 @@
+import { chromium } from 'playwright';
+const b=await chromium.launch({headless:true,executablePath:process.env.UXR_CHROME}); const p=await b.newPage({viewport:{width:1200,height:900}}); await p.goto('file:///C:/Users/khanh/projects/vocabularies-smoke/docs/design/uxr-02/assets/contact-sheet.html'); await p.screenshot({path:'docs/design/uxr-02/assets/uxr02-v1-contact-sheet.png',fullPage:true}); await b.close();

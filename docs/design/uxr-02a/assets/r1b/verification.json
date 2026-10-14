@@ -1,0 +1,103 @@
+{
+  "status": "PASS",
+  "a04": {
+    "populated": {
+      "total": "110",
+      "legend": [
+        "78 (71%)",
+        "24 (22%)",
+        "8 (7%)"
+      ]
+    },
+    "mixed": {
+      "total": "6",
+      "legend": [
+        "5 (83%)",
+        "1 (17%)",
+        "0 (0%)"
+      ]
+    }
+  },
+  "a02": {
+    "cellCount": 105,
+    "initialTabindexZero": 1,
+    "hoverSwitch": true,
+    "pointerExit": true,
+    "keyboardArrow": true,
+    "escape": true,
+    "noReload": true,
+    "mobileTap": true,
+    "tooltipInViewport": true
+  },
+  "a08": {
+    "globalHero": "Tạo nhịp học đầu tiên",
+    "resultRing": 0,
+    "heatCells": 0,
+    "repeatedEmptyDataCopy": 0
+  },
+  "a12": {
+    "preserved": true,
+    "grid": [
+      242,
+      242.09375
+    ],
+    "cell": [
+      19.265625,
+      19.265625
+    ],
+    "cells": 105,
+    "noOverflow": true
+  },
+  "screenshots": [
+    {
+      "name": "R1B-A-first-run-1366x768.png",
+      "w": 1366,
+      "h": 768
+    },
+    {
+      "name": "R1B-B-first-run-1366x768.png",
+      "w": 1366,
+      "h": 768
+    },
+    {
+      "name": "R1B-mixed-1366x768.png",
+      "w": 1366,
+      "h": 768
+    },
+    {
+      "name": "R1B-populated-1366x768.png",
+      "w": 1366,
+      "h": 768
+    },
+    {
+      "name": "R1B-heatmap-default-1366x768.png",
+      "w": 1366,
+      "h": 768
+    },
+    {
+      "name": "R1B-heatmap-keyboard-1366x768.png",
+      "w": 1366,
+      "h": 768
+    },
+    {
+      "name": "R1B-heatmap-tooltip-1366x768.png",
+      "w": 1366,
+      "h": 768
+    },
+    {
+      "name": "R1B-heatmap-mobile-tap-390x844.png",
+      "w": 390,
+      "h": 844
+    },
+    {
+      "name": "R1B-first-run-390x844.png",
+      "w": 390,
+      "h": 844
+    },
+    {
+      "name": "R1B-heatmap-dark-1366x768.png",
+      "w": 1366,
+      "h": 768
+    }
+  ]
+}

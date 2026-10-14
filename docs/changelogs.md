@@ -1,3 +1,28 @@
+## 13/10/2026 — UXR-01 final integration preparation (Asia/Bangkok)
+
+- Applied the owner-approved wording corrections in `tasks/uxr-06-quiz-builder-runner-design.md` and `tasks/uxr-07-quiz-results-writing-feedback-design.md`.
+- Added only the two approved historical false-positive Gitleaks fingerprints to `.gitleaksignore`; no broad rule or path suppression was added.
+- Prepared the final UXR-01 documentation, 54 original A/B design images and owner-approved Dashboard reference for branch integration; no production code changed.
+- Verified all image manifest hashes and sizes, parsed both JSON documents, and passed `npm run security:secrets` with Gitleaks 8.30.1, exit 0 and zero findings after filesystem escalation for temporary report writes.
+
+## 13/10/2026 — UXR-01 final closure reconciliation (Asia/Bangkok)
+
+- Recorded the owner-approved B — Compact Study Console v1.2 direction and D1/D2/D3/D4/D6/D8/D9 decisions; D5 remains deferred to UXR-06 and D7 remains future/unapproved.
+- Added the byte-preserved owner-approved Dashboard Overview reference, source prompts, hash/dimension record and data-truthfulness boundary under docs/design/uxr-01/owner-approved-dashboard-overview/.
+- Reconciled UXR-01 status summaries, repaired six internal research links, preserved all 54 A/B PNGs and documented AC01–AC09 validation.
+- Ran the pinned Gitleaks 8.30.1 gate. It returned exit 1 with four redacted findings in existing UXR-06/UXR-07 task files, so commit/push/research-branch integration remained blocked. No production code changed.
+
+## 12/10/2026 - UXR-00 autonomous rendered visual audit (Asia/Bangkok)
+
+- Added local-only research evidence under `artifacts/uxr00/`: A0 environment readiness, A1 source audit, A2 IA/design audit, 21 canonical Playwright MCP screenshots (22 physical files including one duplicate), a nine-group coverage matrix, screenshot inventory and final UXR-00 report.
+- Verified the isolated Windows harness and temporary SQLite database, rebuilt the existing frontend, and recorded REAL_RENDERED versus SYNTHETIC_RENDERED states. No production code, AI provider, commit, push or merge was performed.
+- Recorded UXR-00 as `PARTIAL_WITH_EXPLICIT_BLOCKERS`: G7 has source-confirmed MCQ result data but no browser-rendered result/feedback capture, with writing feedback and populated Dashboard follow-up work carried forward. Browser worker used GPT-6 Sol/high fallback after requested GPT-6.1 Sol/high was unavailable due runtime capacity.
+
+## 12/10/2026 - Cài Impeccable cho Codex (Asia/Bangkok)
+
+- Cài skill Impeccable 4.5.2 vào `.agents/skills/impeccable`, engine Windows x64 v0.1.14 và hook Codex project-local trong `.codex/hooks.json` để hỗ trợ quy trình thiết kế/review UI.
+- Để khởi tạo bối cảnh thiết kế sản phẩm khi cần, chạy `/impeccable init` trong phiên Codex.
+
 ## 12/10/2026 - T040 coding-only merge and closure (Asia/Bangkok)
 
 - Owner-approved [PR #23](https://github.com/khanhpn308/english_web/pull/23) merged Windows first-run and DPAPI runtime source into `main` at `a5623be42baa421539975ff57d619aeb1789a256`. Updated T040 card and checklist to `DONE (CODING_ONLY)` with `FINAL_VERIFICATION_DEFERRED`.

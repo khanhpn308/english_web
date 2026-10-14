@@ -1,0 +1,4 @@
+import { chromium } from 'playwright';
+const cases=[['',1440,900],['&collapsed=1',1440,900],['&theme=dark',1440,900],['',390,844],['&drawer=1',390,844],['',320,568]];
+const b=await chromium.launch({headless:true,executablePath:process.env.UXR_CHROME});let issues=[];
+for(const [q,w,h] of cases){const p=await b.newPage({viewport:{width:w,height:h}});await p.goto('http://127.0.0.1:4180/index-r1.html?'+q,{waitUntil:'networkidle'});const m=await p.evaluate(()=>({sw:document.documentElement.scrollWidth,cw:document.documentElement.clientWidth,stamp:document.body.innerText.includes('DESIGN_MOCKUP'),labels:[...document.querySelectorAll('body *')].filter(e=>e.textContent?.includes('?')).length}));if(m.sw>m.cw+1||!m.stamp||m.labels)issues.push({q,w,h,m});await p.close();}await b.close();console.log(JSON.stringify({cases:cases.length,issues},null,2));

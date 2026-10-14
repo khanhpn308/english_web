@@ -1,0 +1,62 @@
+/* Owner A12: eleven columns by eleven rows; 105 dates and 16 non-data slots. */
+.r1-heat-grid,
+.r1-heat-detail .r1-heat-grid {
+  width: min(100%, 242px);
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: repeat(11, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  gap: 3px;
+  position: relative;
+}
+.r1-heat-wrap, .heat-padding {
+  aspect-ratio: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+.r1-heat-grid .r1-heat-cell,
+.r1-heat-detail .r1-heat-grid .r1-heat-cell {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: 1;
+  border: 0;
+}
+.r1-heat-legend, .r1-heat-detail .r1-heat-legend {
+  justify-content: center;
+  gap: 4px;
+  margin-block: 12px 6px;
+}
+.r1-heat .r1-full-note { text-align: center; line-height: 1.5; }
+.a12-empty {
+  width: min(100%, 242px);
+  aspect-ratio: 1;
+  margin-inline: auto;
+  justify-content: center;
+}
+.r1-heat-tooltip, .r1-heat-detail .r1-heat-tooltip {
+  width: 200px;
+  min-width: 0;
+  max-width: 200px;
+  transform: none;
+  left: 0;
+  top: 100%;
+}
+[data-theme=dark] .r1-heat-legend .l0 { background:#1f3b40; }
+[data-theme=dark] .r1-heat-legend .l1 { background:#24695f; }
+[data-theme=dark] .r1-heat-legend .l2 { background:#338c7d; }
+[data-theme=dark] .r1-heat-legend .l3 { background:#46ba98; }
+[data-theme=dark] .r1-heat-legend .l4 { background:#a8f0d8; }
+@media(max-width:767px) {
+  .r1-heat-grid, .r1-heat-detail .r1-heat-grid { gap:3px; }
+}
+
+/* R1B A04: derive donut center from the active state fixture, never a shared literal. */
+.result-ring::after { content: attr(data-total) !important; }
+.result-total { display:none; }
+/* R1B A08: compact panel empties; the hero remains the one dominant first-run explanation. */
+.compact-empty { min-height:42px; margin-top:8px; padding:8px; }
+.compact-empty p { display:none; }
+/* First-run keeps panel structure while the hero carries the only explanatory onboarding copy. */
+.dashboard .empty-surface p, .dashboard .book-empty p { display:none; }
