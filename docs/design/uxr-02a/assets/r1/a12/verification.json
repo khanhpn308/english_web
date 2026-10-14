@@ -1,0 +1,711 @@
+{
+  "engine": "Installed Chrome via Playwright",
+  "scope": "Isolated DESIGN_MOCKUP / SYNTHETIC_DESIGN_FIXTURE",
+  "geometry": [
+    {
+      "width": 1366,
+      "theme": "light",
+      "variant": "A",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0.0078125,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 1366,
+      "theme": "light",
+      "variant": "B",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0.0078125,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 1366,
+      "theme": "dark",
+      "variant": "A",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0.0078125,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 1366,
+      "theme": "dark",
+      "variant": "B",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0.0078125,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 1024,
+      "theme": "light",
+      "variant": "A",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 1024,
+      "theme": "light",
+      "variant": "B",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 1024,
+      "theme": "dark",
+      "variant": "A",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 1024,
+      "theme": "dark",
+      "variant": "B",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 768,
+      "theme": "light",
+      "variant": "A",
+      "gridWidth": 239,
+      "gridHeight": 239,
+      "ratio": 1,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19,
+        19
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 768,
+      "theme": "light",
+      "variant": "B",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 768,
+      "theme": "dark",
+      "variant": "A",
+      "gridWidth": 239,
+      "gridHeight": 239,
+      "ratio": 1,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19,
+        19
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 768,
+      "theme": "dark",
+      "variant": "B",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 390,
+      "theme": "light",
+      "variant": "A",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 390,
+      "theme": "light",
+      "variant": "B",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 390,
+      "theme": "dark",
+      "variant": "A",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 390,
+      "theme": "dark",
+      "variant": "B",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 320,
+      "theme": "light",
+      "variant": "A",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 320,
+      "theme": "light",
+      "variant": "B",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 320,
+      "theme": "dark",
+      "variant": "A",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    },
+    {
+      "width": 320,
+      "theme": "dark",
+      "variant": "B",
+      "gridWidth": 242,
+      "gridHeight": 242.09375,
+      "ratio": 0.9996127533238673,
+      "gap": "3px",
+      "cellCount": 105,
+      "padding": 16,
+      "maxCellDifference": 0,
+      "cellSize": [
+        19.265625,
+        19.265625
+      ],
+      "centeredError": 0,
+      "borders": true,
+      "horizontalOverflow": false,
+      "levels": [
+        "r1-heat-cell level-0",
+        "r1-heat-cell level-1",
+        "r1-heat-cell level-2",
+        "r1-heat-cell level-4",
+        "r1-heat-cell level-3",
+        "r1-heat-cell unknown"
+      ]
+    }
+  ],
+  "interactions": {
+    "hover": true,
+    "pointerExit": true,
+    "keyboardFocus": true,
+    "arrowMovement": true,
+    "focusOutline": "2px",
+    "escape": true,
+    "emulatedTouchTap": true,
+    "close": true,
+    "mobileTooltipInViewport": true
+  },
+  "images": [
+    {
+      "name": "A12-dashboard-A-desktop.png",
+      "cssViewport": [
+        1366,
+        768
+      ],
+      "capture": "viewport",
+      "pixels": [
+        1366,
+        768
+      ]
+    },
+    {
+      "name": "A12-dashboard-B-desktop.png",
+      "cssViewport": [
+        1366,
+        768
+      ],
+      "capture": "viewport",
+      "pixels": [
+        1366,
+        768
+      ]
+    },
+    {
+      "name": "A12-desktop-default.png",
+      "cssViewport": [
+        1366,
+        768
+      ],
+      "capture": "heatmap card at native resolution",
+      "pixels": [
+        393,
+        423
+      ]
+    },
+    {
+      "name": "A12-desktop-tooltip.png",
+      "cssViewport": [
+        1366,
+        768
+      ],
+      "capture": "viewport",
+      "pixels": [
+        1366,
+        768
+      ]
+    },
+    {
+      "name": "A12-desktop-dark.png",
+      "cssViewport": [
+        1366,
+        768
+      ],
+      "capture": "heatmap card at native resolution",
+      "pixels": [
+        393,
+        423
+      ]
+    },
+    {
+      "name": "A12-tablet-default.png",
+      "cssViewport": [
+        768,
+        1024
+      ],
+      "capture": "heatmap card at native resolution",
+      "pixels": [
+        269,
+        420
+      ]
+    },
+    {
+      "name": "A12-mobile-390-default.png",
+      "cssViewport": [
+        390,
+        844
+      ],
+      "capture": "heatmap card at native resolution",
+      "pixels": [
+        366,
+        417
+      ]
+    },
+    {
+      "name": "A12-mobile-390-tooltip.png",
+      "cssViewport": [
+        390,
+        844
+      ],
+      "capture": "heatmap card at native resolution",
+      "pixels": [
+        366,
+        417
+      ]
+    },
+    {
+      "name": "A12-mobile-320-default.png",
+      "cssViewport": [
+        320,
+        568
+      ],
+      "capture": "heatmap card at native resolution",
+      "pixels": [
+        302,
+        413
+      ]
+    },
+    {
+      "name": "A12-mobile-320-dark.png",
+      "cssViewport": [
+        320,
+        568
+      ],
+      "capture": "heatmap card at native resolution",
+      "pixels": [
+        302,
+        413
+      ]
+    },
+    {
+      "name": "A12-dashboard-390-full.png",
+      "cssViewport": [
+        390,
+        844
+      ],
+      "capture": "full page",
+      "pixels": [
+        390,
+        2354
+      ]
+    },
+    {
+      "name": "A12-dashboard-320-full.png",
+      "cssViewport": [
+        320,
+        568
+      ],
+      "capture": "full page",
+      "pixels": [
+        320,
+        2293
+      ]
+    }
+  ],
+  "firstRun": {
+    "noFabricatedCells": true,
+    "squareEnvelope": [
+      242,
+      242
+    ]
+  },
+  "status": "PASS"
+}
