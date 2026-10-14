@@ -1,7 +1,7 @@
 ﻿# UXR-02A Evidence Matrix
 
 **Task:** UXR-02A Â· Layout Simplification & Information Density
-**Status:** DONE / OWNER_APPROVED / DESIGN_PUBLISHED_PENDING_GIT_CONFIRMATION
+**Status:** DONE / OWNER_APPROVED / PUBLISHED
 **Branch:** `design/ui-ux-research-20261012`
 **Foundation:** `UXR-02-R2 + HM-FIX` (owner approved 2026-10-14)
 **Evidence rule:** proposed frames are `DESIGN_MOCKUP` with synthetic fixtures. Baseline captures retain their original `REAL_RENDERED` or `SYNTHETIC_RENDERED` provenance.
@@ -132,3 +132,8 @@ The authoritative remaining-defect statuses are recorded in [UXR-02A-R1B-FINAL-C
 | AC16 | PASS | explicit owner approval of R1B image packet and density rules on 2026-10-14 |
 
 The final closure report records publication metadata after Git confirmation. Isolated-preview checks are not production implementation or runtime accessibility claims.
+
+
+### Publication closure (2026-10-14)
+
+Remote branch and GitHub artifact checks passed at commit 79ccbac59ea777ceee0424b61e2a203578d29703. AC03, AC15 and AC16 remain PASS; owner approval is recorded in the decision sheet. PR #26 remains OPEN/DRAFT.

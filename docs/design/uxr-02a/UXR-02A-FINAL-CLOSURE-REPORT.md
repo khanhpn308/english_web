@@ -98,12 +98,30 @@ UXR02A_HANDOFF: COMPLETE. UXR03_09_DESIGN_DEPENDENCY: SATISFIED. UXR03_09_PRODUC
 
 ## Publication metadata
 
-Commit SHA: to be recorded after authorized commit.
-Remote branch SHA: to be recorded after remote verification.
-Draft PR #26: to be verified after push; it must remain OPEN/DRAFT against main with head design/ui-ux-research-20261012.
+Commit SHA: 79ccbac59ea777ceee0424b61e2a203578d29703.
+Remote branch SHA: 79ccbac59ea777ceee0424b61e2a203578d29703 (verified at origin/design/ui-ux-research-20261012).
+Draft PR #26: OPEN / DRAFT / NOT MERGED; base main; head design/ui-ux-research-20261012. PR milestone marker opening/closing each appears exactly once.
 Production code modified: NO. Main modified or merged: NO.
 
 ## Final status
 
-Before Git confirmation: DONE / OWNER_APPROVED / DESIGN_PUBLISHED_PENDING_GIT_CONFIRMATION.
-After successful remote verification: DONE / OWNER_APPROVED / PUBLISHED.
+Final status: DONE / OWNER_APPROVED / PUBLISHED.
+Remote verification: PASS.
+
+
+## Final publication gate results (2026-10-14)
+
+| Gate | Status | Actual evidence |
+|---|---|---|
+| G01 repository/branch integrity | PASS | branch and origin equal 79ccbac59ea777ceee0424b61e2a203578d29703; no divergence |
+| G02 scope allowlist | PASS | staged paths limited to UXR-02A docs/task/roadmap; no production paths |
+| G03 approved artifacts | PASS | 64 PNGs decoded; R1/A12/R1B/source preserved; links resolve |
+| G04 targeted preview | PASS | R1B check PASS; A12 verification PASS; A04/A02/A08/A12 evidence recorded |
+| G05 AC completeness | PASS | AC03, AC15 and AC16 explicitly closed; AC01–AC16 traceable |
+| G06 links/documentation | PASS | 240 repository-relative links resolve |
+| G07 provenance | PASS | installed Impeccable evidence and official shadcn mapping preserved |
+| G08 security | PASS | Gitleaks 8.30.1 protect --staged, zero findings |
+| G09 Git patch integrity | PASS | git diff --check and git diff --cached --check clean |
+| G10 gate summary | PASS | all applicable closure gates passed before commit/push |
+
+Remote GitHub file HEAD checks returned HTTP 200 for the closure report, owner decision, handoff, R1B gallery asset and A12 verification. PR #26 remains OPEN/DRAFT and was not merged.

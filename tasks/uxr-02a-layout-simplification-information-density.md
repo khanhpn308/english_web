@@ -2,8 +2,8 @@
 
 **Track:** English Web UI/UX research/redesign; distinct from application T001â€“T090 and AI orchestration.
 **Priority:** P0 mandatory cross-screen density and layout design gate.
-**Status:** DONE / OWNER_APPROVED / DESIGN_PUBLISHED_PENDING_GIT_CONFIRMATION.
-**UXR02A_STATUS:** DONE / OWNER_APPROVED / DESIGN_PUBLISHED_PENDING_GIT_CONFIRMATION.
+**Status:** DONE / OWNER_APPROVED / PUBLISHED.
+**UXR02A_STATUS:** DONE / OWNER_APPROVED / PUBLISHED.
 **UXR02A_REVIEW_STATE:** OWNER_VISUAL_APPROVAL_APPROVED — Variant B / UXR-02A-R1B / A12 square geometry.
 **Approval scope:** The 2026-10-14 owner instruction authorizes UXR-02A design execution and isolated preview production. It does not authorize application code modification, production implementation, final design approval, commit, push or merge.
 **Hard dependency:** UXR-00 verified evidence handoff â†’ UXR-01 owner-approved visual direction â†’ UXR-02 owner-approved AppShell + foundation visuals â†’ **UXR-02A**.
