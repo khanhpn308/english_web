@@ -124,5 +124,4 @@ Remote verification: PASS.
 | G09 Git patch integrity | PASS | git diff --check and git diff --cached --check clean |
 | G10 gate summary | PASS | all applicable closure gates passed before commit/push |
 
-Remote GitHub file HEAD checks returned HTTP 200 for the closure report, owner decision, handoff, R1B gallery asset and A12 verification. PR #26 remains OPEN/DRAFT and was not merged.
-
+Remote GitHub file HEAD checks returned HTTP 200 for the closure report, owner decision, handoff, R1B gallery asset and A12 verification. PR #26 remains OPEN/DRAFT and was not merged.\n
