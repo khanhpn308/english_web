@@ -39,7 +39,7 @@
 
 Variant B is recommended because it exposes more of Rows 3â€“4 at 1366Ã—768 while preserving the approved hierarchy and gives the mobile first viewport a shorter scan. Variant A is the safer reference-faithful baseline and may be preferred if owner review prioritizes breathing room over visible lower-row context. This is a design recommendation, not owner approval.
 
-## Owner comparison record
+## Historical owner comparison record (superseded by final selection)
 
 | Version | First-run desktop | Populated mobile | Recommendation | Owner response |
 |---|---|---|---|---|
@@ -50,7 +50,7 @@ The owner must choose a named version after viewing the full-resolution frames. 
 
 ## R1 correction status
 
-Both variants now use the same corrected synthetic fixture and required widgets: 14-day line chart, future due workload, 105-cell HM-FIX heatmap, 78/24/8 donut, 3.6/4 Writing score, Cloze/Tráº¯c nghiá»‡m/Writing skills and truthful book states. Variant B still changes internal spacing only. See the [R1 correction report](UXR-02A-R1-CORRECTION-REPORT.md). The owner decision remains pending.
+Both variants use the same corrected synthetic fixture and required widgets: 14-day line chart, future due workload, 105-cell HM-FIX heatmap, 78/24/8 donut, 3.6/4 Writing score, Cloze/Trắc nghiệm/Writing skills and truthful book states. Variant B changes internal spacing only. See the [R1 correction report](UXR-02A-R1-CORRECTION-REPORT.md) and the R1B correction report. The pending wording in this historical paragraph is superseded by the final owner selection below.
 ## Final owner selection (2026-10-14)
 
 - Variant B â€” Compact Refinement, release UXR-02A-R1B: OWNER_APPROVED / FROZEN.

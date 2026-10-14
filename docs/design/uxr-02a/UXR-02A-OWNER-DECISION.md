@@ -14,7 +14,7 @@ Please review the [full-resolution gallery](UXR-02A-VISUAL-GALLERY.md), [Dashboa
 - `REQUEST_CHANGES` â€” name the affected frame/rule; a new version and new frames are required.
 - `REJECT` â€” stop this packet and record the reason.
 
-## Owner response
+## Historical owner response template (superseded by final approval)
 
 | Field | Entry |
 |---|---|
@@ -25,11 +25,11 @@ Please review the [full-resolution gallery](UXR-02A-VISUAL-GALLERY.md), [Dashboa
 | Approval scope | Dashboard compact treatment, Review/Status density rules, nine-group matrix, image packet |
 | Explicit exceptions | `PENDING` |
 
-No owner response is inferred from the current task instruction. UXR-02A stays `OWNER_VISUAL_APPROVAL_PENDING`; UXR-03â€“09 execution remains blocked until this record is explicitly completed.
+Historical pre-approval note: no owner response was inferred at the time this template was written. It is superseded by the explicit approval recorded in the final owner decision section above.
 
 ## R1 correction packet
 
-The owner review must include the corrected [R1 gallery](UXR-02A-R1-OWNER-REVIEW.md), especially the restored charts, HM-FIX heatmap, carousel truthfulness, mixed semantics and full-page mobile evidence. The selected version remains `PENDING` until the owner explicitly responds.
+Historical pre-R1B review instruction: the corrected gallery was required before selection. It is superseded by the approved R1B packet and the owner quotation recorded above.
 ## Final owner approval closure (2026-10-14)
 
 | Field | Entry |

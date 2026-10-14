@@ -49,7 +49,7 @@ The before/proposed sheet uses genuine existing bytes where available: [before-p
 | Status | `artifacts/uxr00/A3-browser/screenshots/G8-status-REAL_RENDERED-1440x900.png` | current diagnostics hierarchy; consent reachability remains a design requirement |
 | G3/G4/G7 | `SOURCE_ONLY / NOT_VERIFIED` for this task | no new screenshots invented |
 
-## Acceptance trace
+## Historical acceptance trace (before final owner approval)
 
 | Criterion | Evidence in this packet | Result at handoff |
 |---|---|---|
@@ -76,7 +76,7 @@ The before/proposed sheet uses genuine existing bytes where available: [before-p
 - Synthetic data is never described as current production data.
 - Mockups do not establish runtime accessibility, keyboard behavior, contrast conformance or API correctness.
 
-## R1 acceptance addendum
+## R1 acceptance addendum (historical before final owner approval)
 
 The initial acceptance rows above describe the original packet and are retained for history. The authoritative correction status is now:
 
