@@ -98,8 +98,8 @@ UXR02A_HANDOFF: COMPLETE. UXR03_09_DESIGN_DEPENDENCY: SATISFIED. UXR03_09_PRODUC
 
 ## Publication metadata
 
-Commit SHA: 79ccbac59ea777ceee0424b61e2a203578d29703.
-Remote branch SHA: 79ccbac59ea777ceee0424b61e2a203578d29703 (verified at origin/design/ui-ux-research-20261012).
+Initial design publication commit: 79ccbac59ea777ceee0424b61e2a203578d29703. Final closure metadata commit: ea50ef9a4740fe3fd4403c519b283058dacd3285.
+Remote branch SHA: ea50ef9a4740fe3fd4403c519b283058dacd3285 (verified at origin/design/ui-ux-research-20261012).
 Draft PR #26: OPEN / DRAFT / NOT MERGED; base main; head design/ui-ux-research-20261012. PR milestone marker opening/closing each appears exactly once.
 Production code modified: NO. Main modified or merged: NO.
 
@@ -113,7 +113,7 @@ Remote verification: PASS.
 
 | Gate | Status | Actual evidence |
 |---|---|---|
-| G01 repository/branch integrity | PASS | branch and origin equal 79ccbac59ea777ceee0424b61e2a203578d29703; no divergence |
+| G01 repository/branch integrity | PASS | branch and origin equal ea50ef9a4740fe3fd4403c519b283058dacd3285; no divergence |
 | G02 scope allowlist | PASS | staged paths limited to UXR-02A docs/task/roadmap; no production paths |
 | G03 approved artifacts | PASS | 64 PNGs decoded; R1/A12/R1B/source preserved; links resolve |
 | G04 targeted preview | PASS | R1B check PASS; A12 verification PASS; A04/A02/A08/A12 evidence recorded |
@@ -125,3 +125,4 @@ Remote verification: PASS.
 | G10 gate summary | PASS | all applicable closure gates passed before commit/push |
 
 Remote GitHub file HEAD checks returned HTTP 200 for the closure report, owner decision, handoff, R1B gallery asset and A12 verification. PR #26 remains OPEN/DRAFT and was not merged.
+
