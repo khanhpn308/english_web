@@ -1,5 +1,30 @@
 # UXR-04 — Save & Edit Vocabulary Design
 
+## CURRENT OWNER AUTHORIZATION — 2026-10-14 — DESIGN + FRONTEND IMPLEMENTATION
+
+> **Binding amendment.** The owner changed UXR-04 from design-only research to **Design + Frontend Implementation** on 2026-10-14. [Shared implementation policy](../docs/design/uxr-03-09-design-frontend-implementation-policy-2026-10-14.md) is binding. The original task's source/evidence, feature semantics, all visual frame/viewport quotas, Impeccable, official shadcn, accessibility, and explicit owner visual approval requirements remain mandatory. Historical `design-only`, `no frontend edits`, `no code`, `no tests`, and `no implementation` clauses are **SUPERSEDED for the explicitly owned frontend scope only**. This section prevails over contradictory legacy clauses below. Application backend/API/DB/contracts still remain protected.
+
+**CURRENT STATUS:** `READY_FOR_DESIGN_PLUS_FRONTEND_IMPLEMENTATION / NOT_STARTED` (UXR-02A owner-approved and published; launching Codex work still requires the owner's instruction).  
+**CURRENT ACTION:** Design the complete UXR-04 feature experience **and implement it in the actual existing React/TypeScript/Tailwind frontend**, keeping the approved UXR-01/02/02A foundation unchanged.  
+**OUTPUT STATE:** `OWNER_VISUAL_AND_IMPLEMENTATION_APPROVAL_PENDING`, not `DONE`, until owner review.  
+**BASE:** `57159675fc59e984db1d64dcd899aedabf6622ff`; existing `design/uxr-04` worktree must safely fast-forward to the updated specification before execution.
+
+### New authorized deliverables for UXR-04
+
+1. Preserve **every original scenario, minimum full-resolution screenshot count, comparative evidence, and state/viewport gate specified later in this task**; additionally show the actual running application frontend implementing the design, not solely isolated mockups.
+2. Implement the feature-owned frontend surfaces, preserving current app routes and supported API contracts. **Candidate ownership allowlist:** `frontend/src/features/lookup/SavePreview.tsx; existing Save/Edit feature-specific components discovered in frontend source (including EditWordForm.tsx and RevisionConflictDialog.tsx); feature-local tests/styles`. Inspect the actual repo to resolve paths; if an expected file moved, document the precise verified path. No arbitrary changes outside the feature boundary.
+3. **Primary implementation targets:** SavePreview.tsx; EditWordForm.tsx; RevisionConflictDialog.tsx. The approved design direction is UXR-01 Compact Study Console v1.2 + UXR-02 AppShell R2/HM-FIX + UXR-02A Variant B/R1B. Do not redesign shared foundation.
+4. **Read-only/cross-task seam:** UXR-03 lookup and Search page, UXR-08 actual consent logic. If a necessary change touches a shared/cross-feature file, record a proposed integration patch or ask for an explicit single-writer owner/coordinator decision; do not modify in two parallel worktrees.
+5. No invented data or backend capabilities: preserve null/zero/UNKNOWN/error boundaries, existing operation contracts, idempotency, revision/reconciliation, user consent, and status truthfulness as applicable. Mark screenshots as `RUNNING_FRONTEND`, `ISOLATED_MOCKUP` or `SYNTHETIC_FIXTURE` accurately.
+6. New implementation acceptance: actual TSX/styles changed; actual app can mount the affected route; representative functional interactions can be exercised against existing contracts or explicitly labeled fixtures; required full-resolution UI frames captured from the running frontend; feature-local build/type/browser check results documented. Full-system tests/audit remain for a later wave; do not fabricate PASS.
+7. Every frontend-design Worker explicitly invokes installed `$frontend-ui-engineering`, plus relevant addyosmani skills and installed Impeccable in its own context; Astra acts as coordinator/auditor/integrator, delegates GPT-6.1 Sol Worker packages with single-writer file ownership.
+8. Request `speed: fast`, `permission: full-access` via actual supported runtime controls, but still obey the file allowlist. On the exact model-capacity error, retry dispatch with a real 3s delay up to 30 times, then replace the blocked, non-running worker (max 3 replacement workers per package) without changing model or duplicating writes. Disclose unverified actual-model/speed/permission metadata.
+9. No new dependencies or shadcn installation without separate approval; reuse current canonical primitives. No unapproved edits to `backend/**`, SQLite, API/DTO/OpenAPI, generated contracts, SRS/quiz/consent business semantics, main, UXR-02A frozen artifacts, `tasks/todo.md`, or shared app shell. No automatic commit/push/merge; stop for owner visual + implementation review.
+10. Acceptance item previously reading `no app/frontend code changes` is now `no unauthorized code changes outside owned frontend`; any other old item only contradicted by this explicit amendment is `SUPERSEDED_BY_OWNER_2026-10-14`, **not PASS**. Add an `IMPLEMENTATION_GATE` alongside all original design AC. No existing critical visual or safety criterion is waived.
+
+---
+
+
 **Track:** English Web — major final UI/UX redesign; research and visual design task, separate from canonical application T001–T090.  
 **Priority:** P0 — G4 Save/Edit Vocabulary, shared seam with G2 Lookup Preview and G3 Word Detail.  
 **Status:** `PREPARED / NOT STARTED / BLOCKED_BY_UXR_02A_OWNER_VISUAL_SIGNOFF`.  
