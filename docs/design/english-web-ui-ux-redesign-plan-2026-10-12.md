@@ -1,5 +1,20 @@
 ﻿# English Web â€” UI/UX source assessment and redesign proposal
 
+## CURRENT EXECUTION POLICY — 2026-10-14 — DESIGN + FRONTEND IMPLEMENTATION
+
+**Owner decision:** UXR-03 through UXR-09 no longer stop at isolated design mockups; each task must both **design its feature UI and implement the approved direction in the actual application React/TypeScript/Tailwind frontend**. These seven task cards were updated directly on GitHub, and the [binding shared policy](uxr-03-09-design-frontend-implementation-policy-2026-10-14.md) supersedes earlier design-only/no-code restrictions solely for task-owned frontend paths.
+
+**Status:** UXR-02A remains DONE/OWNER_APPROVED/PUBLISHED; UXR-03–09 are READY_FOR_DESIGN_PLUS_FRONTEND_IMPLEMENTATION / NOT_STARTED until their respective local session launches. Seven local worktrees `design/uxr-03` through `design/uxr-09` were created from UXR-02A commit `57159675fc59e984db1d64dcd899aedabf6622ff`; safely synchronize the new spec/policy commits into those existing worktrees before running workers, never reset or overwrite user changes.
+
+**Scope permitted:** respective feature-local production frontend files and focused frontend verification, with actual running-frontend screenshot evidence in addition to every original task's minimum screen-state gallery. Existing backend/API/SQLite/DTO, global shell, frozen design references and unrelated feature code remain outside these authorizations. Cross-task shared file changes require single-writer integration coordination. Owner approval and implementation acceptance remain gates before DONE/merge.
+
+**Orchestration:** one Astra High coordinator per worktree, multiple GPT-6.1 Sol frontend workers, installed `$frontend-ui-engineering` and Impeccable, official shadcn/ui. Fast/full-access are requests subject to runtime support. Capacity-only dispatch: 3s interval, up to 30 retries, up to three worker replacements with actual lifecycle checks; do not duplicate active work or silently change model.
+
+**Historical note:** All older descriptions of UXR-03–09 as `design-only`, `no production React`, `no implementation`, and `no frontend tests` are superseded by this explicit 2026-10-14 authorization **only for task-owned frontend implementation**. Original required owner-facing screenshot counts, safety, API invariants, and design approval requirements continue to apply. UXR-10/11 remain downstream cross-screen review/final design milestones; their complete sequencing with implementation requires separately coordinated integration, not automatic main merge.
+
+---
+
+
 **Date:** 2026-10-12 (Asia/Ho_Chi_Minh)
 **Repository:** khanhpn308/english_web
 **Source baseline:** `67659eea35202706e0f18e4db9c722b02921cbd0` on `main`
